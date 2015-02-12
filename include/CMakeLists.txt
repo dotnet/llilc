@@ -1,0 +1,5 @@
+add_subdirectory(clr)
+add_subdirectory(Driver)
+add_subdirectory(Jit)
+add_subdirectory(Pal)
+add_subdirectory(Reader)

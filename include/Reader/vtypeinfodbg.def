@@ -1,0 +1,328 @@
+//===------------------- include/Reader/vtypeinfo.h -------------*- C++ -*-===//
+//
+// LLVM-MSILC
+//
+// Copyright (c) Microsoft. All rights reserved.
+// Licensed under the MIT license.
+// See LICENSE file in the project root for full license information.
+//
+//===----------------------------------------------------------------------===//
+//
+// Result code literals for Verifier Type Interface
+//
+//===----------------------------------------------------------------------===//
+
+#define MVER_E_HRESULT           "[HRESULT 0x%08X]"
+#define MVER_E_OFFSET            "[offset 0x%08X]"
+#define MVER_E_OPCODE            "[opcode %s]"
+#define MVER_E_OPERAND           "[operand 0x%08X]"
+#define MVER_E_TOKEN             "[token  0x%08X]"
+#define MVER_E_EXCEPT            "[exception #0x%08X]"
+#define MVER_E_STACK_SLOT        "[stack slot 0x%08X]"
+#define MVER_E_LOC               "[local variable #0x%08X]"
+#define MVER_E_LOC_BYNAME        "[local variable '%s']"
+#define MVER_E_ARG               "[argument #0x%08x]"
+#define MVER_E_FOUND             "[found %s]"
+#define MVER_E_EXPECTED          "[expected %s]"
+#define MVER_E_UNKNOWN_OPCODE     "Unknown opcode [0x%08X]."
+#define MVER_E_SIG_CALLCONV       "Unknown calling convention [0x%08X]."
+#define MVER_E_SIG_ELEMTYPE       "Unknown ELEMENT_TYPE [0x%08x]."
+#define MVER_E_RET_SIG           "[return sig]"
+#define MVER_E_FIELD_SIG         "[field sig]"
+#define MVER_E_INTERNAL           "Internal error."
+#define MVER_E_STACK_TOO_LARGE    "Stack is too large."
+#define MVER_E_ARRAY_NAME_LONG    "Array name is too long."
+#define MVER_E_FALLTHRU           "fall through end of the method without "    \
+                                  "returning"
+#define MVER_E_TRY_GTEQ_END       "try start >= try end"
+#define MVER_E_TRYEND_GT_CS       "try end > code size"
+#define MVER_E_HND_GTEQ_END       "handler >= handler end"
+#define MVER_E_HNDEND_GT_CS       "handler end > code size"
+#define MVER_E_TRY_START          "Try starts in the middle of an instruction."
+#define MVER_E_HND_START          "Handler starts in the middle of an "        \
+                                  "instruction."
+#define MVER_E_TRY_OVERLAP        "Try block overlap with another block."
+#define MVER_E_TRY_EQ_HND_FIL     "Try and filter/handler blocks are "         \
+                                  "equivalent."
+#define MVER_E_TRY_SHARE_FIN_FAL  "Try shared between finally and fault."
+#define MVER_E_HND_OVERLAP        "Handler block overlaps with another block."
+#define MVER_E_HND_EQ             "Handler block is the same as another block."
+#define MVER_E_FIL_OVERLAP        "Filter block overlaps with another block."
+#define MVER_E_FIL_EQ             "Filter block is the same as another block."
+#define MVER_E_FIL_CONT_TRY       "Filter contains try."
+#define MVER_E_FIL_CONT_HND       "Filter contains handler."
+#define MVER_E_FIL_CONT_FIL       "Nested filters."
+#define MVER_E_FIL_GTEQ_CS        "filter >= code size"
+#define MVER_E_FIL_START          "Filter starts in the middle of an "         \
+                                  "instruction."
+#define MVER_E_FALLTHRU_EXCEP     "fallthru the end of an exception block"
+#define MVER_E_FALLTHRU_INTO_HND  "fallthru into an exception handler"
+#define MVER_E_FALLTHRU_INTO_FIL  "fallthru into an exception filter"
+#define MVER_E_LEAVE              "Leave from outside a try or catch block."
+#define MVER_E_RETHROW            "Rethrow from outside a catch handler."
+#define MVER_E_ENDFINALLY         "Endfinally from outside a finally handler"
+#define MVER_E_ENDFILTER          "Endfilter from outside an exception filter "\
+                                  "block"
+#define MVER_E_ENDFILTER_MISSING  "Missing Endfilter."
+#define MVER_E_BR_INTO_TRY        "Branch into try block."
+#define MVER_E_BR_INTO_HND        "Branch into exception handler block."
+#define MVER_E_BR_INTO_FIL        "Branch into exception filter block."
+#define MVER_E_BR_OUTOF_TRY       "Branch out of try block."
+#define MVER_E_BR_OUTOF_HND       "Branch out of exception handler block."
+#define MVER_E_BR_OUTOF_FIL       "Branch out of exception filter block."
+#define MVER_E_BR_OUTOF_FIN       "Branch out of finally block."
+#define MVER_E_RET_FROM_TRY       "Return out of try block."
+#define MVER_E_RET_FROM_HND       "Return out of exception handler block."
+#define MVER_E_RET_FROM_FIL       "Return out of exception filter block."
+#define MVER_E_BAD_JMP_TARGET     "jmp / exception into the middle of an "     \
+                                  "instruction"
+#define MVER_E_PATH_LOC           "Non-compatible types depending on path."
+#define MVER_E_PATH_THIS          "Init state for this differs depending on "  \
+                                  "path."
+#define MVER_E_PATH_STACK         "Non-compatible types on stack depending on "\
+                                  "path."
+#define MVER_E_PATH_STACK_DEPTH   "Stack depth differs depending on path."
+#define MVER_E_THIS               "Instance variable (this) missing."
+#define MVER_E_THIS_UNINIT_EXCEP  "Uninitialized this on entering a try block."
+#define MVER_E_THIS_UNINIT_STORE  "Store into this when it is uninitialized."
+#define MVER_E_THIS_UNINIT_RET    "Return from ctor when this is uninitialized."
+#define MVER_E_THIS_UNINIT_V_RET  "Return from ctor before all fields are "    \
+                                  "initialized."
+#define MVER_E_THIS_UNINIT_BR     "Branch back when this is uninitialized."
+#define MVER_E_LDFTN_CTOR         "ldftn/ldvirtftn not allowed on ctor."
+#define MVER_E_STACK_NOT_EQ       "Non-compatible types on the stack."
+#define MVER_E_STACK_UNEXPECTED   "Unexpected type on the stack."
+#define MVER_E_STACK_EXCEPTION    "Missing stack slot for exception."
+#define MVER_E_STACK_OVERFLOW     "Stack overflow."
+#define MVER_E_STACK_UNDERFLOW    "Stack underflow."
+#define MVER_E_STACK_EMPTY        "Stack empty."
+#define MVER_E_STACK_UNINIT       "Uninitialized item on stack."
+#define MVER_E_STACK_I_I4_I8      "Expected I, I4, or I8 on the stack."
+#define MVER_E_STACK_I_I4         "Expected I, or I4 on the stack."
+#define MVER_E_STACK_R_R4_R8      "Expected R, R4, or R8 on the stack."
+#define MVER_E_STACK_NO_R_I8      "unexpected R, R4, R8, or I8 on the stack."
+#define MVER_E_STACK_NUMERIC      "Expected numeric type on the stack."
+#define MVER_E_STACK_OBJREF       "Expected an Objref on the stack."
+#define MVER_E_STACK_P_OBJREF     "Expected address of an Objref on the stack."
+#define MVER_E_STACK_BYREF        "Expected Byref on the stack."
+#define MVER_E_STACK_METHOD       "Expected pointer to function on the stack."
+#define MVER_E_STACK_ARRAY_SD     "Expected single dimension array on the "    \
+                                  "stack."
+#define MVER_E_STACK_VALCLASS     "Expected value type instance on the stack."
+#define MVER_E_STACK_P_VALCLASS   "Expected address of value type on the stack."
+#define MVER_E_STACK_NO_VALCLASS  "Unexpected value type instance on the stack."
+#define MVER_E_LOC_DEAD           "Local variable is unusable at this point."
+#define MVER_E_LOC_NUM            "Unrecognized local variable number."
+#define MVER_E_ARG_NUM            "Unrecognized argument number."
+#define MVER_E_TOKEN_RESOLVE      "Unable to resolve token."
+#define MVER_E_TOKEN_TYPE         "Unable to resolve type of the token."
+#define MVER_E_TOKEN_TYPE_MEMBER  "Expected memberRef/memberDef/methodSpec "   \
+                                  "token."
+#define MVER_E_TOKEN_TYPE_FIELD   "Expected memberRef/fieldDef token."
+#define MVER_E_TOKEN_TYPE_SIG     "Expected signature token."
+#define MVER_E_UNVERIFIABLE       "Instruction can not be verified."
+#define MVER_E_LDSTR_OPERAND      "Operand does not point to a valid "         \
+                                  "string ref."
+#define MVER_E_RET_PTR_TO_STACK   "Return type is BYREF, TypedReference, "     \
+                                  "ArgHandle, or ArgIterator."
+#define MVER_E_RET_VOID           "Stack must be empty on return from a "      \
+                                  "void function."
+#define MVER_E_RET_MISSING        "Return value missing on the stack."
+#define MVER_E_RET_EMPTY          "Stack must contain only the return value."
+#define MVER_E_RET_UNINIT         "Return uninitialized data."
+#define MVER_E_ARRAY_ACCESS       "Illegal array access."
+#define MVER_E_ARRAY_V_STORE      "Store non Object type into Object array."
+#define MVER_E_ARRAY_SD           "Expected single dimension array."
+#define MVER_E_ARRAY_SD_PTR       "Expected single dimension array of "        \
+                                  "pointer types."
+#define MVER_E_ARRAY_FIELD        "Array field access is denied."
+#define MVER_E_ARGLIST            "Allowed only in vararg methods."
+#define MVER_E_VALCLASS           "Value type expected."
+#define MVER_E_OPEN_DLGT_PROT_ACC "Protected method access through an open "   \
+                                  "instance delegate is not verifiable."
+#define MVER_E_METHOD_ACCESS      "Method is not visible."
+#define MVER_E_FIELD_ACCESS       "Field is not visible."
+#define MVER_E_DEAD               "Item is unusable at this point."
+#define MVER_E_FIELD_STATIC       "Expected static field."
+#define MVER_E_FIELD_NO_STATIC    "Expected non-static field."
+#define MVER_E_ADDR               "Address of not allowed for this item."
+#define MVER_E_ADDR_BYREF         "Address of not allowed for byref."
+#define MVER_E_ADDR_LITERAL       "Address of not allowed for literal field."
+#define MVER_E_INITONLY           "Can not change initonly field outside "     \
+                                  "its ctor."
+#define MVER_E_WRITE_RVA_STATIC   "Can not modify an imaged based (RVA) static"
+#define MVER_E_THROW              "Can not throw this object."
+#define MVER_E_CALLVIRT_VALCLASS  "Callvirt on a value type method."
+#define MVER_E_CALL_SIG           "Call signature mismatch."
+#define MVER_E_CALL_STATIC        "Static function expected."
+#define MVER_E_CTOR               "Ctor expected."
+#define MVER_E_CTOR_VIRT          "Can not use callvirt on ctor."
+#define MVER_E_CTOR_OR_SUPER      "Only super::ctor or typeof(this)::ctor "    \
+                                  "allowed here."
+#define MVER_E_CTOR_MUL_INIT      "Possible call to ctor more than once."
+#define MVER_E_SIG                "Unrecognized signature."
+#define MVER_E_SIG_ARRAY          "Can not resolve Array type."
+#define MVER_E_SIG_ARRAY_PTR      "Array of ELEMENT_TYPE_PTR."
+#define MVER_E_SIG_ARRAY_BYREF    "Array of ELEMENT_TYPE_BYREF or "            \
+                                  "ELEMENT_TYPE_TYPEDBYREF."
+#define MVER_E_SIG_ELEM_PTR       "ELEMENT_TYPE_PTR can not be verified."
+#define MVER_E_SIG_VARARG         "Unexpected vararg."
+#define MVER_E_SIG_VOID           "Unexpected Void."
+#define MVER_E_SIG_BYREF_BYREF    "BYREF of BYREF"
+#define MVER_E_CODE_SIZE_ZERO     "Code size is zero."
+#define MVER_E_BAD_VARARG         "Unrecognized use of vararg."
+#define MVER_E_TAIL_CALL          "Missing call/callvirt/calli."
+#define MVER_E_TAIL_BYREF         "Can not pass byref to a tail call."
+#define MVER_E_TAIL_RET           "Missing ret."
+#define MVER_E_TAIL_RET_VOID      "Void ret type expected for tail call."
+#define MVER_E_TAIL_RET_TYPE      "Tail call return type not compatible."
+#define MVER_E_TAIL_STACK_EMPTY   "Stack not empty after tail call."
+#define MVER_E_METHOD_END         "Method ends in the middle of an instruction."
+#define MVER_E_BAD_BRANCH         "Branch out of the method."
+#define MVER_E_FIN_OVERLAP        "Finally handler blocks overlap."
+#define MVER_E_LEXICAL_NESTING    "Lexical nesting."
+#define MVER_E_VOLATILE           "Missing ldsfld/stsfld/ldind/stind/ldfld/"   \
+                                  "stfld/ldobj/stobj/initblk/cpblk."
+#define MVER_E_UNALIGNED          "Missing ldind/stind/ldfld/stfld/ldobj/"     \
+                                  "stobj/initblk/cpblk."
+#define MVER_E_INNERMOST_FIRST    "Innermost exception blocks should be "      \
+                                  "declared first."
+#define MVER_E_CALLI_VIRTUAL      "Calli not allowed on virtual methods."
+#define MVER_E_CALL_ABSTRACT      "Call not allowed on abstract methods."
+#define MVER_E_STACK_UNEXP_ARRAY  "Unexpected array type on the stack."
+#define MVER_E_NOT_IN_GC_HEAP     "Value type with NotInGCHeap attribute "     \
+                                  "being created on the GC heap."
+#define MVER_E_TRY_N_EMPTY_STACK  "Attempt to enter a try block with "         \
+                                   "nonempty stack."
+#define MVER_E_DLGT_CTOR          "Unrecognized arguments for delegate ctor."
+#define MVER_E_DLGT_BB            "Delegate ctor not allowed at the start of " \
+                                  "a basic block when the function pointer "   \
+                                  "argument is a virtual method."
+#define MVER_E_DLGT_PATTERN       "Dup, ldvirtftn, newobj delegate::.ctor() "  \
+                                  "pattern expected (in the same basic block)."
+#define MVER_E_DLGT_LDFTN         "Ldftn/ldvirtftn instruction required "      \
+                                  "before call to a delegate ctor."
+#define MVER_E_FTN_ABSTRACT       "Attempt to load address of an "             \
+                                  "abstract method."
+#define MVER_E_SIG_C_VC           "ELEMENT_TYPE_CLASS ValueClass in signature."
+#define MVER_E_SIG_VC_C           "ELEMENT_TYPE_VALUETYPE non-ValueClass "     \
+                                  "in signature."
+#define MVER_E_BOX_PTR_TO_STACK   "Box operation on TypedReference, "          \
+                                  "ArgHandle, or ArgIterator."
+#define MVER_E_SIG_BYREF_TB_AH    "Byref of TypedReference, ArgHandle, "       \
+                                  "or ArgIterator."
+#define MVER_E_SIG_ARRAY_TB_AH    "Array of TypedReference, ArgHandle, "       \
+                                  "or ArgIterator."
+#define MVER_E_ENDFILTER_STACK    "Stack not empty when leaving an "           \
+                                  "exception filter."
+#define MVER_E_DLGT_SIG_I         "Unrecognized delegate ctor signature; "     \
+                                  "expected I."
+#define MVER_E_DLGT_SIG_O         "Unrecognized delegate ctor signature; "     \
+                                  "expected Object."
+#define MVER_E_RA_PTR_TO_STACK    "Mkrefany on TypedReference, ArgHandle, "    \
+                                  "or ArgIterator."
+#define MVER_E_CATCH_VALUE_TYPE   "Value type not allowed as catch type."
+#define MVER_E_CATCH_BYREF        "Byref not allowed as catch type."
+#define MVER_E_FIL_PRECEED_HND    "filter block should immediately precede "   \
+                                  "handler block"
+#define MVER_E_LDVIRTFTN_STATIC   "ldvirtftn on static"
+#define MVER_E_CALLVIRT_STATIC    "callvirt on static"
+#define MVER_E_INITLOCALS         "initlocals must be set for verifiable "     \
+                                  "methods with one or more local variables."
+#define MVER_E_BR_TO_EXCEPTION    "branch/leave to the beginning of a "        \
+                                  "catch/filter handler"
+#define MVER_E_CALL_CTOR          "call to ctor only allowed to initialize "   \
+                                  "this pointer from within a ctor. Try newobj."
+
+//@GENERICSVER: new generics related error messages
+#define MVER_E_VALCLASS_OBJREF_VAR      "Value type, objref type or "          \
+                                        "variable type expected."
+#define MVER_E_STACK_P_VALCLASS_OBJREF_VAR "Expected address of value type, "  \
+                                        "objref type or variable type "        \
+                                        "on the stack."
+#define MVER_E_SIG_VAR_PARAM            "Unrecognized type parameter of "      \
+                                        "enclosing class."
+#define MVER_E_SIG_MVAR_PARAM           "Unrecognized type parameter of "      \
+                                        "enclosing method."
+#define MVER_E_SIG_VAR_ARG              "Unrecognized type argument of "       \
+                                        "referenced class instantiation."
+#define MVER_E_SIG_MVAR_ARG             "Unrecognized type argument of "       \
+                                        "referenced method instantiation."
+#define MVER_E_SIG_GENERICINST          "Can not resolve generic type."
+#define MVER_E_SIG_METHOD_INST          "Method instantiation contains non "   \
+                                        "boxable type arguments."
+#define MVER_E_SIG_METHOD_PARENT_INST   "Method parent instantiation contains "\
+                                        "non boxable type arguments."
+#define MVER_E_SIG_FIELD_PARENT_INST    "Field parent instantiation contains " \
+                                        "non boxable type arguments."
+#define MVER_E_CALLCONV_NOT_GENERICINST "Unrecognized calling convention for " \
+                                        "an instantiated generic method."
+#define MVER_E_TOKEN_BAD_METHOD_SPEC    "Unrecognized generic method in "      \
+                                        "method instantiation."
+#define MVER_E_BAD_READONLY_PREFIX      "Missing ldelema/callvirt following "  \
+                                        "readonly. prefix."
+#define MVER_E_BAD_CONSTRAINED_PREFIX   "Missing callvirt following "          \
+                                        "constrained. prefix."
+
+#define MVER_E_CIRCULAR_VAR_CONSTRAINTS  "Method parent has circular class "   \
+                                         "type parameter constraints."
+#define MVER_E_CIRCULAR_MVAR_CONSTRAINTS "Method has circular method "         \
+                                         "type parameter constraints."
+
+#define MVER_E_UNSATISFIED_METHOD_INST          "Method instantiation has "    \
+                                                "unsatisfied method type "     \
+                                                "parameter constraints."
+#define MVER_E_UNSATISFIED_METHOD_PARENT_INST   "Method parent instantiation " \
+                                                "has unsatisfied class type "  \
+                                                "parameter constraints."
+#define MVER_E_UNSATISFIED_FIELD_PARENT_INST    "Field parent instantiation "  \
+                                                "has unsatisfied class type "  \
+                                                "parameter constraints."
+#define MVER_E_UNSATISFIED_BOX_OPERAND          "Type operand of box "         \
+                                                "instruction has unsatisfied " \
+                                                "class type parameter "        \
+                                                "constraints."
+#define MVER_E_CONSTRAINED_CALL_WITH_NON_BYREF_THIS "The this argument to a "  \
+                                                "constrained call must have "  \
+                                                "byref type."
+#define MVER_E_CONSTRAINED_OF_NON_VARIABLE_TYPE "The operand to a constrained "\
+                                                "prefix instruction must be a "\
+                                                "type parameter."
+#define MVER_E_READONLY_UNEXPECTED_CALLEE       "The readonly prefix may only "\
+                                                "be applied to calls to array "\
+                                                "methods returning byrefs."
+#define MVER_E_READONLY_ILLEGAL_WRITE           "Illegal write to "            \
+                                                "readonly byref."
+#define MVER_E_READONLY_IN_MKREFANY             "A readonly byref cannot be "  \
+                                                "used with mkrefany."
+#define MVER_E_UNALIGNED_ALIGNMENT              "Alignment specified for "     \
+                                                "'unaligned' prefix must be "  \
+                                                "1, 2, or 4" 
+#define MVER_E_TAILCALL_INSIDE_EH               "The tail.call (or calli or "  \
+                                                "callvirt) instruction cannot "\
+                                                "be used to transfer control " \
+                                                "out of a try, filter, catch, "\
+                                                "or finally block"     
+#define MVER_E_BACKWARD_BRANCH                  "Stack height at all points "  \
+                                                "must be determinable in a "   \
+                                                "single forward scan of IL"
+#define MVER_E_CALL_TO_VTYPE_BASE               "Call to base type of "        \
+                                                "valuetype (which is never a " \
+                                                "valuetype)"
+
+#define MVER_E_BAD_PE             "Unverifiable PE Header/native stub."
+#define MVER_E_BAD_MD             "Unrecognized metadata, unable to verify IL."
+#define MVER_E_BAD_APPDOMAIN      "Unrecognized appdomain pointer."
+#define MVER_E_TYPELOAD           "Type load failed."
+#define MVER_E_PE_LOAD            "Module load failed."
+#define MVER_E_NEWOBJ_OF_ABSTRACT_CLASS  "Can not construct an instance of "   \
+                                          "abstract class."
+#define MVER_E_FIELD_OVERLAP      "Accessing type with overlapping fields."
+#define MVER_E_LDFTN_NON_FINAL_VIRTUAL  "Cannot LDFTN a non-final "            \
+                                        "virtual method."
+#define MVER_E_UNMANAGED_POINTER   "Unmanaged pointer is not a verifiable type."
+#define MVER_E_THIS_MISMATCH      "The 'this' parameter to the call must be "  \
+                                  "the calling method's 'this' parameter."
+
+#define MVER_E_INITIALIZE_ARRAY_MISSING_TOKEN   "Ldtoken instruction required "\
+               "before call to System.Runtime.CompilerServices.InitializeArray."

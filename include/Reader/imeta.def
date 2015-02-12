@@ -1,0 +1,40 @@
+//===------------------- include/Reader/imeta.def ----------------*- C++ -*-===//
+//
+// LLVM-MSILC
+//
+// Copyright (c) Microsoft. All rights reserved.
+// Licensed under the MIT license.
+// See LICENSE file in the project root for full license information.
+//
+//===----------------------------------------------------------------------===//
+///
+/// \file
+/// \brief Declares constants useful for imeta.h interface
+///
+//===----------------------------------------------------------------------===//
+
+#define    mdtJitHelper            0x73000000
+#define    mdtInterfaceOffset      0x74000000
+#define    mdtCodeOffset           0x75000000
+#define    mdtSyncHandle           0x76000000
+#define    mdtVarArgsHandle        0x77000000
+#define    mdtPInvokeCalliHandle   0x78000000
+#define    mdtIBCProfHandle        0x79000000
+
+// When returning a struct with gc through a hidden param, we 
+// call the ASSIGN_STRUCT helper and we need a dummy token to pass
+// around with the class handle we got from the method sig.
+#define    mdtMBReturnHandle       0x7A000000
+#define    mdtGSCookie             0x7B000000
+
+#define    mdtJMCHandle            0x7C000000
+#define    mdtCaptureThreadGlobal  0x7D000000
+#define    mdtModuleID             0x7E000000
+
+// For instantiation parameters where we have a handle, but no token
+#define    mdtMethodHandle         0x7F000000
+#define    mdtClassHandle          0x80000000
+
+#define    mdtVarArgsSigHandle     0x81000000
+#define    mdtVarArgsMDHandle      0x82000000
+#define    mdtVarArgsMSHandle      0x83000000
