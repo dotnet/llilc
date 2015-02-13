@@ -254,7 +254,7 @@ typedef enum {
   TRY_MCatch,     // the try has only catch handlers
   TRY_MCatchXcpt, // the try has both catch and except handlers
   TRY_MXcpt,      // the try has only except handlers
-  // for native compiler code, not used in current jit64
+  // for native compiler code, not used in current JIT
   TRY_Xcpt,  // native SEH except
   TRY_CCatch // native C++ catch
 } TryKind;

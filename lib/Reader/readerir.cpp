@@ -676,7 +676,7 @@ void ReaderBase::debugError(const char *Filename, unsigned Linenumber,
 };
 
 // Fatal error, reader cannot continue.
-void ReaderBase::fatal(int ErrNum) { MSILCJit::fatal(JIT64_FATAL_ERROR); }
+void ReaderBase::fatal(int ErrNum) { MSILCJit::fatal(MSILCJIT_FATAL_ERROR); }
 
 #pragma endregion
 
