@@ -30,8 +30,8 @@ class FlowGraphNode : public llvm::BasicBlock {};
 
 struct FlowGraphNodeInfo {
 public:
-  unsigned int StartMSILOffset;
-  unsigned int EndMSILOffset;
+  uint32_t StartMSILOffset;
+  uint32_t EndMSILOffset;
   bool IsVisited;
   ReaderStack *TheReaderStack;
 };
@@ -95,13 +95,13 @@ private:
 class GenStack : public ReaderStack {
 public:
   GenStack();
-  GenStack(int MaxStack, ReaderBase *Reader);
+  GenStack(uint32_t MaxStack, ReaderBase *Reader);
   IRNode *pop(void) override;
   void push(IRNode *NewVal, IRNode **NewIR) override;
   void clearStack(void) override;
   bool empty(void) override;
   void assertEmpty(void) override;
-  int depth() override;
+  uint32_t depth() override;
 
   // For iteration
   IRNode *getIterator(ReaderStackIterator **) override;
@@ -109,7 +109,7 @@ public:
   void iteratorReplace(ReaderStackIterator **, IRNode *) override;
   IRNode *getReverseIterator(ReaderStackIterator **) override;
   IRNode *getReverseIteratorFromDepth(ReaderStackIterator **,
-                                      int Depth) override;
+                                      uint32_t Depth) override;
   IRNode *reverseIteratorGetNext(ReaderStackIterator **) override;
 
 #if !defined(NODEBUG)
@@ -119,8 +119,8 @@ public:
   ReaderStack *copy() override;
 
 private:
-  int Max;
-  int Top;
+  int32_t Max;
+  int32_t Top;
   IRNode **Stack;
   ReaderBase *Reader;
 };
@@ -130,9 +130,9 @@ class GenIR : public ReaderBase {
 public:
   GenIR(MSILCJitContext *JitContext,
         std::map<CORINFO_CLASS_HANDLE, llvm::Type *> *ClassTypeMap,
-        std::map<std::tuple<CorInfoType, CORINFO_CLASS_HANDLE, unsigned int>,
+        std::map<std::tuple<CorInfoType, CORINFO_CLASS_HANDLE, uint32_t>,
                  llvm::Type *> *ArrayTypeMap,
-        std::map<CORINFO_FIELD_HANDLE, unsigned int> *FieldIndexMap)
+        std::map<CORINFO_FIELD_HANDLE, uint32_t> *FieldIndexMap)
       : ReaderBase(JitContext->JitInfo, JitContext->MethodInfo,
                    JitContext->Flags) {
     this->JitContext = JitContext;
@@ -154,11 +154,11 @@ public:
   // MSIL Routines - client defined routines that are invoked by the reader.
   //                 One will be called for each msil opcode.
 
-  unsigned int getPointerByteSize() override {
+  uint32_t getPointerByteSize() override {
     return TargetPointerSizeInBits / 8;
   }
 
-  void opcodeDebugPrint(BYTE *Buf, unsigned StartOffset,
+  void opcodeDebugPrint(uint8_t *Buf, unsigned StartOffset,
                         unsigned EndOffset) override {
     return;
   };
@@ -192,7 +192,7 @@ public:
   IRNode *call(ReaderBaseNS::CallOpcode Opcode, mdToken Token,
                mdToken ConstraintTypeRef, mdToken LoadFtnToken,
                bool HasReadOnlyPrefix, bool HasTailCallPrefix,
-               bool IsUnmarkedTailCall, unsigned int CurrOffset,
+               bool IsUnmarkedTailCall, uint32_t CurrOffset,
                bool *RecursiveTailCall, IRNode **NewIR) override;
 
   IRNode *castOp(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *ObjRefNode,
@@ -215,12 +215,12 @@ public:
   };
 
   FlowGraphNode *fgNodeGetNext(FlowGraphNode *FgNode) override;
-  unsigned int fgNodeGetStartMSILOffset(FlowGraphNode *Fg) override;
+  uint32_t fgNodeGetStartMSILOffset(FlowGraphNode *Fg) override;
   void fgNodeSetStartMSILOffset(FlowGraphNode *Fg,
-                                unsigned int Offset) override;
-  unsigned int fgNodeGetEndMSILOffset(FlowGraphNode *Fg) override;
+                                uint32_t Offset) override;
+  uint32_t fgNodeGetEndMSILOffset(FlowGraphNode *Fg) override;
   void fgNodeSetEndMSILOffset(FlowGraphNode *FgNode,
-                              unsigned int Offset) override;
+                              uint32_t Offset) override;
 
   bool fgNodeIsVisited(FlowGraphNode *FgNode) override;
   void fgNodeSetVisited(FlowGraphNode *FgNode, bool Visited) override;
@@ -235,13 +235,13 @@ public:
     throw NotYetImplementedException("jmp");
   };
 
-  void leave(unsigned int TargetOffset, bool IsNonLocal,
+  void leave(uint32_t TargetOffset, bool IsNonLocal,
              bool EndsWithNonLocalGoto, IRNode **NewIR) override;
-  IRNode *loadArg(unsigned int ArgOrdinal, bool IsJmp, IRNode **NewIR) override;
-  IRNode *loadLocal(unsigned int ArgOrdinal, IRNode **NewIR) override;
-  IRNode *loadArgAddress(unsigned int ArgOrdinal, IRNode **NewIR) override;
-  IRNode *loadLocalAddress(unsigned int LocOrdinal, IRNode **NewIR) override;
-  IRNode *loadConstantI4(int Constant, IRNode **NewIR) override;
+  IRNode *loadArg(uint32_t ArgOrdinal, bool IsJmp, IRNode **NewIR) override;
+  IRNode *loadLocal(uint32_t ArgOrdinal, IRNode **NewIR) override;
+  IRNode *loadArgAddress(uint32_t ArgOrdinal, IRNode **NewIR) override;
+  IRNode *loadLocalAddress(uint32_t LocOrdinal, IRNode **NewIR) override;
+  IRNode *loadConstantI4(int32_t Constant, IRNode **NewIR) override;
   IRNode *loadConstantI8(__int64 Constant, IRNode **NewIR) override;
   IRNode *loadConstantI(size_t Constant, IRNode **NewIR) override;
   IRNode *loadConstantR4(float Value, IRNode **NewIR) override;
@@ -332,7 +332,7 @@ public:
   };
   IRNode *newArr(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
                  IRNode **NewIR) override;
-  IRNode *newObj(mdToken Token, mdToken LoadFtnToken, unsigned int CurrOffset,
+  IRNode *newObj(mdToken Token, mdToken LoadFtnToken, uint32_t CurrOffset,
                  IRNode **NewIR) override;
   void pop(IRNode *Opr, IRNode **NewIR) override;
   IRNode *refAnyType(IRNode *Arg1, IRNode **NewIR) override {
@@ -348,7 +348,7 @@ public:
                 IRNode *ShiftOperand, IRNode **NewIR) override;
   IRNode *sizeofOpcode(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                        IRNode **NewIR) override;
-  void storeArg(unsigned int ArgOrdinal, IRNode *Arg1,
+  void storeArg(uint32_t ArgOrdinal, IRNode *Arg1,
                 ReaderAlignType Alignment, bool IsVolatile,
                 IRNode **NewIR) override;
   void storeElem(ReaderBaseNS::StElemOpcode Opcode,
@@ -366,7 +366,7 @@ public:
                           IRNode **NewIR) override {
     throw NotYetImplementedException("storePrimitiveType");
   };
-  void storeLocal(unsigned int LocOrdinal, IRNode *Arg1,
+  void storeLocal(uint32_t LocOrdinal, IRNode *Arg1,
                   ReaderAlignType Alignment, bool IsVolatile,
                   IRNode **NewIR) override;
   void storeStaticField(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
@@ -408,8 +408,8 @@ public:
   void nop(IRNode **NewIR) override;
 
   void insertIBCAnnotations() override;
-  IRNode *insertIBCAnnotation(FlowGraphNode *Node, unsigned int Count,
-                              unsigned int Offset) override {
+  IRNode *insertIBCAnnotation(FlowGraphNode *Node, uint32_t Count,
+                              uint32_t Offset) override {
     throw NotYetImplementedException("insertIBCAnnotation");
   };
 
@@ -427,10 +427,10 @@ public:
   methodNeedsToKeepAliveGenericsContext(bool KeepGenericsCtxtAlive) override;
 
   // Called to instantiate an empty reader stack.
-  ReaderStack *createStack(int MaxStack, ReaderBase *Reader) override;
+  ReaderStack *createStack(uint32_t MaxStack, ReaderBase *Reader) override;
 
   // Called when reader begins processing method.
-  void readerPrePass(BYTE *Buf, unsigned int NumBytes) override;
+  void readerPrePass(uint8_t *Buf, uint32_t NumBytes) override;
 
   // Called between building the flow graph and inserting the IR
   void readerMiddlePass(void) override;
@@ -439,10 +439,10 @@ public:
   void readerPostPass(bool IsImportOnly) override;
 
   // Called at the start of block processing
-  void beginFlowGraphNode(FlowGraphNode *Fg, unsigned int CurrOffset,
+  void beginFlowGraphNode(FlowGraphNode *Fg, uint32_t CurrOffset,
                           bool IsVerifyOnly) override;
   // Called at the end of block processing.
-  void endFlowGraphNode(FlowGraphNode *Fg, unsigned int CurrOffset,
+  void endFlowGraphNode(FlowGraphNode *Fg, uint32_t CurrOffset,
                         IRNode **NewIR) override;
 
   // Used to maintain operand stack.
@@ -461,8 +461,8 @@ public:
 
   void removeStackInterference(IRNode **NewIR) override;
 
-  void removeStackInterferenceForLocalStore(unsigned int Opcode,
-                                            unsigned int Ordinal,
+  void removeStackInterferenceForLocalStore(uint32_t Opcode,
+                                            uint32_t Ordinal,
                                             IRNode **NewIR) override;
 
   // Remove all IRNodes from block (for verification error processing.)
@@ -475,9 +475,9 @@ public:
                              unsigned MinClassAlign) override;
 
   // Allocate temporary (Reader lifetime) memory
-  void *getTempMemory(unsigned Bytes) override;
+  void *getTempMemory(size_t NumBytes) override;
   // Allocate procedure-lifetime memory
-  void *getProcMemory(unsigned Bytes) override;
+  void *getProcMemory(size_t NumBytes) override;
 
   EHRegion *rgnAllocateRegion() override;
   EHRegionList *rgnAllocateRegionList() override;
@@ -546,13 +546,13 @@ public:
   };
   FlowGraphNode *fgSplitBlock(FlowGraphNode *Block, IRNode *Node) override;
   void fgSetBlockToRegion(FlowGraphNode *Block, EHRegion *Region,
-                          unsigned int LastOffset) override {
+                          uint32_t LastOffset) override {
     throw NotYetImplementedException("fgSetBlockToRegion");
   };
   IRNode *fgMakeBranch(IRNode *LabelNode, IRNode *InsertNode,
-                       unsigned int CurrentOffset, bool IsConditional,
+                       uint32_t CurrentOffset, bool IsConditional,
                        bool IsNominal) override;
-  IRNode *fgMakeEndFinally(IRNode *InsertNode, unsigned int CurrentOffset,
+  IRNode *fgMakeEndFinally(IRNode *InsertNode, uint32_t CurrentOffset,
                            bool IsLexicalEnd) override;
 
   // turns an unconditional branch to the entry label into a fall-through
@@ -577,7 +577,7 @@ public:
                               IRNode *InsertNode) override {
     throw NotYetImplementedException("insertEHAnnotationNode");
   };
-  FlowGraphNode *makeFlowGraphNode(unsigned int TargetOffset,
+  FlowGraphNode *makeFlowGraphNode(uint32_t TargetOffset,
                                    EHRegion *Region) override;
   void markAsEHLabel(IRNode *LabelNode) override {
     throw NotYetImplementedException("markAsEHLabel");
@@ -655,7 +655,7 @@ public:
 
   // Helper callback used by rdrCall to emit call code.
   IRNode *genCall(ReaderCallTargetData *CallTargetInfo, CallArgTriple *ArgArray,
-                  unsigned int NumArgs, IRNode **CallNode,
+                  uint32_t NumArgs, IRNode **CallNode,
                   IRNode **NewIR) override;
 
   bool canMakeDirectCall(ReaderCallTargetData *CallTargetData) override;
@@ -675,7 +675,7 @@ public:
     throw NotYetImplementedException("callRuntimeHandleHelper");
   };
 
-  IRNode *convertToHelperArgumentType(IRNode *Opr, unsigned int DestinationSize,
+  IRNode *convertToHelperArgumentType(IRNode *Opr, uint32_t DestinationSize,
                                       IRNode **NewIR) override {
     throw NotYetImplementedException("convertToHelperArgumentType");
   };
@@ -684,7 +684,7 @@ public:
     throw NotYetImplementedException("genNullCheck");
   };
   void
-  createSym(int Num, bool IsAuto, CorInfoType CorType,
+  createSym(uint32_t Num, bool IsAuto, CorInfoType CorType,
             CORINFO_CLASS_HANDLE Class, bool IsPinned,
             ReaderSpecialSymbolType SymType = Reader_NotSpecialSymbol) override;
 
@@ -725,7 +725,7 @@ public:
   // Called once region tree has been built.
   void setEHInfo(EHRegion *EhRegionTree, EHRegionList *EhRegionList) override;
 
-  void setSequencePoint(unsigned int, ICorDebugInfo::SourceTypes,
+  void setSequencePoint(uint32_t, ICorDebugInfo::SourceTypes,
                         IRNode **NewIR) override {
     throw NotYetImplementedException("setSequencePoint");
   };
@@ -770,7 +770,7 @@ public:
   void dbPrintEHRegion(EHRegion *Eh) override {
     throw NotYetImplementedException("dbPrintEHRegion");
   };
-  DWORD dbGetFuncHash(void) override {
+  uint32_t dbGetFuncHash(void) override {
     throw NotYetImplementedException("dbGetFuncHash");
   };
 #endif
@@ -807,11 +807,11 @@ private:
                              CORINFO_FIELD_INFO *FieldInfo,
                              IRNode **NewIR) override;
 
-  void classifyCmpType(llvm::Type *Ty, unsigned int &Size, bool &IsPointer,
+  void classifyCmpType(llvm::Type *Ty, uint32_t &Size, bool &IsPointer,
                        bool &IsFloat);
 
-  unsigned int size(CorInfoType CorType);
-  unsigned int stackSize(CorInfoType CorType);
+  uint32_t size(CorInfoType CorType);
+  uint32_t stackSize(CorInfoType CorType);
   static bool isSigned(CorInfoType CorType);
   llvm::Type *getStackType(CorInfoType CorType);
 
@@ -842,7 +842,7 @@ private:
 
   IRNode *
   loadManagedAddress(const std::vector<llvm::Value *> &UnmanagedAddresses,
-                     unsigned int Index);
+                     uint32_t Index);
 
   llvm::PointerType *getManagedPointerType(llvm::Type *ElementType);
 
@@ -850,8 +850,8 @@ private:
 
   bool isManagedPointerType(llvm::PointerType *PointerType);
 
-  unsigned int argOrdinalToArgIndex(unsigned int ArgOrdinal);
-  unsigned int argIndexToArgOrdinal(unsigned int ArgIndex);
+  uint32_t argOrdinalToArgIndex(uint32_t ArgOrdinal);
+  uint32_t argIndexToArgOrdinal(uint32_t ArgIndex);
 
   void makeStore(llvm::Type *Ty, llvm::Value *Address,
                  llvm::Value *ValueToStore, bool IsVolatile, IRNode **NewIR);
@@ -861,9 +861,9 @@ private:
   llvm::Function *Function;
   llvm::IRBuilder<> *LLVMBuilder;
   std::map<CORINFO_CLASS_HANDLE, llvm::Type *> *ClassTypeMap;
-  std::map<std::tuple<CorInfoType, CORINFO_CLASS_HANDLE, unsigned int>,
+  std::map<std::tuple<CorInfoType, CORINFO_CLASS_HANDLE, uint32_t>,
            llvm::Type *> *ArrayTypeMap;
-  std::map<CORINFO_FIELD_HANDLE, unsigned int> *FieldIndexMap;
+  std::map<CORINFO_FIELD_HANDLE, uint32_t> *FieldIndexMap;
   std::map<llvm::BasicBlock *, FlowGraphNodeInfo> FlowGraphInfoMap;
   std::vector<llvm::Value *> LocalVars;
   std::vector<CorInfoType> LocalVarCorTypes;
@@ -875,9 +875,9 @@ private:
   bool HasVarargsToken;
   llvm::BasicBlock *EntryBlock;
   llvm::Instruction *TempInsertionPoint;
-  unsigned int TargetPointerSizeInBits;
-  const unsigned int UnmanagedAddressSpace = 0;
-  const unsigned int ManagedAddressSpace = 1;
+  uint32_t TargetPointerSizeInBits;
+  const uint32_t UnmanagedAddressSpace = 0;
+  const uint32_t ManagedAddressSpace = 1;
 };
 
 #endif // MSIL_READER_IR_H

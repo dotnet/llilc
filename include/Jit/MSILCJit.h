@@ -37,14 +37,14 @@ public:
   std::unique_ptr<llvm::Module>
   getModuleForMethod(CORINFO_METHOD_INFO *MethodInfo);
   void outputDebugMethodName();
-  inline BYTE getILByte() { return *((BYTE *&)ILCursor)++; }
-  inline DWORD getILDword() { return *((UNALIGNED DWORD *&)ILCursor)++; }
+  inline uint8_t getILByte() { return *((uint8_t *&)ILCursor)++; }
+  inline uint32_t getILUInt32() { return *((UNALIGNED uint32_t *&)ILCursor)++; }
 
 public:
-  BYTE *ILCursor;
+  uint8_t *ILCursor;
   ICorJitInfo *JitInfo;
   CORINFO_METHOD_INFO *MethodInfo;
-  UINT Flags;
+  uint32_t Flags;
   llvm::Module *CurrentModule;
   std::string MethodName;
   llvm::ExecutionEngine *EE;
@@ -58,9 +58,9 @@ public:
   // This is encoded byte size for the complied method
   // and associated data.
 
-  ULONG HotCodeSize = 0;
-  ULONG ColdCodeSize = 0;
-  ULONG ReadOnlyDataSize = 0;
+  uint32_t HotCodeSize = 0;
+  uint32_t ColdCodeSize = 0;
+  uint32_t ReadOnlyDataSize = 0;
 };
 
 /// \brief This struct holds per-thread Jit state.
@@ -81,9 +81,9 @@ public:
   llvm::LLVMContext LLVMContext;
   MSILCJitContext *JitContext;
   std::map<CORINFO_CLASS_HANDLE, llvm::Type *> ClassTypeMap;
-  std::map<std::tuple<CorInfoType, CORINFO_CLASS_HANDLE, unsigned int>,
+  std::map<std::tuple<CorInfoType, CORINFO_CLASS_HANDLE, uint32_t>,
            llvm::Type *> ArrayTypeMap;
-  std::map<CORINFO_FIELD_HANDLE, unsigned int> FieldIndexMap;
+  std::map<CORINFO_FIELD_HANDLE, uint32_t> FieldIndexMap;
 };
 
 /// \brief The Jit interface to the EE.

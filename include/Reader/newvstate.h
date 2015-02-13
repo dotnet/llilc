@@ -35,26 +35,26 @@ public:
   // in a potential delegate creation sequence.
   mdToken DelegateMethodRef;
 
-  UINT ConstrainedPrefix : 1;
-  UINT ReadonlyPrefix : 1;
-  UINT TailPrefix : 1;
-  UINT VolatilePrefix : 1;
-  UINT UnalignedPrefix : 1;
-  UINT TailInBlock : 1;
+  uint32_t ConstrainedPrefix : 1;
+  uint32_t ReadonlyPrefix : 1;
+  uint32_t TailPrefix : 1;
+  uint32_t VolatilePrefix : 1;
+  uint32_t UnalignedPrefix : 1;
+  uint32_t TailInBlock : 1;
   // say we initialize the 'this' pointer in a try.
   // Real successors of the block can assume 'this' is inited.
   // nominal successors cannot.  However if we know 'this' was inited in
-  UINT ThisInitializedThisBlock : 1;
-  UINT StrongThisInitialized : 1;
-  UINT ContainsCtorCall : 1; // block is in a ctor and calls a parent or same
-                             // class ctor
-  const BYTE *DelegateCreateStart;
+  uint32_t ThisInitializedThisBlock : 1;
+  uint32_t StrongThisInitialized : 1;
+  uint32_t ContainsCtorCall : 1; // block is in a ctor and calls a parent or
+                                 // same class ctor
+  const uint8_t *DelegateCreateStart;
 
   InitState ThisInitialized; // 'this' has been initialized on some paths
 private:
   VerType *Vstack;
-  unsigned Vsp;
-  unsigned MaxStack;
+  uint32_t Vsp;
+  uint32_t MaxStack;
 
   VerificationState() {}
 
@@ -63,7 +63,7 @@ public:
 
   inline void setStack(VerType *StackMem);
 
-  inline void init(unsigned MaxStackSize, unsigned NumLocals, bool InitLocals,
+  inline void init(uint32_t MaxStackSize, uint32_t NumLocals, bool InitLocals,
                    InitState InitState);
 
   inline void print();
@@ -72,7 +72,7 @@ public:
 
   inline VerType pop();
 
-  inline VerType impStackTop(unsigned N = 0);
+  inline VerType impStackTop(uint32_t N = 0);
 
   // pop an objref which might be an uninitialized 'this' ptr
   // See Partion 3 1.8.1.4
@@ -80,7 +80,7 @@ public:
   //   except for storing into and loading from the object's fields.
   inline VerType popPossiblyUninit();
 
-  inline unsigned stackLevel() { return Vsp; }
+  inline uint32_t stackLevel() { return Vsp; }
 
   bool isThisPublishable() {
     if (ThisInitialized == ThisInited || ThisInitialized == ThisEHReached)
@@ -100,7 +100,7 @@ public:
 
 void VerificationState::setStack(VerType *StackMem) { Vstack = StackMem; }
 
-void VerificationState::init(unsigned MaxStackSize, unsigned NumLocals,
+void VerificationState::init(uint32_t MaxStackSize, uint32_t NumLocals,
                              bool InitLocals, InitState InitState) {
   Vsp = 0;
   MaxStack = MaxStackSize;
@@ -119,7 +119,7 @@ void VerificationState::init(unsigned MaxStackSize, unsigned NumLocals,
   ThisInitialized = InitState;
   StrongThisInitialized = false;
 
-  for (unsigned I = 0; I < NumLocals; I++) {
+  for (uint32_t I = 0; I < NumLocals; I++) {
     ArgsInitialized[I] = InitLocals;
   }
 }
@@ -155,7 +155,7 @@ void VerificationState::push(VerType Typ) {
   Vsp++;
 }
 
-VerType VerificationState::impStackTop(unsigned N) {
+VerType VerificationState::impStackTop(uint32_t N) {
   Base->gverifyOrReturn(Vsp > N, MVER_E_STACK_UNDERFLOW);
 
   return Vstack[Vsp - N - 1];
@@ -169,35 +169,35 @@ class CallAuthorizationException : public ReaderException {};
 
 class VerificationException : public ReaderException {
 public:
-  DWORD DwFlags; // VER_ERR_XXX
+  uint32_t DwFlags; // VER_ERR_XXX
 
   union {
     ReaderBaseNS::OPCODE Opcode;
-    unsigned long Padding1; // to match with idl generated struct size
+    uint32_t Padding1; // to match with idl generated struct size
   };
 
   union {
-    DWORD DwOffset; // #of bytes from start of method
+    uint32_t DwOffset; // #of bytes from start of method
     long Offset;    // for backward compat with Metadata validator
   };
 
   union {
     mdToken Token; // for backward compat with metadata validator
-    BYTE CallConv;
+    uint8_t CallConv;
     CorElementType Elem;
-    DWORD StackSlot;        // positon in the Stack
-    unsigned long Padding2; // to match with idl generated struct size
+    uint32_t StackSlot;        // positon in the Stack
+    uint32_t Padding2; // to match with idl generated struct size
   };
 
   union {
-    DWORD Exception1; // Exception Record #
-    DWORD VarNumber;  // Variable #
-    DWORD ArgNumber;  // Argument #
-    DWORD Operand;    // Operand for the opcode
+    uint32_t Exception1; // Exception Record #
+    uint32_t VarNumber;  // Variable #
+    uint32_t ArgNumber;  // Argument #
+    uint32_t Operand;    // Operand for the opcode
   };
 
   union {
-    DWORD Exception2; // Exception Record #
+    uint32_t Exception2; // Exception Record #
   };
 };
 

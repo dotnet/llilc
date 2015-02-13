@@ -73,15 +73,15 @@ void EEMemoryManager::reserveAllocationSpace(uintptr_t CodeSize,
   this->Context->JitInfo->reserveUnwindInfo(FALSE, FALSE, DataSizeRO);
 
   // Treat all code for now as "hot section"
-  ULONG HotCodeSize = CodeSize;
-  ULONG ColdCodeSize = 0;
+  uint32_t HotCodeSize = CodeSize;
+  uint32_t ColdCodeSize = 0;
 
   // We still need to allocate space for the RO data here too, because
   // LLVM's dynamic loader does not know where the EE's reservation was made.
   // So this gives the dyamic loader room to copy the RO sections, and later
   // the EE will copy from there to the place it really keeps unwind data.
-  ULONG ReadOnlyDataSize = DataSizeRO;
-  ULONG ExceptionCount = 0;
+  uint32_t ReadOnlyDataSize = DataSizeRO;
+  uint32_t ExceptionCount = 0;
 
   // Remap alignment to the EE notion of alignment
   CorJitAllocMemFlag Flag =
@@ -118,8 +118,8 @@ void EEMemoryManager::registerEHFrames(uint8_t *Addr, uint64_t LoadAddr,
 
   // Assume this unwind covers the entire method. Later when
   // we have multiple unwind regions we'll need something more clever.
-  ULONG StartOffset = 0;
-  ULONG EndOffset = this->Context->HotCodeSize;
+  uint32_t StartOffset = 0;
+  uint32_t EndOffset = this->Context->HotCodeSize;
   this->Context->JitInfo->allocUnwindInfo(
       this->HotCodeBlock, nullptr, StartOffset, EndOffset, Size,
       (BYTE *)LoadAddr, CorJitFuncKind::CORJIT_FUNC_ROOT);

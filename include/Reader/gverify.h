@@ -22,8 +22,8 @@ class FlowGraphNode;
 // global verification structures
 typedef struct {
   FlowGraphNode *Block;
-  int TosIndex;
-  int SsaIndex;
+  int32_t TosIndex;
+  int32_t SsaIndex;
 } TOSTemp;
 
 struct TagGlobalVerifyData;
@@ -38,14 +38,14 @@ enum InitState {
 };
 
 struct TagGlobalVerifyData {
-  int MinStack;
-  int MaxStack;
-  int NetStack;
-  int TOSTempsCount;
+  int32_t MinStack;
+  int32_t MaxStack;
+  int32_t NetStack;
+  int32_t TOSTempsCount;
   TOSTemp *TOSTemps;
-  int SsaBase;
+  int32_t SsaBase;
 
-  int StkDepth;
+  int32_t StkDepth;
   VerType *TiStack;
   bool IsOnWorklist, BlockIsBad;
   GlobalVerifyData *WorklistPrev, *WorklistNext;

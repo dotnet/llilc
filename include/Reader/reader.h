@@ -17,6 +17,7 @@
 #define MSIL_READER_H
 
 #include <cstddef>
+#include <cstdint>
 #include <cwchar>
 #include <cstring>
 #include <cstdio>
@@ -130,7 +131,7 @@
 extern "C"
 #endif
     int
-    jitFilter(PEXCEPTION_POINTERS ExceptionPointersPtr, LPVOID Param);
+    jitFilter(PEXCEPTION_POINTERS ExceptionPointersPtr, void *Param);
 extern void _cdecl fatal(int Errnum, ...);
 
 // Global environment config variables (set by GetConfigString).
@@ -140,47 +141,47 @@ extern void _cdecl fatal(int Errnum, ...);
 extern "C" {
 #endif
 
-extern UINT EnvConfigCseOn;
+extern uint32_t EnvConfigCseOn;
 #ifndef NDEBUG
-extern UINT EnvConfigCseBinarySearch;
-extern UINT EnvConfigCseMax;
-extern UINT EnvConfigCopyPropMax;
-extern UINT EnvConfigDeadCodeMax;
-extern UINT EnvConfigCseStats;
+extern uint32_t EnvConfigCseBinarySearch;
+extern uint32_t EnvConfigCseMax;
+extern uint32_t EnvConfigCopyPropMax;
+extern uint32_t EnvConfigDeadCodeMax;
+extern uint32_t EnvConfigCseStats;
 #endif // !NDEBUG
 #if !defined(CC_PEVERIFY)
-extern UINT EnvConfigTailCallOpt;
+extern uint32_t EnvConfigTailCallOpt;
 #if !defined(NODEBUG)
-extern UINT EnvConfigDebugVerify;
-extern UINT EnvConfigTailCallMax;
+extern uint32_t EnvConfigDebugVerify;
+extern uint32_t EnvConfigTailCallMax;
 #endif // !NODEBUG
 #endif // !CC_PEVERIFY
-extern UINT EnvConfigPInvokeInline;
-extern UINT EnvConfigPInvokeCalliOpt;
-extern UINT EnvConfigNewGCCalc;
-extern UINT EnvConfigTurnOffDebugInfo;
-extern WCHAR *EnvConfigJitName;
+extern uint32_t EnvConfigPInvokeInline;
+extern uint32_t EnvConfigPInvokeCalliOpt;
+extern uint32_t EnvConfigNewGCCalc;
+extern uint32_t EnvConfigTurnOffDebugInfo;
+extern char16_t *EnvConfigJitName;
 
-extern BOOL HaveEnvConfigCseOn;
-extern BOOL HaveEnvConfigCseStats;
+extern bool HaveEnvConfigCseOn;
+extern bool HaveEnvConfigCseStats;
 #ifndef NDEBUG
-extern BOOL HaveEnvConfigCseBinarySearch;
-extern BOOL HaveEnvConfigCseMax;
-extern BOOL HaveEnvConfigCopyPropMax;
-extern BOOL HaveEnvConfigDeadCodeMax;
+extern bool HaveEnvConfigCseBinarySearch;
+extern bool HaveEnvConfigCseMax;
+extern bool HaveEnvConfigCopyPropMax;
+extern bool HaveEnvConfigDeadCodeMax;
 #endif // !NDEBUG
 #if !defined(CC_PEVERIFY)
-extern BOOL HaveEnvConfigTailCallOpt;
+extern bool HaveEnvConfigTailCallOpt;
 #if !defined(NODEBUG)
-extern BOOL HaveEnvConfigDebugVerify;
-extern BOOL HaveEnvConfigTailCallMax;
+extern bool HaveEnvConfigDebugVerify;
+extern bool HaveEnvConfigTailCallMax;
 #endif // !NODEBUG
 #endif // !CC_PEVERIFY
-extern BOOL HaveEnvConfigPInvokeInline;
-extern BOOL HaveEnvConfigPInvokeCalliOpt;
-extern BOOL HaveEnvConfigNewGCCalc;
-extern BOOL HaveEnvConfigTurnOffDebugInfo;
-extern BOOL HaveEnvConfigJitName;
+extern bool HaveEnvConfigPInvokeInline;
+extern bool HaveEnvConfigPInvokeCalliOpt;
+extern bool HaveEnvConfigNewGCCalc;
+extern bool HaveEnvConfigTurnOffDebugInfo;
+extern bool HaveEnvConfigJitName;
 
 } // extern "C"
 
@@ -209,8 +210,8 @@ struct RuntimeFilterParams : JITFilterCommonParams {
 };
 
 typedef struct {
-  INT NumGcPtrs;
-  BYTE GCLayout[0];
+  uint32_t NumGcPtrs;
+  uint8_t GCLayout[0];
 } GCLayoutStruct;
 
 #define GCLS_NUMGCPTRS(X) ((X)->NumGcPtrs)
@@ -246,7 +247,7 @@ class VerifyWorkList;
 class VerificationState;
 
 typedef enum {
-  Reader_AlignNatural = (unsigned char)~0, // Default natural alignment
+  Reader_AlignNatural = (uint8_t)~0, // Default natural alignment
   Reader_AlignUnknown = 0,
   Reader_Align1 = 1,
   Reader_Align2 = 2,
@@ -317,7 +318,7 @@ public:
   virtual void clearStack(void) = 0;
   virtual bool empty(void) = 0;
   virtual void assertEmpty(void) = 0;
-  virtual int depth() = 0;
+  virtual uint32_t depth() = 0;
 
   // For iteration, implement/use as needed by the client
   virtual IRNode *getIterator(ReaderStackIterator **) = 0;
@@ -325,7 +326,7 @@ public:
   virtual void iteratorReplace(ReaderStackIterator **, IRNode *) = 0;
   virtual IRNode *getReverseIterator(ReaderStackIterator **) = 0;
   virtual IRNode *getReverseIteratorFromDepth(ReaderStackIterator **,
-                                              int Depth) = 0;
+                                              uint32_t Depth) = 0;
   virtual IRNode *reverseIteratorGetNext(ReaderStackIterator **) = 0;
 
 #if defined(_DEBUG)
@@ -359,8 +360,8 @@ private:
   bool IsReadonlyCall;
 
   CorInfoIntrinsics CorIntrinsicId;
-  DWORD TargetMethodAttribs;
-  DWORD TargetClassAttribs;
+  uint32_t TargetMethodAttribs;
+  uint32_t TargetClassAttribs;
   CORINFO_METHOD_HANDLE TargetMethodHandle;
   CORINFO_CLASS_HANDLE TargetClassHandle;
   CORINFO_SIG_INFO SigInfo;
@@ -382,12 +383,12 @@ private:
   void fillTargetInfo(mdToken TargetToken, mdToken ConstraintToken,
                       CORINFO_CONTEXT_HANDLE Context,
                       CORINFO_MODULE_HANDLE Scope, CORINFO_METHOD_HANDLE Caller,
-                      unsigned int MsilOffset);
+                      uint32_t MsilOffset);
 
   void init(ReaderBase *Reader, mdToken TargetToken, mdToken ConstraintToken,
             mdToken LoadFtnToken, bool IsTailCall, bool IsUnmarkedTailCall,
             bool IsReadonlyCall, ReaderBaseNS::CallOpcode Opcode,
-            unsigned int MsilOffset, CORINFO_CONTEXT_HANDLE Context,
+            uint32_t MsilOffset, CORINFO_CONTEXT_HANDLE Context,
             CORINFO_MODULE_HANDLE Scope, CORINFO_METHOD_HANDLE Caller);
 
 public:
@@ -398,7 +399,7 @@ public:
     return &ResolvedConstraintToken;
   }
   CORINFO_METHOD_HANDLE getMethodHandle() { return TargetMethodHandle; }
-  DWORD getMethodAttribs() { return TargetMethodAttribs; };
+  uint32_t getMethodAttribs() { return TargetMethodAttribs; };
   CORINFO_SIG_INFO *getSigInfo() { return &SigInfo; };
   CORINFO_CALL_INFO *getCallInfo() {
     return IsCallInfoValid ? &CallInfo : NULL;
@@ -406,7 +407,7 @@ public:
   IRNode *getIndirectionCellNode() { return IndirectionCellNode; }
   IRNode *getCallTargetNode() { return CallTargetNode; }
 
-  DWORD getClassAttribs();
+  uint32_t getClassAttribs();
   CORINFO_CLASS_HANDLE getClassHandle();
 
   CORINFO_CONTEXT_HANDLE getExactContext();
@@ -480,10 +481,10 @@ EHRegion *rgnListGetRgn(EHRegionList *EhRegionList);
 void rgnListSetRgn(EHRegionList *EhRegionList, EHRegion *Rgn);
 ReaderBaseNS::RegionKind rgnGetRegionType(EHRegion *EhRegion);
 void rgnSetRegionType(EHRegion *EhRegion, ReaderBaseNS::RegionKind Type);
-DWORD rgnGetStartMSILOffset(EHRegion *EhRegion);
-void rgnSetStartMSILOffset(EHRegion *EhRegion, DWORD Offset);
-DWORD rgnGetEndMSILOffset(EHRegion *EhRegion);
-void rgnSetEndMSILOffset(EHRegion *EhRegion, DWORD Offset);
+uint32_t rgnGetStartMSILOffset(EHRegion *EhRegion);
+void rgnSetStartMSILOffset(EHRegion *EhRegion, uint32_t Offset);
+uint32_t rgnGetEndMSILOffset(EHRegion *EhRegion);
+void rgnSetEndMSILOffset(EHRegion *EhRegion, uint32_t Offset);
 IRNode *rgnGetHead(EHRegion *EhRegion);
 void rgnSetHead(EHRegion *EhRegion, IRNode *Head);
 IRNode *rgnGetLast(EHRegion *EhRegion);
@@ -503,7 +504,7 @@ void rgnSetTryBodyEnd(EHRegion *EhRegion, IRNode *Node);
 ReaderBaseNS::TryKind rgnGetTryType(EHRegion *EhRegion);
 void rgnSetTryType(EHRegion *EhRegion, ReaderBaseNS::TryKind Type);
 int rgnGetTryCanonicalExitOffset(EHRegion *TryRegion);
-void rgnSetTryCanonicalExitOffset(EHRegion *TryRegion, int Offset);
+void rgnSetTryCanonicalExitOffset(EHRegion *TryRegion, int32_t Offset);
 EHRegion *rgnGetExceptFilterRegion(EHRegion *EhRegion);
 void rgnSetExceptFilterRegion(EHRegion *EhRegion, EHRegion *FilterRegion);
 EHRegion *rgnGetExceptTryRegion(EHRegion *EhRegion);
@@ -550,7 +551,7 @@ void fgNodeSetIBCNotReal(FlowGraphNode *Fg);
 GlobalVerifyData *fgNodeGetGlobalVerifyData(FlowGraphNode *Fg);
 void fgNodeSetGlobalVerifyData(FlowGraphNode *Fg, GlobalVerifyData *GvData);
 
-unsigned fgNodeGetBlockNum(FlowGraphNode *Fg);
+uint32_t fgNodeGetBlockNum(FlowGraphNode *Fg);
 
 FlowGraphEdgeList *fgEdgeListGetNextSuccessor(FlowGraphEdgeList *FgEdge);
 FlowGraphEdgeList *fgEdgeListGetNextPredecessor(FlowGraphEdgeList *FgEdge);
@@ -573,14 +574,14 @@ FlowGraphEdgeList *fgNodeGetPredecessorListActual(FlowGraphNode *Fg);
 IRNode *irNodeGetNext(IRNode *Node);
 bool irNodeIsBranch(IRNode *Node);
 
-IRNode *irNodeGetInsertPointAfterMSILOffset(IRNode *Node, unsigned int Offset);
-IRNode *irNodeGetInsertPointBeforeMSILOffset(IRNode *Node, unsigned int Offset);
+IRNode *irNodeGetInsertPointAfterMSILOffset(IRNode *Node, uint32_t Offset);
+IRNode *irNodeGetInsertPointBeforeMSILOffset(IRNode *Node, uint32_t Offset);
 IRNode *
 irNodeGetFirstLabelOrInstrNodeInEnclosingBlock(IRNode *HandlerStartNode);
-unsigned int irNodeGetMSILOffset(IRNode *Node);
-void irNodeLabelSetMSILOffset(IRNode *Node, unsigned int LabelMSILOffset);
-void irNodeBranchSetMSILOffset(IRNode *BranchNode, unsigned int Offset);
-void irNodeExceptSetMSILOffset(IRNode *BranchNode, unsigned int Offset);
+uint32_t irNodeGetMSILOffset(IRNode *Node);
+void irNodeLabelSetMSILOffset(IRNode *Node, uint32_t Offset);
+void irNodeBranchSetMSILOffset(IRNode *BranchNode, uint32_t Offset);
+void irNodeExceptSetMSILOffset(IRNode *BranchNode, uint32_t Offset);
 void irNodeInsertBefore(IRNode *InsertionPointTuple, IRNode *NewNode);
 void irNodeInsertAfter(IRNode *InsertionPointTuple, IRNode *NewNode);
 void irNodeSetRegion(IRNode *Node, EHRegion *Region);
@@ -596,22 +597,22 @@ BranchList *branchListGetNext(BranchList *BranchList);
 IRNode *branchListGetIRNode(BranchList *BranchList);
 
 struct VerificationBranchInfo {
-  unsigned SrcOffset;
-  unsigned TargetOffset;
+  uint32_t SrcOffset;
+  uint32_t TargetOffset;
   IRNode *BranchOp;
   bool IsLeave;
 
   VerificationBranchInfo *Next;
 };
 
-ReaderBaseNS::OPCODE parseMSILOpcode(unsigned char *ILCursor,
-                                     unsigned char **OperandCursor,
-                                     unsigned int *Increment,
+ReaderBaseNS::OPCODE parseMSILOpcode(uint8_t *ILCursor,
+                                     uint8_t **OperandCursor,
+                                     uint32_t *Increment,
                                      ReaderBase *Reader);
 ReaderBaseNS::OPCODE
-parseMSILOpcodeSafely(unsigned char *ILInput, unsigned int CurretOffset,
-                      unsigned int ILInputSize, unsigned char **Operand,
-                      unsigned int *NextOffset, ReaderBase *Reader,
+parseMSILOpcodeSafely(uint8_t *ILInput, uint32_t CurretOffset,
+                      uint32_t ILInputSize, uint8_t **Operand,
+                      uint32_t *NextOffset, ReaderBase *Reader,
                       bool ReportError);
 
 ReaderBaseNS::CallOpcode remapCallOpcode(ReaderBaseNS::OPCODE Opcode);
@@ -622,7 +623,7 @@ struct ReadBytesForFlowGraphNodeHelperParam {
   FlowGraphNode *Fg;
   bool IsVerifyOnly;
   IRNode **NewIR; // Used in a trace pr post process
-  unsigned int CurrentOffset;
+  uint32_t CurrentOffset;
   bool LocalFault;
   bool HasFallThrough;
   VerificationState *VState;
@@ -631,7 +632,7 @@ struct ReadBytesForFlowGraphNodeHelperParam {
 
 class LoadTracker;
 
-static const int SizeOfCEECall = 5;
+static const int32_t SizeOfCEECall = 5;
 
 class ReaderBase {
   friend class ReaderCallTargetData;
@@ -657,12 +658,12 @@ public:
   FlowGraphNode *CurrentFgNode;
 
   bool HasLocAlloc;
-  unsigned CurrInstrOffset; // current instruction IL offset
+  uint32_t CurrInstrOffset; // current instruction IL offset
 
 private:
   // Private data (not available to derived client class)
   ICorJitInfo *JitInfo;
-  unsigned Flags; // original flags that were passed to compileMethod
+  uint32_t Flags; // original flags that were passed to compileMethod
 
   // SEQUENCE POINT Info
   ReaderBitVector *CustomSequencePoints;
@@ -680,7 +681,7 @@ private:
   // are maintained in order, which helps later replacement of temp branch
   // targets with real ones.
   FlowGraphNodeOffsetList **NodeOffsetListArray;
-  unsigned NodeOffsetListArraySize;
+  uint32_t NodeOffsetListArraySize;
 
   VerificationBranchInfo *BranchesToVerify;
 
@@ -690,7 +691,7 @@ private:
 protected:
   // how we track the pushes/pops to/from the stack across a basic block
   LoadTracker *LoadTracking;
-  unsigned CurrentBranchDepth;
+  uint32_t CurrentBranchDepth;
 
   // Verification Info
 public:
@@ -702,8 +703,8 @@ public:
 private:
   bool VerTrackObjCtorInitState;
   bool VerThisInitialized;
-  unsigned NumVerifyParams;
-  unsigned NumVerifyAutos;
+  uint32_t NumVerifyParams;
+  uint32_t NumVerifyAutos;
   bool ThisPtrModified;
   VerType *ParamVerifyMap;
   VerType *AutoVerifyMap;
@@ -724,49 +725,49 @@ public:
 protected:
 private:
   // Global Verification Info
-  unsigned short *GvStackPop;
-  unsigned short *GvStackPush;
+  uint16_t *GvStackPop;
+  uint16_t *GvStackPush;
   GlobalVerifyData *GvWorklistHead;
   GlobalVerifyData *GvWorklistTail;
 
 public:
   bool AreInlining;
   ReaderBase(ICorJitInfo *CorJitInfo, CORINFO_METHOD_INFO *MethodInfo,
-             unsigned Flags);
+             uint32_t Flags);
 
   // Main Reader Entry
   void msilToIR(void);
 
   // Call CreateSym for each param and auto. Also return function bytecode
   // start and length.
-  void initParamsAndAutos(unsigned int NumParam, unsigned int NumAuto);
+  void initParamsAndAutos(uint32_t NumParam, uint32_t NumAuto);
   void handleNonEmptyStack(FlowGraphNode *Fg, IRNode **NewIR, bool *FmbAssign);
 
   // Needed by inlining so public
   FlowGraphNode *buildFlowGraph(FlowGraphNode **FgTail);
-  FlowGraphNode *fgSplitBlock(FlowGraphNode *Block, unsigned int Offset,
+  FlowGraphNode *fgSplitBlock(FlowGraphNode *Block, uint32_t Offset,
                               IRNode *Node);
   CORINFO_ARG_LIST_HANDLE argListNext(CORINFO_ARG_LIST_HANDLE ArgListHandle,
                                       CORINFO_SIG_INFO *Sig,
                                       CorInfoType *CorType = NULL,
                                       CORINFO_CLASS_HANDLE *Class = NULL,
                                       bool *IsPinned = NULL);
-  void buildUpParams(unsigned int NumParams);
-  void buildUpAutos(unsigned int NumAutos);
+  void buildUpParams(uint32_t NumParams);
+  void buildUpAutos(uint32_t NumAutos);
 #if defined(_DEBUG)
   // Debug-only reader function to print range of MSIL.
-  void printMSIL(BYTE *Buf, unsigned StartOffset, unsigned EndOffset);
+  void printMSIL(uint8_t *Buf, uint32_t StartOffset, uint32_t EndOffset);
 #endif
 
-  void getMSILInstrStackDelta(ReaderBaseNS::OPCODE Opcode, BYTE *Operand,
-                              unsigned short *Pop, unsigned short *Push);
+  void getMSILInstrStackDelta(ReaderBaseNS::OPCODE Opcode, uint8_t *Operand,
+                              uint16_t *Pop, uint16_t *Push);
 
 private:
-  bool isUnmarkedTailCall(BYTE *ILInput, unsigned int ILInputSize,
-                          unsigned int NextOffset, mdToken Token);
-  bool isUnmarkedTailCallHelper(BYTE *ILInput, unsigned int ILInputSize,
-                                unsigned int NextOffset, mdToken Token);
-  bool checkExplicitTailCall(unsigned int ILOffset, BOOL AllowPop);
+  bool isUnmarkedTailCall(uint8_t *ILInput, uint32_t ILInputSize,
+                          uint32_t NextOffset, mdToken Token);
+  bool isUnmarkedTailCallHelper(uint8_t *ILInput, uint32_t ILInputSize,
+                                uint32_t NextOffset, mdToken Token);
+  bool checkExplicitTailCall(uint32_t ILOffset, bool AllowPop);
 
   // Reduce given block from MSIL to IR
   void readBytesForFlowGraphNode(FlowGraphNode *Fg, bool IsVerifyOnly);
@@ -779,7 +780,7 @@ public:
 private:
   void setupBlockForEH(IRNode **NewIR);
 
-  bool isOffsetInstrStart(unsigned int Offset);
+  bool isOffsetInstrStart(uint32_t Offset);
 
   // SEQUENCE POINTS
   void getCustomSequencePoints();
@@ -788,38 +789,38 @@ private:
   // FlowGraph
   //
 
-  FlowGraphNode *fgBuildBasicBlocksFromBytes(BYTE *Buffer,
-                                             unsigned int BufferSize);
-  void fgBuildPhase1(FlowGraphNode *Fg, BYTE *Buffer, unsigned BufferSize);
+  FlowGraphNode *fgBuildBasicBlocksFromBytes(uint8_t *Buffer,
+                                             uint32_t BufferSize);
+  void fgBuildPhase1(FlowGraphNode *Fg, uint8_t *Buffer, uint32_t BufferSize);
   void fgAttachGlobalVerifyData(FlowGraphNode *HeadBlock);
   void fgAddArcs(FlowGraphNode *HeadBlock);
   IRNode *fgAddCaseToCaseListHelper(IRNode *SwitchNode, IRNode *LabelNode,
-                                    unsigned int Element);
+                                    uint32_t Element);
   FlowGraphNodeWorkList *
   fgAppendUnvisitedSuccToWorklist(FlowGraphNodeWorkList *Worklist,
                                   FlowGraphNode *CurrBlock);
   void fgDeleteBlockAndNodes(FlowGraphNode *Block);
   void fgEnsureEnclosingRegionBeginsWithLabel(IRNode *HandlerStartNode);
-  EHRegion *fgGetRegionFromMSILOffset(unsigned int Offset);
-  FlowGraphNode *fgReplaceBranchTarget(unsigned int Offset,
+  EHRegion *fgGetRegionFromMSILOffset(uint32_t Offset);
+  FlowGraphNode *fgReplaceBranchTarget(uint32_t Offset,
                                        FlowGraphNode *TempBranchTarget,
                                        FlowGraphNode *StartBlock);
   void fgReplaceBranchTargets(void);
   void fgInsertTryEnd(EHRegion *EhRegion);
-  void fgInsertBeginRegionExceptionNode(unsigned int Offset, IRNode *EHNode);
-  void fgInsertEndRegionExceptionNode(unsigned int Offset, IRNode *EHNode);
+  void fgInsertBeginRegionExceptionNode(uint32_t Offset, IRNode *EHNode);
+  void fgInsertEndRegionExceptionNode(uint32_t Offset, IRNode *EHNode);
   void fgInsertEHAnnotations(EHRegion *Region);
   IRNode *fgMakeBranchHelper(IRNode *LabelNode, IRNode *BlockNode,
-                             unsigned int Offset, bool IsConditional,
+                             uint32_t Offset, bool IsConditional,
                              bool IsNominal);
-  IRNode *fgMakeEndFinallyHelper(IRNode *BlockNode, unsigned int Offset,
+  IRNode *fgMakeEndFinallyHelper(IRNode *BlockNode, uint32_t Offset,
                                  bool IsLexicalEnd);
   void fgRemoveUnusedBlocks(FlowGraphNode *FgHead, FlowGraphNode *FgTail);
-  unsigned int fgGetRegionCanonicalExitOffset(EHRegion *Region);
-  int *FgGetRegionCanonicalExitOffsetBuff;
+  uint32_t fgGetRegionCanonicalExitOffset(EHRegion *Region);
+  int32_t *FgGetRegionCanonicalExitOffsetBuff;
 
   // DomInfo - get and set properties of dominators
-  void initBlockArray(unsigned BlockCount);
+  void initBlockArray(uint32_t BlockCount);
   void *domInfoGetInfoFromDominator(
       FlowGraphNode *Fg, CorInfoHelpFunc Key1, CORINFO_CLASS_HANDLE Key2,
       bool *Key3, bool RequireSameRegion,
@@ -840,9 +841,9 @@ private:
   void domInfoRecordClassInit(FlowGraphNode *Fg, CORINFO_CLASS_HANDLE Class);
 
   FlowGraphNodeOffsetList *fgAddNodeMSILOffset(FlowGraphNode **Node,
-                                               unsigned int TargetOffset);
-  bool fgLeaveIsNonLocal(FlowGraphNode *Fg, unsigned int LeaveOffset,
-                         unsigned int LeaveTarget, bool *EndsWithNonLocalGoto);
+                                               uint32_t TargetOffset);
+  bool fgLeaveIsNonLocal(FlowGraphNode *Fg, uint32_t LeaveOffset,
+                         uint32_t LeaveTarget, bool *EndsWithNonLocalGoto);
 
   // =============================================================================
   // =============================================================================
@@ -868,7 +869,7 @@ private:
   EITVerBasicBlock *verEITAddBlock(ILOffset Start, ILOffset End);
   EITVerBasicBlock *verLookupBasicBlock(UINT32 X);
 
-  void verInitEHTree(unsigned NumEHClauses);
+  void verInitEHTree(uint32_t NumEHClauses);
   void verInsertEhNode(CORINFO_EH_CLAUSE *Clause,
                        EHBlockDescriptor *HandlerTab);
   void verInsertEhNodeInTree(EHNodeDescriptor **Root, EHNodeDescriptor *Node);
@@ -877,9 +878,9 @@ private:
   void verDispHandlerTab();
 
   inline ILOffset ebdTryEndOffset(EHBlockDescriptor *EhBlock);
-  inline unsigned ebdTryEndBlockNum(EHBlockDescriptor *EhBlock);
+  inline uint32_t ebdTryEndBlockNum(EHBlockDescriptor *EhBlock);
   inline ILOffset ebdHndEndOffset(EHBlockDescriptor *EhBlock);
-  inline unsigned ebdHndEndBlockNum(EHBlockDescriptor *EhBlock);
+  inline uint32_t ebdHndEndBlockNum(EHBlockDescriptor *EhBlock);
 
   // =============================================================================
   // =======  EHRegion Builder =============================================
@@ -908,8 +909,8 @@ public:
   void verifyCompatibleWith(const VerType &A, const VerType &B);
   void verifyEqual(const VerType &A, const VerType &B);
   void verifyEqualNotEquivalent(const VerType &A, const VerType &B);
-  void verifyAndReportFound(int Cond, const VerType &Type, HRESULT Message);
-  void verifyAndReportFound(int Cond, const VerType &Type, const char *Message);
+  void verifyAndReportFound(int32_t Cond, const VerType &Type, HRESULT Message);
+  void verifyAndReportFound(int32_t Cond, const VerType &Type, const char *Message);
   void verifyIsNumberType(const VerType &Type);
   void verifyIsIntegerType(const VerType &Type);
   void verifyIsObjRef(const VerType &Type);
@@ -923,8 +924,8 @@ public:
                                      const VerType *Expected,
                                      const VerType *Encountered, mdToken Token,
                                      bool AndThrow);
-  void verifyOrReturn(int Cond, const char *Message);
-  void gverifyOrReturn(int Cond, const char *Message);
+  void verifyOrReturn(int32_t Cond, const char *Message);
+  void gverifyOrReturn(int32_t Cond, const char *Message);
   void verGlobalError(const char *Message);
 #else
   void printVerificationErrorMessage(VerErrType Type, const char *Message,
@@ -935,12 +936,12 @@ public:
                                      const VerType *Expected,
                                      const VerType *Encountered, mdToken Token,
                                      bool AndThrow);
-  void verifyOrReturn(int Cond, HRESULT Code);
-  void gverifyOrReturn(int Cond, HRESULT Message);
+  void verifyOrReturn(int32_t Cond, HRESULT Code);
+  void gverifyOrReturn(int32_t Cond, HRESULT Message);
   void verGlobalError(HRESULT Message);
   // @todo get rid of
-  void verifyOrReturn(int Cond, const char *Message);
-  void gverifyOrReturn(int Cond, const char *Message);
+  void verifyOrReturn(int32_t Cond, const char *Message);
+  void gverifyOrReturn(int32_t Cond, const char *Message);
   void verGlobalError(const char *Message);
 #endif
 
@@ -949,7 +950,7 @@ public:
     EXCEPTION_POINTERS ExceptionPointers;
   };
   static LONG eeJITFilter(PEXCEPTION_POINTERS ExceptionPointersPtr,
-                          LPVOID Param);
+                          void *Param);
 
 protected:
   void clearStack(IRNode **NewIR);
@@ -957,11 +958,11 @@ protected:
   // Client defined function to initialize verification state.
   void verifyNeedsVerification();
   VerificationState *verifyInitializeBlock(FlowGraphNode *,
-                                           unsigned int ILOffset);
+                                           uint32_t ILOffset);
   void verPropEHInitFlow(FlowGraphNode *Block);
   void verPropHandlerInitFlow(FlowGraphNode *Block);
 
-  VerificationState *verCreateNewVState(unsigned MaxStack, unsigned NumLocals,
+  VerificationState *verCreateNewVState(uint32_t MaxStack, uint32_t NumLocals,
                                         bool InitLocals, InitState InitState);
   void verifyFinishBlock(VerificationState *VState, FlowGraphNode *);
   void verifyPropCtorInitToSucc(InitState CurrentState,
@@ -974,22 +975,22 @@ protected:
 
   void verInitCurrentState();
 
-  void verifyRecordBranchForVerification(IRNode *Branch, unsigned SourceOffset,
-                                         unsigned TargetOffset, bool IsLeave);
+  void verifyRecordBranchForVerification(IRNode *Branch, uint32_t SourceOffset,
+                                         uint32_t TargetOffset, bool IsLeave);
 
-  void verifyRecordLocalType(int Num, CorInfoType Type,
+  void verifyRecordLocalType(uint32_t Num, CorInfoType Type,
                              CORINFO_CLASS_HANDLE Class);
-  void verifyRecordParamType(int Num, CorInfoType Type,
+  void verifyRecordParamType(uint32_t Num, CorInfoType Type,
                              CORINFO_CLASS_HANDLE Class, bool MakeByRef,
                              bool IsThis);
-  void verifyRecordParamType(int Num, CORINFO_SIG_INFO *Sig,
+  void verifyRecordParamType(uint32_t Num, CORINFO_SIG_INFO *Sig,
                              CORINFO_ARG_LIST_HANDLE Args);
-  void verifyRecordLocalType(int Num, CORINFO_SIG_INFO *Sig,
+  void verifyRecordLocalType(uint32_t Num, CORINFO_SIG_INFO *Sig,
                              CORINFO_ARG_LIST_HANDLE Args);
   void verifyPushExceptionObject(VerificationState *VState, mdToken);
   void verifyFieldAccess(VerificationState *VState, ReaderBaseNS::OPCODE Opcode,
                          CORINFO_RESOLVED_TOKEN *ResolvedToken);
-  BOOL verIsCallToInitThisPtr(CORINFO_CLASS_HANDLE Context,
+  bool verIsCallToInitThisPtr(CORINFO_CLASS_HANDLE Context,
                               CORINFO_CLASS_HANDLE Target);
   void verifyLoadElemA(VerificationState *VState, bool HasReadOnlyPrefix,
                        CORINFO_RESOLVED_TOKEN *ResolvedToken);
@@ -1001,7 +1002,7 @@ protected:
                       CORINFO_RESOLVED_TOKEN *ResolvedToken);
   void verifyLoadObj(VerificationState *VState,
                      CORINFO_RESOLVED_TOKEN *ResolvedToken);
-  void verifyStloc(VerificationState *VState, unsigned LocalNumber);
+  void verifyStloc(VerificationState *VState, uint32_t LocalNumber);
   void verifyIsInst(VerificationState *VState,
                     CORINFO_RESOLVED_TOKEN *ResolvedToken);
   void verifyCastClass(VerificationState *VState,
@@ -1014,16 +1015,16 @@ protected:
   void verifyUnbox(VerificationState *VState,
                    CORINFO_RESOLVED_TOKEN *ResolvedToken);
   void verifyStoreElemRef(VerificationState *VState);
-  void verifyLdarg(VerificationState *VState, unsigned LocalNumber,
+  void verifyLdarg(VerificationState *VState, uint32_t LocalNumber,
                    ReaderBaseNS::OPCODE Opcode);
-  void verifyStarg(VerificationState *VState, unsigned LocalNumber);
-  void verifyLdloc(VerificationState *VState, unsigned LocalNumber,
+  void verifyStarg(VerificationState *VState, uint32_t LocalNumber);
+  void verifyLdloc(VerificationState *VState, uint32_t LocalNumber,
                    ReaderBaseNS::OPCODE Opcode);
   void verifyStoreElem(VerificationState *VState, ReaderBaseNS::StElemOpcode,
                        CORINFO_RESOLVED_TOKEN *ResolvedToken);
   void verifyLoadLen(VerificationState *VState);
-  void verifyDup(VerificationState *VState, const BYTE *CodeAddress);
-  void verifyEndFilter(VerificationState *VState, DWORD ILOffset);
+  void verifyDup(VerificationState *VState, const uint8_t *CodeAddress);
+  void verifyEndFilter(VerificationState *VState, uint32_t ILOffset);
   void verifyInitObj(VerificationState *VState,
                      CORINFO_RESOLVED_TOKEN *ResolvedToken);
   void verifyCall(VerificationState *VState, ReaderBaseNS::OPCODE Opcode,
@@ -1034,9 +1035,9 @@ protected:
                    CORINFO_RESOLVED_TOKEN *ResolvedToken);
   void verifyNewObj(VerificationState *VState, ReaderBaseNS::OPCODE Opcode,
                     bool SsTail, CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                    const BYTE *CodeAddress);
-  void verifyBoolBranch(VerificationState *VState, unsigned int NextOffset,
-                        unsigned TargetOffset);
+                    const uint8_t *CodeAddress);
+  void verifyBoolBranch(VerificationState *VState, uint32_t NextOffset,
+                        uint32_t TargetOffset);
   void verifyLoadNull(VerificationState *VState);
   void verifyLoadStr(VerificationState *VState, mdToken Token);
   void verifyIntegerBinary(VerificationState *VState);
@@ -1047,7 +1048,7 @@ protected:
   void verifyThrow(VerificationState *VState);
   void verifyLoadFtn(VerificationState *VState, ReaderBaseNS::OPCODE Opcode,
                      CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                     const BYTE *CodeAddress, CORINFO_CALL_INFO *CallInfo);
+                     const uint8_t *CodeAddress, CORINFO_CALL_INFO *CallInfo);
   void verifyNewArr(VerificationState *VState,
                     CORINFO_RESOLVED_TOKEN *ResolvedToken);
   void verifyLoadIndirect(VerificationState *VState,
@@ -1085,27 +1086,27 @@ protected:
 
   void verifyBranchTarget(VerificationState *VState,
                           FlowGraphNode *CurrentFGNode, EHRegion *SourceRegion,
-                          unsigned int TargetOffset, bool IsLeave);
-  void verifyReturnFlow(unsigned int SourceOffset);
+                          uint32_t TargetOffset, bool IsLeave);
+  void verifyReturnFlow(uint32_t SourceOffset);
 
   void verifyFallThrough(VerificationState *VState, FlowGraphNode *Fg);
 
   bool verCheckDelegateCreation(ReaderBaseNS::OPCODE Opcode,
                                 VerificationState *VState,
-                                const BYTE *CodeAddress,
+                                const uint8_t *CodeAddress,
                                 mdMemberRef &TargetMemberRef,
                                 VerType FunctionType, VerType ObjectType);
 
   void verVerifyCall(ReaderBaseNS::OPCODE Opcode,
                      const CORINFO_RESOLVED_TOKEN *ResolvedToken,
                      const CORINFO_CALL_INFO *CallInfo, bool IsTailCall,
-                     const BYTE *CodeAddress, VerificationState *VState);
+                     const uint8_t *CodeAddress, VerificationState *VState);
 
   void verifyIsMethodToken(mdToken Token);
   void verifyIsCallToken(mdToken Token);
   void verVerifyField(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                       const CORINFO_FIELD_INFO &FieldInfo,
-                      const VerType *ThisType, BOOL IsMutator);
+                      const VerType *ThisType, bool IsMutator);
   bool verIsValueClass(CORINFO_CLASS_HANDLE Class);
   bool verIsBoxedValueType(const VerType &Type);
   static bool verIsCallToken(mdToken Token);
@@ -1136,14 +1137,14 @@ protected:
 
   void eeGetMethodSig(CORINFO_METHOD_HANDLE Method, CORINFO_SIG_INFO *SigRet,
                       bool GiveUp, CORINFO_CLASS_HANDLE Owwner = NULL);
-  void eeGetCallSiteSig(unsigned SigToken, CORINFO_MODULE_HANDLE Scope,
+  void eeGetCallSiteSig(uint32_t SigToken, CORINFO_MODULE_HANDLE Scope,
                         CORINFO_CONTEXT_HANDLE Context,
                         CORINFO_SIG_INFO *SigRet, bool GiveUp = true);
 
   void verifyIsSDArray(const VerType &Type);
   bool verIsByRefLike(const VerType &Type);
   bool verIsSafeToReturnByRef(const VerType &Type);
-  BOOL verIsBoxable(const VerType &Type);
+  bool verIsBoxable(const VerType &Type);
 
 public:
   // ///////////////////////////////////////////////////////////////////////////
@@ -1190,7 +1191,7 @@ public:
                                        bool IsUnmarkedTailCall,
                                        bool IsReadonlyCall,
                                        ReaderBaseNS::CallOpcode Opcode,
-                                       unsigned int MsilOffset) {
+                                       uint32_t MsilOffset) {
     CallTargetData->init(this, TargetToken, ConstraintToken, mdTokenNil,
                          IsTailCall, IsUnmarkedTailCall, IsReadonlyCall, Opcode,
                          MsilOffset, getCurrentContext(),
@@ -1305,11 +1306,11 @@ public:
                    CORINFO_CALLINFO_FLAGS Flags, CORINFO_CALL_INFO *Result,
                    CORINFO_METHOD_HANDLE Caller);
 
-  unsigned int getClassNumInstanceFields(CORINFO_CLASS_HANDLE Class);
+  uint32_t getClassNumInstanceFields(CORINFO_CLASS_HANDLE Class);
   CORINFO_FIELD_HANDLE getFieldInClass(CORINFO_CLASS_HANDLE Class,
-                                       unsigned int Ordinal);
-  CorInfoType getFieldInfo(CORINFO_CLASS_HANDLE Class, unsigned int Ordinal,
-                           unsigned int *FieldOffset,
+                                       uint32_t Ordinal);
+  CorInfoType getFieldInfo(CORINFO_CLASS_HANDLE Class, uint32_t Ordinal,
+                           uint32_t *FieldOffset,
                            CORINFO_CLASS_HANDLE *FieldClass);
   void getFieldInfo(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                     CORINFO_ACCESS_FLAGS AccessFlags,
@@ -1321,17 +1322,17 @@ public:
 
   // Properties of current method.
   bool isZeroInitLocals(void);
-  unsigned int getCurrentMethodNumAutos(void);
+  uint32_t getCurrentMethodNumAutos(void);
   CORINFO_METHOD_HANDLE getCurrentMethodHandle(void);
   CORINFO_CLASS_HANDLE getCurrentMethodClass(void);
   CORINFO_CONTEXT_HANDLE getCurrentContext(void);
-  unsigned getCurrentMethodHash(void);
-  DWORD getCurrentMethodAttribs(void);
+  uint32_t getCurrentMethodHash(void);
+  uint32_t getCurrentMethodAttribs(void);
   char *getCurrentMethodName(const char **ModuleName);
   void getCurrentMethodSigData(CorInfoCallConv *Conv, CorInfoType *ReturnType,
                                CORINFO_CLASS_HANDLE *ReturnClass,
-                               int *TotalILArgs, bool *IsVarArg, bool *HasThis,
-                               unsigned __int8 *RetSig);
+                               int32_t *TotalILArgs, bool *IsVarArg, bool *HasThis,
+                               uint8_t *RetSig);
 
   // Get entry point for function (used *only* by direct calls)
   void getFunctionEntryPoint(CORINFO_METHOD_HANDLE Function,
@@ -1363,29 +1364,29 @@ public:
 public:
   CORINFO_CLASS_HANDLE getMethodClass(CORINFO_METHOD_HANDLE Handle);
   void getMethodVTableOffset(CORINFO_METHOD_HANDLE Handle,
-                             unsigned *OffsetOfIndirection,
-                             unsigned *OffsetAfterIndirection);
+                             uint32_t *OffsetOfIndirection,
+                             uint32_t *OffsetAfterIndirection);
   const char *getClassName(CORINFO_CLASS_HANDLE Class);
-  int appendClassName(WCHAR **Buffer, int *BufferLen,
-                      CORINFO_CLASS_HANDLE Class, BOOL IncludeNamespace,
-                      BOOL FullInst, BOOL IncludeAssembly);
+  int32_t appendClassName(char16_t **Buffer, int32_t *BufferLen,
+                      CORINFO_CLASS_HANDLE Class, bool IncludeNamespace,
+                      bool FullInst, bool IncludeAssembly);
   GCLayoutStruct *getClassGCLayout(CORINFO_CLASS_HANDLE Class);
-  DWORD getClassAttribs(CORINFO_CLASS_HANDLE Class);
-  unsigned int getClassSize(CORINFO_CLASS_HANDLE Class);
+  uint32_t getClassAttribs(CORINFO_CLASS_HANDLE Class);
+  uint32_t getClassSize(CORINFO_CLASS_HANDLE Class);
   CorInfoType getClassType(CORINFO_CLASS_HANDLE Class);
-  void getClassType(CORINFO_CLASS_HANDLE Class, DWORD Attribs,
-                    CorInfoType *CorInfoType, unsigned int *Size);
-  BOOL canInlineTypeCheckWithObjectVTable(CORINFO_CLASS_HANDLE Class);
+  void getClassType(CORINFO_CLASS_HANDLE Class, uint32_t Attribs,
+                    CorInfoType *CorInfoType, uint32_t *Size);
+  bool canInlineTypeCheckWithObjectVTable(CORINFO_CLASS_HANDLE Class);
   bool accessStaticFieldRequiresClassConstructor(CORINFO_FIELD_HANDLE);
   void classMustBeLoadedBeforeCodeIsRun(CORINFO_CLASS_HANDLE Handle);
   CorInfoInitClassResult initClass(CORINFO_FIELD_HANDLE Field,
                                    CORINFO_METHOD_HANDLE Method,
                                    CORINFO_CONTEXT_HANDLE Context,
-                                   BOOL Speculative = FALSE);
+                                   bool Speculative = false);
 
   // Class Alignment
 private:
-  unsigned int getClassAlignmentRequirement(CORINFO_CLASS_HANDLE);
+  uint32_t getClassAlignmentRequirement(CORINFO_CLASS_HANDLE);
   void *getMethodSync(bool *IsIndirect);
 
 public:
@@ -1408,7 +1409,7 @@ public:
   CORINFO_CLASS_HANDLE getTypeForBox(CORINFO_CLASS_HANDLE Class);
   CorInfoHelpFunc getBoxHelper(CORINFO_CLASS_HANDLE);
   CorInfoHelpFunc getUnBoxHelper(CORINFO_CLASS_HANDLE);
-  unsigned int getFieldOffset(CORINFO_FIELD_HANDLE);
+  uint32_t getFieldOffset(CORINFO_FIELD_HANDLE);
 
   void *getStaticFieldAddress(CORINFO_FIELD_HANDLE Field, bool *IsIndirect);
 
@@ -1416,12 +1417,12 @@ public:
   // method
   //
   const char *getMethodName(CORINFO_METHOD_HANDLE, const char **ModuleName);
-  DWORD getMethodAttribs(CORINFO_METHOD_HANDLE Handle);
+  uint32_t getMethodAttribs(CORINFO_METHOD_HANDLE Handle);
   void setMethodAttribs(CORINFO_METHOD_HANDLE Handle,
                         CorInfoMethodRuntimeFlags Flag);
 
-  BOOL checkMethodModifier(CORINFO_METHOD_HANDLE Method, LPCSTR Modifier,
-                           BOOL IsOptional);
+  bool checkMethodModifier(CORINFO_METHOD_HANDLE Method, LPCSTR Modifier,
+                           bool IsOptional);
   mdToken getMethodDefFromMethod(CORINFO_METHOD_HANDLE Handle);
   void getMethodSig(CORINFO_METHOD_HANDLE Handle, CORINFO_SIG_INFO *Sig);
   const char *getMethodRefInfo(CORINFO_METHOD_HANDLE Handle,
@@ -1429,8 +1430,8 @@ public:
                                CORINFO_CLASS_HANDLE *RetTypeClass,
                                const char **ModuleName);
   void getMethodSigData(CorInfoCallConv *Conv, CorInfoType *ReturnType,
-                        CORINFO_CLASS_HANDLE *ReturnClass, int *TotalILArgs,
-                        bool *IsVarArg, bool *HasThis, unsigned __int8 *RetSig);
+                        CORINFO_CLASS_HANDLE *ReturnClass, uint32_t *TotalILArgs,
+                        bool *IsVarArg, bool *HasThis, uint8_t *RetSig);
   void getMethodInfo(CORINFO_METHOD_HANDLE Handle, CORINFO_METHOD_INFO *Info);
   void methodMustBeLoadedBeforeCodeIsRun(CORINFO_METHOD_HANDLE Handle);
 
@@ -1458,7 +1459,7 @@ public:
   bool canTailCall(CORINFO_METHOD_HANDLE DeclaredTarget,
                    CORINFO_METHOD_HANDLE ExactTarget, bool IsTailPrefix);
   CorInfoInline canInline(CORINFO_METHOD_HANDLE Caller,
-                          CORINFO_METHOD_HANDLE Target, DWORD *Restrictions);
+                          CORINFO_METHOD_HANDLE Target, uint32_t *Restrictions);
   CORINFO_ARG_LIST_HANDLE getArgNext(CORINFO_ARG_LIST_HANDLE Args);
   CorInfoTypeWithMod getArgType(CORINFO_SIG_INFO *Sig,
                                 CORINFO_ARG_LIST_HANDLE Args,
@@ -1468,8 +1469,8 @@ public:
   CORINFO_CLASS_HANDLE getBuiltinClass(CorInfoClassId ClassId);
   CorInfoType getChildType(CORINFO_CLASS_HANDLE Class,
                            CORINFO_CLASS_HANDLE *ClassRet);
-  BOOL isSDArray(CORINFO_CLASS_HANDLE Class);
-  unsigned getArrayRank(CORINFO_CLASS_HANDLE Class);
+  bool isSDArray(CORINFO_CLASS_HANDLE Class);
+  uint32_t getArrayRank(CORINFO_CLASS_HANDLE Class);
 
   void *getHelperDescr(CorInfoHelpFunc HelpFuncId, bool *IsIndirect);
   CorInfoHelpFunc getNewHelper(CORINFO_RESOLVED_TOKEN *ResolvedToken);
@@ -1496,7 +1497,7 @@ public:
   // Support for filtering runtime-thrown exceptions
   //
   static int runtimeFilter(struct _EXCEPTION_POINTERS *ExceptionPointersPtr,
-                           PVOID Param);
+                           void *Param);
   void runtimeHandleException(struct _EXCEPTION_POINTERS *ExceptionPointersPtr);
 
   // ////////////////////////////////////////////////////////////////////
@@ -1510,10 +1511,10 @@ public:
   // MSIL Routines - client defined routines that are invoked by the reader.
   //                 One will be called for each msil opcode.
 
-  virtual unsigned int getPointerByteSize() = 0;
+  virtual uint32_t getPointerByteSize() = 0;
 
-  virtual void opcodeDebugPrint(BYTE *Buffer, unsigned StartOffset,
-                                unsigned EndOffset) = 0;
+  virtual void opcodeDebugPrint(uint8_t *Buffer, uint32_t StartOffset,
+                                uint32_t EndOffset) = 0;
 
   // Used for testing, client can force verification.
   virtual bool verForceVerification(void) = 0;
@@ -1527,7 +1528,7 @@ public:
   virtual void boolBranch(ReaderBaseNS::BoolBranchOpcode Opcode, IRNode *Arg1,
                           IRNode **NewIR) = 0;
   virtual IRNode *box(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
-                      IRNode **NewIR, unsigned int *NextOffset = NULL,
+                      IRNode **NewIR, uint32_t *NextOffset = NULL,
                       VerificationState *VState = NULL);
   virtual IRNode *binaryOp(ReaderBaseNS::BinaryOpcode Opcode, IRNode *Arg1,
                            IRNode *Arg2, IRNode **NewIR) = 0;
@@ -1536,7 +1537,7 @@ public:
   virtual IRNode *call(ReaderBaseNS::CallOpcode Opcode, mdToken Token,
                        mdToken ConstraintTypeRef, mdToken LoadFtnToken,
                        bool IsReadOnlyPrefix, bool IsTailCallPrefix,
-                       bool IsUnmarkedTailCall, unsigned int CurrentOffset,
+                       bool IsUnmarkedTailCall, uint32_t CurrentOffset,
                        bool *IsRecursiveTailCall, IRNode **NewIR) = 0;
   virtual IRNode *castClass(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                             IRNode *ObjRefNode, IRNode **NewIR);
@@ -1564,12 +1565,12 @@ public:
   virtual void endFilter(IRNode *Arg1, IRNode **NewIR) = 0;
 
   virtual FlowGraphNode *fgNodeGetNext(FlowGraphNode *FgNode) = 0;
-  virtual unsigned int fgNodeGetStartMSILOffset(FlowGraphNode *Fg) = 0;
+  virtual uint32_t fgNodeGetStartMSILOffset(FlowGraphNode *Fg) = 0;
   virtual void fgNodeSetStartMSILOffset(FlowGraphNode *Fg,
-                                        unsigned int Offset) = 0;
-  virtual unsigned int fgNodeGetEndMSILOffset(FlowGraphNode *Fg) = 0;
+                                        uint32_t Offset) = 0;
+  virtual uint32_t fgNodeGetEndMSILOffset(FlowGraphNode *Fg) = 0;
   virtual void fgNodeSetEndMSILOffset(FlowGraphNode *FgNode,
-                                      unsigned int Offset) = 0;
+                                      uint32_t Offset) = 0;
 
   virtual bool fgNodeIsVisited(FlowGraphNode *FgNode) = 0;
   virtual void fgNodeSetVisited(FlowGraphNode *FgNode, bool IsVisited) = 0;
@@ -1583,20 +1584,20 @@ public:
                        bool IsVolatile, IRNode **NewIR);
   virtual void initObj(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg2,
                        IRNode **NewIR);
-  virtual void insertThrow(CorInfoHelpFunc ThrowHelper, unsigned int Offset,
+  virtual void insertThrow(CorInfoHelpFunc ThrowHelper, uint32_t Offset,
                            IRNode **NewIR);
   virtual void jmp(ReaderBaseNS::CallOpcode Opcode, mdToken Token, bool HasThis,
                    bool HasVarArg, IRNode **NewIR) = 0;
 
-  virtual void leave(unsigned int TargetOffset, bool IsNonLocal,
+  virtual void leave(uint32_t TargetOffset, bool IsNonLocal,
                      bool EndsWithNonLocalGoto, IRNode **NewIR) = 0;
-  virtual IRNode *loadArg(unsigned int ArgOrdinal, bool IsJmp,
+  virtual IRNode *loadArg(uint32_t ArgOrdinal, bool IsJmp,
                           IRNode **NewIR) = 0;
-  virtual IRNode *loadLocal(unsigned int ArgOrdinal, IRNode **NewIR) = 0;
-  virtual IRNode *loadArgAddress(unsigned int ArgOrdinal, IRNode **NewIR) = 0;
-  virtual IRNode *loadLocalAddress(unsigned int LocOrdinal, IRNode **NewIR) = 0;
-  virtual IRNode *loadConstantI4(int Constant, IRNode **NewIR) = 0;
-  virtual IRNode *loadConstantI8(__int64 Constant, IRNode **NewIR) = 0;
+  virtual IRNode *loadLocal(uint32_t ArgOrdinal, IRNode **NewIR) = 0;
+  virtual IRNode *loadArgAddress(uint32_t ArgOrdinal, IRNode **NewIR) = 0;
+  virtual IRNode *loadLocalAddress(uint32_t LocOrdinal, IRNode **NewIR) = 0;
+  virtual IRNode *loadConstantI4(int32_t Constant, IRNode **NewIR) = 0;
+  virtual IRNode *loadConstantI8(int64_t Constant, IRNode **NewIR) = 0;
   virtual IRNode *loadConstantI(size_t Constant, IRNode **NewIR) = 0;
   virtual IRNode *loadConstantR4(float Value, IRNode **NewIR) = 0;
   virtual IRNode *loadConstantR8(double Value, IRNode **NewIR) = 0;
@@ -1659,7 +1660,7 @@ public:
   virtual IRNode *newArr(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
                          IRNode **NewIR) = 0;
   virtual IRNode *newObj(mdToken Token, mdToken LoadFtnToken,
-                         unsigned int CurrentOffset, IRNode **NewIR) = 0;
+                         uint32_t CurrentOffset, IRNode **NewIR) = 0;
   virtual void pop(IRNode *Opr, IRNode **NewIR) = 0;
   virtual IRNode *refAnyType(IRNode *Arg1, IRNode **NewIR) = 0;
   virtual IRNode *refAnyVal(IRNode *Val, CORINFO_RESOLVED_TOKEN *ResolvedToken,
@@ -1671,7 +1672,7 @@ public:
                         IRNode *ShiftOperand, IRNode **NewIR) = 0;
   virtual IRNode *sizeofOpcode(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                                IRNode **NewIR) = 0;
-  virtual void storeArg(unsigned int LocOrdinal, IRNode *Arg1,
+  virtual void storeArg(uint32_t LocOrdinal, IRNode *Arg1,
                         ReaderAlignType Alignment, bool IsVolatile,
                         IRNode **NewIR) = 0;
   virtual void storeElem(ReaderBaseNS::StElemOpcode Opcode,
@@ -1689,7 +1690,7 @@ public:
                                   CorInfoType CorType,
                                   ReaderAlignType Alignment, bool IsVolatile,
                                   IRNode **NewIR) = 0;
-  virtual void storeLocal(unsigned int LocOrdinal, IRNode *Arg1,
+  virtual void storeLocal(uint32_t LocOrdinal, IRNode *Arg1,
                           ReaderAlignType Alignment, bool IsVolatile,
                           IRNode **NewIR) = 0;
   virtual void storeObj(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
@@ -1724,8 +1725,8 @@ public:
   virtual void nop(IRNode **NewIR) = 0;
 
   virtual void insertIBCAnnotations() = 0;
-  virtual IRNode *insertIBCAnnotation(FlowGraphNode *Node, unsigned int Count,
-                                      unsigned int Offset) = 0;
+  virtual IRNode *insertIBCAnnotation(FlowGraphNode *Node, uint32_t Count,
+                                      uint32_t Offset) = 0;
 
   // Insert class constructor
   virtual void insertClassConstructor(IRNode **NewIR);
@@ -1742,10 +1743,10 @@ public:
   methodNeedsToKeepAliveGenericsContext(bool KeepGenericsCtxtAlive) = 0;
 
   // Called to instantiate an empty reader stack.
-  virtual ReaderStack *createStack(int MaxStack, ReaderBase *Reader) = 0;
+  virtual ReaderStack *createStack(uint32_t MaxStack, ReaderBase *Reader) = 0;
 
   // Called when reader begins processing method.
-  virtual void readerPrePass(BYTE *Buffer, unsigned int NumBytes) = 0;
+  virtual void readerPrePass(uint8_t *Buffer, uint32_t NumBytes) = 0;
 
   // Called between building the flow graph and inserting the IR
   virtual void readerMiddlePass(void) = 0;
@@ -1754,10 +1755,10 @@ public:
   virtual void readerPostPass(bool IsImportOnly) = 0;
 
   // Called at the start of block processing
-  virtual void beginFlowGraphNode(FlowGraphNode *Fg, unsigned int CurrentOffset,
+  virtual void beginFlowGraphNode(FlowGraphNode *Fg, uint32_t CurrentOffset,
                                   bool IsVerifyOnly) = 0;
   // Called at the end of block processing.
-  virtual void endFlowGraphNode(FlowGraphNode *Fg, unsigned int CurrentOffset,
+  virtual void endFlowGraphNode(FlowGraphNode *Fg, uint32_t CurrentOffset,
                                 IRNode **NewIR) = 0;
 
   // Used to maintain operand stack.
@@ -1772,20 +1773,20 @@ public:
 
   virtual void removeStackInterference(IRNode **NewIR) = 0;
 
-  virtual void removeStackInterferenceForLocalStore(unsigned int Opcode,
-                                                    unsigned int Ordinal,
+  virtual void removeStackInterferenceForLocalStore(uint32_t Opcode,
+                                                    uint32_t Ordinal,
                                                     IRNode **NewIR) = 0;
 
   // Remove all IRNodes from block (for verification error processing.)
   virtual void clearCurrentBlock(IRNode **NewIR) = 0;
 
   // Called when an assert occurs (debug only)
-  static void debugError(const char *Filename, unsigned LineNumber,
+  static void debugError(const char *Filename, uint32_t LineNumber,
                          const char *Message);
 
   // Notify client of alignment problem
   virtual void verifyStaticAlignment(void *Pointer, CorInfoType CorType,
-                                     unsigned MinClassAlign) = 0;
+                                     uint32_t MinClassAlign) = 0;
 
   // non-debug fatal error (verification badcode, jit can't continue, etc...)
   static void fatal(int Errnum);
@@ -1795,10 +1796,11 @@ public:
   virtual bool generateDebugInfo() { return false; }
   virtual bool generateDebugEnC() { return false; }
 
-  virtual void *getTempMemory(
-      unsigned Bytes) = 0; // Allocate temporary (Reader lifetime) memory
-  virtual void *
-  getProcMemory(unsigned Bytes) = 0; // Allocate procedure-lifetime memory
+  // Allocate temporary (Reader lifetime) memory
+  virtual void *getTempMemory(size_t Bytes) = 0;
+
+ // Allocate procedure-lifetime memory
+  virtual void *getProcMemory(size_t Bytes) = 0;
 
   virtual EHRegion *rgnAllocateRegion() = 0;
   virtual EHRegionList *rgnAllocateRegionList() = 0;
@@ -1810,7 +1812,7 @@ public:
   virtual void fgPostPhase(void) = 0;
   virtual FlowGraphNode *fgGetHeadBlock(void) = 0;
   virtual FlowGraphNode *fgGetTailBlock(void) = 0;
-  virtual unsigned fgGetBlockCount(void) = 0;
+  virtual uint32_t fgGetBlockCount(void) = 0;
   virtual FlowGraphNode *fgNodeGetIDom(FlowGraphNode *Fg) = 0;
 
   virtual IRNode *fgNodeFindStartLabel(FlowGraphNode *Block) = 0;
@@ -1845,12 +1847,12 @@ public:
   virtual bool fgIsExceptRegionStartNode(IRNode *Node) = 0;
   virtual FlowGraphNode *fgSplitBlock(FlowGraphNode *Block, IRNode *Node) = 0;
   virtual void fgSetBlockToRegion(FlowGraphNode *Block, EHRegion *Region,
-                                  unsigned int LastOffset) = 0;
+                                  uint32_t LastOffset) = 0;
   virtual IRNode *fgMakeBranch(IRNode *LabelNode, IRNode *BlockNode,
-                               unsigned int CurrentOffset, bool IsConditional,
+                               uint32_t CurrentOffset, bool IsConditional,
                                bool IsNominal) = 0;
   virtual IRNode *fgMakeEndFinally(IRNode *BlockNode,
-                                   unsigned int CurrentOffset,
+                                   uint32_t CurrentOffset,
                                    bool IsLexicalEnd) = 0;
 
   // turns an unconditional branch to the entry label into a fall-through
@@ -1862,10 +1864,10 @@ public:
   virtual IRNode *fgMakeThrow(IRNode *Node) = 0;
   virtual IRNode *fgMakeRethrow(IRNode *Node) = 0;
   virtual IRNode *fgAddCaseToCaseList(IRNode *SwitchNode, IRNode *LabelNode,
-                                      unsigned Element) = 0;
+                                      uint32_t Element) = 0;
   virtual void insertEHAnnotationNode(IRNode *InsertionPointNode,
                                       IRNode *Node) = 0;
-  virtual FlowGraphNode *makeFlowGraphNode(unsigned int TargetOffset,
+  virtual FlowGraphNode *makeFlowGraphNode(uint32_t TargetOffset,
                                            EHRegion *Region) = 0;
   virtual void markAsEHLabel(IRNode *LabelNode) = 0;
   virtual IRNode *makeTryEndNode(void) = 0;
@@ -1877,7 +1879,7 @@ public:
   // is a recursive tail
   // call and thus should be turned into a loop
   virtual bool fgCall(ReaderBaseNS::OPCODE Opcode, mdToken Token,
-                      mdToken ConstraintToken, unsigned ILOffset, IRNode *Block,
+                      mdToken ConstraintToken, uint32_t ILOffset, IRNode *Block,
                       bool CanInline, bool IsTailCall, bool IsUnmarkedTailCall,
                       bool IsReadOnly) = 0;
 
@@ -1917,7 +1919,7 @@ public:
 
   // Helper callback used by rdrCall to emit call code.
   virtual IRNode *genCall(ReaderCallTargetData *CallTargetDaTA,
-                          CallArgTriple *Args, unsigned int NumArgs,
+                          CallArgTriple *Args, uint32_t NumArgs,
                           IRNode **CallNode, IRNode **NewIR) = 0;
 
   virtual bool canMakeDirectCall(ReaderCallTargetData *CallTargetData) = 0;
@@ -1937,13 +1939,13 @@ public:
                                           IRNode **NewIR) = 0;
 
   virtual IRNode *convertToHelperArgumentType(IRNode *Opr,
-                                              unsigned int DestinationSize,
+                                              uint32_t DestinationSize,
                                               IRNode **NewIR) = 0;
 
   virtual IRNode *genNullCheck(IRNode *Node, IRNode **NewIR) = 0;
 
   virtual void
-  createSym(int Num, bool IsAuto, CorInfoType CorType,
+  createSym(uint32_t Num, bool IsAuto, CorInfoType CorType,
             CORINFO_CLASS_HANDLE Class, bool IsPinned,
             ReaderSpecialSymbolType Type = Reader_NotSpecialSymbol) = 0;
 
@@ -1971,7 +1973,7 @@ public:
   virtual IRNode *makePtrNode(ReaderPtrType PointerType = Reader_PtrNotGc) = 0;
   virtual IRNode *makeStackTypeNode(IRNode *Node) = 0;
   virtual IRNode *makeCallReturnNode(CORINFO_SIG_INFO *Sig,
-                                     unsigned *HiddenMBParamSize,
+                                     uint32_t *HiddenMBParamSize,
                                      GCLayoutStruct **GCLayout) = 0;
 
   virtual IRNode *makeDirectCallTargetNode(CORINFO_METHOD_HANDLE Method,
@@ -1982,9 +1984,9 @@ public:
                          EHRegionList *EhRegionList) = 0;
 
   // Line number info
-  virtual void sequencePoint(int Offset, ReaderBaseNS::OPCODE PrevOp,
+  virtual void sequencePoint(int32_t Offset, ReaderBaseNS::OPCODE PrevOp,
                              IRNode **NewIR);
-  virtual void setSequencePoint(unsigned int, ICorDebugInfo::SourceTypes,
+  virtual void setSequencePoint(uint32_t, ICorDebugInfo::SourceTypes,
                                 IRNode **NewIR) = 0;
   virtual bool needSequencePoints() = 0;
 
@@ -2009,10 +2011,10 @@ public:
   virtual void dbPrintIRNode(IRNode *NewIR) = 0;
   virtual void dbPrintFGNode(FlowGraphNode *Fg) = 0;
   virtual void dbPrintEHRegion(EHRegion *Eh) = 0;
-  virtual DWORD dbGetFuncHash(void) = 0;
+  virtual uint32_t dbGetFuncHash(void) = 0;
 #endif
 
-  static bool rdrIsMethodVirtual(DWORD MethodAttribs);
+  static bool rdrIsMethodVirtual(uint32_t MethodAttribs);
 
 private:
   ///////////////////////////////////////////////////////////////////////
@@ -2022,7 +2024,7 @@ private:
   ///////////////////////////////////////////////////////////////////////
 
   // Deferred NYI map for Leave instructions (temporary)
-  std::map<unsigned, const char *> NyiLeaveMap;
+  std::map<uint32_t, const char *> NyiLeaveMap;
 };
 
 // this is a helper class for tracking what is loaded onto the stack so
@@ -2038,16 +2040,16 @@ private:
 
   struct LTNode {
     LTNodeType Type : 4;
-    unsigned CandidateILOffset : 28;
+    uint32_t CandidateILOffset : 28;
   };
 
   LTNode *Stack;
-  unsigned Top;
-  unsigned MaxStack;
+  uint32_t Top;
+  uint32_t MaxStack;
   bool IsValidProgram;
 
 public:
-  void init(ReaderBase *Reader, unsigned MaxStack) {
+  void init(ReaderBase *Reader, uint32_t MaxStack) {
     this->Stack = (LTNode *)Reader->getProcMemory(sizeof(LTNode) * MaxStack);
     this->MaxStack = MaxStack;
     this->Top = 0;
@@ -2065,9 +2067,9 @@ public:
     this->Stack[this->Top++].CandidateILOffset = 0;
   }
 
-  void loadOther(unsigned Count) {
+  void loadOther(uint32_t Count) {
     CHECK_VALID(this->Top + Count <= this->MaxStack);
-    for (unsigned I = this->Top; I < (this->Top + Count); I++) {
+    for (uint32_t I = this->Top; I < (this->Top + Count); I++) {
       this->Stack[I].Type = LT_Other;
       this->Stack[I].CandidateILOffset = 0;
     }
@@ -2088,13 +2090,13 @@ public:
     this->Stack[this->Top++].CandidateILOffset = 0;
   }
 
-  void loadRetVal(unsigned CandMSILOffset) {
+  void loadRetVal(uint32_t CandMSILOffset) {
     CHECK_VALID(this->Top < this->MaxStack);
     this->Stack[this->Top].Type = LT_Retval;
     this->Stack[this->Top++].CandidateILOffset = CandMSILOffset;
   }
 
-  void unload(unsigned N) {
+  void unload(uint32_t N) {
     CHECK_VALID(true);
     if (this->Top <= N)
       this->Top = 0;
@@ -2104,17 +2106,17 @@ public:
 
   void unload() { this->unload(1); }
 
-  bool checkFirstParamIsThis(unsigned NumArgs) {
+  bool checkFirstParamIsThis(uint32_t NumArgs) {
     return this->IsValidProgram && (this->Top >= NumArgs) &&
            (this->Stack[this->Top - NumArgs].Type == LT_This);
   }
 
-  unsigned numConstantParams(unsigned NumArgs) {
-    unsigned RetVal = 0;
+  uint32_t numConstantParams(uint32_t NumArgs) {
+    uint32_t RetVal = 0;
     if (this->IsValidProgram) {
       // if by scanning we find any constant arguments return true
       // (this could be changed to a percentage?)
-      for (unsigned I = 0; I < NumArgs && I < this->Top; I++) {
+      for (uint32_t I = 0; I < NumArgs && I < this->Top; I++) {
         if (this->Stack[this->Top - I - 1].Type == LT_Constant)
           RetVal++;
       }
@@ -2122,12 +2124,12 @@ public:
     return RetVal;
   }
 
-  unsigned numAddressParams(unsigned NumArgs) {
-    unsigned RetVal = 0;
+  uint32_t numAddressParams(uint32_t NumArgs) {
+    uint32_t RetVal = 0;
     if (this->IsValidProgram) {
       // if by scanning we find any constant arguments return true
       // (this could be changed to a percentage?)
-      for (unsigned I = 0; I < NumArgs && I < this->Top; I++) {
+      for (uint32_t I = 0; I < NumArgs && I < this->Top; I++) {
         if (this->Stack[this->Top - I - 1].Type == LT_Address)
           RetVal++;
       }
@@ -2135,12 +2137,12 @@ public:
     return RetVal;
   }
 
-  unsigned offsetIsRetVal(unsigned Offset) {
+  uint32_t offsetIsRetVal(uint32_t Offset) {
     return this->IsValidProgram && (this->Top >= Offset) &&
            (this->Stack[this->Top - Offset].Type == LT_Retval);
   }
 
-  unsigned offsetGetMSILOffset(unsigned Offset) {
+  uint32_t offsetGetMSILOffset(uint32_t Offset) {
     return this->Stack[this->Top - Offset].CandidateILOffset;
   }
 
@@ -2160,8 +2162,9 @@ public:
 #define IL_LOADTYPE(ILCursor__, Type)                                          \
   {                                                                            \
     Type RetVal;                                                               \
-    for (unsigned I = 0; I < sizeof(Type); ++I)                                \
-      ((BYTE *)&RetVal)[I] = ((BYTE *)(ILCursor__))[sizeof(Type) - I - 1];     \
+    for (uint32_t I = 0; I < sizeof(Type); ++I)                                \
+      ((uint8_t *)&RetVal)[I] =                                                \
+          ((uint8_t *)(ILCursor__))[sizeof(Type) - I - 1];                     \
     return RetVal;                                                             \
   }
 #else
@@ -2172,40 +2175,40 @@ public:
   }
 #endif
 
-inline signed char readInt8(BYTE *ILCursor) {
-  IL_LOADTYPE(ILCursor, signed char);
+inline int8_t readInt8(uint8_t *ILCursor) {
+  IL_LOADTYPE(ILCursor, int8_t);
 }
 
-inline unsigned char readUInt8(BYTE *ILCursor) {
-  IL_LOADTYPE(ILCursor, unsigned char);
+inline uint8_t readUInt8(uint8_t *ILCursor) {
+  IL_LOADTYPE(ILCursor, uint8_t);
 }
 
-inline signed short readInt16(BYTE *ILCursor) {
-  IL_LOADTYPE(ILCursor, signed short);
+inline int16_t readInt16(uint8_t *ILCursor) {
+  IL_LOADTYPE(ILCursor, int16_t);
 }
 
-inline unsigned short readUInt16(BYTE *ILCursor) {
-  IL_LOADTYPE(ILCursor, unsigned short);
+inline uint16_t readUInt16(uint8_t *ILCursor) {
+  IL_LOADTYPE(ILCursor, uint16_t);
 }
 
-inline signed int readInt32(BYTE *ILCursor) {
-  IL_LOADTYPE(ILCursor, signed int);
+inline int32_t readInt32(uint8_t *ILCursor) {
+  IL_LOADTYPE(ILCursor, int32_t);
 }
 
-inline unsigned int readUInt32(BYTE *ILCursor) {
-  IL_LOADTYPE(ILCursor, unsigned int);
+inline uint32_t readUInt32(uint8_t *ILCursor) {
+  IL_LOADTYPE(ILCursor, uint32_t);
 }
 
-inline __int64 readInt64(BYTE *ILCursor) { IL_LOADTYPE(ILCursor, __int64); }
+inline int64_t readInt64(uint8_t *ILCursor) { IL_LOADTYPE(ILCursor, int64_t); }
 
-inline mdToken readToken(BYTE *ILCursor) { IL_LOADTYPE(ILCursor, mdToken); }
+inline mdToken readToken(uint8_t *ILCursor) { IL_LOADTYPE(ILCursor, mdToken); }
 
-inline float readF32(BYTE *ILCursor) { IL_LOADTYPE(ILCursor, float); }
+inline float readF32(uint8_t *ILCursor) { IL_LOADTYPE(ILCursor, float); }
 
-inline double readF64(BYTE *ILCursor) { IL_LOADTYPE(ILCursor, double); }
+inline double readF64(uint8_t *ILCursor) { IL_LOADTYPE(ILCursor, double); }
 
-inline void *readPtr(BYTE *ILCursor) {
-  typedef int *PtrType;
+inline void *readPtr(uint8_t *ILCursor) {
+  typedef void *PtrType;
   IL_LOADTYPE(ILCursor, PtrType);
 }
 

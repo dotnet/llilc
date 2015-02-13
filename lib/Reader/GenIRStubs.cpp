@@ -44,7 +44,7 @@ void fgNodeSetGlobalVerifyData(FlowGraphNode *Fg, GlobalVerifyData *GvData) {
   throw NotYetImplementedException("fgNodeSetGlobalVerifyData");
 }
 
-unsigned int fgNodeGetBlockNum(FlowGraphNode *Fg) {
+uint32_t fgNodeGetBlockNum(FlowGraphNode *Fg) {
   throw NotYetImplementedException("fgNodeGetBlockNum");
 }
 
@@ -68,12 +68,12 @@ bool irNodeIsBranch(IRNode *Node) {
   throw NotYetImplementedException("irNodeIsBranch");
 }
 
-IRNode *irNodeGetInsertPointAfterMSILOffset(IRNode *Node, unsigned int Offset) {
+IRNode *irNodeGetInsertPointAfterMSILOffset(IRNode *Node, uint32_t Offset) {
   throw NotYetImplementedException("irNodeGetInsertPointAfterMSILOffset");
 }
 
 IRNode *irNodeGetInsertPointBeforeMSILOffset(IRNode *Node,
-                                             unsigned int Offset) {
+                                             uint32_t Offset) {
   throw NotYetImplementedException("irNodeGetInsertPointBeforeMSILOffset");
 }
 
@@ -83,19 +83,19 @@ irNodeGetFirstLabelOrInstrNodeInEnclosingBlock(IRNode *HandlerStartNode) {
       "irNodeGetFirstLabelOrInstrNodeInEnclosingBlock");
 }
 
-unsigned int irNodeGetMSILOffset(IRNode *Node) {
+uint32_t irNodeGetMSILOffset(IRNode *Node) {
   throw NotYetImplementedException("irNodeGetMSILOffset");
 }
 
-void irNodeLabelSetMSILOffset(IRNode *Node, unsigned int LabelMSILOffset) {
+void irNodeLabelSetMSILOffset(IRNode *Node, uint32_t LabelMSILOffset) {
   throw NotYetImplementedException("irNodeLabelSetMSILOffset");
 }
 
-void irNodeBranchSetMSILOffset(IRNode *BranchNode, unsigned int Offset) {
+void irNodeBranchSetMSILOffset(IRNode *BranchNode, uint32_t Offset) {
   throw NotYetImplementedException("irNodeBranchSetMSILOffset");
 }
 
-void irNodeExceptSetMSILOffset(IRNode *BranchNode, unsigned int Offset) {
+void irNodeExceptSetMSILOffset(IRNode *BranchNode, uint32_t Offset) {
   throw NotYetImplementedException("irNodeExceptSetMSILOffset");
 }
 
@@ -136,7 +136,7 @@ IRNode *branchListGetIRNode(BranchList *BranchList) {
 void ReaderBase::verifyNeedsVerification() { return; }
 
 VerificationState *ReaderBase::verifyInitializeBlock(FlowGraphNode *,
-                                                     unsigned int IlOffset) {
+                                                     uint32_t IlOffset) {
   return NULL;
 }
 
@@ -144,8 +144,8 @@ void ReaderBase::verPropEHInitFlow(FlowGraphNode *Block) { return; }
 
 void ReaderBase::verPropHandlerInitFlow(FlowGraphNode *Block) { return; }
 
-VerificationState *ReaderBase::verCreateNewVState(unsigned MaxStack,
-                                                  unsigned NumLocals,
+VerificationState *ReaderBase::verCreateNewVState(uint32_t MaxStack,
+                                                  uint32_t NumLocals,
                                                   bool InitLocals,
                                                   InitState InitState) {
   return NULL;
@@ -177,23 +177,23 @@ ReaderBase::verifyFindFaultHandlerBlock(VerificationState *Vstate,
   return NULL;
 }
 
-void ReaderBase::verifyRecordLocalType(int Num, CorInfoType Type,
+void ReaderBase::verifyRecordLocalType(uint32_t Num, CorInfoType Type,
                                        CORINFO_CLASS_HANDLE ClassHandle) {
   return;
 }
 
-void ReaderBase::verifyRecordParamType(int Num, CorInfoType Type,
+void ReaderBase::verifyRecordParamType(uint32_t Num, CorInfoType Type,
                                        CORINFO_CLASS_HANDLE ClassHandle,
                                        bool MakeByRef, bool IsThis) {
   return;
 }
 
-void ReaderBase::verifyRecordParamType(int Num, CORINFO_SIG_INFO *Sig,
+void ReaderBase::verifyRecordParamType(uint32_t Num, CORINFO_SIG_INFO *Sig,
                                        CORINFO_ARG_LIST_HANDLE Args) {
   return;
 }
 
-void ReaderBase::verifyRecordLocalType(int Num, CORINFO_SIG_INFO *Sig,
+void ReaderBase::verifyRecordLocalType(uint32_t Num, CORINFO_SIG_INFO *Sig,
                                        CORINFO_ARG_LIST_HANDLE Args) {
   return;
 }
@@ -209,7 +209,7 @@ void ReaderBase::verifyFieldAccess(VerificationState *Vstate,
   return;
 }
 
-BOOL verIsCallToInitThisPtr(CORINFO_CLASS_HANDLE Context,
+bool verIsCallToInitThisPtr(CORINFO_CLASS_HANDLE Context,
                             CORINFO_CLASS_HANDLE Ttarget) {
   return FALSE;
 }
@@ -240,7 +240,7 @@ void ReaderBase::verifyLoadObj(VerificationState *Vstate,
   return;
 }
 
-void ReaderBase::verifyStloc(VerificationState *Vstate, unsigned int Locnum) {
+void ReaderBase::verifyStloc(VerificationState *Vstate, uint32_t Locnum) {
   return;
 }
 
@@ -273,16 +273,16 @@ void ReaderBase::verifyUnbox(VerificationState *Vstate,
 
 void ReaderBase::verifyStoreElemRef(VerificationState *Vstate) { return; }
 
-void ReaderBase::verifyLdarg(VerificationState *Vstate, unsigned int Locnum,
+void ReaderBase::verifyLdarg(VerificationState *Vstate, uint32_t Locnum,
                              ReaderBaseNS::OPCODE Opcode) {
   return;
 }
 
-void ReaderBase::verifyStarg(VerificationState *Vstate, unsigned int Locnum) {
+void ReaderBase::verifyStarg(VerificationState *Vstate, uint32_t Locnum) {
   return;
 }
 
-void ReaderBase::verifyLdloc(VerificationState *Vstate, unsigned int Locnum,
+void ReaderBase::verifyLdloc(VerificationState *Vstate, uint32_t Locnum,
                              ReaderBaseNS::OPCODE Opcode) {
   return;
 }
@@ -295,11 +295,11 @@ void ReaderBase::verifyStoreElem(VerificationState *Vstate,
 
 void ReaderBase::verifyLoadLen(VerificationState *Vstate) { return; }
 
-void ReaderBase::verifyDup(VerificationState *Vstate, const BYTE *CodeAddr) {
+void ReaderBase::verifyDup(VerificationState *Vstate, const uint8_t *CodeAddr) {
   return;
 }
 
-void ReaderBase::verifyEndFilter(VerificationState *Vstate, DWORD MsilOffset) {
+void ReaderBase::verifyEndFilter(VerificationState *Vstate, uint32_t MsilOffset) {
   return;
 }
 
@@ -324,13 +324,13 @@ void ReaderBase::verifyCpObj(VerificationState *Vstate,
 void ReaderBase::verifyNewObj(VerificationState *Vstate,
                               ReaderBaseNS::OPCODE Opcode, bool IsTail,
                               CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                              const BYTE *CodeAddr) {
+                              const uint8_t *CodeAddr) {
   return;
 }
 
 void ReaderBase::verifyBoolBranch(VerificationState *Vstate,
-                                  unsigned int NextOffset,
-                                  unsigned int TargetOffset) {
+                                  uint32_t NextOffset,
+                                  uint32_t TargetOffset) {
   return;
 }
 
@@ -360,7 +360,7 @@ void ReaderBase::verifyThrow(VerificationState *Vstate) { return; }
 void ReaderBase::verifyLoadFtn(VerificationState *Vstate,
                                ReaderBaseNS::OPCODE Opcode,
                                CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                               const BYTE *CodeAddr,
+                               const uint8_t *CodeAddr,
                                CORINFO_CALL_INFO *CallInfo) {
   return;
 }
@@ -461,11 +461,11 @@ void ReaderBase::verifyLeave(VerificationState *Vstate) { return; }
 void ReaderBase::verifyBranchTarget(VerificationState *Vstate,
                                     FlowGraphNode *CurrentFGNode,
                                     EHRegion *SrcRegion,
-                                    unsigned int TargetOffset, bool IsLeave) {
+                                    uint32_t TargetOffset, bool IsLeave) {
   return;
 }
 
-void ReaderBase::verifyReturnFlow(unsigned int SrcOffset) { return; }
+void ReaderBase::verifyReturnFlow(uint32_t SrcOffset) { return; }
 
 void ReaderBase::verifyFallThrough(VerificationState *Vstate,
                                    FlowGraphNode *Fg) {
@@ -473,7 +473,7 @@ void ReaderBase::verifyFallThrough(VerificationState *Vstate,
 }
 
 bool verCheckDelegateCreation(ReaderBaseNS::OPCODE Opcode,
-                              VerificationState *Vstate, const BYTE *CodeAddr,
+                              VerificationState *Vstate, const uint8_t *CodeAddr,
                               mdMemberRef &TargetMemberRef, VerType FtnType,
                               VerType ObjType) {
   return false;
@@ -482,7 +482,7 @@ bool verCheckDelegateCreation(ReaderBaseNS::OPCODE Opcode,
 void ReaderBase::verVerifyCall(ReaderBaseNS::OPCODE Opcode,
                                const CORINFO_RESOLVED_TOKEN *ResolvedToken,
                                const CORINFO_CALL_INFO *CallInfo, bool TailCall,
-                               const BYTE *CodeAddr,
+                               const uint8_t *CodeAddr,
                                VerificationState *Vstate) {
   return;
 }
@@ -493,7 +493,7 @@ void ReaderBase::verifyIsCallToken(mdToken Token) { return; }
 
 void ReaderBase::verVerifyField(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                                 const CORINFO_FIELD_INFO &FieldInfo,
-                                const VerType *TiThis, BOOL Mutator) {
+                                const VerType *TiThis, bool Mutator) {
   return;
 }
 
@@ -533,7 +533,7 @@ int _cdecl dbPrint(const char *Format, ...) {
   return NumChars;
 }
 
-BOOL HaveEnvConfigTailCallOpt = FALSE;
-UINT EnvConfigTailCallOpt = 0;
-BOOL HaveEnvConfigTailCallMax = FALSE;
-UINT EnvConfigTailCallMax = 0;
+bool HaveEnvConfigTailCallOpt = false;
+uint32_t EnvConfigTailCallOpt = 0;
+bool HaveEnvConfigTailCallMax = false;
+uint32_t EnvConfigTailCallMax = 0;
