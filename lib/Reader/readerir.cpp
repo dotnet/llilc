@@ -1784,11 +1784,11 @@ FlowGraphNode *fgEdgeListGetSource(FlowGraphEdgeList *FgEdge) {
 }
 
 void GenIR::fgNodeSetOperandStack(FlowGraphNode *Fg, ReaderStack *Stack) {
-  FlowGraphInfoMap[Fg].ReaderStack = Stack;
+  FlowGraphInfoMap[Fg].TheReaderStack = Stack;
 }
 
 ReaderStack *GenIR::fgNodeGetOperandStack(FlowGraphNode *Fg) {
-  return FlowGraphInfoMap[Fg].ReaderStack;
+  return FlowGraphInfoMap[Fg].TheReaderStack;
 }
 
 bool GenIR::fgNodeIsVisited(FlowGraphNode *Fg) {

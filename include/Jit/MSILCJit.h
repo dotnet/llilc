@@ -34,7 +34,8 @@ class MSILCJitContext {
 public:
   MSILCJitContext(MSILCJitPerThreadState *State);
   ~MSILCJitContext();
-  llvm::Module *getModuleForMethod(CORINFO_METHOD_INFO *MethodInfo);
+  std::unique_ptr<llvm::Module>
+  getModuleForMethod(CORINFO_METHOD_INFO *MethodInfo);
   void outputDebugMethodName();
   inline BYTE getILByte() { return *((BYTE *&)ILCursor)++; }
   inline DWORD getILDword() { return *((UNALIGNED DWORD *&)ILCursor)++; }

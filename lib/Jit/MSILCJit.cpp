@@ -145,16 +145,15 @@ CorJitResult MSILCJit::compileMethod(ICorJitInfo *JitInfo,
 
   // Fill in context information from LLVM
   Context.LLVMContext = &PerThreadState->LLVMContext;
-  Module *M = Context.getModuleForMethod(MethodInfo);
-  Context.CurrentModule = M;
+  std::unique_ptr<Module> M = Context.getModuleForMethod(MethodInfo);
+  Context.CurrentModule = M.get();
 
-  EngineBuilder Builder(M);
+  EngineBuilder Builder(std::move(M));
   std::string ErrStr;
   Builder.setErrorStr(&ErrStr);
-  Builder.setUseMCJIT(true);
 
-  RTDyldMemoryManager *MM = new EEMemoryManager(&Context);
-  Builder.setMCJITMemoryManager(MM);
+  std::unique_ptr<RTDyldMemoryManager> MM(new EEMemoryManager(&Context));
+  Builder.setMCJITMemoryManager(std::move(MM));
 
   TargetOptions Options;
 
@@ -212,7 +211,8 @@ CorJitResult MSILCJit::compileMethod(ICorJitInfo *JitInfo,
   return Result;
 }
 
-Module *MSILCJitContext::getModuleForMethod(CORINFO_METHOD_INFO *MethodInfo) {
+std::unique_ptr<Module>
+MSILCJitContext::getModuleForMethod(CORINFO_METHOD_INFO *MethodInfo) {
   // Grab name info from the EE.
   const char *DebugClassName = NULL;
   const char *DebugMethodName = NULL;
@@ -223,7 +223,7 @@ Module *MSILCJitContext::getModuleForMethod(CORINFO_METHOD_INFO *MethodInfo) {
   ModName.append(1, '.');
   ModName.append(DebugMethodName);
 
-  Module *M = NULL;
+  std::unique_ptr<Module> M;
   char *BitcodePath = getenv("BITCODE_PATH");
 
   if (BitcodePath != NULL) {
@@ -235,7 +235,7 @@ Module *MSILCJitContext::getModuleForMethod(CORINFO_METHOD_INFO *MethodInfo) {
     Path.append("\\");
     Path.append(ModName);
     Path.append(".bc");
-    M = llvm::ParseIRFile(Path, Err, *this->LLVMContext);
+    M = llvm::parseIRFile(Path, Err, *this->LLVMContext);
 
     if (!M) {
       // Err.print("IR Parsing failed: ", errs());
@@ -249,10 +249,10 @@ Module *MSILCJitContext::getModuleForMethod(CORINFO_METHOD_INFO *MethodInfo) {
   }
 
   if (!this->HasLoadedBitCode) {
-    M = new Module(ModName, *this->LLVMContext);
+    M = std::unique_ptr<Module>(new Module(ModName, *this->LLVMContext));
   }
 
-  return M;
+  return std::move(M);
 }
 
 // Read method MSIL and construct LLVM bitcode

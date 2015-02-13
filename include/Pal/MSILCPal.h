@@ -149,7 +149,7 @@
 #define __inout_ecount(count)
 #define __deref_inout_ecount(count)
 
-#ifdef  __cplusplus
+#if defined(__cplusplus)
 extern "C" {
 #endif
 
@@ -160,16 +160,18 @@ extern "C" {
 #define EXTERN_C
 #endif // __cplusplus
 
-#if defined(__llvm__)
-#define DECLSPEC_ALIGN(x)   __declspec(align(x))
-#else
-#define DECLSPEC_ALIGN(x) 
-#endif
-
 #define _ASSERTE assert
 #define __assume(x) (void)0
 
 #define UNALIGNED
+
+#if !defined(_HOST_X86_)
+#define __stdcall
+#endif
+
+#if defined(__GNUC__)
+#define __cdecl __attribute__((cdecl))
+#endif
 
 #define PALIMPORT EXTERN_C
 #define PALAPI __stdcall
@@ -371,7 +373,7 @@ namespace StaticContract
 {
     struct ScanThrowMarkerStandard
     {
-        __declspec(noinline) ScanThrowMarkerStandard()
+        __attribute__((noinline)) ScanThrowMarkerStandard()
         {
             METHOD_CANNOT_BE_FOLDED_DEBUG;
             STATIC_CONTRACT_THROWS;
@@ -382,7 +384,7 @@ namespace StaticContract
 
     struct ScanThrowMarkerTerminal
     {
-        __declspec(noinline) ScanThrowMarkerTerminal()
+        __attribute__((noinline)) ScanThrowMarkerTerminal()
         {
             METHOD_CANNOT_BE_FOLDED_DEBUG;
         }
@@ -390,7 +392,7 @@ namespace StaticContract
 
     struct ScanThrowMarkerIgnore
     {
-        __declspec(noinline) ScanThrowMarkerIgnore()
+        __attribute__((noinline)) ScanThrowMarkerIgnore()
         {
             METHOD_CANNOT_BE_FOLDED_DEBUG;
         }
@@ -479,7 +481,7 @@ extern "C"
     // Exception Handling ABI Level II: C++ ABI
     //
 
-    void *__cxa_begin_catch(void *exceptionObject);
+    void *__cxa_begin_catch(void *exceptionObject) throw();
     void __cxa_end_catch();
 
 #if defined(__cplusplus)
@@ -720,8 +722,7 @@ typedef GUID CLSID;
 #define REFCLSID const CLSID *
 #endif
 
-#define DECLSPEC_UUID(x) __declspec(uuid(x))
-#define MIDL_INTERFACE(x)   struct DECLSPEC_UUID(x) __declspec(novtable)
+#define MIDL_INTERFACE(x)   struct DECLSPEC_NOVTABLE
 
 #define EXTERN_GUID(itf,l1,s1,s2,c1,c2,c3,c4,c5,c6,c7,c8)                      \
     EXTERN_C const IID DECLSPEC_SELECTANY itf =                                \
