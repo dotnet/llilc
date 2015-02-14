@@ -2860,12 +2860,12 @@ bool GenIR::canonNewObjCall(IRNode *CallNode,
         LLVMBuilder->CreateAddrSpaceCast(AllocaInst, ManagedPointerType);
     Value *CalledValue = CallInstruction->getCalledValue();
     PointerType *CalledValueType =
-      dyn_cast<PointerType>(CalledValue->getType());
+        dyn_cast<PointerType>(CalledValue->getType());
     FunctionType *FuncType =
-      dyn_cast<FunctionType>(CalledValueType->getElementType());
+        dyn_cast<FunctionType>(CalledValueType->getElementType());
     Type *ThisType = FuncType->getFunctionParamType(0);
     ManagedPointerToStruct =
-      LLVMBuilder->CreatePointerCast(ManagedPointerToStruct, ThisType);
+        LLVMBuilder->CreatePointerCast(ManagedPointerToStruct, ThisType);
     CallInstruction->setArgOperand(0, ManagedPointerToStruct);
     LLVMBuilder->SetInsertPoint(CurrentBlock, SavedInsertPoint);
     *OutResult = (IRNode *)LLVMBuilder->CreateLoad(AllocaInst);
