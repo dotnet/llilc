@@ -6521,7 +6521,7 @@ LONG objectFilter(PEXCEPTION_POINTERS ExceptionPointersPtr, LPVOID Param) {
       (ReadBytesForFlowGraphNodeHelperParam *)Param;
 
   if (ExceptionPointersPtr->ExceptionRecord->ExceptionCode ==
-      JIT64_READEREXCEPTION_CODE) {
+      MSILCJIT_READEREXCEPTION_CODE) {
     ReadParam->Excep =
         *(ReaderException **)
              ExceptionPointersPtr->ExceptionRecord->ExceptionInformation;
