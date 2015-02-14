@@ -3800,12 +3800,11 @@ void GenIR::removeStackInterferenceForLocalStore(unsigned int Opcode,
 
 void GenIR::maintainOperandStack(IRNode **Opr1, IRNode **Opr2, IRNode **NewIR) {
 
-  BasicBlock *CurrentBlock = LLVMBuilder->GetInsertPoint()->getParent();
-
   if (ReaderOperandStack->depth() == 0) {
     return;
   }
 
+  BasicBlock *CurrentBlock = LLVMBuilder->GetInsertBlock();
   FlowGraphEdgeList *SuccessorList =
       fgNodeGetSuccessorListActual((FlowGraphNode *)CurrentBlock);
 
