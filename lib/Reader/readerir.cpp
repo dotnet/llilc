@@ -3009,19 +3009,20 @@ IRNode *GenIR::conv(ReaderBaseNS::ConvOpcode Opcode, IRNode *Arg1,
   Type *SourceTy = Arg1->getType();
   Type *TargetTy = getType(Info.CorType, NULL);
   const bool SourceIsSigned = !Info.SourceIsUnsigned;
+  const bool DestIsSigned = TargetTy->isIntegerTy() && isSigned(Info.CorType);
   Value *Conversion = nullptr;
 
   if (SourceTy == TargetTy) {
     Conversion = Arg1;
   } else if (SourceTy->isIntegerTy() && TargetTy->isIntegerTy()) {
-    Conversion = LLVMBuilder->CreateIntCast(Arg1, TargetTy, SourceIsSigned);
+    Conversion = LLVMBuilder->CreateIntCast(Arg1, TargetTy, DestIsSigned);
   } else if (SourceTy->isPointerTy() && TargetTy->isIntegerTy()) {
     Conversion = LLVMBuilder->CreatePtrToInt(Arg1, TargetTy);
   } else if (SourceTy->isIntegerTy() && TargetTy->isFloatingPointTy()) {
     Conversion = SourceIsSigned ? LLVMBuilder->CreateSIToFP(Arg1, TargetTy)
       : LLVMBuilder->CreateUIToFP(Arg1, TargetTy);
   } else if (SourceTy->isFloatingPointTy() && TargetTy->isIntegerTy()) {
-    Conversion = SourceIsSigned ? LLVMBuilder->CreateFPToSI(Arg1, TargetTy)
+    Conversion = DestIsSigned ? LLVMBuilder->CreateFPToSI(Arg1, TargetTy)
       : LLVMBuilder->CreateFPToUI(Arg1, TargetTy);
   } else if (SourceTy->isFloatingPointTy() && TargetTy->isFloatingPointTy()) {
     Conversion = LLVMBuilder->CreateFPCast(Arg1, TargetTy);
