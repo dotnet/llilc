@@ -130,7 +130,7 @@ function ValidatePreConditions
   else {
     $VSExists = Test-Path $Env:VS120COMNTOOLS
     if (!$VSExists) {
-      throw "!!! Visual Studio 12.0 not available in specified location." 
+      throw "!!! Visual Studio 12.0 not available." 
     }
   }
 
@@ -140,7 +140,7 @@ function ValidatePreConditions
   if (!$GitExists) {
     $GitExists = Test-Path $DefaultGit;
     if (!$GitExists) {
-      Write-Warning "!!! Git not specified." 
+      throw "!!! Git not specified." 
     }
     else {
       $Env:GITDIR = $DefaultGit
@@ -149,7 +149,7 @@ function ValidatePreConditions
   else {
     $GitExists = Test-Path $Env:GITDIR
     if (!$GitExists) {
-      Write-Warning "!!! Git not available in specified location." 
+      throw "!!! Git not available." 
     }
   }
 
@@ -159,7 +159,7 @@ function ValidatePreConditions
   if (!$CMakeExists) {
     $CMakeExists = Test-Path $DefaultCMake;
     if (!$CMakeExists) {
-      Write-Warning "!!! CMake not specified." 
+      throw "!!! CMake not specified." 
     }
     else {
       $Env:CMAKEDIR = $DefaultCMake
@@ -168,7 +168,7 @@ function ValidatePreConditions
   else {
     $CMakeExists = Test-Path $Env:CMAKEDIR
     if (!$CMakeExists) {
-      Write-Warning "!!! CMake not available in specified location." 
+      throw "!!! CMake not available." 
     }
   }
 
@@ -178,7 +178,7 @@ function ValidatePreConditions
   if (!$PythonExists) {
     $PythonExists = Test-Path $DefaultPython;
     if (!$PythonExists) {
-      Write-Warning "!!! Python not specified." 
+      throw "!!! Python not specified." 
     }
     else {
       $Env:PYTHONDIR = $DefaultPython
@@ -187,7 +187,7 @@ function ValidatePreConditions
   else {
     $PythonExists = Test-Path $Env:PYTHONDIR
     if (!$PythonExists) {
-      Write-Warning "!!! Python not available in specified location." 
+      throw "!!! Python not available." 
     }
   }
 
@@ -197,7 +197,7 @@ function ValidatePreConditions
   if (!$GnuWin32Exists) {
     $GnuWin32Exists = Test-Path $DefaultGnuWin32;
     if (!$GnuWin32Exists) {
-      Write-Warning "!!! GnuWin32 not specified." 
+      throw "!!! GnuWin32 not specified." 
     }
     else {
       $Env:GNUWIN32DIR = $DefaultGnuWin32
@@ -206,7 +206,7 @@ function ValidatePreConditions
   else {
     $GnuWin32Exists = Test-Path $Env:GNUWIN32DIR
     if (!$GnuWin32Exists) {
-      Write-Warning "!!! GnuWin32 not available in specified location." 
+      throw "!!! GnuWin32 not available." 
     }
   }
 
@@ -385,7 +385,7 @@ function ValidatePreConditions
   if (!$DiffExists) {
     $DiffExists = Test-Path "$DefaultDiffTool"
     if (!$DiffExists) {
-      Write-Warning "!!! Diff Tool not specified." 
+      throw "!!! Diff Tool not specified." 
     }
     else {
       $Env:DIFFTOOL = "$DefaultDiffTool"
@@ -394,7 +394,7 @@ function ValidatePreConditions
   else {
     $DiffExists = Test-Path "$Env:DIFFTOOL"
     if (!$DiffExists) {
-      Write-Warning "!!! Diff Tool not available." 
+      throw "!!! Diff Tool not available." 
     }
   }
 }
@@ -472,22 +472,6 @@ function SetVCVars
 
 # -------------------------------------------------------------------------
 #
-# Check if executable is already on the Path
-#
-# -------------------------------------------------------------------------
-
-function IsOnPath([string]$executable)
-{
-  if (Get-Command $executable -ErrorAction SilentlyContinue) {
-    return $TRUE
-  }
-  else {
-    return $FALSE
-  }
-}
-
-# -------------------------------------------------------------------------
-#
 # Do the rest of environment setup after validation
 # 
 # -------------------------------------------------------------------------
@@ -495,24 +479,11 @@ function IsOnPath([string]$executable)
 function CompleteEnvInit
 {
   SetVCVars
-  
-  # Only add directories to path if the executables are not already on PATH
-  if (-Not (IsOnPath("git.exe"))) {
-    $Env:PATH = $Env:PATH + ";$Env:GITDIR\cmd"
-  }
-
-  if (-Not (IsOnPath("cmake.exe"))) {
-    $Env:PATH = $Env:PATH + ";$Env:CMAKEDIR\bin"
-  }
-
-  if (-Not (IsOnPath("python.exe"))) {
-    $Env:PATH = $Env:PATH + ";$Env:PYTHONDIR"
-    $Env:PATH = $Env:PATH + ";$Env:PYTHONDIR\DLLs"
-  }
-  
-  if (-Not (IsOnPath("grep.exe"))) {
-    $Env:PATH = $Env:PATH + ";$Env:GNUWIN32DIR\bin"
-  }
+  $Env:PATH = $Env:PATH + ";$Env:GITDIR\cmd"
+  $Env:PATH = $Env:PATH + ";$Env:CMAKEDIR\bin"
+  $Env:PATH = $Env:PATH + ";$Env:PYTHONDIR"
+  $Env:PATH = $Env:PATH + ";$Env:PYTHONDIR\DLLs"
+  $Env:PATH = $Env:PATH + ";$Env:GNUWIN32DIR\bin"
 
   $Global:JitName = "MSILCJit"
   $Env:MSILCJIT = "$Env:LLVMBUILD\bin\$BUILD\$Global:JitName.dll"
