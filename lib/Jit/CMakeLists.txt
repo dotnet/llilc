@@ -15,7 +15,9 @@ set(LLVM_LINK_COMPONENTS
   native
   )
 
-if ( WIN32 )
+set(MSILCJIT_LINK_LIBRARIES msilcReader)
+
+if (WIN32)
   set(CMAKE_CXX_FLAGS "-EHsc")
 
   # Create .def file containing a list of exports preceeded by
@@ -34,6 +36,10 @@ if ( WIN32 )
 
   set(SHARED_LIB_SOURCES ${SOURCES} ${MSILCJIT_EXPORTS_DEF})
 else()
+  if (UNIX)
+    set(MSILCJIT_LINK_LIBRARIES ${MSILCJIT_LINK_LIBRARIES} coreclr)
+  endif()
+
   set(SHARED_LIB_SOURCES ${SOURCES})
 endif()
 
@@ -56,5 +62,5 @@ add_dependencies(
 target_link_libraries(
   msilcjit
   ${cmake_2_8_12_PRIVATE}
-  msilcReader
+  ${MSILCJIT_LINK_LIBRARIES}
   )

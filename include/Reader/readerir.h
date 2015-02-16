@@ -33,7 +33,7 @@ public:
   unsigned int StartMSILOffset;
   unsigned int EndMSILOffset;
   bool IsVisited;
-  ReaderStack *ReaderStack;
+  ReaderStack *TheReaderStack;
 };
 
 class IRNode : public llvm::Value {};

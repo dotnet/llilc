@@ -8,6 +8,8 @@ if( CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
     "Path to LLVM source code. Not necessary if using an installed LLVM.")
   set(MSILCJIT_PATH_TO_LLVM_BUILD "" CACHE PATH
     "Path to the directory where LLVM was built or installed.")
+  set(MSILCJIT_PATH_TO_CORECLR_BUILD "" CACHE PATH
+    "Path to the directory containing the CoreCLR drop to build against.")
 
   if( MSILCJIT_PATH_TO_LLVM_SOURCE )
     if( NOT EXISTS "${MSILCJIT_PATH_TO_LLVM_SOURCE}/cmake/config-ix.cmake" )
@@ -318,6 +320,12 @@ add_definitions( -D_GNU_SOURCE )
 add_definitions( -DFEATURE_CORECLR )
 
 if (UNIX)
+  if (NOT EXISTS "${MSILCJIT_PATH_TO_CORECLR_BUILD}/libcoreclr.so")
+    message(FATAL_ERROR "Please set MSILCJIT_PATH_TO_CORECLR_BUILD to a directory containing a CoreCLR build.")
+  else()
+    link_directories("${MSILCJIT_PATH_TO_CORECLR_BUILD}")
+  endif()
+
   add_definitions( -DPLATFORM_UNIX )
   include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/Pal/Rt)
 else()
