@@ -305,7 +305,7 @@ bool MSILCJit::outputGCInfo(MSILCJitContext *JitContext) {
   }
 
   // First word of the GCInfoBuffer should be the size of the method.
-  *(unsigned *)GCInfoBuffer = JitContext->HotCodeSize;
+  *(uint32_t *)GCInfoBuffer = JitContext->HotCodeSize;
 
   // 0x8 is the end sentinel of the buffer.
   *(((char *)GCInfoBuffer) + 4) = 0x8;

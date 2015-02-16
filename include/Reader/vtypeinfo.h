@@ -20,9 +20,9 @@
 class TypeInfo;
 typedef TypeInfo VerType;
 
-typedef BYTE VarTypes;
-void gVerifyOrReturn(int Cond, char *Message);
-void gVerifyOrReturn(int Cond, HRESULT Message);
+typedef uint8_t VarTypes;
+void gVerifyOrReturn(int32_t Cond, char *Message);
+void gVerifyOrReturn(int32_t Cond, HRESULT Message);
 #define gVerify(cond, Message) gVerifyOrReturn(cond, Message)
 
 enum TITypes {
@@ -56,7 +56,7 @@ enum VerErrTypeEnum {
 };
 
 // going to OR these together
-typedef UINT VerErrType;
+typedef uint32_t VerErrType;
 
 // Convert the type returned from the VM to a TIType.
 
@@ -250,16 +250,16 @@ public:
     // Right now m_bits is for debugging,
     struct {
       TITypes Type : 6;
-      unsigned UninitObj : 1; // used
-      unsigned ByRef : 1;     // used
-      unsigned ByRefReadOnly : 1;
-      unsigned : 3;                // unused?
-      unsigned ThisPtr : 1;        // used
-      unsigned : 1;                // unused?
-      unsigned GenericTypeVar : 1; // used
+      uint32_t UninitObj : 1; // used
+      uint32_t ByRef : 1;     // used
+      uint32_t ByRefReadOnly : 1;
+      uint32_t : 3;                // unused?
+      uint32_t ThisPtr : 1;        // used
+      uint32_t : 1;                // unused?
+      uint32_t GenericTypeVar : 1; // used
     } Bits;
 
-    DWORD Flags;
+    uint32_t Flags;
   };
 
   union {
@@ -279,12 +279,12 @@ public:
     assertx((TiType >= TI_Byte) && (TiType <= TI_Null));
     assertx(TiType <= TI_FLAG_DATA_MASK);
 
-    Flags = (DWORD)TiType;
+    Flags = (uint32_t)TiType;
     WHENDEBUG(Cls = BadClassHandle);
   }
 
   TypeInfo(CorInfoType VarType) {
-    Flags = (DWORD)jitType2TIType(VarType);
+    Flags = (uint32_t)jitType2TIType(VarType);
     WHENDEBUG(Cls = BadClassHandle);
   }
 
@@ -303,7 +303,7 @@ public:
     Method = Method;
   }
 
-  int operator==(const TypeInfo &Ti) const {
+  bool operator==(const TypeInfo &Ti) const {
     TITypes LType, RType;
     LType = getRawType();
     RType = Ti.getRawType();
@@ -340,12 +340,12 @@ public:
     return Cls == Ti.Cls;
   }
 
-  static BOOL tiMergeToCommonParent(ICorJitInfo *JitInfo, TypeInfo *PDest,
+  static bool tiMergeToCommonParent(ICorJitInfo *JitInfo, TypeInfo *PDest,
                                     const TypeInfo *PSrc);
-  static BOOL tiCompatibleWith(ICorJitInfo *JitInfo, const TypeInfo &Child,
+  static bool tiCompatibleWith(ICorJitInfo *JitInfo, const TypeInfo &Child,
                                const TypeInfo &Parent);
 
-  static BOOL tiMergeCompatibleWith(ICorJitInfo *JitInfo, const TypeInfo &Child,
+  static bool tiMergeCompatibleWith(ICorJitInfo *JitInfo, const TypeInfo &Child,
                                     const TypeInfo &Parent);
   /////////////////////////////////////////////////////////////////////////
   // Operations
@@ -466,45 +466,45 @@ public:
 
   TITypes getRawType() const { return (TITypes)(Flags & TI_FLAG_DATA_MASK); }
 
-  BOOL isType(TITypes Type) const {
+  bool isType(TITypes Type) const {
     assertx(Type != TI_Error);
     return (Flags & (TI_FLAG_DATA_MASK | TI_ALL_BYREF_FLAGS |
-                     TI_FLAG_GENERIC_TYPE_VAR)) == DWORD(Type);
+                     TI_FLAG_GENERIC_TYPE_VAR)) == uint32_t(Type);
   }
 
   // Returns whether this is an objref
-  BOOL isObjRef() const { return isType(TI_Ref) || isType(TI_Null); }
+  bool isObjRef() const { return isType(TI_Ref) || isType(TI_Null); }
 
   // Returns whether this is a by-ref
-  BOOL isByRef() const { return (Flags & TI_FLAG_BYREF); }
+  bool isByRef() const { return (Flags & TI_FLAG_BYREF); }
 
   // Returns whether this is the this pointer
-  BOOL isThisPtr() const { return (Flags & TI_FLAG_THIS_PTR); }
+  bool isThisPtr() const { return (Flags & TI_FLAG_THIS_PTR); }
 
-  BOOL isUnboxedGenericTypeVar() const {
+  bool isUnboxedGenericTypeVar() const {
     return !isByRef() && (Flags & TI_FLAG_GENERIC_TYPE_VAR);
   }
 
-  BOOL isReadonlyByRef() const {
+  bool isReadonlyByRef() const {
     return isByRef() && (Flags & TI_FLAG_BYREF_READONLY);
   }
 
-  BOOL isPermanentHomeByRef() const {
+  bool isPermanentHomeByRef() const {
     return isByRef() && (Flags & TI_FLAG_BYREF_PERMANENT_HOME);
   }
 
   // Returns whether this is a method desc
-  BOOL isMethod() const { return (getType() == TI_Method); }
+  bool isMethod() const { return (getType() == TI_Method); }
 
   // A byref value class is NOT a value class
-  BOOL isValueClass() const {
+  bool isValueClass() const {
     // TODO: make a table lookup for efficiency
     return (isType(TI_Struct) || isPrimitiveType());
   }
 
   // Does not return true for primitives. Will return true for value types that
   // behave as primitives
-  BOOL isValueClassWithClsHnd() const {
+  bool isValueClassWithClsHnd() const {
     if ((getType() == TI_Struct) ||
         (Cls && getType() != TI_Ref && getType() != TI_Method &&
          getType() != TI_Error)) // necessary because if byref bit is set, we
@@ -520,7 +520,7 @@ public:
   // NOTE: Use NormaliseToPrimitiveType() if you think you may have a
   // System.Int32 etc., because those types are not considered number
   // types by this function.
-  BOOL isNumberType() const {
+  bool isNumberType() const {
     TITypes Type = getType();
 
     // I1, I2, Boolean, character etc. cannot exist nakedly -
@@ -534,7 +534,7 @@ public:
   // NOTE: Use NormaliseToPrimitiveType() if you think you may have a
   // System.Int32 etc., because those types are not considered number
   // types by this function.
-  BOOL isIntegerType() const {
+  bool isIntegerType() const {
     TITypes Type = getType();
 
     // I1, I2, Boolean, character etc. cannot exist nakedly -
@@ -546,8 +546,8 @@ public:
   // Returns whether this is a primitive type (not a byref, objref,
   // array, null, value class, invalid value)
   // May Need to normalise first (m/r/I4 --> I4)
-  BOOL isPrimitiveType() const {
-    DWORD Type = getType();
+  bool isPrimitiveType() const {
+    uint32_t Type = getType();
 
     // boolean, char, u1,u2 never appear on the operand stack
     return (Type == TI_Byte || Type == TI_Short || Type == TI_Int ||
@@ -556,16 +556,16 @@ public:
   }
 
   // Returns whether this is the null objref
-  BOOL isNullObjRef() const { return (isType(TI_Null)); }
+  bool isNullObjRef() const { return (isType(TI_Null)); }
 
   // must be for a local which is an object type (i.e. has a slot >= 0)
   // for primitive locals, use the liveness bitmap instead
   // Note that this works if the error is 'Byref'
-  BOOL isDead() const {
+  bool isDead() const {
     return getRawType() == TI_Error || getRawType() == TI_Ptr;
   }
 
-  BOOL isUninitialisedObjRef() const { return (Flags & TI_FLAG_UNINIT_OBJREF); }
+  bool isUninitialisedObjRef() const { return (Flags & TI_FLAG_UNINIT_OBJREF); }
 
   // In the watch window of the debugger, type tiVarName.ToStaticString()
   // to view a string representation of this instance.
@@ -579,7 +579,7 @@ public:
 
 private:
   // used to make functions that return typeinfo efficient.
-  TypeInfo(DWORD Flags, CORINFO_CLASS_HANDLE Cls) {
+  TypeInfo(uint32_t Flags, CORINFO_CLASS_HANDLE Cls) {
     Cls = Cls;
     Flags = Flags;
   }
@@ -601,13 +601,13 @@ inline TypeInfo dereferenceByRef(const TypeInfo &Ti) {
   return TypeInfo(Ti).dereferenceByRef();
 }
 
-BOOL tiCompatibleWith(ICorJitInfo *JitInfo, const TypeInfo &Child,
+bool tiCompatibleWith(ICorJitInfo *JitInfo, const TypeInfo &Child,
                       const TypeInfo &Parent);
 
-BOOL tiMergeToCommonParent(ICorJitInfo *JitInfo, TypeInfo *PDest,
+bool tiMergeToCommonParent(ICorJitInfo *JitInfo, TypeInfo *PDest,
                            const TypeInfo *PSrc);
 
-BOOL tiEquivalent(ICorJitInfo *JitInfo, const VerType &ChildTarget,
+bool tiEquivalent(ICorJitInfo *JitInfo, const VerType &ChildTarget,
                   const VerType &ParentTarget);
 
 #ifndef CC_PEVERIFY // peverify OFF - just use the strings for debugging

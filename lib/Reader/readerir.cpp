@@ -33,9 +33,9 @@ using namespace llvm;
 //
 //===----------------------------------------------------------------------===//
 
-GenStack::GenStack(int MaxStack, ReaderBase *Rdr) {
+GenStack::GenStack(uint32_t MaxStack, ReaderBase *Rdr) {
   Reader = Rdr;
-  Stack = (IRNode **)Reader->getTempMemory(MaxStack * sizeof(IRNode *));
+  Stack = (IRNode **)Reader->getTempMemory((size_t)MaxStack * sizeof(IRNode *));
   Top = -1;
   Max = MaxStack - 1;
 }
@@ -49,10 +49,10 @@ void GenStack::push(IRNode *NewVal, IRNode **NewIR) {
   // rare circumstances.
   if (Top >= Max) {
     // Reallocate the stack to make some more room.
-    int NewSize = Max * 2 + 2;
+    uint32_t NewSize = Max * 2 + 2;
     IRNode **NewStack =
-        (IRNode **)Reader->getTempMemory(NewSize * sizeof(IRNode *));
-    memcpy(NewStack, Stack, (Max + 1) * sizeof(IRNode *));
+        (IRNode **)Reader->getTempMemory((size_t)NewSize * sizeof(IRNode *));
+    memcpy(NewStack, Stack, (size_t)(Max + 1) * sizeof(IRNode *));
     Stack = NewStack;
     Max = NewSize - 1;
   }
@@ -78,7 +78,7 @@ bool GenStack::empty() { return (Top == -1); }
 
 void GenStack::assertEmpty() { ASSERT(empty()); }
 
-int GenStack::depth() { return Top + 1; }
+uint32_t GenStack::depth() { return (uint32_t)(Top + 1); }
 
 IRNode *GenStack::getIterator(ReaderStackIterator **Iterator) {
   *((size_t *)Iterator) = Top;
@@ -104,8 +104,8 @@ IRNode *GenStack::getReverseIterator(ReaderStackIterator **Iterator) {
 }
 
 IRNode *GenStack::getReverseIteratorFromDepth(ReaderStackIterator **Iterator,
-                                              int Depth) {
-  size_t Idx = Top - Depth + 1;
+                                              uint32_t Depth) {
+  size_t Idx = (size_t)(Top - Depth + 1);
   ASSERT(Idx >= 0);
   *((size_t *)Iterator) = Idx;
   if (empty())
@@ -126,7 +126,7 @@ void GenStack::print() {
   dbgs() << "{GenStack dump, Top first, depth = " << depth() << '\n';
   ReaderStackIterator *Iterator;
   IRNode *N = getIterator(&Iterator);
-  int I = 0;
+  int32_t I = 0;
   while (N) {
     dbgs() << "[" << I++ << "]: ";
     Reader->dbPrintIRNode(N);
@@ -142,12 +142,12 @@ ReaderStack *GenStack::copy() {
   void *Buffer = Reader->getTempMemory(sizeof(GenStack));
   Copy = new (Buffer) GenStack(Max + 1, Reader);
   Copy->Top = Top;
-  for (int I = 0; I <= Top; I++)
+  for (int32_t I = 0; I <= Top; I++)
     Copy->Stack[I] = Stack[I];
   return Copy;
 }
 
-ReaderStack *GenIR::createStack(int MaxStack, ReaderBase *Reader) {
+ReaderStack *GenIR::createStack(uint32_t MaxStack, ReaderBase *Reader) {
   void *Buffer = Reader->getTempMemory(sizeof(GenStack));
   // extra 16 should reduce frequency of reallocation when inlining / jmp
   return new (Buffer) GenStack(MaxStack + 16, Reader);
@@ -167,8 +167,8 @@ struct EHRegion {
 public:
   EHRegion *Parent;
   EHRegionList *Children;
-  DWORD StartMsilOffset;
-  DWORD EndMsilOffset;
+  uint32_t StartMsilOffset;
+  uint32_t EndMsilOffset;
   ReaderBaseNS::RegionKind Kind;
 };
 
@@ -212,17 +212,17 @@ void rgnSetRegionType(EHRegion *Region, ReaderBaseNS::RegionKind Type) {
   Region->Kind = Type;
 }
 
-DWORD rgnGetStartMSILOffset(EHRegion *Region) {
+uint32_t rgnGetStartMSILOffset(EHRegion *Region) {
   return Region->StartMsilOffset;
 }
 
-void rgnSetStartMSILOffset(EHRegion *Region, DWORD Offset) {
+void rgnSetStartMSILOffset(EHRegion *Region, uint32_t Offset) {
   Region->StartMsilOffset = Offset;
 }
 
-DWORD rgnGetEndMSILOffset(EHRegion *Region) { return Region->EndMsilOffset; }
+uint32_t rgnGetEndMSILOffset(EHRegion *Region) { return Region->EndMsilOffset; }
 
-void rgnSetEndMSILOffset(EHRegion *Region, DWORD Offset) {
+void rgnSetEndMSILOffset(EHRegion *Region, uint32_t Offset) {
   Region->EndMsilOffset = Offset;
 }
 
@@ -260,7 +260,7 @@ ReaderBaseNS::TryKind rgnGetTryType(EHRegion *Region) {
 }
 void rgnSetTryType(EHRegion *Region, ReaderBaseNS::TryKind Type) { return; }
 int rgnGetTryCanonicalExitOffset(EHRegion *TryRegion) { return 0; }
-void rgnSetTryCanonicalExitOffset(EHRegion *TryRegion, int Offset) { return; }
+void rgnSetTryCanonicalExitOffset(EHRegion *TryRegion, int32_t Offset) { return; }
 EHRegion *rgnGetExceptFilterRegion(EHRegion *Region) { return NULL; }
 void rgnSetExceptFilterRegion(EHRegion *Region, EHRegion *FilterRegion) {
   return;
@@ -305,10 +305,10 @@ void rgnSetCatchClassToken(EHRegion *CatchRegion, mdToken Token) { return; }
 //===----------------------------------------------------------------------===//
 
 // Get memory that will be freed at end of reader
-void *GenIR::getTempMemory(unsigned Bytes) { return calloc(1, Bytes); }
+void *GenIR::getTempMemory(size_t NumBytes) { return calloc(1, NumBytes); }
 
 // Get memory that will persist after the reader
-void *GenIR::getProcMemory(unsigned Bytes) { return calloc(1, Bytes); }
+void *GenIR::getProcMemory(size_t NumBytes) { return calloc(1, NumBytes); }
 
 #pragma endregion
 
@@ -320,7 +320,7 @@ void *GenIR::getProcMemory(unsigned Bytes) { return calloc(1, Bytes); }
 //
 //===----------------------------------------------------------------------===//
 
-void GenIR::readerPrePass(BYTE *Buffer, unsigned int NumBytes) {
+void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   Triple PT(Triple::normalize(LLVM_DEFAULT_TARGET_TRIPLE));
   if (PT.isArch16Bit()) {
     TargetPointerSizeInBits = 16;
@@ -350,9 +350,9 @@ void GenIR::readerPrePass(BYTE *Buffer, unsigned int NumBytes) {
   // are hidden args like the varargs cookie or type descriptor.
   // Since we add these hidden args to the function's type, we can use the
   // type's argument count to get the right number here.
-  unsigned int NumArgs = Function->getFunctionType()->getFunctionNumParams();
+  uint32_t NumArgs = Function->getFunctionType()->getFunctionNumParams();
   ASSERT(NumArgs >= JitContext->MethodInfo->args.totalILArgs());
-  unsigned int NumLocals = JitContext->MethodInfo->locals.numArgs;
+  uint32_t NumLocals = JitContext->MethodInfo->locals.numArgs;
   
   LocalVars.resize(NumLocals);
   LocalVarCorTypes.resize(NumLocals);
@@ -374,7 +374,7 @@ void GenIR::readerPrePass(BYTE *Buffer, unsigned int NumBytes) {
 
   Function::arg_iterator Args = Function->arg_begin();
   Value *CurrentArg;
-  int I;
+  int32_t I;
   for (CurrentArg = Args++, I = 0; CurrentArg != Function->arg_end();
        CurrentArg = Args++, I++) {
     LLVMBuilder->CreateStore(CurrentArg, Arguments[I]);
@@ -402,10 +402,10 @@ void GenIR::readerPostPass(bool IsImportOnly) {
 
 // Translate an ArgOrdinal (from MSIL) into an in index
 // into the Arguments array.
-unsigned int GenIR::argOrdinalToArgIndex(unsigned int ArgOrdinal) {
+uint32_t GenIR::argOrdinalToArgIndex(uint32_t ArgOrdinal) {
   bool MightNeedShift = !HasThis || ArgOrdinal > 0;
   if (MightNeedShift) {
-    unsigned int Delta = (HasTypeParameter ? 1 : 0) + (HasVarargsToken ? 1 : 0);
+    uint32_t Delta = (HasTypeParameter ? 1 : 0) + (HasVarargsToken ? 1 : 0);
     return ArgOrdinal + Delta;
   }
 
@@ -414,10 +414,10 @@ unsigned int GenIR::argOrdinalToArgIndex(unsigned int ArgOrdinal) {
 
 // Translate an index into the Arguments array into
 // the ordinal used in MSIL.
-unsigned int GenIR::argIndexToArgOrdinal(unsigned int ArgIndex) {
+uint32_t GenIR::argIndexToArgOrdinal(uint32_t ArgIndex) {
   bool MightNeedShift = !HasThis || ArgIndex > 0;
   if (MightNeedShift) {
-    unsigned int Delta = (HasTypeParameter ? 1 : 0) + (HasVarargsToken ? 1 : 0);
+    uint32_t Delta = (HasTypeParameter ? 1 : 0) + (HasVarargsToken ? 1 : 0);
     ASSERT(ArgIndex >= Delta);
     return ArgIndex - Delta;
   }
@@ -425,7 +425,7 @@ unsigned int GenIR::argIndexToArgOrdinal(unsigned int ArgIndex) {
   return ArgIndex;
 }
 
-void GenIR::createSym(int Num, bool IsAuto, CorInfoType CorType,
+void GenIR::createSym(uint32_t Num, bool IsAuto, CorInfoType CorType,
                       CORINFO_CLASS_HANDLE Class, bool IsPinned,
                       ReaderSpecialSymbolType SymType) {
 
@@ -435,7 +435,7 @@ void GenIR::createSym(int Num, bool IsAuto, CorInfoType CorType,
   // not in the metadata, so we can't directly access it via the jit interface.
   const char *SymName = IsAuto ? "loc" : "arg";
   bool UseNumber = false;
-  unsigned int Number = Num;
+  uint32_t Number = Num;
 
   switch (SymType) {
   case ReaderSpecialSymbolType::Reader_ThisPtr:
@@ -486,7 +486,7 @@ Function *GenIR::getFunction(CORINFO_METHOD_HANDLE MethodHandle) {
 
   // Use "param" for these initial parameter values. Numbering here
   // is strictly positional (hence includes implicit parameters).
-  unsigned int N = 0;
+  uint32_t N = 0;
   for (Function::arg_iterator Args = F->arg_begin(); Args != F->arg_end();
        Args++) {
     Args->setName(Twine("param") + Twine(N++));
@@ -538,9 +538,9 @@ Instruction *GenIR::createTemporary(Type * Ty) {
 
 // Notify client of alignment problem
 void GenIR::verifyStaticAlignment(void *FieldAddress, CorInfoType CorType,
-                                unsigned int MinClassAlign) {
+                                  uint32_t MinClassAlign) {
   bool AlignmentError;
-  char *TypeName;
+  const char *TypeName;
 
   AlignmentError = false;
 
@@ -587,8 +587,8 @@ void GenIR::verifyStaticAlignment(void *FieldAddress, CorInfoType CorType,
 
   ALIGN_8:
 
-    // Require 8-BYTE alignment
-    AlignmentError = ((7 & (LONGLONG)FieldAddress) != 0);
+    // Require 8-byte alignment
+    AlignmentError = ((7 & (uintptr_t)FieldAddress) != 0);
     break;
 
   case CORINFO_TYPE_INT:
@@ -615,8 +615,8 @@ void GenIR::verifyStaticAlignment(void *FieldAddress, CorInfoType CorType,
 
   ALIGN_4:
 
-    // Require 4-BYTE alignment
-    AlignmentError = ((3 & (LONGLONG)FieldAddress) != 0);
+    // Require 4-byte alignment
+    AlignmentError = ((3 & (uintptr_t)FieldAddress) != 0);
     break;
 
   case CORINFO_TYPE_SHORT:
@@ -631,8 +631,8 @@ void GenIR::verifyStaticAlignment(void *FieldAddress, CorInfoType CorType,
 
   ALIGN_2:
 
-    // Require 2-BYTE alignment
-    AlignmentError = ((1 & (LONGLONG)FieldAddress) != 0);
+    // Require 2-byte alignment
+    AlignmentError = ((1 & (uintptr_t)FieldAddress) != 0);
     break;
 
   case CORINFO_TYPE_BOOL:
@@ -647,7 +647,7 @@ void GenIR::verifyStaticAlignment(void *FieldAddress, CorInfoType CorType,
 
   ALIGN_1:
   default:
-    // Require 1-BYTE alignment - no constraints.
+    // Require 1-byte alignment - no constraints.
     break;
   }
 
@@ -797,7 +797,7 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
   // Check if we've already created a type for this class handle.
   Type *ResultTy = NULL;
   StructType *StructTy = NULL;
-  unsigned int ArrayRank = getArrayRank(ClassHandle);
+  uint32_t ArrayRank = getArrayRank(ClassHandle);
   bool IsArray = ArrayRank > 0;
   CORINFO_CLASS_HANDLE ArrayElementHandle = NULL;
   CorInfoType ArrayElementType = CorInfoType::CORINFO_TYPE_UNDEF;
@@ -867,10 +867,10 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
 
     // Fetch the name of this type for use in dumps.
     // Note some constructed types like arrays may not have names.
-    int NameSize = 0;
-    BOOL IncludeNamespace = TRUE;
-    BOOL FullInst = FALSE;
-    BOOL IncludeAssembly = FALSE;
+    int32_t NameSize = 0;
+    const bool IncludeNamespace = true;
+    const bool FullInst = false;
+    const bool IncludeAssembly = false;
     // We are using appendClassName instead of getClassName because
     // getClassName omits namespaces from some types (e.g., nested classes).
     // We may still get the same name for two different structs because
@@ -881,10 +881,10 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
                                FullInst, IncludeAssembly);
     if (NameSize > 0) {
       // Add one for terminating null.
-      int BufferLength = NameSize + 1;
-      int BufferRemaining = BufferLength;
-      WCHAR *WideCharBuffer = new WCHAR[BufferLength];
-      WCHAR *BufferPtrToChange = WideCharBuffer;
+      int32_t BufferLength = NameSize + 1;
+      int32_t BufferRemaining = BufferLength;
+      char16_t *WideCharBuffer = new char16_t[BufferLength];
+      char16_t *BufferPtrToChange = WideCharBuffer;
       appendClassName(&BufferPtrToChange, &BufferRemaining, ClassHandle,
                       IncludeNamespace, FullInst, IncludeAssembly);
       ASSERT(BufferRemaining == 1);
@@ -899,7 +899,7 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
                              &UTF8Start[UTF8Size], strictConversion);
       if (result == conversionOK) {
         ASSERT((size_t)(&WideCharBuffer[BufferLength] -
-            (WCHAR *)UTF16Start) == 0);
+            (char16_t *)UTF16Start) == 0);
         StructTy->setName((char *)ClassName);
       }
       delete[] ClassName;
@@ -922,10 +922,10 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
   // Note getClassNumInstanceFields includes fields from
   // all ancestor classes. We'll need to subtract those out to figure
   // out how many fields this class uniquely contributes.
-  const unsigned int NumFields = getClassNumInstanceFields(ClassHandle);
+  const uint32_t NumFields = getClassNumInstanceFields(ClassHandle);
   std::vector<Type *> Fields;
-  unsigned int ByteOffset = 0;
-  unsigned int NumParentFields = 0;
+  uint32_t ByteOffset = 0;
+  uint32_t NumParentFields = 0;
 
   // Look for cases that require special handling.
   bool IsString = false;
@@ -946,7 +946,7 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
   } else if (ClassHandle == TypedByrefClassHandle) {
     IsTypedByref = true;
   } else {
-    DWORD ClassAttributes = getClassAttribs(ClassHandle);
+    uint32_t ClassAttributes = getClassAttribs(ClassHandle);
     if ((ClassAttributes & CORINFO_FLG_ARRAY) != 0) {
       ASSERT(IsArray);
     }
@@ -998,17 +998,17 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
 
     // Determine how many fields are added at this level of derivation.
     ASSERT(NumFields >= NumParentFields);
-    const unsigned int NumDerivedFields = NumFields - NumParentFields;
+    const uint32_t NumDerivedFields = NumFields - NumParentFields;
 
     // Add the fields (if any) contributed by this class.
     // We need to add them in increasing order of offset, but the EE
     // gives them to us in somewhat arbitrary order. So we have to sort.
-    std::vector<std::pair<unsigned int, CORINFO_FIELD_HANDLE>> DerivedFields;
+    std::vector<std::pair<uint32_t, CORINFO_FIELD_HANDLE>> DerivedFields;
 
-    for (unsigned int I = 0; I < NumDerivedFields; I++) {
+    for (uint32_t I = 0; I < NumDerivedFields; I++) {
       CORINFO_FIELD_HANDLE FieldHandle = getFieldInClass(ClassHandle, I);
       ASSERT(FieldHandle != NULL);
-      const unsigned int FieldOffset = getFieldOffset(FieldHandle);
+      const uint32_t FieldOffset = getFieldOffset(FieldHandle);
       DerivedFields.push_back(std::make_pair(FieldOffset, FieldHandle));
     }
 
@@ -1019,7 +1019,7 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
     // Now walk the fields in increasing offset order, adding
     // them and padding to the struct as we go.
     for (const auto &FieldPair : DerivedFields) {
-      const unsigned int FieldOffset = FieldPair.first;
+      const uint32_t FieldOffset = FieldPair.first;
       CORINFO_FIELD_HANDLE FieldHandle = FieldPair.second;
 
       // Bail out for now if we see a union type.
@@ -1030,7 +1030,7 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
 
       // Account for padding by injecting a field.
       if (FieldOffset > ByteOffset) {
-        const unsigned int PadSize = FieldOffset - ByteOffset;
+        const uint32_t PadSize = FieldOffset - ByteOffset;
         Type *PadTy = ArrayType::get(Type::getInt8Ty(LLVMContext), PadSize);
         Fields.push_back(PadTy);
         ByteOffset += DataLayout->getTypeSizeInBits(PadTy) / 8;
@@ -1102,9 +1102,9 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
     // other types, but we have no way to check. So we'll have to
     // settle for having their fields at the right offsets.
     if (!IsRefClass) {
-      const unsigned int EEClassSize = getClassSize(ClassHandle);
+      const uint32_t EEClassSize = getClassSize(ClassHandle);
       ASSERT(EEClassSize >= ByteOffset);
-      const unsigned int EndPadSize = EEClassSize - ByteOffset;
+      const uint32_t EndPadSize = EEClassSize - ByteOffset;
 
       if (EndPadSize > 0) {
         // We ought to be able to assert that the pad size
@@ -1127,7 +1127,7 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
       ByteOffset += DataLayout->getTypeSizeInBits(ArrayLengthTy) / 8;
 
       // For 64 bit targets there's then a 32 bit pad.
-      const unsigned int PointerSize = DataLayout->getPointerSizeInBits();
+      const uint32_t PointerSize = DataLayout->getPointerSizeInBits();
       if (PointerSize == 64) {
         Type *ArrayPadTy = ArrayType::get(Type::getInt8Ty(LLVMContext), 4);
         Fields.push_back(ArrayPadTy);
@@ -1169,9 +1169,9 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
   if (!IsRefClass) {
 
     // Verify overall size matches up.
-    const unsigned int LLVMClassSize =
+    const uint32_t LLVMClassSize =
       DataLayout->getTypeSizeInBits(StructTy) / 8;
-    const unsigned int EEClassSize = getClassSize(ClassHandle);
+    const uint32_t EEClassSize = getClassSize(ClassHandle);
     ASSERT(EEClassSize == LLVMClassSize);
 
     // Verify that the LLVM type contains the same information
@@ -1179,16 +1179,16 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
     GCLayoutStruct *RuntimeGCInfo = getClassGCLayout(ClassHandle);
     const StructLayout *MainStructLayout =
       DataLayout->getStructLayout(StructTy);
-    const unsigned int PointerSize = DataLayout->getPointerSize();
+    const uint32_t PointerSize = DataLayout->getPointerSize();
 
     // Walk through the type in pointer-sized jumps. 
-    for (unsigned int GCOffset = 0; GCOffset < EEClassSize;
+    for (uint32_t GCOffset = 0; GCOffset < EEClassSize;
          GCOffset += PointerSize) {
       const bool ExpectGCPointer =
         (RuntimeGCInfo != NULL) &&
           (RuntimeGCInfo->GCLayout[GCOffset / PointerSize] !=
         CorInfoGCType::TYPE_GC_NONE);
-      const unsigned int FieldIndex =
+      const uint32_t FieldIndex =
         MainStructLayout->getElementContainingOffset(GCOffset);
       Type *FieldTy = StructTy->getStructElementType(FieldIndex);
 
@@ -1198,23 +1198,23 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
 
         // Prepare to loop through the nesting.
         const StructLayout *OuterStructLayout = MainStructLayout;
-        unsigned int OuterOffset = GCOffset;
-        unsigned int OuterIndex = FieldIndex;
+        uint32_t OuterOffset = GCOffset;
+        uint32_t OuterIndex = FieldIndex;
 
         while (FieldTy->isStructTy()) {
           // Offset of the Inner class within the outer class
-          const unsigned int InnerBaseOffset =
+          const uint32_t InnerBaseOffset =
             OuterStructLayout->getElementOffset(OuterIndex);
           // Inner class should start at or before the outer offset
           ASSERT(InnerBaseOffset <= OuterOffset);
           // Determine target offset relative to this inner class.
-          const unsigned int InnerOffset = OuterOffset - InnerBaseOffset;
+          const uint32_t InnerOffset = OuterOffset - InnerBaseOffset;
           // Get the inner class layout
           StructType *InnerStructTy = cast<StructType>(FieldTy);
           const StructLayout *InnerStructLayout =
             DataLayout->getStructLayout(InnerStructTy);
           // Find the field at that target offset.
-          const unsigned int InnerIndex =
+          const uint32_t InnerIndex =
             InnerStructLayout->getElementContainingOffset(InnerOffset);
           // Update for next iteration.
           FieldTy = InnerStructTy->getStructElementType(InnerIndex);
@@ -1257,7 +1257,7 @@ FunctionType *GenIR::getFunctionType(CORINFO_METHOD_HANDLE Method) {
     CORINFO_CLASS_HANDLE Class = getMethodClass(Method);
 
     // See if the current class is an valueclass
-    DWORD Attribs = getClassAttribs(Class);
+    uint32_t Attribs = getClassAttribs(Class);
 
     CorInfoType CorType;
 
@@ -1293,7 +1293,7 @@ FunctionType *GenIR::getFunctionType(CORINFO_METHOD_HANDLE Method) {
 
   CORINFO_ARG_LIST_HANDLE NextArg = Sig.args;
 
-  for (unsigned int I = 0; I < Sig.numArgs; ++I) {
+  for (uint32_t I = 0; I < Sig.numArgs; ++I) {
     CorInfoType ArgType = CorInfoType::CORINFO_TYPE_UNDEF;
     CORINFO_CLASS_HANDLE Class;
     NextArg = this->argListNext(NextArg, &Sig, &ArgType, &Class);
@@ -1315,7 +1315,7 @@ bool GenIR::isValidStackType(IRNode *Node) {
 
   switch (Ty->getTypeID()) {
   case Type::TypeID::IntegerTyID: {
-    const unsigned int Size = Ty->getIntegerBitWidth();
+    const uint32_t Size = Ty->getIntegerBitWidth();
     IsValid = (Size == 32) || (Size == 64);
     break;
   }
@@ -1336,7 +1336,7 @@ bool GenIR::isValidStackType(IRNode *Node) {
 
 // Given an integral or float CorInfoType, determine its size
 // once pushed on the evaluation stack.
-unsigned int GenIR::stackSize(CorInfoType CorType) {
+uint32_t GenIR::stackSize(CorInfoType CorType) {
 
   switch (CorType) {
   case CorInfoType::CORINFO_TYPE_BOOL:
@@ -1367,7 +1367,7 @@ unsigned int GenIR::stackSize(CorInfoType CorType) {
 }
 
 // Given an integral, pointer, or float CorInfoType, determine its size
-unsigned int GenIR::size(CorInfoType CorType) {
+uint32_t GenIR::size(CorInfoType CorType) {
 
   switch (CorType) {
   case CorInfoType::CORINFO_TYPE_BOOL:
@@ -1433,7 +1433,7 @@ bool GenIR::isSigned(CorInfoType CorType) {
 // Given an integral CorInfoType, get the
 // LLVM type that represents it on the stack
 Type *GenIR::getStackType(CorInfoType CorType) {
-  const unsigned int Size = stackSize(CorType);
+  const uint32_t Size = stackSize(CorType);
   return Type::getIntNTy(*JitContext->LLVMContext, Size);
 }
 
@@ -1450,8 +1450,8 @@ IRNode *GenIR::convertToStackType(IRNode *Node, CorInfoType CorType) {
   switch (Ty->getTypeID()) {
   case Type::TypeID::IntegerTyID: {
     ASSERT(Ty->isIntegerTy());
-    const unsigned int Size = Ty->getIntegerBitWidth();
-    const unsigned int DesiredSize = stackSize(CorType);
+    const uint32_t Size = Ty->getIntegerBitWidth();
+    const uint32_t DesiredSize = stackSize(CorType);
     ASSERT(Size <= DesiredSize);
 
     if (Size < DesiredSize) {
@@ -1493,8 +1493,8 @@ IRNode *GenIR::convertFromStackType(IRNode *Node, CorInfoType CorType,
   IRNode *Result = Node;
   switch (Ty->getTypeID()) {
   case Type::TypeID::IntegerTyID: {
-    const unsigned int Size = Ty->getIntegerBitWidth();
-    const unsigned int DesiredSize = size(CorType);
+    const uint32_t Size = Ty->getIntegerBitWidth();
+    const uint32_t DesiredSize = size(CorType);
     ASSERT(Size >= DesiredSize);
 
     // A convert is needed if we're changing size
@@ -1518,8 +1518,8 @@ IRNode *GenIR::convertFromStackType(IRNode *Node, CorInfoType CorType,
   case Type::TypeID::DoubleTyID: {
     // Because we allow f32 on the stack we may
     // need a lengthening convert here.
-    const unsigned int Size = Ty->getPrimitiveSizeInBits();
-    const unsigned int DesiredSize = size(CorType);
+    const uint32_t Size = Ty->getPrimitiveSizeInBits();
+    const uint32_t DesiredSize = size(CorType);
 
     if (Size != DesiredSize) {
       Type *ResultTy = getType(CorType, NULL);
@@ -1584,8 +1584,8 @@ FlowGraphNode *GenIR::fgGetTailBlock() {
   return ((FlowGraphNode *)&Function->back());
 }
 
-FlowGraphNode *GenIR::makeFlowGraphNode(unsigned int TargetOffset,
-                                              EHRegion *Region) {
+FlowGraphNode *GenIR::makeFlowGraphNode(uint32_t TargetOffset,
+                                        EHRegion *Region) {
   FlowGraphNode *Node = (FlowGraphNode *)BasicBlock::Create(
       *JitContext->LLVMContext, "", Function);
   fgNodeSetStartMSILOffset(Node, TargetOffset);
@@ -1595,7 +1595,7 @@ FlowGraphNode *GenIR::makeFlowGraphNode(unsigned int TargetOffset,
 bool irNodeIsLabel(IRNode *Node) { return Node->getType()->isLabelTy(); }
 
 IRNode *GenIR::fgMakeBranch(IRNode *LabelNode, IRNode *InsertNode,
-                            unsigned int CurrentOffset, bool IsConditional,
+                            uint32_t CurrentOffset, bool IsConditional,
                             bool IsNominal) {
   LLVMBuilder->SetInsertPoint((BasicBlock *)InsertNode);
   BranchInst *BranchInst = NULL;
@@ -1614,19 +1614,19 @@ IRNode *GenIR::fgMakeBranch(IRNode *LabelNode, IRNode *InsertNode,
   return (IRNode *)BranchInst;
 }
 
-unsigned int GenIR::fgNodeGetStartMSILOffset(FlowGraphNode *Fg) {
+uint32_t GenIR::fgNodeGetStartMSILOffset(FlowGraphNode *Fg) {
   return FlowGraphInfoMap[Fg].StartMSILOffset;
 }
 
-void GenIR::fgNodeSetStartMSILOffset(FlowGraphNode *Fg, unsigned int Offset) {
+void GenIR::fgNodeSetStartMSILOffset(FlowGraphNode *Fg, uint32_t Offset) {
   FlowGraphInfoMap[Fg].StartMSILOffset = Offset;
 }
 
-unsigned int GenIR::fgNodeGetEndMSILOffset(FlowGraphNode *Fg) {
+uint32_t GenIR::fgNodeGetEndMSILOffset(FlowGraphNode *Fg) {
   return FlowGraphInfoMap[Fg].EndMSILOffset;
 }
 
-void GenIR::fgNodeSetEndMSILOffset(FlowGraphNode *Fg, unsigned int Offset) {
+void GenIR::fgNodeSetEndMSILOffset(FlowGraphNode *Fg, uint32_t Offset) {
   FlowGraphInfoMap[Fg].EndMSILOffset = Offset;
 }
 
@@ -1684,13 +1684,13 @@ IRNode *GenIR::fgMakeThrow(IRNode *Insert) {
   return (IRNode *)Unreachable;
 }
 
-IRNode *GenIR::fgMakeEndFinally(IRNode *InsertNode, unsigned int CurrentOffset,
+IRNode *GenIR::fgMakeEndFinally(IRNode *InsertNode, uint32_t CurrentOffset,
                                 bool IsLexicalEnd) {
   // TODO: figure out what (if any) marker we need to generate here
   return NULL;
 }
 
-void GenIR::beginFlowGraphNode(FlowGraphNode *Fg, unsigned int CurrOffset,
+void GenIR::beginFlowGraphNode(FlowGraphNode *Fg, uint32_t CurrOffset,
                                bool IsVerifyOnly) {
   BasicBlock *Block = (BasicBlock *)Fg;
   TerminatorInst *TermInst = Block->getTerminator();
@@ -1701,7 +1701,7 @@ void GenIR::beginFlowGraphNode(FlowGraphNode *Fg, unsigned int CurrOffset,
   }
 }
 
-void GenIR::endFlowGraphNode(FlowGraphNode *Fg, unsigned int CurrOffset,
+void GenIR::endFlowGraphNode(FlowGraphNode *Fg, uint32_t CurrOffset,
                              IRNode **NewIR) {
   return;
 }
@@ -1834,8 +1834,8 @@ unsigned GenIR::fgGetBlockCount() {
 //
 //===----------------------------------------------------------------------===//
 
-IRNode *GenIR::loadConstantI4(int Constant, IRNode **NewIR) {
-  unsigned int NumBits = 32;
+IRNode *GenIR::loadConstantI4(int32_t Constant, IRNode **NewIR) {
+  uint32_t NumBits = 32;
   bool IsSigned = true;
 
   return (IRNode *)ConstantInt::get(*JitContext->LLVMContext,
@@ -1843,7 +1843,7 @@ IRNode *GenIR::loadConstantI4(int Constant, IRNode **NewIR) {
 }
 
 IRNode *GenIR::loadConstantI8(__int64 Constant, IRNode **NewIR) {
-  unsigned int NumBits = 64;
+  uint32_t NumBits = 64;
   bool IsSigned = true;
 
   return (IRNode *)ConstantInt::get(*JitContext->LLVMContext,
@@ -1851,7 +1851,7 @@ IRNode *GenIR::loadConstantI8(__int64 Constant, IRNode **NewIR) {
 }
 
 IRNode *GenIR::loadConstantI(size_t Constant, IRNode **NewIR) {
-  unsigned int NumBits = TargetPointerSizeInBits;
+  uint32_t NumBits = TargetPointerSizeInBits;
   bool IsSigned = true;
   return (IRNode *)ConstantInt::get(*JitContext->LLVMContext,
                                     APInt(NumBits, Constant, IsSigned));
@@ -2075,8 +2075,8 @@ Type *GenIR::binaryOpType(Type *Type1, Type *Type2) {
     return Type1;
   }
 
-  unsigned int Size1 = Type1->getPrimitiveSizeInBits();
-  unsigned int Size2 = Type2->getPrimitiveSizeInBits();
+  uint32_t Size1 = Type1->getPrimitiveSizeInBits();
+  uint32_t Size2 = Type2->getPrimitiveSizeInBits();
 
   if (Type1->isFloatingPointTy()) {
     if (Type2->isFloatingPointTy()) {
@@ -2109,7 +2109,7 @@ IRNode *GenIR::simpleFieldAddress(IRNode *BaseAddress,
   if (BaseObjTy->isStructTy() &&
       (FieldIndexMap->find(FieldHandle) != FieldIndexMap->end())) {
 
-    const unsigned int FieldIndex = (*FieldIndexMap)[FieldHandle];
+    const uint32_t FieldIndex = (*FieldIndexMap)[FieldHandle];
     StructType *BaseObjStructTy = cast<StructType>(BaseObjTy);
 
     // Double-check that the field index is sensible. Note
@@ -2119,7 +2119,7 @@ IRNode *GenIR::simpleFieldAddress(IRNode *BaseAddress,
        const DataLayout *DataLayout = JitContext->EE->getDataLayout();
        const StructLayout *StructLayout =
           DataLayout->getStructLayout(BaseObjStructTy);
-       const unsigned int FieldOffset = 
+       const uint32_t FieldOffset = 
           StructLayout->getElementOffset(FieldIndex);
        ASSERT(FieldOffset == FieldInfo->offset);
 
@@ -2211,10 +2211,10 @@ IRNode *GenIR::genPointerSub(IRNode *Arg1, IRNode *Arg2) {
    return (IRNode *)ResultPtr;
 }
 
-void GenIR::storeLocal(unsigned int LocalOrdinal, IRNode *Arg1,
+void GenIR::storeLocal(uint32_t LocalOrdinal, IRNode *Arg1,
                              ReaderAlignType Alignment, bool IsVolatile,
                              IRNode **NewIR) {
-  unsigned int LocalIndex = LocalOrdinal;
+  uint32_t LocalIndex = LocalOrdinal;
   Value *LocalAddress = LocalVars[LocalIndex];
   Type *LocalTy = LocalAddress->getType()->getPointerElementType();
   IRNode *Value = 
@@ -2222,48 +2222,48 @@ void GenIR::storeLocal(unsigned int LocalOrdinal, IRNode *Arg1,
   LLVMBuilder->CreateStore(Value, LocalAddress);
 }
 
-IRNode *GenIR::loadLocal(unsigned int LocalOrdinal, IRNode **NewIR) {
-  unsigned int LocalIndex = LocalOrdinal;
+IRNode *GenIR::loadLocal(uint32_t LocalOrdinal, IRNode **NewIR) {
+  uint32_t LocalIndex = LocalOrdinal;
   Value *LocalAddress = LocalVars[LocalIndex];
   IRNode *Value = (IRNode *)LLVMBuilder->CreateLoad(LocalAddress);
   IRNode *Result = convertToStackType(Value, LocalVarCorTypes[LocalIndex]);
   return Result;
 }
 
-IRNode *GenIR::loadLocalAddress(unsigned int LocalOrdinal, IRNode **NewIR) {
-  unsigned int LocalIndex = LocalOrdinal;
+IRNode *GenIR::loadLocalAddress(uint32_t LocalOrdinal, IRNode **NewIR) {
+  uint32_t LocalIndex = LocalOrdinal;
   return loadManagedAddress(LocalVars, LocalIndex);
 }
 
-void GenIR::storeArg(unsigned int ArgOrdinal, IRNode *Arg1,
+void GenIR::storeArg(uint32_t ArgOrdinal, IRNode *Arg1,
                      ReaderAlignType Alignment, bool IsVolatile,
                      IRNode **NewIR) {
-  unsigned int ArgIndex = argOrdinalToArgIndex(ArgOrdinal);
+  uint32_t ArgIndex = argOrdinalToArgIndex(ArgOrdinal);
   Value *ArgAddress = Arguments[ArgIndex];
   Type *ArgTy = ArgAddress->getType()->getPointerElementType();
   IRNode *Value = convertFromStackType(Arg1, ArgumentCorTypes[ArgIndex], ArgTy);
   LLVMBuilder->CreateStore(Value, ArgAddress);
 }
 
-IRNode *GenIR::loadArg(unsigned int ArgOrdinal, bool IsJmp, IRNode **NewIR) {
+IRNode *GenIR::loadArg(uint32_t ArgOrdinal, bool IsJmp, IRNode **NewIR) {
   if (IsJmp) {
     throw NotYetImplementedException("JMP");
   }
-  unsigned int ArgIndex = argOrdinalToArgIndex(ArgOrdinal);
+  uint32_t ArgIndex = argOrdinalToArgIndex(ArgOrdinal);
   Value *ArgAddress = Arguments[ArgIndex];
   IRNode *Value = (IRNode *)LLVMBuilder->CreateLoad(ArgAddress);
   IRNode *Result = convertToStackType(Value, ArgumentCorTypes[ArgIndex]);
   return Result;
 }
 
-IRNode *GenIR::loadArgAddress(unsigned int ArgOrdinal, IRNode **NewIR) {
-  unsigned int ArgIndex = argOrdinalToArgIndex(ArgOrdinal);
+IRNode *GenIR::loadArgAddress(uint32_t ArgOrdinal, IRNode **NewIR) {
+  uint32_t ArgIndex = argOrdinalToArgIndex(ArgOrdinal);
   return loadManagedAddress(Arguments, ArgIndex);
 }
 
 IRNode *
 GenIR::loadManagedAddress(const std::vector<Value *> &UnmanagedAddresses,
-  unsigned int Index) {
+                          uint32_t Index) {
   Value *UnmanagedAddress = UnmanagedAddresses[Index];
   Type *ElementType = UnmanagedAddress->getType()->getPointerElementType();
   Type *ManagedPointerType = getManagedPointerType(ElementType);
@@ -2285,7 +2285,7 @@ IRNode *GenIR::loadFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
 
   // TODO: optimize 'this' pointer reference for contextful classes
 
-  int AccessFlags = ObjIsThis ? CORINFO_ACCESS_THIS : CORINFO_ACCESS_ANY;
+  int32_t AccessFlags = ObjIsThis ? CORINFO_ACCESS_THIS : CORINFO_ACCESS_ANY;
   AccessFlags |= CORINFO_ACCESS_ADDRESS;
 
   getFieldInfo(ResolvedToken, (CORINFO_ACCESS_FLAGS)AccessFlags, &FieldInfo);
@@ -2332,7 +2332,7 @@ IRNode *GenIR::loadField(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Obj,
                          IRNode **NewIR) {
   // Gather relevant facts about this field access.
   bool ObjIsThis = objIsThis(Obj);
-  int AccessFlags = ObjIsThis ? CORINFO_ACCESS_THIS : CORINFO_ACCESS_ANY;
+  int32_t AccessFlags = ObjIsThis ? CORINFO_ACCESS_THIS : CORINFO_ACCESS_ANY;
   AccessFlags |= CORINFO_ACCESS_GET;
   CORINFO_FIELD_INFO FieldInfo;
   getFieldInfo(ResolvedToken, (CORINFO_ACCESS_FLAGS)AccessFlags, &FieldInfo);
@@ -2395,7 +2395,7 @@ IRNode *GenIR::loadField(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Obj,
                    NewIR);
   } else {
     LoadInst *LoadInst = LLVMBuilder->CreateLoad(Address, IsVolatile);
-    unsigned int Align = (AlignmentPrefix == Reader_AlignNatural)
+    uint32_t Align = (AlignmentPrefix == Reader_AlignNatural)
       ? TargetPointerSizeInBits / 8
       : AlignmentPrefix;
     LoadInst->setAlignment(Align);
@@ -2411,7 +2411,7 @@ void GenIR::storeField(CORINFO_RESOLVED_TOKEN *FieldToken, IRNode *ValueToStore,
                        bool IsVolatile, IRNode **NewIR) {
   // Gather information about the field
   const bool ObjectIsThis = objIsThis(Object);
-  int AccessFlags = ObjectIsThis ? CORINFO_ACCESS_THIS : CORINFO_ACCESS_ANY;
+  int32_t AccessFlags = ObjectIsThis ? CORINFO_ACCESS_THIS : CORINFO_ACCESS_ANY;
   AccessFlags |= CORINFO_ACCESS_SET;
   CORINFO_FIELD_INFO FieldInfo;
   getFieldInfo(FieldToken, (CORINFO_ACCESS_FLAGS)AccessFlags, &FieldInfo);
@@ -2470,7 +2470,7 @@ void GenIR::storeField(CORINFO_RESOLVED_TOKEN *FieldToken, IRNode *ValueToStore,
     makeStore(FieldTy, Address, ValueToStore, IsVolatile, NewIR);
     return;
   } else {
-    // The WVM lowerer cannot handle multi-BYTE indirs whose base pointer
+    // The WVM lowerer cannot handle multi-byte indirs whose base pointer
     // is the address of a field.
     if (FieldCorType == CORINFO_TYPE_VALUECLASS ||
         FieldCorType == CORINFO_TYPE_REFANY) {
@@ -2549,7 +2549,7 @@ void GenIR::branch(IRNode **NewIR) {
 IRNode *GenIR::call(ReaderBaseNS::CallOpcode Opcode, mdToken Token,
                           mdToken ConstraintTypeRef, mdToken LoadFtnToken,
                           bool HasReadOnlyPrefix, bool HasTailCallPrefix,
-                          bool IsUnmarkedTailCall, unsigned int CurrOffset,
+                          bool IsUnmarkedTailCall, uint32_t CurrOffset,
                           bool *RecursiveTailCall, IRNode **NewIR) {
   ReaderCallTargetData *Data =
       (ReaderCallTargetData *)_alloca(sizeof(ReaderCallTargetData));
@@ -2670,7 +2670,7 @@ bool GenIR::canMakeDirectCall(ReaderCallTargetData *CallTargetData) {
 
 IRNode *GenIR::makeDirectCallTargetNode(CORINFO_METHOD_HANDLE Method,
   void *CodeAddr) {
-  unsigned int NumBits = TargetPointerSizeInBits;
+  uint32_t NumBits = TargetPointerSizeInBits;
   bool IsSigned = false;
 
   ConstantInt *CodeAddrValue = ConstantInt::get(
@@ -2683,7 +2683,7 @@ IRNode *GenIR::makeDirectCallTargetNode(CORINFO_METHOD_HANDLE Method,
 };
 
 IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
-  CallArgTriple *ArgArray, unsigned int NumArgs,
+  CallArgTriple *ArgArray, uint32_t NumArgs,
   IRNode **CallNode, IRNode **NewIR) {
 
   IRNode *Call = NULL, *ReturnNode = NULL;
@@ -2712,7 +2712,7 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
 
   std::vector<Value *> Arguments;
 
-  for (unsigned int I = 0; I < NumArgs; I++) {
+  for (uint32_t I = 0; I < NumArgs; I++) {
     IRNode *ArgNode = ArgArray[I].ArgNode;
     CorInfoType CorType = ArgArray[I].ArgType;
     CORINFO_CLASS_HANDLE Class = ArgArray[I].ArgClass;
@@ -2780,11 +2780,11 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
 bool GenIR::canonNewObjCall(IRNode *CallNode,
                             ReaderCallTargetData *CallTargetData,
                             IRNode **OutResult, IRNode **NewIR) {
-  DWORD ClassAttribs = CallTargetData->getClassAttribs();
+  uint32_t ClassAttribs = CallTargetData->getClassAttribs();
   CORINFO_CLASS_HANDLE ClassHandle = CallTargetData->getClassHandle();
 
   CorInfoType CorInfoType;
-  unsigned int MbSize;
+  uint32_t MbSize;
 
   ReaderBase::getClassType(ClassHandle, ClassAttribs, &CorInfoType, &MbSize);
 
@@ -2850,7 +2850,7 @@ bool GenIR::canonNewObjCall(IRNode *CallNode,
     // Initialize the struct to zero.
     LLVMContext &LLVMContext = *this->JitContext->LLVMContext;
     Value *ZeroByte = Constant::getNullValue(Type::getInt8Ty(LLVMContext));
-    unsigned int Align = 0;
+    uint32_t Align = 0;
     LLVMBuilder->CreateMemSet(AllocaInst, ZeroByte, MbSize, Align);
 
     // Create a managed pointer to the struct instance and pass it as the 'this'
@@ -2913,7 +2913,7 @@ void GenIR::canonNewArrayCall(IRNode *Call,
   NewArguments.push_back(ClassHandle);
 
   // The second argument is the number of arguments to follow.
-  unsigned int NumBits = 32;
+  uint32_t NumBits = 32;
   bool IsSigned = true;
   Value *NumArgs = ConstantInt::get(
       *JitContext->LLVMContext,
@@ -3075,7 +3075,7 @@ bool GenIR::commonTailCallChecks(CORINFO_METHOD_HANDLE DeclaredMethod,
   // that condition in FgOptRecurse but not here.
   const char *Reason = NULL;
   bool SuppressReport = false;
-  DWORD MethodCompFlags = getCurrentMethodAttribs();
+  uint32_t MethodCompFlags = getCurrentMethodAttribs();
   if (MethodCompFlags & CORINFO_FLG_SYNCH) {
     Reason = "synchronized";
   }
@@ -3141,7 +3141,7 @@ bool GenIR::fgOptRecurse(ReaderCallTargetData *Data) {
     return false;
   }
 
-  DWORD MethodCompFlags = getCurrentMethodAttribs();
+  uint32_t MethodCompFlags = getCurrentMethodAttribs();
   if ((Method != getCurrentMethodHandle())
           // Not yet implemented (but can do a regular tail call)
       ||
@@ -3195,7 +3195,7 @@ bool GenIR::fgOptRecurse(mdToken Token) {
       return false;
     }
 
-  DWORD MethodCompFlags = getCurrentMethodAttribs();
+  uint32_t MethodCompFlags = getCurrentMethodAttribs();
   if ((Params.Method != getCurrentMethodHandle())
           // Not yet implemented (but can do a regular tail call)
       ||
@@ -3270,7 +3270,7 @@ void GenIR::throwOpcode(IRNode *Arg1, IRNode **NewIR) {
   ThrowCall->setDoesNotReturn();
 }
 
-void GenIR::leave(unsigned int TargetOffset, bool IsNonLocal,
+void GenIR::leave(uint32_t TargetOffset, bool IsNonLocal,
   bool EndsWithNonLocalGoto, IRNode **NewIR) {
   // TODO: handle exiting through nested finallies
   // currently FG-building phase 1 generates an appropriate
@@ -3336,7 +3336,7 @@ IRNode *GenIR::handleToIRNode(mdToken Token, void *EmbHandle, void *RealHandle,
   // TODO: There is more work for ngen scenario here. We are ignoring
   // fRelocatable and realHandle for now.
 
-  unsigned int NumBits = TargetPointerSizeInBits;
+  uint32_t NumBits = TargetPointerSizeInBits;
   bool IsSigned = false;
 
   ConstantInt *HandleValue = ConstantInt::get(
@@ -3383,7 +3383,7 @@ IRNode *GenIR::loadPrimitiveType(IRNode *Addr, CorInfoType CorInfoType,
     }
   }
 
-  unsigned int Align = (Alignment == Reader_AlignNatural)
+  uint32_t Align = (Alignment == Reader_AlignNatural)
     ? TargetPointerSizeInBits / 8
     : Alignment;
   LoadInst *LoadInst = LLVMBuilder->CreateLoad(TypedAddr, IsVolatile);
@@ -3394,7 +3394,7 @@ IRNode *GenIR::loadPrimitiveType(IRNode *Addr, CorInfoType CorInfoType,
   return Result;
 }
 
-void GenIR::classifyCmpType(Type *Ty, unsigned int &Size, bool &IsPointer,
+void GenIR::classifyCmpType(Type *Ty, uint32_t &Size, bool &IsPointer,
                             bool &IsFloat) {
   switch (Ty->getTypeID()) {
   case Type::TypeID::IntegerTyID:
@@ -3427,8 +3427,8 @@ IRNode *GenIR::cmp(ReaderBaseNS::CmpOpcode Opcode, IRNode *Arg1, IRNode *Arg2,
 
   // Types can only be int32, int64, float, double, or pointer.
   // They must match in bit size.
-  unsigned int Size1 = 0;
-  unsigned int Size2 = 0;
+  uint32_t Size1 = 0;
+  uint32_t Size2 = 0;
   bool IsFloat1 = false;
   bool IsFloat2 = false;
   bool IsPointer1 = false;
@@ -3537,8 +3537,8 @@ void GenIR::condBranch(ReaderBaseNS::CondBranchOpcode Opcode, IRNode *Arg1,
 
   // Types can only be int32, int64, float, double, or pointer.
   // They must match in bit size.
-  unsigned int Size1 = 0;
-  unsigned int Size2 = 0;
+  uint32_t Size1 = 0;
+  uint32_t Size2 = 0;
   bool IsFloat1 = false;
   bool IsFloat2 = false;
   bool IsPointer1 = false;
@@ -3674,8 +3674,8 @@ IRNode *GenIR::shift(ReaderBaseNS::ShiftOpcode Opcode, IRNode *ShiftAmount,
 /// Generate IR for MSIL Sizeof instruction. 
 IRNode *GenIR::sizeofOpcode(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                             IRNode **NewIR) {
-  unsigned int ClassSize = getClassSize(ResolvedToken->hClass);
-  unsigned int NumBits = 32;
+  uint32_t ClassSize = getClassSize(ResolvedToken->hClass);
+  uint32_t NumBits = 32;
   bool IsSigned = false;
   IRNode *Value = (IRNode *)ConstantInt::get(
       *JitContext->LLVMContext, APInt(NumBits, ClassSize, IsSigned));
@@ -3685,7 +3685,7 @@ IRNode *GenIR::sizeofOpcode(CORINFO_RESOLVED_TOKEN *ResolvedToken,
 }
 
 IRNode *GenIR::newObj(mdToken Token, mdToken LoadFtnToken,
-                      unsigned int CurrOffset, IRNode **NewIR) {
+                      uint32_t CurrOffset, IRNode **NewIR) {
   // Generate the constructor call
   // rdrCall and GenCall process newobj
   //  so there's nothing else to do.
@@ -3752,7 +3752,7 @@ IRNode *GenIR::castOp(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *ObjRefNode,
       //
 
     case CORINFO_HELP_ISINSTANCEOFCLASS: {
-      DWORD Flags = getClassAttribs((CORINFO_CLASS_HANDLE)HandleType);
+      uint32_t Flags = getClassAttribs((CORINFO_CLASS_HANDLE)HandleType);
       if ((Flags & CORINFO_FLG_FINAL) &&
           !(Flags & (CORINFO_FLG_MARSHAL_BYREF | CORINFO_FLG_CONTEXTFUL |
                      CORINFO_FLG_SHAREDINST))) {
@@ -3801,8 +3801,8 @@ bool GenIR::disableCastClassOptimization() {
 // need to do anything.
 void GenIR::removeStackInterference(IRNode **NewIR) { return; }
 
-void GenIR::removeStackInterferenceForLocalStore(unsigned int Opcode,
-                                                 unsigned int Ordinal,
+void GenIR::removeStackInterferenceForLocalStore(uint32_t Opcode,
+                                                 uint32_t Ordinal,
                                                  IRNode **NewIR) {
   return;
 }
@@ -4013,7 +4013,7 @@ std::string TypeInfo::toStaticString() const {
 
 #ifdef DEBUG
 void VerificationState::print() {
-  int I;
+  int32_t I;
   dbgs() << "--verification stack---\n";
   for (I = Vsp - 1; I >= 0; I--) {
     dbgs() << I << ": ";
