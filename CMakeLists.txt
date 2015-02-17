@@ -142,6 +142,10 @@ else()
   set(MSILCJIT_HAS_VERSION_PATCHLEVEL 0)
 endif()
 
+if (CMAKE_BUILD_TYPE STREQUAL "DEBUG")
+  set(DEBUG)
+endif()
+
 if (DEBUG)
   add_definitions( -DDEBUG -D_DEBUG )
 endif()
