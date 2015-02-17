@@ -667,12 +667,13 @@ public:
                      bool CanMoveUp = false) override;
 
   // Generate call to helper
-  IRNode *callHelper(CorInfoHelpFunc HelperID, llvm::Type *ReturnType,
-                     IRNode **NewIR, IRNode *Arg1 = NULL, IRNode *Arg2 = NULL,
-                     IRNode *Arg3 = NULL, IRNode *Arg4 = NULL,
-                     ReaderAlignType Alignment = Reader_AlignUnknown,
-                     bool IsVolatile = false, bool NoCtor = false,
-                     bool CanMoveUp = false);
+  IRNode *callHelperImpl(CorInfoHelpFunc HelperID, llvm::Type *ReturnType,
+                         IRNode **NewIR, IRNode *Arg1 = NULL,
+                         IRNode *Arg2 = NULL, IRNode *Arg3 = NULL,
+                         IRNode *Arg4 = NULL,
+                         ReaderAlignType Alignment = Reader_AlignUnknown,
+                         bool IsVolatile = false, bool NoCtor = false,
+                         bool CanMoveUp = false);
 
   // Generate special generics helper that might need to insert flow
   IRNode *callRuntimeHandleHelper(CorInfoHelpFunc Helper, IRNode *Arg1,
