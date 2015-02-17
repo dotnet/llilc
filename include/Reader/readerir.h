@@ -490,9 +490,7 @@ public:
   FlowGraphNode *fgGetHeadBlock(void) override;
   FlowGraphNode *fgGetTailBlock(void) override;
   unsigned fgGetBlockCount(void) override;
-  FlowGraphNode *fgNodeGetIDom(FlowGraphNode *Fg) override {
-    throw NotYetImplementedException("fgNodeGetIDom");
-  };
+  FlowGraphNode *fgNodeGetIDom(FlowGraphNode *Fg) override;
 
   IRNode *fgNodeFindStartLabel(FlowGraphNode *Block) override;
 
@@ -709,9 +707,8 @@ public:
   IRNode *makePtrDstGCOperand(bool IsInteriorGC) override {
     throw NotYetImplementedException("makePtrDstGCOperand");
   };
-  IRNode *makePtrNode(ReaderPtrType PtrType = Reader_PtrNotGc) override {
-    throw NotYetImplementedException("makePtrNode");
-  };
+  IRNode *makePtrNode(ReaderPtrType PtrType = Reader_PtrNotGc) override;
+
   IRNode *makeStackTypeNode(IRNode *Node) override {
     throw NotYetImplementedException("makeStackTypeNode");
   };

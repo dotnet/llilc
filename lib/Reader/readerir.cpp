@@ -1574,6 +1574,8 @@ bool GenIR::isManagedPointerType(PointerType *PointerType) {
 
 EHRegion *fgNodeGetRegion(FlowGraphNode *Node) { return nullptr; }
 
+EHRegion *fgNodeGetRegion(llvm::Function *Function) { return nullptr; }
+
 void fgNodeSetRegion(FlowGraphNode *Node, EHRegion *Region) { return; }
 
 FlowGraphNode *GenIR::fgGetHeadBlock() {
@@ -1741,6 +1743,31 @@ bool GenIR::fgCall(ReaderBaseNS::OPCODE Opcode, mdToken Token,
                    bool CanInline, bool IsTailCall, bool IsUnmarkedTailCall,
                    bool ReadOnly) {
   return false;
+}
+
+// Small helper function that gets the next IDOM. It was pulled out-of-line
+// so that it can be called in a loop in FgNodeGetIDom.
+// TODO (Issue #38): currently we conservatively return single predecessor without 
+// computing the immediate dominator.
+FlowGraphNode *getNextIDom(FlowGraphNode *fgNode) {
+   return (FlowGraphNode*)fgNode->getSinglePredecessor();
+}
+
+FlowGraphNode *GenIR::fgNodeGetIDom(FlowGraphNode *fgNode) {
+   FlowGraphNode* Idom = getNextIDom(fgNode);
+
+   //  If the dominating block is in an EH region
+   //  and the original block is not in the same region, then this
+   //  is not a true dominance relationship. Progress to the next
+   //  dominator in the chain until we reach a true dominating
+   //  block or there are no more blocks.
+   while (nullptr != Idom
+     && fgNodeGetRegion(Idom) != fgNodeGetRegion(Function)
+     && fgNodeGetRegion(Idom) != fgNodeGetRegion(fgNode)) {
+     Idom = getNextIDom(Idom);
+   }
+
+   return Idom;
 }
 
 FlowGraphEdgeList *fgNodeGetSuccessorList(FlowGraphNode *FgNode) {
@@ -2520,12 +2547,17 @@ IRNode *GenIR::loadStaticField(CORINFO_RESOLVED_TOKEN *FieldToken,
 
   // TODO: Replace static read-only fields with constant when possible
 
-  // Get static field address. Convert to pointer if we get raw address.
+  // Get static field address. Convert to pointer.
   Value *Address = rdrGetStaticFieldAddress(FieldToken, &FieldInfo, NewIR);
+  Type *PtrToFieldTy = getUnmanagedPointerType(FieldTy);
   if (Address->getType()->isIntegerTy()) {
-    Type *PtrToFieldTy = getUnmanagedPointerType(FieldTy);
     Address = LLVMBuilder->CreateIntToPtr(Address, PtrToFieldTy);
   }
+  else {
+    ASSERT(Address->getType()->isPointerTy());
+    Address = LLVMBuilder->CreatePointerCast(Address, PtrToFieldTy);
+  }
+
   IRNode *FieldValue = (IRNode *)LLVMBuilder->CreateLoad(Address, IsVolatile);
   IRNode *Result = convertToStackType(FieldValue, FieldCorType);
   return Result;
@@ -3344,6 +3376,12 @@ IRNode *GenIR::handleToIRNode(mdToken Token, void *EmbHandle, void *RealHandle,
 
   return (IRNode *)HandleValue;
 }
+
+// TODO: currently PtrType telling base or interior pointer is ignored.
+// So for now, deliberately we keep this API to retain the call site.
+IRNode *GenIR::makePtrNode(ReaderPtrType PtrType) {
+   return loadNull(nullptr);
+};
 
 IRNode *GenIR::loadPrimitiveType(IRNode *Addr, CorInfoType CorInfoType,
                                  ReaderAlignType Alignment, bool IsVolatile,
