@@ -2080,8 +2080,27 @@ IRNode *GenIR::binaryOp(ReaderBaseNS::BinaryOpcode Opcode, IRNode *Arg1,
     Arg2 = convert(ResultType, Arg2, !IsUnsigned);
   }
 
-  IRNode *Result = (IRNode *)LLVMBuilder->CreateBinOp(Op, Arg1, Arg2);
 
+  IRNode *Result;
+  if (IsFloat && Op == Instruction::BinaryOps::FRem) {
+    // FRem must be lowered to a JIT helper call to avoid undefined symbols
+    // during emit.
+    //   
+    // TODO: it may be possible to delay this lowering by updating the JIT
+    // APIs to allow the definition of a target library (via TargeLibraryInfo).
+    CorInfoHelpFunc helper = CORINFO_HELP_UNDEF;
+    if (ResultType->isFloatTy()) {
+      helper = CORINFO_HELP_FLTREM;
+    } else if (ResultType->isDoubleTy()) {
+      helper = CORINFO_HELP_DBLREM;
+    } else {
+      llvm_unreachable("Bad floating point type!");
+    }
+
+    Result = callHelper(helper, ResultType, NewIR, Arg1, Arg2);
+  } else {
+    Result = (IRNode *)LLVMBuilder->CreateBinOp(Op, Arg1, Arg2);
+  }
   return Result;
 }
 
@@ -2623,6 +2642,18 @@ IRNode *GenIR::callHelper(CorInfoHelpFunc HelperID, IRNode *Dst, IRNode **NewIR,
                           IRNode *Arg1, IRNode *Arg2, IRNode *Arg3,
                           IRNode *Arg4, ReaderAlignType Alignment,
                           bool IsVolatile, bool NoCtor, bool CanMoveUp) {
+  LLVMContext &LLVMContext = *this->JitContext->LLVMContext;
+  Type *ReturnType =
+      (Dst == NULL) ? Type::getVoidTy(LLVMContext) : Dst->getType();
+  return callHelper(HelperID, ReturnType, NewIR, Arg1, Arg2, Arg3, Arg4,
+                    Alignment, IsVolatile, NoCtor, CanMoveUp);
+}
+
+IRNode *GenIR::callHelper(CorInfoHelpFunc HelperID, Type *ReturnType,
+                          IRNode **NewIR, IRNode *Arg1, IRNode *Arg2,
+                          IRNode *Arg3, IRNode *Arg4,
+                          ReaderAlignType Alignment, bool IsVolatile,
+                          bool NoCtor, bool CanMoveUp) {
   ASSERT(HelperID != CORINFO_HELP_UNDEF);
 
   if (IsVolatile) {
@@ -2662,10 +2693,6 @@ IRNode *GenIR::callHelper(CorInfoHelpFunc HelperID, IRNode *Dst, IRNode **NewIR,
 
   ArrayRef<Value *> Arguments(AllArguments, ArgumentCount);
   ArrayRef<Type *> ArgumentTypes(AllArgumentTypes, ArgumentCount);
-
-  LLVMContext &LLVMContext = *this->JitContext->LLVMContext;
-  Type *ReturnType =
-      (Dst == NULL) ? Type::getVoidTy(LLVMContext) : Dst->getType();
 
   bool IsVarArg = false;
   FunctionType *FunctionType =
@@ -3296,7 +3323,7 @@ void GenIR::throwOpcode(IRNode *Arg1, IRNode **NewIR) {
   // Using a call for now; this will need to be invoke
   // when we get EH flow properly modeled.
   CallInst *ThrowCall =
-      (CallInst *)callHelper(CORINFO_HELP_THROW, NULL, NewIR, Arg1);
+      (CallInst *)callHelper(CORINFO_HELP_THROW, (IRNode *)NULL, NewIR, Arg1);
 
   // Annotate the helper
   ThrowCall->setDoesNotReturn();
