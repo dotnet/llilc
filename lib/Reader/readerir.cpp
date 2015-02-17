@@ -1358,7 +1358,6 @@ uint32_t GenIR::stackSize(CorInfoType CorType) {
   case CorInfoType::CORINFO_TYPE_NATIVEINT:
   case CorInfoType::CORINFO_TYPE_NATIVEUINT:
   case CorInfoType::CORINFO_TYPE_PTR:
-  case CorInfoType::CORINFO_TYPE_CLASS:
     return TargetPointerSizeInBits;
 
   default:
@@ -1394,7 +1393,6 @@ uint32_t GenIR::size(CorInfoType CorType) {
   case CorInfoType::CORINFO_TYPE_NATIVEINT:
   case CorInfoType::CORINFO_TYPE_NATIVEUINT:
   case CorInfoType::CORINFO_TYPE_PTR:
-  case CorInfoType::CORINFO_TYPE_CLASS:
     return TargetPointerSizeInBits;
 
   default:
@@ -1417,7 +1415,6 @@ bool GenIR::isSigned(CorInfoType CorType) {
   case CorInfoType::CORINFO_TYPE_ULONG:
   case CorInfoType::CORINFO_TYPE_NATIVEUINT:
   case CorInfoType::CORINFO_TYPE_PTR:
-  case CorInfoType::CORINFO_TYPE_CLASS:
     return false;
 
   case CorInfoType::CORINFO_TYPE_BYTE:
@@ -1503,8 +1500,7 @@ IRNode *GenIR::convertFromStackType(IRNode *Node, CorInfoType CorType,
     // A convert is needed if we're changing size
     // or implicitly converting int to ptr.
     const bool NeedsTruncation = (Size > DesiredSize);
-    const bool NeedsReinterpret = (CorType == CorInfoType::CORINFO_TYPE_PTR)
-       || (CorType == CorInfoType::CORINFO_TYPE_CLASS);
+    const bool NeedsReinterpret = (CorType == CorInfoType::CORINFO_TYPE_PTR);
 
     if (NeedsTruncation) {
       // Hopefully we don't need both....
@@ -1751,15 +1747,13 @@ bool GenIR::fgCall(ReaderBaseNS::OPCODE Opcode, mdToken Token,
 
 // Small helper function that gets the next IDOM. It was pulled out-of-line
 // so that it can be called in a loop in FgNodeGetIDom.
-// TODO: currently we conservatively return single predecessor without 
+// TODO (Issue #38): currently we conservatively return single predecessor without 
 // computing the immediate dominator.
-FlowGraphNode *getNextIDom(FlowGraphNode *fgNode)
-{
+FlowGraphNode *getNextIDom(FlowGraphNode *fgNode) {
    return (FlowGraphNode*)fgNode->getSinglePredecessor();
 }
 
-FlowGraphNode *GenIR::fgNodeGetIDom(FlowGraphNode *fgNode)
-{
+FlowGraphNode *GenIR::fgNodeGetIDom(FlowGraphNode *fgNode) {
    FlowGraphNode* Idom = getNextIDom(fgNode);
 
    //  If the dominating block is in an EH region
@@ -2250,7 +2244,6 @@ void GenIR::storeLocal(uint32_t LocalOrdinal, IRNode *Arg1,
   uint32_t LocalIndex = LocalOrdinal;
   Value *LocalAddress = LocalVars[LocalIndex];
   Type *LocalTy = LocalAddress->getType()->getPointerElementType();
-
   IRNode *Value = 
     convertFromStackType(Arg1, LocalVarCorTypes[LocalIndex], LocalTy);
   LLVMBuilder->CreateStore(Value, LocalAddress);
@@ -2626,7 +2619,6 @@ bool isNonVolatileWriteHelperCall(CorInfoHelpFunc HelperId) {
 }
 
 // Generate call to helper
-
 IRNode *GenIR::callHelper(CorInfoHelpFunc HelperID, IRNode *Dst, IRNode **NewIR,
                           IRNode *Arg1, IRNode *Arg2, IRNode *Arg3,
                           IRNode *Arg4, ReaderAlignType Alignment,
@@ -2673,7 +2665,7 @@ IRNode *GenIR::callHelper(CorInfoHelpFunc HelperID, IRNode *Dst, IRNode **NewIR,
 
   LLVMContext &LLVMContext = *this->JitContext->LLVMContext;
   Type *ReturnType =
-     (Dst == NULL) ? Type::getVoidTy(LLVMContext) : Dst->getType();
+      (Dst == NULL) ? Type::getVoidTy(LLVMContext) : Dst->getType();
 
   bool IsVarArg = false;
   FunctionType *FunctionType =
@@ -3386,6 +3378,7 @@ IRNode *GenIR::handleToIRNode(mdToken Token, void *EmbHandle, void *RealHandle,
 }
 
 // TODO: currently PtrType telling base or interior pointer is ignored.
+// So for now, deliberately we keep this API to retain the call site.
 IRNode *GenIR::makePtrNode(ReaderPtrType PtrType) {
    return loadNull(nullptr);
 };
