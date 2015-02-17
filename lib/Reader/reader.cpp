@@ -4692,15 +4692,16 @@ ReaderBase::rdrGetStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
           }
         }
 
-        // Record operand that holds shared statics base
-        domInfoRecordSharedStaticBaseDefine(CurrentFgNode, HelperId, Class,
-                                            SharedStaticsBaseNode);
-
         // Record that this block initialized class typeRef.
         domInfoRecordClassInit(CurrentFgNode, Class);
 
-        rdrCallGetStaticBase(Class, ResolvedToken->token, HelperId, NoCtor,
-                             CanMoveUp, SharedStaticsBaseNode, NewIR);
+        SharedStaticsBaseNode = rdrCallGetStaticBase(Class,
+           ResolvedToken->token, HelperId, NoCtor, CanMoveUp,
+           SharedStaticsBaseNode, NewIR);
+
+        // Record instruction that holds shared statics base
+        domInfoRecordSharedStaticBaseDefine(CurrentFgNode, HelperId, Class,
+           SharedStaticsBaseNode);
       }
     }
 

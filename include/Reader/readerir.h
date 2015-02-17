@@ -490,9 +490,7 @@ public:
   FlowGraphNode *fgGetHeadBlock(void) override;
   FlowGraphNode *fgGetTailBlock(void) override;
   unsigned fgGetBlockCount(void) override;
-  FlowGraphNode *fgNodeGetIDom(FlowGraphNode *Fg) override {
-    throw NotYetImplementedException("fgNodeGetIDom");
-  };
+  FlowGraphNode *fgNodeGetIDom(FlowGraphNode *Fg) override;
 
   IRNode *fgNodeFindStartLabel(FlowGraphNode *Block) override;
 
@@ -667,7 +665,14 @@ public:
                      ReaderAlignType Alignment = Reader_AlignUnknown,
                      bool IsVolatile = false, bool NoCtor = false,
                      bool CanMoveUp = false) override;
-
+  /*
+  IRNode *callHelper(CorInfoHelpFunc HelperID, llvm::Type *ReturnType, IRNode **NewIR,
+                     IRNode *Arg1 = NULL, IRNode *Arg2 = NULL,
+                     IRNode *Arg3 = NULL, IRNode *Arg4 = NULL,
+                     ReaderAlignType Alignment = Reader_AlignUnknown,
+                     bool IsVolatile = false, bool NoCtor = false,
+                     bool CanMoveUp = false);
+ */
   // Generate special generics helper that might need to insert flow
   IRNode *callRuntimeHandleHelper(CorInfoHelpFunc Helper, IRNode *Arg1,
                                   IRNode *Arg2, IRNode *NullCheckArg,
@@ -709,9 +714,10 @@ public:
   IRNode *makePtrDstGCOperand(bool IsInteriorGC) override {
     throw NotYetImplementedException("makePtrDstGCOperand");
   };
-  IRNode *makePtrNode(ReaderPtrType PtrType = Reader_PtrNotGc) override {
-    throw NotYetImplementedException("makePtrNode");
-  };
+  IRNode *makePtrNode(ReaderPtrType PtrType = Reader_PtrNotGc) override;// {
+     //return loadNull
+    //throw NotYetImplementedException("makePtrNode");
+  //};
   IRNode *makeStackTypeNode(IRNode *Node) override {
     throw NotYetImplementedException("makeStackTypeNode");
   };
