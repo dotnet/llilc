@@ -17,31 +17,31 @@ JIT.
 
 For the full CoreCLR GC, a JIT has several responsibilities:
 
-1.	Use write barriers for stores of GC pointers or value classes with GC 
+1.  Use write barriers for stores of GC pointers or value classes with GC 
     pointer members (typically via helper calls to the runtime).
-2.	Determine the set of live GC roots in stack slots and registers. 
+2.  Determine the set of live GC roots in stack slots and registers. 
     Slots may be untracked or tracked. All slots must be properly initialized, 
     if necessary, before the first safepoint.
-3.	Ensure no exterior pointer is live at a safepoint.
-4.	Track whether each reference is an object, interior, or pinned reference. 
+3.  Ensure no exterior pointer is live at a safepoint.
+4.  Track whether each reference is an object, interior, or pinned reference. 
     Special reporting may also be needed for this pointers in methods that have 
     them.
-5.	Ensure that there are enough safepoints along every possible dynamic 
+5.  Ensure that there are enough safepoints along every possible dynamic 
     execution path to avoid long or indefinite GC pauses.
-6.	Determine if there are any regions where GC is not supported, for instance 
+6.  Determine if there are any regions where GC is not supported, for instance 
     parts of some prologs and epilogs or the middle of some quasi-atomic 
     instruction sequence. Make sure there are no safepoints in such regions.
-7.	In some cases, ensure that special pointers (pinned pointers, this pointers,
+7.  In some cases, ensure that special pointers (pinned pointers, this pointers,
     generic contexts) are kept alive throughout a suitable region of code by 
     reporting them at the requisite safepoints. This keep alive region might 
     extend beyond the normal range determined by liveness analysis.
-8.	Fill in a GC Info object describing the above information for use by 
+8.  Fill in a GC Info object describing the above information for use by 
     the runtime. Note that in the CoreCLR the reporting format is architecture 
     dependent and may require various encoding techniques.
 
 In conservative mode none of these apply, but:
 
-1.	The JIT must ensure that at a safepoint, each live object with a root in
+1.  The JIT must ensure that at a safepoint, each live object with a root in
     the current stack frame is referenced by at least one object or interior 
     pointer (more specifically, this excludes live objects that are only 
     referenced by exterior pointers).
@@ -113,9 +113,9 @@ instead the results appear in the LLVM
 happens is still being worked out. One aspect of this is to use LLVM's 
 address spaces to distinguish GC pointers from ordinary pointers. In 
 particular, GC pointers are required to be in `addrspace(1)` or be in an 
-address space with some distinguishing GC attribute. Then identifying the set of 
-necessary safepoints and liveness analysis could drive wiring up the necessary 
-SSA uses and definitions.We have adopted this address space convention in 
+address space with some distinguishing GC attribute. Then identifying the set
+of necessary safepoints and liveness analysis could drive wiring up the 
+SSA uses and definitions. We have adopted this address space convention in 
 LLVM-MSILC.
 
 ## Open Issues - Correctness
