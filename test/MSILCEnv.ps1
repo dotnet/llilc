@@ -137,76 +137,80 @@ function ValidatePreConditions
   # Validate Git
 
   $GitExists = Test-Path Env:\GITDIR
-  if (!$GitExists) {
+  $GitOnPath = IsOnPath("git.exe")
+  if (!$GitOnPath -And !$GitExists) {
     $GitExists = Test-Path $DefaultGit;
     if (!$GitExists) {
-      Write-Warning "!!! Git not specified." 
+      throw "!!! Git not specified." 
     }
     else {
       $Env:GITDIR = $DefaultGit
     }
   }
-  else {
+  elseif (!$GitOnPath) {
     $GitExists = Test-Path $Env:GITDIR
     if (!$GitExists) {
-      Write-Warning "!!! Git not available in specified location." 
+      throw "!!! Git not available in specified location." 
     }
   }
 
   # Validate CMake
 
   $CMakeExists = Test-Path Env:\CMAKEDIR
-  if (!$CMakeExists) {
+  $CMakeOnPath = IsOnPath("cmake.exe")
+  if (!$CMakeOnPath -And !$CMakeExists) {
     $CMakeExists = Test-Path $DefaultCMake;
     if (!$CMakeExists) {
-      Write-Warning "!!! CMake not specified." 
+      throw "!!! CMake not specified." 
     }
     else {
       $Env:CMAKEDIR = $DefaultCMake
     }
   }
-  else {
+  elseif (!$CMakeOnPath) {
     $CMakeExists = Test-Path $Env:CMAKEDIR
     if (!$CMakeExists) {
-      Write-Warning "!!! CMake not available in specified location." 
+      throw "!!! CMake not available in specified location." 
     }
   }
 
   # Validate Python
 
   $PythonExists = Test-Path Env:\PYTHONDIR
-  if (!$PythonExists) {
+  $PythonOnPath = IsOnPath("python.exe")
+  if (!$PythonOnPath -And !$PythonExists) {
     $PythonExists = Test-Path $DefaultPython;
     if (!$PythonExists) {
-      Write-Warning "!!! Python not specified." 
+      throw "!!! Python not specified." 
     }
     else {
       $Env:PYTHONDIR = $DefaultPython
     }
   }
-  else {
+  elseif (!$PythonOnPath) {
     $PythonExists = Test-Path $Env:PYTHONDIR
     if (!$PythonExists) {
-      Write-Warning "!!! Python not available in specified location." 
+      throw "!!! Python not available in specified location." 
     }
   }
 
   # Validate GnuWin32
 
   $GnuWin32Exists = Test-Path Env:\GNUWIN32DIR
-  if (!$GnuWin32Exists) {
+  $GnuWin32OnPath = IsOnPath("grep.exe")
+  if (!$GnuWin32OnPath -And !$GnuWin32Exists) {
     $GnuWin32Exists = Test-Path $DefaultGnuWin32;
     if (!$GnuWin32Exists) {
-      Write-Warning "!!! GnuWin32 not specified." 
+      throw "!!! GnuWin32 not specified." 
     }
     else {
       $Env:GNUWIN32DIR = $DefaultGnuWin32
     }
   }
-  else {
+  elseif (!$GnuWin32OnPath) {
     $GnuWin32Exists = Test-Path $Env:GNUWIN32DIR
     if (!$GnuWin32Exists) {
-      Write-Warning "!!! GnuWin32 not available in specified location." 
+      throw "!!! GnuWin32 not available in specified location." 
     }
   }
 
@@ -385,7 +389,7 @@ function ValidatePreConditions
   if (!$DiffExists) {
     $DiffExists = Test-Path "$DefaultDiffTool"
     if (!$DiffExists) {
-      Write-Warning "!!! Diff Tool not specified." 
+      throw "!!! Diff Tool not specified." 
     }
     else {
       $Env:DIFFTOOL = "$DefaultDiffTool"
@@ -394,7 +398,7 @@ function ValidatePreConditions
   else {
     $DiffExists = Test-Path "$Env:DIFFTOOL"
     if (!$DiffExists) {
-      Write-Warning "!!! Diff Tool not available." 
+      throw "!!! Diff Tool not available." 
     }
   }
 }
