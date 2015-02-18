@@ -25,16 +25,7 @@ IRNode *fgNodeGetStartInsertIRNode(FlowGraphNode *FgNode) {
   return fgNodeGetStartIRNode(FgNode);
 }
 
-// Get the special block-end placekeeping node
-IRNode *fgNodeGetEndIRNode(FlowGraphNode *FgNode) {
-  throw NotYetImplementedException("fFgNodeGetEndIRNode");
-}
-
 IRNode *fgNodeGetEndIRInsertionPoint(FlowGraphNode *FgNode) { return NULL; }
-
-void fgNodeSetIBCNotReal(FlowGraphNode *Fg) {
-  throw NotYetImplementedException("fgNodeSetIBCNotReal");
-}
 
 GlobalVerifyData *fgNodeGetGlobalVerifyData(FlowGraphNode *Fg) {
   throw NotYetImplementedException("fgNodeGetGlobalVerifyData");
@@ -48,17 +39,11 @@ uint32_t fgNodeGetBlockNum(FlowGraphNode *Fg) {
   throw NotYetImplementedException("fgNodeGetBlockNum");
 }
 
-bool fgEdgeListIsHandler(FlowGraphEdgeList *FgEdge) {
-  throw NotYetImplementedException("fgEdgeListIsHandler");
-}
-
-bool fgEdgeListIsFake(FlowGraphEdgeList *FgEdge) {
-  throw NotYetImplementedException("fgEdgeListIsFake");
-}
-
+#ifdef CC_PEVERIFY
 void fgEdgeListMakeFake(FlowGraphEdgeList *FgEdge) {
   throw NotYetImplementedException("fgEdgeListMakeFake");
 }
+#endif
 
 IRNode *irNodeGetNext(IRNode *Node) {
   throw NotYetImplementedException("irNodeGetNext");

@@ -3342,7 +3342,8 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
 
       // Make/insert end finally
       BlockNode = fgNodeGetStartIRNode(Block);
-      BranchNode = fgMakeEndFinally(BlockNode, CurrentOffset, IsLexicalEnd);
+      BranchNode = fgMakeEndFinallyHelper(BlockNode, CurrentOffset,
+                                                     IsLexicalEnd);
 
       // And split the block
       fgNodeSetEndMSILOffset(Block, NextOffset);
