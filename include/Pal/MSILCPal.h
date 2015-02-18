@@ -18,6 +18,9 @@
 // We still need the PAL EH macros on Windows, so define them here.
 #if defined(_MSC_VER)
 
+#if defined(_DEBUG)
+#include <windows.h> // For UINT
+#endif
 #include "staticcontract.h"
 
 // Note: PAL_SEH_RESTORE_GUARD_PAGE is only ever defined in clrex.h, so we only
