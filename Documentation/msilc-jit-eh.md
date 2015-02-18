@@ -97,7 +97,7 @@ LLVM IR is set up to model cleanups that occur en route, working from inner scop
 This section describes the processing of EH constructs in the MSIL Reader.  The goal is to translate the MSIL constructs into IR constructs that match LLVM's expectations to the greatest degree possible, and to confine special semantics to a small number of intrinsics that minimally inhibit optimization.  This goal is shared with the [Windows EH support in LLVM](http://thread.gmane.org/gmane.comp.compilers.llvm.devel/81284) currently being developed, and the plan is to be able to reuse much of that implementation for funclet extraction and EH descriptor generation.
 
 ### Explicit throw
-An explicit `throw` operation will be translated into an [`invoke`](http://llvm.org/docs/LangRef.html#invoke-instruction) of the appropriate helper function (#defined by CORINFO_HELP_THROW).  The unwind label of the invoke will be a `landingpad` corresponding to the innermost enclosing protected region.  In the event that there is no enclosing protected region in the current method, the operation will be translated to a `call` rather than an `invoke`.
+An explicit `throw` operation will be translated into an [`invoke`](http://llvm.org/docs/LangRef.html#invoke-instruction) of the appropriate helper function (#defined by `CORINFO_HELP_THROW`).  The unwind label of the invoke will be a `landingpad` corresponding to the innermost enclosing protected region.  In the event that there is no enclosing protected region in the current method, the operation will be translated to a `call` rather than an `invoke`.
 
 ### Implicit exceptions
 MSIL instructions that can generate implicit exceptions (NullReferenceException on load/store, ArithmeticOverflowException, etc.) will be expanded into sequences of LLVM IR instructions with explicit condition testing and exception throwing, at least initially.  See [discussion](#implicit-exceptions-and-machine-traps) above for details/rationale.
@@ -142,7 +142,7 @@ Full EH support will take a while to implement, and many jit tests don't throw e
  5. [ ] Support for other target architectures
  6. [ ] Support for ahead-of-time compilation
 
-(Note: The relative order of 4/5/6 is TBD, based on future priorities.)
+(Note: The relative order of optimizations vs. other targets vs. ahead-of-time is TBD, based on future priorities.)
 
 ## Open Questions
 1. Can filter outlining leverage some of the same outlining utilities used by the late outlining of handlers in LLVM, or is it best performed directly in the reader?
