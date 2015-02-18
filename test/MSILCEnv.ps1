@@ -1,77 +1,77 @@
 ﻿# -------------------------------------------------------------------------
 #
-# This script provides MSILC development environment and some
-# facilities for daily development use.
+# This script provides MSILC development environment and test harness.
 #
 # -------------------------------------------------------------------------
 
 <#
 .SYNOPSIS
-    Setup MSILC development environment and provide some daily routines
+    Setup MSILC development environment and provide test harness.
 
 .DESCRIPTION
     This script set up the MSILC environment with the assumptions below:
     
     1. The following software are installed:
     Visual Studio 12.0, Git, CMake, Python, GnuWin32, and DiffMerge
-
-    2. LLVM and MSILC source are downloaded and an LLVM build directory
-    are specified. Note that MSILC source should be located at the
-    correct place under LLVM: tools\llvm-msilc .
-    
-    3. A separate MSILC work directory is specified, where CLR, MSILC
-    JIT, and test cases from CLR drop will be copied into so that you can
-    run test.
-
-    4. The following environment variable are set, or if not, it will be
-    picked up from default values listed in function ValidatePreConditions
-    if they are valid.
+ 
+    If the software are installed in default location, or the desired
+    executable is already on path, this environment will pick them up 
+    automatically. If you install any of them to a different place and
+    the executable is not on path, please specify them through the
+    following environment variables:
 
     VS120COMNTOOLS
     GITDIR
     CMAKEDIR
     PYTHONDIR
     GNUWIN32DIR
+    DIFFTOOL
+
+    2. CoreCLR, LLVM and MSILC local repositories are created. Note that 
+    MSILC should be located at the correct place under tools\MSILC in 
+    LLVM repository. MSILC uses CoreCLR's test assets to run regressions.
+    Please specify the following environment variable:
+
     LLVMSOURCE
     LLVMBUILD
-    WORKMSILCDIR
-    DIFFTOOL
-    CLRDROP
-    MSILCTESTSRC
-    ILASMEXE
-    CSCEXE
-
-    5. Developer has to provide a powershell global function CopyTestCasesHelper
-    in the following form to curstomize their test needs:
-
-    function Global:CopyTestCasesHelper
-    {
-      CopyTestCase("\CertainDir1\test1.il")
-      CopyTestCase("\CertainDir2\test2.cs")
-    }
-
-    It will copy test cases located in MSILCTESTSRC into work test directory.
+    CORECLRREPO
 
     This script completes the environment setup and reports the status.
     
-    Some daily routines are also provided:
-    CheckCLR, CopyCLR,
-    CheckJIT, CopyJIT,
-    CheckTestCases, CopyTestCase, CopyTestCases, 
-    CheckWorkDir, CleanWorkDir, CopyWorkDir,
-    MSILCRegr, MSILCRegrDiff,
-    CopyJITAndRun (cr in short), CopyWorkDirAndRun
-    CheckEnv,
-    CreateBase, ReBaseOne, ReBaseAll
-    ApplyFilter,
-    MSILCHelp,
-    and some quick directory navigations (cdw, cdp, cdl, cdb)
+    This scirpt also provides some daily routines used for daily
+    development and test harness. It tries to make common task
+    as simple as possible and also provides some routines for
+    finer control.
+     
+    Most commonly used routines are:
+    Build, BuildTest, RunTest, CheckDiff
 
-    Regression test cases will be copied from CLRDrop into work test
-    directory through CopyTestCases. The test cases themselves are
-    not included in repository. But a list of regressions test cases
-    name and its base line for diff are located at MSILC test directory.
+    Routines with finer control are:
+    MSILCHelp, NuGetCLR, CoreCLRVersion, CopyJIT, 
+    CheckJIT, CheckCLR, CheckStatus, CheckEnv,
+    ReBaseAll, ApplyFilter,
+    ConfigureLLVM, BuildLLVM, 
+    and some quick directory navigations
     
+    In first launch of this environment, a CoreCLR package Nuget will be
+    performed and it will be placed under MSILCSOURCE\test\TestResult.
+    This directory will be ignored by Git as it is specied in .gitignore.
+
+    To build MSILC, just run Build.
+    To build CoreCLR regression tests, just run BuildTest.
+    To run CoreCLR regression tests, just run RunTest.
+    To check the details of the difference of intermediate LLVM IR against
+    baseline, just run CheckDiff. It will bring up DiffMerge.
+
+    Under the hood, MSILC uses CoreCLR's test assets, BuildTest will
+    build CoreCLR regression tests under CORECLRREPO\binaries\test.
+    To run CoreCLR with MSILC, MSILCJit.dll has to be copied to where
+    CoreRun.exe resides in CoreCLR package. Build will automatically
+    copy it over once it is built. CopyJIT can do so whenever you can.
+    As MSILC is still in early developement stage, intermediate LLVM
+    IR dump is used to protect the work we have achieved. A baseline
+    of such dump is kept in MSILCSOURCE\test\BaseLine. 
+
 .PARAMETER Arch
     Target Architecture
 
@@ -85,8 +85,8 @@
 
 [CmdletBinding()]
 Param(
-   [string]$Arch="amd64",
-   [string]$Build="debug"
+   [string]$Arch="x64",
+   [string]$Build="Debug"
 )
 
 # -------------------------------------------------------------------------
@@ -106,15 +106,12 @@ function ValidatePreConditions
   $DefaultCMake = "C:\Program Files (x86)\CMake\"
   $DefaultPython = "C:\Python34\"
   $DefaultGnuWin32 = "C:\GnuWin32\"
+  $DefaultDiffTool =  "C:\Program Files\SourceGear\"
+
   $DefaultLLVMSource = "C:\LLVM\"
   $DefaultLLVMBuild = "C:\LLVMBuild\"
-  $DefaultWorkMSILCDir = "C:\WorkMSILC\"
-  $DefaultDiffTool =  "C:\Program Files\SourceGear\Common\DiffMerge\sgdm.exe"
-  $DefaultCLRDrop = "C:\CLRDrop\"
-  $DefaultMSILCTestSrc = "C:\MSILCTestSrc\"
-  $DefaultILAsmExe = "C:\CLRDrop\ilasm.exe"
-  $DefaultCSCExe = "C:\CLRDrop\csc.exe"
-
+  $DefaultCoreCLRRepo = "C:\coreclr\"
+    
   # Validate Visual Studio
 
   $VSExists = Test-Path Env:\VS120COMNTOOLS
@@ -214,6 +211,26 @@ function ValidatePreConditions
     }
   }
 
+  # Validate Diff Tool
+
+  $DiffToolExists = Test-Path Env:\DIFFTOOL
+  $DiffToolOnPath = IsOnPath("sgdm.exe")
+  if (!$DiffToolOnPath -And !$DiffToolExists) {
+    $DiffToolExists = Test-Path "$DefaultDiffTool"
+    if (!$DiffToolExists) {
+      throw "!!! Diff Tool not specified." 
+    }
+    else {
+      $Env:DIFFTOOL = "$DefaultDiffTool"
+    }
+  }
+  elseif (!$DiffToolOnPath) {
+    $DiffToolExists = Test-Path "$Env:DIFFTOOL"
+    if (!$DiffToolExists) {
+      throw "!!! Diff Tool not available in specified location." 
+    }
+  }
+
   # Validate LLVM
 
   $LLVMSourceExists = Test-Path Env:\LLVMSOURCE
@@ -262,143 +279,22 @@ function ValidatePreConditions
     }
   }
 
-  # Validate CLR Drop
+  # Validate CoreCLR Repository
 
-  $CLRDropExists = Test-Path Env:\CLRDROP
-  if (!$CLRDropExists) {
-    $CLRDropExists = Test-Path $DefaultCLRDrop
-    if (!$CLRDropExists) {
-      throw "!!! CLR Drop not specified."
+  $CoreCLRRepoExists = Test-Path Env:\CORECLRREPO
+  if (!$CoreCLRRepoExists) {
+    $CoreCLRRepoExists = Test-Path $DefaultCoreCLRRepo
+    if (!$CoreCLRRepoExists) {
+      throw "!!! CoreCLR Repository not specified."
     }
     else {
-      $Env:CLRDROP = $DefaultCLRDrop
+      $Env:CORECLRREPO = $DefaultCoreCLRRepo
     }
   }
   else {
-    $CLRDropExists = Test-Path $Env:CLRDROP
-    if (!$CLRDropExists) {
-      throw "!!! CLR Drop not available." 
-    }
-  }
-
-  if ($CLRDropExists) {
-    $CLRDropRuntimeExists = Test-Path "$Env:CLRDROP\TestNet\Runtime"
-    if (!$CLRDropRuntimeExists) {
-      throw "!!! CLR Drop Runtime not available" 
-    }
-    else {
-      $Env:CLRDROPRUNTIME = "$Env:CLRDROP\TestNet\Runtime"
-    }
-      
-    $CLRDropHostExists = Test-Path "$Env:CLRDROP\TestNet\Host"
-    if (!$CLRDropHostExists) {
-      throw " CLR Drop Host not available"
-    }
-    else {
-      $Env:CLRDROPHOST = "$Env:CLRDROP\TestNet\Host"
-    }
-
-	$CLRSysBuildExists = Test-Path "$Env:CLRDROP\SysBuild"
-    if (!$CLRSysBuildExists) {
-      throw " CLR Drop SysBuild not available"
-    }
-    else {
-      $Env:CLRDROPSYSBUILD = "$Env:CLRDROP\SysBuild"
-    }
-  }
-
-  # Validate MSILC Work Directory
-
-  $WorkMSILCDirExists = Test-Path Env:\WORKMSILCDIR
-  if (!$WorkMSILCDirExists) {
-    $WorkMSILCDirExists = Test-Path $DefaultWorkMSILCDir
-    if (!$WorkMSILCDirExists) {
-      throw "!!! MSILC Work Directory not specified."
-    }
-    else {
-      $Env:WORKMSILCDIR = $DefaultWorkMSILCDir
-    }
-  }
-  else {
-    $WorkMSILCDirExists = Test-Path $Env:WORKMSILCDIR
-    if (!$WorkMSILCDirExists) {
-      throw "!!! MSILC Work Directory not available." 
-    }
-  }
-
-  # Validate MSILC Test Source
-
-  $MSILCTestSrcExists = Test-Path Env:\MSILCTESTSRC
-  if (!$MSILCTestSrcExists) {
-    $MSILCTestSrcExists = Test-Path $DefaultMSILCTestSrc
-    if (!$MSILCTestSrcExists) {
-      throw "!!! MSILC Test Source not specified."
-    }
-    else {
-      $Env:MSILCTESTSRC = $DefaultMSILCTestSrc
-    }
-  }
-  else {
-    $MSILCTestSrcExists = Test-Path $Env:MSILCTESTSRC
-    if (!$MSILCTestSrcExists) {
-      throw "!!! MSILC Test Source not available." 
-    }
-  }
-
-  # Validate ILASM executable
-
-  $ILAsmExeExists = Test-Path Env:\ILASMEXE
-  if (!$ILAsmExeExists) {
-    $ILAsmExeExists = Test-Path $DefaultILAsmExe
-    if (!$ILAsmExeExists) {
-      throw "!!! ilasm executable not specified."
-    }
-    else {
-      $Env:ILASMEXE = $DefaultILAsmExe
-    }
-  }
-  else {
-    $ILAsmExeExists = Test-Path $Env:ILASMEXE
-    if (!$ILAsmExeExists) {
-      throw "!!! ilasm executable not available." 
-    }
-  }
-
-  # Validate CSC executable
-
-  $CSCExeExists = Test-Path Env:\CSCEXE
-  if (!$CSCExeExists) {
-    $CSCExeExists = Test-Path $DefaultCSCExe
-    if (!$CSCExeExists) {
-      throw "!!! csc executable not specified."
-    }
-    else {
-      $Env:CSCEXE = $DefaultCSCExe
-    }
-  }
-  else {
-    $CSCExeExists = Test-Path $Env:CSCEXE
-    if (!$CSCExeExists) {
-      throw "!!! csc executable not available." 
-    }
-  }
-
-  # Validate Diff Tool
-
-  $DiffExists = Test-Path Env:\DIFFTOOL
-  if (!$DiffExists) {
-    $DiffExists = Test-Path "$DefaultDiffTool"
-    if (!$DiffExists) {
-      throw "!!! Diff Tool not specified." 
-    }
-    else {
-      $Env:DIFFTOOL = "$DefaultDiffTool"
-    }
-  }
-  else {
-    $DiffExists = Test-Path "$Env:DIFFTOOL"
-    if (!$DiffExists) {
-      throw "!!! Diff Tool not available." 
+    $CoreCLRRepoExists = Test-Path $Env:CORECLRREPO
+    if (!$CoreCLRRepoExists) {
+      throw "!!! CoreCLR Repository not available." 
     }
   }
 }
@@ -424,9 +320,9 @@ function SetVCVars
   # use the current pid to avoid comflict with other instances
   # that might be running.
 
-  $TempBat = Join-Path $env:TEMP "getvc$pid.bat"
+  $TempBat = Join-Path $Env:TEMP "getvc$pid.bat"
   #echo "TempBat = $TempBat"
-  $File = "$Env:VS120COMNTOOLS\..\..\VC\bin\amd64\vcvars64.bat"
+  $File = "$Env:VS120COMNTOOLS\VsDevCmd.bat"
   #echo "VC batch file = $File"
   ("call ""$File""", "echo ENV_VARS_START", "set") | Out-File -Encoding ascii $TempBat
   $CmdOut = cmd /q /c $TempBat
@@ -437,10 +333,10 @@ function SetVCVars
     exit $LASTEXITCODE
   }
 
-  Remove-Item $TempBat
+  Remove-Item $TempBat | Out-Null
 
   ## Erase our current set of environment variables
-  Remove-Item -path env:*
+  Remove-Item -path env:* | Out-Null
 
   ## Go through the environment variables returned by cmd.exe.
   ## For each of them, set the variable in our local environment.
@@ -499,7 +395,7 @@ function IsOnPath([string]$executable)
 function CompleteEnvInit
 {
   SetVCVars
-  
+
   # Only add directories to path if the executables are not already on PATH
   if (-Not (IsOnPath("git.exe"))) {
     $Env:PATH = $Env:PATH + ";$Env:GITDIR\cmd"
@@ -518,51 +414,98 @@ function CompleteEnvInit
     $Env:PATH = $Env:PATH + ";$Env:GNUWIN32DIR\bin"
   }
 
-  $Global:JitName = "MSILCJit"
-  $Env:MSILCJIT = "$Env:LLVMBUILD\bin\$BUILD\$Global:JitName.dll"
-  $Env:MSILCTEST = "$Env:MSILCSOURCE\test"
-  $Env:MSILCTESTLIST = "$Env:MSILCTEST\MSILCRegr.lst"
+  if (-Not (IsOnPath("sdgm.exe"))) {
+    $Env:PATH = $Env:PATH + ";$Env:DIFFTOOL\Common\DiffMerge"
+  }
 
-  $Env:WORKCLRRUNTIME = "$Env:WORKMSILCDIR\CLRRuntime"
-  $Env:WORKCLRCORERUN = "$Env:WORKCLRRUNTIME\CoreRun.exe"
-  $Env:WORKMSILCJIT = "$Env:WORKCLRRUNTIME\$Global:JitName.dll"
-  $Env:WORKMSILCTEST = "$Env:WORKMSILCDIR\test"
+  $Global:JitName = "MSILCJit"
+  $Global:JitArch = $Arch
+  $Global:JitBuild = $Build
+
+  $Global:CoreCLRVersion = CoreCLRVersion
+  $Global:CoreCLRArch = $Global:JitArch
+  if ($Global:CoreCLRVersion -match "Debug") {
+    $Global:CoreCLRBuild = "Debug"
+  }
+  else {
+    $Global:CoreCLRBuild = "Release"
+  }
+  $Env:MSILCJIT = "$Env:LLVMBUILD\bin\$Global:JitBuild\MSILCJit.dll"
+  $Env:MSILCTEST = "$Env:MSILCSOURCE\test\"
+
+  $Env:WORKCLRRUNTIME = "$Env:MSILCTEST\TestResult\"
+  $Env:WORKCLRCORERUN = "$Env:WORKCLRRUNTIME\$Global:CoreCLRVersion\bin\CoreRun.exe"
+  
+  NuGetCLR
+
+  $Env:Core_Root = "$Env:WORKCLRRUNTIME\$Global:CoreCLRVersion\bin"
 }
 
 # -------------------------------------------------------------------------
 #
-# Check the status of CLR Drop and its copy in work directory
+# Download nuget.exe
+# 
+# -------------------------------------------------------------------------
+
+function Global:DownloadNuGet
+{
+  $NuGetExists = Test-Path $Env:WORKCLRRUNTIME\NuGet.exe
+  if (!$NuGetExists) {
+    pushd .
+    cd $Env:WORKCLRRUNTIME
+    wget http://nuget.org/NuGet.exe -OutFile NuGet.exe
+    popd
+  }
+}
+
+# -------------------------------------------------------------------------
+#
+# Perform a CoreCLR package Nuget.
+# 
+# -------------------------------------------------------------------------
+
+function Global:NuGetCLR
+{
+  $WorkCLRRuntimeExists = Test-Path $Env:WORKCLRRUNTIME
+
+  if (!$WorkCLRRuntimeExists) {
+    New-Item $Env:WORKCLRRUNTIME -ItemType directory | Out-Null
+  }
+  else {
+    Write-OutPut("CoreCLR Runtime already downloaded.")
+    return
+  }
+
+  Write-OutPut("Downloading NuGet.exe...")
+  DownloadNuGet
+
+  if (!$WorkCLRRuntimeExists) {
+    copy $Env:MSILCSOURCE\utils\NuGet.config $Env:WORKCLRRUNTIME
+    copy $Env:MSILCSOURCE\utils\packages.config $Env:WORKCLRRUNTIME
+    pushd .
+    cd $Env:WORKCLRRUNTIME
+    Write-OutPut("Performing a CoreCLR package NuGet...")    
+    & .\NuGet.exe install
+    popd
+  }
+}
+
+# -------------------------------------------------------------------------
+#
+# Check the status of CoreCLR Runtime
 # 
 # -------------------------------------------------------------------------
 
 function Global:CheckCLR
 {
-  $CLRDropExists = Test-Path $Env:CLRDROP
-  if (!$CLRDropExists) {
-    Write-Output ("CLR Drop not available.")
-  }
-
-  $CLRDropRuntimeExists = Test-Path $Env:CLRDROPRUNTIME
-  if (!$CLRDropRuntimeExists) {
-    Write-Output ("CLR Drop Runtime not available.") 
-  }
-     
-  $CLRDropHostExists = Test-Path $Env:CLRDROPHOST
-  if (!$CLRDropHostExists) {
-    Write-Output ("CLR Drop Host not available.")
-  }
-
-  $CLRDropSysBuildExists = Test-Path $Env:CLRDROPSYSBUILD
-  if (!$CLRDropSysBuildExists) {
-    Write-Output ("CLR Drop SysBuild not available.")
-  }
-
-  $WorkCLRRuntimeExists = Test-Path $Env:WORKCLRRUNTIME
+  $WorkCLRRuntimeExists = Test-Path $Env:WORKCLRRUNTIME\$Global:CoreCLRVersion
   if (!$WorkCLRRuntimeExists) {
-    Write-Output("CLR Runtime not copied into work yet.")
+    Write-Output("CoreCLR Runtime not ready yet.")
+  }
+  else {
     $WorkCLRCoreRunExists = Test-Path $Env:WorkCLRCORERUN
     if (!$WorkCLRCoreRunExists) {
-      Write-Output ("CLR CoreRun.exe not copiled into work yet.")
+      Write-Output("CoreCLR CoreRun.exe not ready yet.")
     }
   }
 }
@@ -570,7 +513,7 @@ function Global:CheckCLR
 # -------------------------------------------------------------------------
 #
 # Check the status of MSILC JIT in LLVM build directory and its copy
-# in work directory
+# in CoreCLR Runtime directory
 # 
 # -------------------------------------------------------------------------
 
@@ -578,64 +521,25 @@ function Global:CheckJIT
 {
   $MSILCJITExists = Test-Path $Env:MSILCJIT
   if (!$MSILCJITExists) {
-    Write-Output ("MSILC JIT has not been built yet.") 
+    Write-Output ("MSILC JIT not built yet.") 
   }
 
-  $WorkMSILCJITExists = Test-Path $Env:WORKMSILCJIT
+  $WorkMSILCJITExists = Test-Path $Env:WORKCLRRUNTIME\$Global:CoreCLRVersion\bin\MSILCJit.dll
   if (!$WorkMSILCJITExists) {
-    Write-Output ("MSILC JIT has not been copied into work yet.") 
+    Write-Output("MSILC JIT not copied into CoreCLR Runtime yet.") 
   }
 }
 
 # -------------------------------------------------------------------------
 #
-# Check the status of regression test cases in work test directory, and 
-# its baseline in MSILC test directory.
+# Check the status of CoreCLR Runtime and MSILC JIT
 # 
 # -------------------------------------------------------------------------
 
-function Global:CheckTestCases
+function global:CheckStatus
 {
-  $MSILCTestListExists = Test-Path $Env:MSILCTESTLIST
-  if (!$MSILCTestListExists) {
-    throw "!!! Regression Test List not available." 
-  }
-  
-  $WorkMSILCTestExists = Test-Path $Env:WORKMSILCTEST
-  if (!$WorkMSILCTestExists) {
-    Write-Output("Regression Test Cases not copied into work yet.")
-  }
-  else {
-    $Lines = Get-Content $Env:MSILCTESTLIST
-    foreach ($Line in $Lines) {
-      $TestCaseExists = Test-Path "$Env:WORKMSILCTEST\$Line.exe"
-      if (!$TestCaseExists) {
-        Write-Output ("Regression Test Case $Line not copied into work yet.")
-      }
-    }
-  }
-
-  $Lines = Get-Content $Env:MSILCTESTLIST
-  foreach ($Line in $Lines) {
-    $TestCaseBaseLineExists = Test-Path "$Env:MSILCTEST\$Line.base"
-    if (!$TestCaseBaseLineExists) {
-      Write-Output ("Regression Test Case $Line baseline not created yet.")
-    }
-  }
-}
-
-# -------------------------------------------------------------------------
-#
-# Check the status of work directory
-# 
-# -------------------------------------------------------------------------
-
-function global:CheckWorkDir
-{
-  Write-Output ("Work Directory Status:")
   CheckCLR
   CheckJIT  
-  CheckTestCases
 }
 
 # -------------------------------------------------------------------------
@@ -644,12 +548,12 @@ function global:CheckWorkDir
 # 
 # -------------------------------------------------------------------------
 
-function Global:cdw
+function Global:cdc
 {
-  cd $Env:WORKMSILCDIR
+  cd $Env:CORECLRREPO
 }
 
-function Global:cdp
+function Global:cdm
 {
   cd $Env:MSILCSOURCE
 }
@@ -672,33 +576,25 @@ function Global:cdb
 
 function Global:CheckEnv
 {
-  Write-Output ("************************************ MSILC Work Environment **************************************")
-  Write-Output ("VS120COMNTOOLS     : $Env:VS120COMNTOOLS")
-  Write-Output ("GITDIR             : $Env:GITDIR")
-  Write-Output ("CMAKEDIR           : $Env:CMAKEDIR")
-  Write-Output ("PYTHONDIR          : $Env:PYTHONDIR")
-  Write-Output ("GNUWIN32DIR        : $Env:GNUWIN32DIR")
-  Write-Output ("LLVMSOURCE         : $Env:LLVMSOURCE")
-  Write-Output ("LLVMBUILD          : $Env:LLVMBUILD")
-  Write-Output ("MSILCSOURCE        : $Env:MSILCSOURCE")
-  Write-Output ("CLRDROP            : $Env:CLRDROP")
-  Write-Output ("CLRDROPRUNTIME     : $Env:CLRDROPRUNTIME")
-  Write-Output ("CLRDROPHOST        : $Env:CLRDROPHOST")
-  Write-Output ("CLRDROPSYSBUILD    : $Env:CLRDROPSYSBUILD")
-  Write-Output ("ILASMEXE           : $Env:ILASMEXE")
-  Write-Output ("CSCEXE             : $Env:CSCEXE")
-  Write-Output ("MSILCJIT           : $Env:MSILCJIT")
-  Write-Output ("MSILCTEST          : $Env:MSILCTEST")
-  Write-Output ("MSILCTESTLIST      : $Env:MSILCTESTLIST")
-  Write-Output ("MSILCTESTSRC       : $Env:MSILCTESTSRC")
-  Write-Output ("WORKMSILCDIR       : $Env:WORKMSILCDIR")
-  Write-Output ("WORKCLRRUNTIME     : $Env:WORKCLRRUNTIME")
-  Write-Output ("WORKCLRCORERUN     : $Env:WORKCLRCORERUN")
-  Write-Output ("WORKMSILCJIT       : $Env:WORKMSILCJIT")
-  Write-Output ("WORKMSILCTEST      : $Env:WORKMSILCTEST")
-  Write-Output ("**************************************************************************************************")
+  Write-Output("************************************ MSILC Work Environment **************************************")
+  Write-Output("VS120COMNTOOLS     : $Env:VS120COMNTOOLS")
+  Write-Output("GITDIR             : $Env:GITDIR")
+  Write-Output("CMAKEDIR           : $Env:CMAKEDIR")
+  Write-Output("PYTHONDIR          : $Env:PYTHONDIR")
+  Write-Output("GNUWIN32DIR        : $Env:GNUWIN32DIR")
+  Write-Output("LLVMSOURCE         : $Env:LLVMSOURCE")
+  Write-Output("LLVMBUILD          : $Env:LLVMBUILD")
+  Write-Output("MSILCSOURCE        : $Env:MSILCSOURCE")
+  Write-Output("CORECLRREPO        : $Env:CORECLRREPO")
+  Write-Output("MSILCJIT           : $Env:MSILCJIT")
+  Write-Output("MSILCTEST          : $Env:MSILCTEST")
+  Write-Output("WORKCLRRUNTIME     : $Env:WORKCLRRUNTIME")
+  Write-Output("WORKCLRCORERUN     : $Env:WORKCLRCORERUN")
+  Write-Output("CoreCLRVersion     : $Global:CoreCLRVersion")
+  Write-Output("Core_Root          : $Env:Core_Root")
+  Write-Output("**************************************************************************************************")
 
-  CheckWorkDir
+  CheckStatus
 }
 
 # -------------------------------------------------------------------------
@@ -711,44 +607,8 @@ function MSILCEnvInit
 {
   ValidatePreConditions
   CompleteEnvInit
-  CleanWorkDir
   CheckEnv
-  cdp
-}
-
-# -------------------------------------------------------------------------
-#
-# Copy in CLR
-#
-# -------------------------------------------------------------------------
-
-function Global:CopyCLR
-{
-  $WorkCLRRuntimeExists = Test-Path $Env:WORKCLRRUNTIME
-  if ($WorkCLRRuntimeExists) {
-    Remove-Item $Env:WORKCLRRUNTIME -recurse
-  }
-
-  New-Item $Env:WORKCLRRUNTIME -itemtype directory
-
-  pushd .
-  cd $Env:WORKCLRRUNTIME
-
-  Write-Output ("Copying CLR Runtime")
-  xcopy /Q  $Env:CLRDROPRUNTIME .
-  Write-Output ("CLR Runtime copied")
- 
-  Write-Output ("Copying CLR Host")
-  xcopy /Q $Env:CLRDROPHOST .
-  Write-Output ("CLR Host copied")
-
-  Write-Output ("Copying CLR SOS")
-  xcopy /Q $Env:CLRDROPSYSBUILD\x64\SOS.dll .
-  xcopy /Q $Env:CLRDROPSYSBUILD\sos*.dll .
-  xcopy /Q $Env:CLRDROPSYSBUILD\mscordaccore*.dll .
-  Write-Output ("CLR SOS copied")
-
-  popd
+  cdm
 }
 
 # -------------------------------------------------------------------------
@@ -759,13 +619,13 @@ function Global:CopyCLR
 
 function Global:CopyJIT
 {
-  $WorkMSILCJitExists = Test-Path $Env:WORKMSILCJIT
+  $WorkMSILCJitExists = Test-Path $Env:WORKCLRRUNTIME\$Global:CoreCLRVersion\bin\MSILCJit.dll
   if ($WorkMSILCJitExists) {
-    Remove-Item $Env:WORKMSILCJIT
+    Remove-Item $Env:WORKCLRRUNTIME\$Global:CoreCLRVersion\bin\MSILCJit.dll | Out-Null
   }
 
   pushd .
-  cd $Env:WORKCLRRUNTIME
+  cd $Env:WORKCLRRUNTIME\$Global:CoreCLRVersion\bin
 
   Write-Output ("Copying MSILC JIT")
   copy $Env:MSILCJIT .
@@ -776,83 +636,95 @@ function Global:CopyJIT
 
 # -------------------------------------------------------------------------
 #
-# Copy in .il and create .exe with ilasm for one test case
+# Configure LLVM Solution
 #
 # -------------------------------------------------------------------------
 
-function Global:CopyTestCase([string]$TCWithPath)
+function Global:ConfigureLLVM
 {
-  copy $Env:MSILCTESTSRC\$TCWithPath $Env:WORKMSILCTEST
-  $ILFile = Get-ChildItem $Env:MSILCTESTSRC\$TCWithPath
-  $TC = $ILFile.BaseName
-
-  switch ($ILFile.Extension) {
-    '.il' {
-      & $Env:ILASMEXE /PDB $Env:WORKMSILCTEST\$TC.il
-    }
-    '.cs' {
-      & $Env:CSCEXE /debug:pdbonly $Env:WORKMSILCTEST\$TC.cs
-    }
-  }
-}
-
-# -------------------------------------------------------------------------
-#
-# Copy in .il for all regression tests in list and create .exe with ilasm
-#
-# -------------------------------------------------------------------------
-
-function Global:CopyTestCases
-{
-  $WorkMSILCTestExists = Test-Path $Env:WORKMSILCTEST
-  if ($WorkMSILCTestExists) {
-    Remove-Item $Env:WORKMSILCTEST -recurse
-  }
-
-  New-Item $Env:WORKMSILCTEST -itemtype directory
-
   pushd .
-  cd $Env:WORKMSILCTEST
-
-  Write-Output ("Copying Test Cases")
-  
-  CopyTestCasesHelper
-
-  Write-Output ("Test Cases Copied")
-  
+  cd $Env:LLVMBUILD
+  if ($Global:JitArch -eq "x64") {
+    cmake -G "Visual Studio 12 2013 Win64" $Env:LLVMSOURCE
+  }
+  else {
+    cmake -G "Visual Studio 12" $Env:LLVMSOURCE
+  }
   popd
 }
 
 # -------------------------------------------------------------------------
 #
-# Clean all resources in work directory
+# Build LLVM including MSILC JIT
 #
 # -------------------------------------------------------------------------
 
-function Global:CleanWorkDir
+function Global:BuildLLVM
 {
-  $WorkCLRRuntimeExists = Test-Path $Env:WORKCLRRUNTIME
-  if ($WorkCLRRuntimeExists) {
-    Remove-Item $Env:WORKCLRRUNTIME -recurse -force
-  }
-  
-  $WorkMSILCTestExists = Test-Path $Env:WORKMSILCTEST
-  if ($WorkMSILCTestExists) {
-    Remove-Item $Env:WORKMSILCTEST -recurse -force
-  }
+  $TempBat = Join-Path $Env:TEMP "buildllvm.bat"
+  $File = "$Env:VS120COMNTOOLS\..\..\VC\vcvarsall.bat" 
+  ("call ""$File"" x86", "msbuild $Env:LLVMBUILD\LLVM.sln /p:Configuration=$Global:JitBuild /p:Platfrom=$Global:JitArch /t:ALL_BUILD") | Out-File -Encoding ascii $TempBat
+  $CmdOut = cmd /c $TempBat
+  Remove-Item -force $TempBat | Out-Null
+  CopyJIT
 }
 
 # -------------------------------------------------------------------------
 #
-# Copy in all resources for Work Directory
+# Build MSILC JIT
 #
 # -------------------------------------------------------------------------
 
-function Global:CopyWorkDir
+function Global:Build
 {
-  CopyCLR
+  $TempBat = Join-Path $Env:TEMP "buildmsilc.bat"
+  $File = "$Env:VS120COMNTOOLS\..\..\VC\vcvarsall.bat" 
+  ("call ""$File"" x86", "msbuild $Env:LLVMBUILD\LLVM.sln /p:Configuration=$Global:JitBuild /p:Platfrom=$Global:JitArch /t:msilcreader /p:BuildProjectReferences=false", "msbuild $Env:LLVMBUILD\LLVM.sln /p:Configuration=$Global:JitBuild /p:Platfrom=$Global:JitArch /t:msilcjit /p:BuildProjectReferences=false") | Out-File -Encoding ascii $TempBat
+  $CmdOut = cmd /c $TempBat
+  Remove-Item -force $TempBat | Out-Null
   CopyJIT
-  CopyTestCases
+}
+
+# -------------------------------------------------------------------------
+#
+# Get the CoreCLR Version
+#
+# -------------------------------------------------------------------------
+
+function Global:CoreCLRVersion
+{
+  (Get-Content $Env:MSILCSOURCE\utils\packages.config) | ForEach-Object { 
+    if ($_ -match 'package id="(.*?)" version="(.*?)"') {
+      $Result = $matches[1] + "." + $matches[2]
+      return $Result
+    }
+  }   
+}
+
+# -------------------------------------------------------------------------
+#
+# Apply Filter to suppress allowable LLVM IR difference in pipeline
+#
+# -------------------------------------------------------------------------
+
+function Global:ApplyFilterAll{
+    param(  
+    [Parameter(
+        Position=0, 
+        Mandatory=$true, 
+        ValueFromPipeline=$true,
+        ValueFromPipelineByPropertyName=$true)
+    ]
+    [Alias('FullName')]
+    [String[]]$FilePath
+    ) 
+
+    process {
+       foreach($path in $FilePath)
+       {
+           ApplyFilter $path
+       }
+    }
 }
 
 # -------------------------------------------------------------------------
@@ -861,7 +733,7 @@ function Global:CopyWorkDir
 #
 # -------------------------------------------------------------------------
 
-function Global:ApplyFilter([string]$File,[string]$TmpFile)
+function Global:ApplyFilter([string]$File)
 {
   # Suppress address difference from run to run
   # Assume the address is at least 10-digit number
@@ -880,7 +752,7 @@ function Global:ApplyFilter([string]$File,[string]$TmpFile)
   # to
   # %3 = icmp eq i64 NORMALIZED_ADDRESS, %2
 
-  (Get-Content $File) -replace 'i64 \d{10}\d*', 'i64 NORMALIZED_ADDRESS' | Out-File $TmpFile -Encoding ascii
+  (Get-Content $File) -replace 'i64 \d{10}\d*', 'i64 NORMALIZED_ADDRESS' | Out-File $File -Encoding ascii
 
   # Suppress type id difference from run to run
   #
@@ -898,242 +770,158 @@ function Global:ApplyFilter([string]$File,[string]$TmpFile)
   # to
   # %0 = alloca %AppDomain.NORMALIZED_TYPEID addrspace(1)*
   
-  (Get-Content $TmpFile) -replace '%(.*?)\.\d+ addrspace', '%$1.NORMALIZED_TYPEID addrspace' | Out-File $TmpFile -Encoding ascii
+  (Get-Content $File) -replace '%(.*?)\.\d+ addrspace', '%$1.NORMALIZED_TYPEID addrspace' | Out-File $File -Encoding ascii
 
   # Suppress type id difference from run to run, string name with double quotes
 
-  (Get-Content $TmpFile) -replace '%"(.*?)\.\d+" addrspace', '%"$1.NORMALIZED_TYPEID" addrspace' | Out-File $TmpFile -Encoding ascii
+  (Get-Content $File) -replace '%"(.*?)\.\d+" addrspace', '%"$1.NORMALIZED_TYPEID" addrspace' | Out-File $File -Encoding ascii
 }
 
 # -------------------------------------------------------------------------
 #
-# Execute one .exe with CoreRun.exe
+# Exclude test cases from running
 #
 # -------------------------------------------------------------------------
 
-function Global:ExecuteOne([string]$TC)
+function Global:ExcludeTest
 {
-    $COMPLus_AltJitExists = Test-Path Env:\COMPLus_AltJit
-    if ($COMPLus_AltJitExists) {
-      $COMPLus_AltJitValue = $Env:COMPLus_AltJit
-    }
-
-    $COMPLus_AltJitNameExists = Test-Path Env:\COMPLus_AltJitName
-    if ($COMPLus_AltJitNameExists) {
-      $COMPLus_AltJitNameValue = $Env:COMPLus_AltJitName
-    }
-
-    $Env:COMPLus_AltJit = 1
-    $Env:COMPLus_AltJitName = "$Global:JitName.dll"
-
-    $Process = Start-Process $Env:WORKCLRCORERUN $Env:WORKMSILCTEST\$TC.exe -RedirectStandardError $Env:WORKMSILCTEST\$TC.error -RedirectStandardOutput $Env:WORKMSILCTEST\$TC.output -PassThru -Wait -WindowStyle Hidden
-
-    if ($COMPLus_AltJitExists) {
-      $Env:COMPLus_AltJit = $COMPLus_AltJitValue
-    }
-    else {
-      Remove-Item Env:\COMPLus_AltJit
-    }
-
-    if ($COMPLus_AltJitNameExists) {
-      $Env:COMPLus_AltJitName = $COMPLus_AltJitNameValue
-    }
-    else {
-      Remove-Item Env:\COMPLus_AltJitName
-    }
-
-    return $Process
-}
-
-# -------------------------------------------------------------------------
-#
-# Run regression test
-#
-# -------------------------------------------------------------------------
-
-function Global:MSILCRegr([bool]$Diff = $False)
-{
-  $PassedNodiff = 0
-  $PassedDiff = 0
-  $Failed = 0
-
   pushd .
-
-  cd $Env:WORKCLRRUNTIME
-  Write-Output ("Running Regression Test Cases")
-
-  if ($Diff) {
-    $RunDirExists = Test-Path $Env:WORKMSILCTEST\run
-    if ($RunDirExists) {
-      Remove-Item $Env:WORKMSILCTEST\run -recurse -force
-    }
-
-    $BaseDirExists = Test-Path $Env:WORKMSILCTEST\base
-    if ($BaseDirExists) {
-      Remove-Item $Env:WORKMSILCTEST\base -recurse -force
-    }
-
-    New-Item $Env:WORKMSILCTEST\run -itemtype directory
-    New-Item $Env:WORKMSILCTEST\base -itemtype directory
-  }
-
-  $Lines = Get-Content $Env:MSILCTESTLIST
-  foreach ($Line in $Lines) {
-    $Process = ExecuteOne("$Line")
-
-    Get-Content $Env:WORKMSILCTEST\$Line.error > $Env:WORKMSILCTEST\$Line.run
-    Get-Content $Env:WORKMSILCTEST\$Line.output >> $Env:WORKMSILCTEST\$Line.run
-    Remove-Item $Env:WORKMSILCTEST\$Line.error
-    Remove-Item $Env:WORKMSILCTEST\$Line.output
-    ApplyFilter -File "$Env:WORKMSILCTEST\$Line.run" -TmpFile "$Env:WORKMSILCTEST\$Line.run.tmp"
-    
-    $DiffResult = Compare-Object -Ref (Get-Content $Env:WORKMSILCTEST\$Line.run.tmp) -Diff (Get-Content $Env:MSILCTEST\$Line.base) | Tee-Object -file $Env:WORKMSILCTEST\$Line.diff | Measure
-    
-    if ($Process.ExitCode -eq 43690) {
-      if ($DiffResult.Count -eq 0) {
-        Write-Output("$Line passed with nodiff.")
-        $PassedNodiff++
-      }
-      else {
-        if ($Diff) {
-          copy $Env:WORKMSILCTEST\$Line.run.tmp $Env:WORKMSILCTEST\run\$Line.output
-          copy $Env:MSILCTEST\$Line.base $Env:WORKMSILCTEST\base\$Line.output
-        }
-
-        Write-Output("$Line passed with diff.")
-        $PassedDiff++
-      }
-    }
-    else {
-      Write-Output("$Line failed.")
-      $Failed++
-    }
-
-    Remove-Item $Env:WORKMSILCTEST\$Line.run.tmp
-  }
-  Write-Output ("Regression Test Finished: $PassedNodiff passed with nodiff, $PassedDiff passed with diff, and $Failed failed.")
-
-  if ($Diff) {
-    if ($PassedDiff -ne 0) {
-      & "$Env:DIFFTOOL" -t1=Base -t2=Run $Env:WORKMSILCTEST\base $Env:WORKMSILCTEST\run
-    }
-  }
-
+  cd $Env:CORECLRREPO\binaries\tests\x64\release\JIT\CodeGenBringUpTests
+  del DblRem*
+  del FpRem*
+  del div2*
+  del localloc*
   popd
 }
 
 # -------------------------------------------------------------------------
 #
-# Run regression test and pop up diff tool if there were any diff
+# Build CoreCLR regression tests
 #
 # -------------------------------------------------------------------------
 
-function Global:MSILCRegrDiff
+function Global:BuildTest
 {
-  MSILCRegr -Diff $True
+  pushd .
+  cd $Env:CORECLRREPO\tests
+  .\buildtest $Global:CoreCLRArch $Global:CoreCLRBuild clean
+  ExcludeTest
+  popd
 }
 
 # -------------------------------------------------------------------------
 #
-# Create base for a test case and add it to test list if you want
+# Run MSILC enabled CoreCLR regression tests
 #
 # -------------------------------------------------------------------------
- 
-function Global:CreateBase([string]$TC, [bool]$AddToList = $true)
+
+function Global:RunTest
 {
-  $WorkMSILCTestExists = Test-Path $Env:WORKMSILCTEST\$TC.exe
-  if (!$WorkMSILCTestExists) {
-    Write-Output("Regression Test Case $TC not copied into work yet. No base created.")
-  }
-  else {
-    $Process = ExecuteOne("$TC")
+  # Workaround exception handling issue
+  chcp 65001 | Out-Null
 
-    if ($Process.ExitCode -eq 43690) {
-      $BaseExists = Test-Path $Env:MSILCTEST\$TC.base
-      if ($BaseExists) {
-        Remove-Item $Env:MSILCTEST\$TC.base
-      }
-      
-      Get-Content $Env:WORKMSILCTEST\$TC.error > $Env:MSILCTEST\$TC.base.tmp
-      Get-Content $Env:WORKMSILCTEST\$TC.output >> $Env:MSILCTEST\$TC.base.tmp
-      Remove-Item $Env:WORKMSILCTEST\$TC.error
-      Remove-Item $Env:WORKMSILCTEST\$TC.output
-      ApplyFilter -File "$Env:MSILCTEST\$TC.base.tmp" -TmpFile "$Env:MSILCTEST\$TC.base"
-      Remove-Item $Env:MSILCTEST\$TC.base.tmp
-
-      if ($AddToList) {
-        Add-Content $Env:MSILCTESTLIST "$TC"     
-        Write-Output("Test case $TC added to test list with base created.")
-      }
-      else {
-        Write-Output("Test case $TC base created.")
-      }
-    }
-    else {
-      Write-Output("Test case $TC execution failed. No base created.")
-    }
-  }
+  $Env:SkipTestAssemblies = "Common;Exceptions;GC;Loader;managed;packages;Regressions;runtime;Tests;TestWrappers_x64_release;Threading" 
+  pushd .
+  cd $Env:CORECLRREPO\tests
+  .\runtest $Global:CoreCLRArch $Global:CoreCLRBuild EnableMSILC $Env:Core_Root 
+  CheckDiff -Create $True -UseDiffTool $False
+  popd  
 }
 
 # -------------------------------------------------------------------------
 #
-# Re-create the base line for one regression test case, list not touched.
-#
-# -------------------------------------------------------------------------
-
-function Global:ReBaseOne([string]$TC)
-{
-  CreateBase -TC $TC -AddToList $False
-}
-
-# -------------------------------------------------------------------------
-#
-# Re-create the base line for all regression test cases, list not touched.
+# Re-create the base line for all MSILC enabled regression test cases.
 #
 # -------------------------------------------------------------------------
 
 function Global:ReBaseAll
 {
-  $Lines = Get-Content $Env:MSILCTESTLIST
-  foreach ($Line in $Lines) {
-    CreateBase -TC $Line -AddToList $False
+  $BaseLineExists = Test-Path $Env:MSILCTEST\BaseLine
+  if ($BaseLineExists) {
+    Remove-Item -recurse -force $Env:MSILCTEST\BaseLine | Out-Null
   }
+  New-Item -itemtype directory $Env:MSILCTEST\BaseLine | Out-Null
+
+  Copy-Item -recurse "$Env:CORECLRREPO\binaries\tests\$Global:CoreCLRArch\$CoreCLRBuild\Reports\*" -Destination $Env:MSILCTEST\BaseLine
+  Get-ChildItem -recurse -path $Env:MSILCTEST\BaseLine | Where {$_.FullName -match "output.txt"} | Remove-Item -force
+  Get-ChildItem -recurse -path $Env:MSILCTEST\BaseLine | Where {$_.FullName -match "error.txt"} | ApplyFilterAll
 }
 
 # -------------------------------------------------------------------------
 #
-# Copy MSILC JIT and run regression test
+# Check the LLVM IR dump difference against baseline.
 #
 # -------------------------------------------------------------------------
 
-function Global:CopyJITAndRun
+function Global:CheckDiff([bool]$Create = $false, [bool]$UseDiffTool = $True)
 {
-  CopyJIT
-  MSILCRegr
-}
+  Write-Output ("Checking diff...")
+  $DiffExists = Test-Path $Env:WORKCLRRUNTIME\Diff
+  if ($Create) {
+    if ($DiffExists) {
+      Remove-Item -recurse -force $Env:WORKCLRRUNTIME\Diff | Out-Null
+    }
 
-# -------------------------------------------------------------------------
-#
-# Quick form of CopyJITAndRun
-# 
-# -------------------------------------------------------------------------
+    New-Item -itemtype directory $Env:WORKCLRRUNTIME\Diff | Out-Null
+    New-Item -itemtype directory $Env:WORKCLRRUNTIME\Diff\Base | Out-Null
+    New-Item -itemtype directory $Env:WORKCLRRUNTIME\Diff\Run | Out-Null
 
-function Global:cr
-{
-  CopyJIT
-  MSILCRegr
-}
+    $TotalCount = 0;
+    $DiffCount = 0;
+    Get-ChildItem -recurse -path $Env:CORECLRREPO\binaries\tests\$Global:CoreCLRArch\$CoreCLRBuild\Reports | Where {$_.FullName -match "error.txt"} | `
+    Foreach-Object {
+      $TotalCount = $TotalCount + 1
+      $RunFile = $_.FullName
+      $PartialPathMatch = $_.FullName -match "Reports\\(.*)"
+      $PartialPath = $matches[1]
+      $BaseFile = "$Env:MSILCTEST\BaseLine\$PartialPath"
+      copy $RunFile $Env:WORKCLRRUNTIME\Diff\Run
+      ApplyFilter("$Env:WORKCLRRUNTIME\Diff\Run\$_")
+      $DiffResult = Compare-Object -Ref (Get-Content $BaseFile) -Diff (Get-Content $Env:WORKCLRRUNTIME\Diff\Run\$_)
+      if ($DiffResult.Count -ne 0) {
+        copy $BaseFile $Env:WORKCLRRUNTIME\Diff\Base
+        $DiffCount = $DiffCount + 1
+      }
+      else {
+        Remove-Item -force $Env:WORKCLRRUNTIME\Diff\Run\$_ | Out-Null
+      }
+    }
 
-# -------------------------------------------------------------------------
-#
-# Copy work directory and run regression test
-#
-# -------------------------------------------------------------------------
+    if ($DiffCount -eq 0) {
+      Write-Output ("There is no diff.")
+      Remove-Item -recurse -force $Env:WORKCLRRUNTIME\Diff | Out-Null
+    }
+    else {
+      Write-Output ("$DiffCount out of $TotalCount have diff.")
+      if ($UseDiffTool) {
+        & sgdm -t1=Base -t2=Run $Env:WORKCLRRUNTIME\Diff\Base $Env:WORKCLRRUNTIME\Diff\Run
+      }
+    }
+  }
+  else {
+    if (!$DiffExists) {
+      Write-Output ("There is no diff.")
+    }
+    else {
+      if ($UseDiffTool) {
+        & sgdm -t1=Base -t2=Run $Env:WORKCLRRUNTIME\Diff\Base $Env:WORKCLRRUNTIME\Diff\Run
+      }
+      else {
+        $TotalCount = 0;
+        $DiffCount = 0;
+        Get-ChildItem -recurse -path $Env:CORECLRREPO\binaries\tests\$Global:CoreCLRArch\$CoreCLRBuild\Reports | Where {$_.FullName -match "error.txt"} | `
+        Foreach-Object {
+          $TotalCount = $TotalCount + 1;
+        }
 
-function Global:CopyWorkDirAndRun
-{
-  CopyWorkDir
-  MSILCRegr
+        Get-ChildItem -recurse -path $Env:WORKCLRRUNTIME\Diff\Run | Where {$_.FullName -match "error.txt"} | `
+        Foreach-Object {
+          $DiffCount = $DiffCount + 1;
+        }
+        Write-Output ("$DiffCount out of $TotalCount have diff.")
+      }
+    }
+  }
 }
 
 # -------------------------------------------------------------------------
@@ -1141,33 +929,29 @@ function Global:CopyWorkDirAndRun
 # List and explain available commands
 #
 # -------------------------------------------------------------------------
+
 function Global:MSILCHelp
 {
   Write-Output("ApplyFilter       - Filter to suppress allowable LLVM IR difference. Example: AppyFilter -File FileName -TmpFile TmpFileName")
-  Write-Output("CheckCLR          - Check the status of CLR Drop and its copy in work directory. Example: CheckCLR")
+  Write-Output("Build             - Build MSILC JIT. Example: Build")
+  Write-Output("BuildLLVM         - Build LLVM including MSILC JIT. Example: Build LLVM")
+  Write-Output("BuildTest         - Build CoreCLR regression tests. Example: BuildTest")
+  Write-Output("CheckCLR          - Check the status of CoreCLR Runtime. Example: CheckCLR")
+  Write-Output("CheckDiff         - Check the LLVM IR dump diff between run and baseline. Example: CheckDiff")
   Write-Output("CheckEnv          - Check the status of development environment. Example: CheckEnv")
-  Write-Output("CheckJIT          - Check the status of MSILC JIT in LLVM build directory and its copy in work directory. Example: CheckJIT")
-  Write-Output("CheckTestCases    - Check the status of regression test cases in work test directory, and its baseline in MSILC test directory. Example: CheckTestCases")
-  Write-Output("CheckWorkDir      - Check the status of work directory. Example: CheckWorkDir")
-  Write-Output("CleanWorkDir      - Clean all resources in work directory. Example: CleanWorkDir")
-  Write-Output("CopyCLR           - Copy in CLR. Example: CopyCLR")
-  Write-Output("CopyJIT           - Copy in MSILC JIT dll. Example: CopyJIT")
-  Write-Output("CopyJITAndRun     - Copy MSILC JIT and run regression test. Example: CopyJitAndRun.")
-  Write-Output("CopyTestCase      - Copy in .il and create .exe with ilasm for one test case. Example: CopyTestCase -TC `"Pacific\newtestcasename`"")
-  Write-Output("CopyTestCases     - Copy in .il for all regression tests in list and create .exe with ilasm. Example: CopyTestCases")
-  Write-Output("CopyWorkDir       - Copy in all resources for Work Directory. Example: CopyWorkDir")
-  Write-Output("CopyWorkDirAndRun - Copy work directory and run regression test. Example: CopyWorkDirAndRun")
-  Write-Output("CreateBase        - Create base for a test case and add it to test list if you want. Example: CreateBase -TC TestName, CreateBase -TC TestName -AddToList `$False")
-  Write-Output("MSILCRegr         - Run regression test. Example: MSILCRegr")
-  Write-Output("MSILCRegrDiff     - Run regression test and pop up diff tool if there were any diff. Example: MSILCRegrDiff")
+  Write-Output("CheckJIT          - Check the status of MSILC JIT in LLVM build directory and its copy in CLR directory. Example: CheckJIT")
+  Write-Output("CheckStatus       - Check the status of CoreCLR Runtime and MSILC JIT. Example: CheckStatus")
+  Write-Output("ConfigureLLVM     - Create LLVM solution file. Example : ConfigureLLVM")
+  Write-Output("CopyJIT           - Copy MSILC JIT dll into CoreCLR Runtime. Example: CopyJIT")
+  Write-Output("CoreCLRVersion    - Get CoreCLR package version")
   Write-Output("MSILCHelp         - List and explain available commands. Example: MSILCHelp")
-  Write-Output("ReBaseOne         - Re-create the base line for one regression test case, list not touched. Example: ReBaseOne -TC beq")
-  Write-Output("ReBaseAll         - Re-create the base line for all regression test cases, list not touched. Example: ReBaseAll")
+  Write-Output("NuGetCLR          - NuGet CoreCLR package. Example: NuGetCLR")
+  Write-Output("ReBaseAll         - Re-create the base line for all regression test cases. Example: ReBaseAll")
+  Write-Output("RunTest           - Run MSILC enabled CoreCLR regression tests. Example: RunTest")
   Write-Output("cdb               - cd to LLVM build directory")
   Write-Output("cdl               - cd to LLVM source directory")
-  Write-Output("cdp               - cd to MSILC source diretory")
+  Write-Output("cdm               - cd to MSILC source diretory")
   Write-Output("cdw               - cd to work directory")
-  Write-Output("cr                - short form of CopyJITAndRun")
 }
 
 # -------------------------------------------------------------------------
