@@ -539,14 +539,10 @@ IRNode *fgNodeGetStartIRNode(FlowGraphNode *FgNode);
 // Get the first non-placekeeping node in block
 IRNode *fgNodeGetStartInsertIRNode(FlowGraphNode *FgNode);
 
-// Get the special block-end placekeeping node
-IRNode *fgNodeGetEndIRNode(FlowGraphNode *FgNode);
-
 // Get the last non-placekeeping node in block
 IRNode *fgNodeGetEndInsertIRNode(FlowGraphNode *FgNode);
 
 IRNode *fgNodeGetEndIRInsertionPoint(FlowGraphNode *FgNode);
-void fgNodeSetIBCNotReal(FlowGraphNode *Fg);
 
 GlobalVerifyData *fgNodeGetGlobalVerifyData(FlowGraphNode *Fg);
 void fgNodeSetGlobalVerifyData(FlowGraphNode *Fg, GlobalVerifyData *GvData);
@@ -558,9 +554,9 @@ FlowGraphEdgeList *fgEdgeListGetNextPredecessor(FlowGraphEdgeList *FgEdge);
 FlowGraphNode *fgEdgeListGetSource(FlowGraphEdgeList *FgEdge);
 FlowGraphNode *fgEdgeListGetSink(FlowGraphEdgeList *FgEdge);
 bool fgEdgeListIsNominal(FlowGraphEdgeList *FgEdge);
-bool fgEdgeListIsHandler(FlowGraphEdgeList *FgEdge);
-bool fgEdgeListIsFake(FlowGraphEdgeList *FgEdge);
+#ifdef CC_PEVERIFY
 void fgEdgeListMakeFake(FlowGraphEdgeList *FgEdge);
+#endif
 
 FlowGraphEdgeList *fgEdgeListGetNextSuccessorActual(FlowGraphEdgeList *FgEdge);
 FlowGraphEdgeList *
@@ -1812,7 +1808,6 @@ public:
   virtual void fgPostPhase(void) = 0;
   virtual FlowGraphNode *fgGetHeadBlock(void) = 0;
   virtual FlowGraphNode *fgGetTailBlock(void) = 0;
-  virtual uint32_t fgGetBlockCount(void) = 0;
   virtual FlowGraphNode *fgNodeGetIDom(FlowGraphNode *Fg) = 0;
 
   virtual IRNode *fgNodeFindStartLabel(FlowGraphNode *Block) = 0;
@@ -1827,7 +1822,6 @@ public:
   virtual void fgAddArc(IRNode *BranchNode, FlowGraphNode *Source,
                         FlowGraphNode *Sink) = 0;
   virtual bool fgBlockHasFallThrough(FlowGraphNode *Block) = 0;
-  virtual bool fgBlockIsRegionEnd(FlowGraphNode *Block) = 0;
   virtual void fgDeleteBlock(FlowGraphNode *Block) = 0;
   virtual void fgDeleteEdge(FlowGraphEdgeList *Arc) = 0;
   virtual void fgDeleteNodesFromBlock(FlowGraphNode *Block) = 0;
@@ -1862,7 +1856,6 @@ public:
 
   virtual IRNode *fgMakeSwitch(IRNode *DefaultLabel, IRNode *Node) = 0;
   virtual IRNode *fgMakeThrow(IRNode *Node) = 0;
-  virtual IRNode *fgMakeRethrow(IRNode *Node) = 0;
   virtual IRNode *fgAddCaseToCaseList(IRNode *SwitchNode, IRNode *LabelNode,
                                       uint32_t Element) = 0;
   virtual void insertEHAnnotationNode(IRNode *InsertionPointNode,
@@ -1882,9 +1875,6 @@ public:
                       mdToken ConstraintToken, uint32_t ILOffset, IRNode *Block,
                       bool CanInline, bool IsTailCall, bool IsUnmarkedTailCall,
                       bool IsReadOnly) = 0;
-
-  // Hook to permit client to record when calls feed branches
-  virtual void fgCmp(ReaderBaseNS::OPCODE) = 0;
 
   // Replace all uses of oldNode in the IR with newNode and delete oldNode.
   virtual void replaceFlowGraphNodeUses(FlowGraphNode *OldNode,

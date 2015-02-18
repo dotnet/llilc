@@ -1848,9 +1848,6 @@ IRNode *GenIR::fgNodeFindStartLabel(FlowGraphNode *Block) { return NULL; }
 
 bool GenIR::fgBlockHasFallThrough(FlowGraphNode *Block) { return false; }
 
-unsigned GenIR::fgGetBlockCount() {
-  return Function->getBasicBlockList().size();
-}
 #pragma endregion
 
 #pragma region MSIL OPCODES

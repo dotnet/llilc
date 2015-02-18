@@ -489,7 +489,6 @@ public:
   void fgPostPhase(void) override;
   FlowGraphNode *fgGetHeadBlock(void) override;
   FlowGraphNode *fgGetTailBlock(void) override;
-  unsigned fgGetBlockCount(void) override;
   FlowGraphNode *fgNodeGetIDom(FlowGraphNode *Fg) override;
 
   IRNode *fgNodeFindStartLabel(FlowGraphNode *Block) override;
@@ -512,9 +511,6 @@ public:
   };
   bool fgBlockHasFallThrough(FlowGraphNode *Block) override;
 
-  bool fgBlockIsRegionEnd(FlowGraphNode *Block) override {
-    throw NotYetImplementedException("fgBlockIsRegionEnd");
-  };
   void fgDeleteBlock(FlowGraphNode *Block) override;
   void fgDeleteEdge(FlowGraphEdgeList *Arc) override {
     throw NotYetImplementedException("fgDeleteEdge");
@@ -564,9 +560,6 @@ public:
     throw NotYetImplementedException("fgMakeSwitch");
   };
   IRNode *fgMakeThrow(IRNode *Insert) override;
-  IRNode *fgMakeRethrow(IRNode *Insert) override {
-    throw NotYetImplementedException("fgMakeRethrow");
-  };
   IRNode *fgAddCaseToCaseList(IRNode *SwitchNode, IRNode *LabelNode,
                               unsigned Element) override {
     throw NotYetImplementedException("fgAddCaseToCaseList");
@@ -600,11 +593,6 @@ public:
               mdToken ConstraintToken, unsigned MsilOffset, IRNode *Block,
               bool CanInline, bool IsTailCall, bool IsUnmarkedTailCall,
               bool IsReadOnly) override;
-
-  // Hook to permit client to record when calls feed branches
-  void fgCmp(ReaderBaseNS::OPCODE) override {
-    throw NotYetImplementedException("fgCmp");
-  };
 
   // Replace all uses of oldNode in the IR with newNode and delete oldNode.
   void replaceFlowGraphNodeUses(FlowGraphNode *OldNode,
