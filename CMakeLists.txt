@@ -2,58 +2,91 @@
 # standalone project, using LLVM as an external library:
 if( CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
   project(MSILCJit)
-  cmake_minimum_required(VERSION 2.8)
+  cmake_minimum_required(VERSION 2.8.8)
 
-  set(MSILCJIT_PATH_TO_LLVM_SOURCE "" CACHE PATH
-    "Path to LLVM source code. Not necessary if using an installed LLVM.")
-  set(MSILCJIT_PATH_TO_LLVM_BUILD "" CACHE PATH
-    "Path to the directory where LLVM was built or installed.")
-  set(MSILCJIT_PATH_TO_CORECLR_BUILD "" CACHE PATH
-    "Path to the directory containing the CoreCLR drop to build against.")
+  set(MSILC_WITH_LLVM "" CACHE PATH "Path to the directory where LLVM was built or installed.")
+  set(MSILC_WITH_CORECLR  "" CACHE PATH "Path to the directory where CoreCLR was built or installed.")
 
-  if( MSILCJIT_PATH_TO_LLVM_SOURCE )
-    if( NOT EXISTS "${MSILCJIT_PATH_TO_LLVM_SOURCE}/cmake/config-ix.cmake" )
-      message(FATAL_ERROR "Please set MSILCJIT_PATH_TO_LLVM_SOURCE to the root directory of LLVM source code.")
-    else()
-      get_filename_component(LLVM_MAIN_SRC_DIR ${MSILCJIT_PATH_TO_LLVM_SOURCE}
-	ABSOLUTE)
-      list(APPEND CMAKE_MODULE_PATH "${LLVM_MAIN_SRC_DIR}/cmake/modules")
+  # Probe for LLVM. First with CMake, then manually.
+  find_package(LLVM QUIET CONFIG)
+  if( NOT LLVM_FOUND )
+    set(MSILC_LLVM_CONFIG_SEARCH_PATHS "")
+
+    if( NOT MSILC_WITH_LLVM STREQUAL "" )
+      get_filename_component(MSILC_WITH_LLVM_ABS "${MSILC_WITH_LLVM}" ABSOLUTE CACHE)
+
+      list(APPEND MSILC_LLVM_CONFIG_SEARCH_PATHS "${MSILC_WITH_LLVM_ABS}/bin")
+
+      if( WIN32 )
+        list(APPEND MSILC_LLVM_CONFIG_SEARCH_PATHS
+          "${MSILC_WITH_LLVM_ABS}/bin/Debug"
+          "${MSILC_WITH_LLVM_ABS}/Debug/bin"
+          "${MSILC_WITH_LLVM_ABS}/bin/Release"
+          "${MSILC_WITH_LLVM_ABS}/Release/bin")
+      endif()
+    endif()
+
+    find_path(MSILC_LLVM_CONFIG_DIRECTORY "llvm-config${CMAKE_EXECUTABLE_SUFFIX}"
+      HINTS ${MSILC_LLVM_CONFIG_SEARCH_PATHS}
+      DOC "Path to llvm-config"
+      NO_DEFAULT_PATH)
+    find_path(MSILC_LLVM_CONFIG_DIRECTORY "llvm-config${CMAKE_EXECUTABLE_SUFFIX}"
+      DOC "Path to llvm-config")
+
+    if( NOT EXISTS "${MSILC_LLVM_CONFIG_DIRECTORY}" )
+      message(FATAL_ERROR "Could not find llvm-config. Please set MSILC_WITH_LLVM to a directory where LLVM has been built or installed.")
+    endif()
+
+    exec_program("${MSILC_LLVM_CONFIG_DIRECTORY}/llvm-config${CMAKE_EXECUTABLE_SUFFIX} --obj-root" OUTPUT_VARIABLE MSILC_WITH_LLVM_ABS)
+
+    if( NOT EXISTS "${MSILC_WITH_LLVM_ABS}" )
+      message(FATAL_ERROR "Could not find LLVM. Please set MSILC_WITH_LLVM to a directory where LLVM has been built or installed.")
+    endif()
+
+    list(APPEND CMAKE_MODULE_PATH "${MSILC_WITH_LLVM_ABS}/share/llvm/cmake")
+  else()
+    list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
+  endif()
+
+  if( UNIX )
+    set(MSILC_CORECLR_SO_SEARCH_PATHS "")
+
+    if( NOT MSILC_WITH_CORECLR STREQUAL "" )
+      get_filename_component(MSILC_WITH_CORECLR_ABS "${MSILC_WITH_CORECLR}" ABSOLUTE CACHE)
+
+      list(APPEND MSILC_CORECLR_SO_SEARCH_PATHS "${MSILC_WITH_CORECLR_ABS}")
+    endif()
+
+    find_path(MSILC_CORECLR_SO_PATH "libcoreclr.so"
+      HINTS ${MSILC_CORECLR_SO_SEARCH_PATHS}
+      DOC "Path to libcoreclr.so"
+      NO_DEFAULT_PATH)
+    find_path(MSILC_CORECLR_SO_PATH "libcoreclr.so"
+      DOC "Path to libcoreclr.so")
+
+    if( EXISTS "${MSILC_CORECLR_SO_PATH}" )
+      get_filename_component(MSILC_WITH_CORECLR_ABS "${MSILC_CORECLR_SO_PATH}" DIRECTORY CACHE)
+      link_directories("${MSILC_WITH_CORECLR_ABS}")
     endif()
   endif()
 
-  if (EXISTS "${MSILCJIT_PATH_TO_LLVM_BUILD}/bin/llvm-config${CMAKE_EXECUTABLE_SUFFIX}")
-    set (PATH_TO_LLVM_CONFIG "${MSILCJIT_PATH_TO_LLVM_BUILD}/bin/llvm-config${CMAKE_EXECUTABLE_SUFFIX}")
-  elseif (EXISTS "${MSILCJIT_PATH_TO_LLVM_BUILD}/bin/Debug/llvm-config${CMAKE_EXECUTABLE_SUFFIX}")
-    # Looking for bin/Debug/llvm-config seems suboptimal. How can we get
-    # around this?
-    set (PATH_TO_LLVM_CONFIG "${MSILCJIT_PATH_TO_LLVM_BUILD}/bin/Debug/llvm-config${CMAKE_EXECUTABLE_SUFFIX}")
-  else()
-    message(FATAL_ERROR "Please set MSILCJIT_PATH_TO_LLVM_BUILD to a directory containing a LLVM build.")
-  endif()
-
-  list(APPEND CMAKE_MODULE_PATH "${MSILCJIT_PATH_TO_LLVM_BUILD}/share/llvm/cmake")
-
-  get_filename_component(PATH_TO_LLVM_BUILD ${MSILCJIT_PATH_TO_LLVM_BUILD}
-    ABSOLUTE)
+  list(APPEND CMAKE_MODULE_PATH "${MSILC_WITH_LLVM_ABS}/share/llvm/cmake")
 
   option(LLVM_INSTALL_TOOLCHAIN_ONLY "Only include toolchain files in the 'install' target." OFF)
 
+  include(LLVMConfig)
   include(AddLLVM)
   include(TableGen)
-  include("${MSILCJIT_PATH_TO_LLVM_BUILD}/share/llvm/cmake/LLVMConfig.cmake")
   include(HandleLLVMOptions)
 
   set(PACKAGE_VERSION "${LLVM_PACKAGE_VERSION}")
 
-  set(LLVM_MAIN_INCLUDE_DIR "${LLVM_MAIN_SRC_DIR}/include")
-  set(LLVM_BINARY_DIR ${CMAKE_BINARY_DIR})
-
   set(CMAKE_INCLUDE_CURRENT_DIR ON)
-  include_directories("${PATH_TO_LLVM_BUILD}/include" "${LLVM_MAIN_INCLUDE_DIR}")
-  link_directories("${PATH_TO_LLVM_BUILD}/lib")
+  include_directories("${LLVM_INCLUDE_DIRS}")
+  link_directories("${LLVM_LIBRARY_DIRS}")
 
-  exec_program("${PATH_TO_LLVM_CONFIG} --bindir" OUTPUT_VARIABLE LLVM_BINARY_DIR)
-  set(LLVM_TABLEGEN_EXE "${LLVM_BINARY_DIR}/llvm-tblgen${CMAKE_EXECUTABLE_SUFFIX}")
+  exec_program("${MSILC_LLVM_CONFIG_PATH} --bindir" OUTPUT_VARIABLE LLVM_BINARY_DIR)
+  set(LLVM_TABLEGEN_EXE "${LLVM_TOOLS_BINARY_DIR}/llvm-tblgen${CMAKE_EXECUTABLE_SUFFIX}")
 
   # Define the default arguments to use with 'lit', and an option for the user
   # to override.
@@ -324,11 +357,7 @@ add_definitions( -D_GNU_SOURCE )
 add_definitions( -DFEATURE_CORECLR )
 
 if (UNIX)
-  if (NOT EXISTS "${MSILCJIT_PATH_TO_CORECLR_BUILD}/libcoreclr.so")
-    message(FATAL_ERROR "Please set MSILCJIT_PATH_TO_CORECLR_BUILD to a directory containing a CoreCLR build.")
-  else()
-    link_directories("${MSILCJIT_PATH_TO_CORECLR_BUILD}")
-  endif()
+  link_directories("${MSILC_WITH_CORECLR_ABS}")
 
   add_definitions( -DPLATFORM_UNIX )
   include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/Pal/Rt)
