@@ -5,10 +5,12 @@ if( CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
   cmake_minimum_required(VERSION 2.8.8)
 
   set(MSILC_WITH_LLVM "" CACHE PATH "Path to the directory where LLVM was built or installed.")
-  set(MSILC_WITH_CORECLR  "" CACHE PATH "Path to the directory where CoreCLR was built or installed.")
 
-  # Probe for LLVM. First with CMake, then manually.
-  find_package(LLVM QUIET CONFIG)
+  # Probe for LLVM. First with CMake (unless the user has specified an LLVM install), then manually.
+  if( NOT MSILC_WITH_LLVM STREQUAL "" )
+    find_package(LLVM QUIET CONFIG)
+  endif()
+
   if( NOT LLVM_FOUND )
     set(MSILC_LLVM_CONFIG_SEARCH_PATHS "")
 
@@ -48,28 +50,6 @@ if( CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
     list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
   endif()
 
-  if( UNIX )
-    set(MSILC_CORECLR_SO_SEARCH_PATHS "")
-
-    if( NOT MSILC_WITH_CORECLR STREQUAL "" )
-      get_filename_component(MSILC_WITH_CORECLR_ABS "${MSILC_WITH_CORECLR}" ABSOLUTE CACHE)
-
-      list(APPEND MSILC_CORECLR_SO_SEARCH_PATHS "${MSILC_WITH_CORECLR_ABS}")
-    endif()
-
-    find_path(MSILC_CORECLR_SO_PATH "libcoreclr.so"
-      HINTS ${MSILC_CORECLR_SO_SEARCH_PATHS}
-      DOC "Path to libcoreclr.so"
-      NO_DEFAULT_PATH)
-    find_path(MSILC_CORECLR_SO_PATH "libcoreclr.so"
-      DOC "Path to libcoreclr.so")
-
-    if( EXISTS "${MSILC_CORECLR_SO_PATH}" )
-      get_filename_component(MSILC_WITH_CORECLR_ABS "${MSILC_CORECLR_SO_PATH}" DIRECTORY CACHE)
-      link_directories("${MSILC_WITH_CORECLR_ABS}")
-    endif()
-  endif()
-
   list(APPEND CMAKE_MODULE_PATH "${MSILC_WITH_LLVM_ABS}/share/llvm/cmake")
 
   option(LLVM_INSTALL_TOOLCHAIN_ONLY "Only include toolchain files in the 'install' target." OFF)
@@ -106,6 +86,30 @@ if( CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
   if (LIBXML2_FOUND)
     set(MSILCJIT_HAVE_LIBXML 1)
   endif ()
+endif()
+
+if( UNIX )
+  set(MSILC_WITH_CORECLR  "" CACHE PATH "Path to the directory where CoreCLR was built or installed.")
+
+  set(MSILC_CORECLR_SO_SEARCH_PATHS "")
+
+  if( NOT MSILC_WITH_CORECLR STREQUAL "" )
+    get_filename_component(MSILC_WITH_CORECLR_ABS "${MSILC_WITH_CORECLR}" ABSOLUTE CACHE)
+
+    list(APPEND MSILC_CORECLR_SO_SEARCH_PATHS "${MSILC_WITH_CORECLR_ABS}")
+  endif()
+
+  find_path(MSILC_CORECLR_SO_PATH "libcoreclr.so"
+    HINTS ${MSILC_CORECLR_SO_SEARCH_PATHS}
+    DOC "Path to libcoreclr.so"
+    NO_DEFAULT_PATH)
+  find_path(MSILC_CORECLR_SO_PATH "libcoreclr.so"
+    DOC "Path to libcoreclr.so")
+
+  if( EXISTS "${MSILC_CORECLR_SO_PATH}" )
+    get_filename_component(MSILC_WITH_CORECLR_ABS "${MSILC_CORECLR_SO_PATH}" DIRECTORY CACHE)
+    link_directories("${MSILC_WITH_CORECLR_ABS}")
+  endif()
 endif()
 
 set(MSILCJIT_RESOURCE_DIR "" CACHE STRING
