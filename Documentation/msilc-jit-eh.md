@@ -503,18 +503,56 @@ exceptions or make nontrivial finally clause invocations at runtime.  To
 avoid silent bad code generation, any nontrivial finally clause invocations
 (i.e. invocations where control upon exit from the finally needs to be
 transferred anywhere other than the MSIL immediately following the finally
-handler) will be detected and rejected at compile-time.  This level of
-stubbed support is the current state of the llvm-msilc codebase.  Future
-intermediate steps on the way to full EH support are TBD.
- 1. [x] Stub EH support
- 2. [ ] Other intermediate staging points (TBD)
- 3. [ ] Support EH constructs on x64
-   - [ ] Throw
-   - [ ] Rethrow
-   - [ ] Catch
-   - [ ] Finally
-   - [ ] Filter
-   - [ ] Fault
+handler) will be detected and rejected at compile-time.  The throw operator
+and the explicit test/throw sequences for implicit MSIL exceptions will be
+implemented on top of the stub support (with throws using `call` rather
+than `invoke`), to reflect correct program semantics and allow compilation
+of code with conditional exceptions that will execute correctly if the
+exception conditions don't arise at run-time.
+
+Once the stub support (with explicit and implicit exceptions) is in place,
+the next steps will be to translate handlers in the reader and generate EH
+clauses at the end of compilation.  The logical order is to implement the
+reader part (which can be validated by inspecting the generated IR) before
+the EH clause generation part (which can be validated by executing tests if
+the reader part is already in place), for each handler type.  Tests with
+handlers would regress (stop compiling cleanly) in the interim.  Also, these
+changes may require some iteration between the table part and the reader
+part as the details crystallize.  To avoid introducing this churn in the
+master branch, the bring-up will be done in a separate EH branch.
+
+Once correct EH support is enabled and pushed back up to the master branch,
+EH-centric optimizations and support for other targets will follow.
+
+The current status is that the stub EH support is implemented with support
+for explicit throws but not implicit exceptions.
+
+In summary, the plan/status is:
+ 1. [ ] Stub EH support
+   - [x] Reader discards handlers
+   - [x] Explicit throw becomes helper call
+   - [ ] Implicit exceptions expanded to explicit test/throw sequences
+     - [ ] Null dereference
+     - [ ] Divide by zero
+     - [ ] Arithmetic overflow
+ 2. [ ] Handler bring-up in EH branch
+   - [ ] Catch handler support
+     - [ ] In reader (includes updating throws to use `invoke` rather than
+           `call` with EH edge to `landingpad`)
+     - [ ] Funclet prolog/epilog generation, Previous Stack Pointer Symbol
+           handshake implemented
+     - [ ] EH Clause generation
+     - [ ] Reporting funclets back to EE with parent functions in `.text`
+   - [ ] Support for `rethrow`
+   - [ ] Finally handler support
+     - [ ] In reader (includes `leave` processing, continuation selection)
+     - [ ] Beginfinally intrinsic handling
+     - [ ] EH Clause generation
+   - [ ] Filter handler support
+     - [ ] In reader (includes early outlining)
+     - [ ] EH Clause generation
+   - [ ] Fault handler support
+ 3. [ ] Migrate changes back into master branch
  4. [ ] EH-specific optimizations
    - [ ] Finally cloning
    - [ ] Others TBD
