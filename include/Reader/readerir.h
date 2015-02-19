@@ -255,10 +255,6 @@ public:
                     ReaderAlignType Alignment, bool IsVolatile,
                     IRNode **NewIR) override;
 
-  IRNode *loadFuncptr(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                      CORINFO_CALL_INFO *CallInfo, IRNode **NewIR) override {
-    throw NotYetImplementedException("loadFuncptr");
-  };
   IRNode *loadNull(IRNode **NewIR) override;
   IRNode *localAlloc(IRNode *Arg, bool ZeroInit, IRNode **NewIR) override {
     throw NotYetImplementedException("localAlloc");
@@ -310,9 +306,8 @@ public:
   IRNode *loadStr(mdToken Token, IRNode **NewIR) override;
 
   IRNode *loadVirtFunc(IRNode *Arg1, CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                       CORINFO_CALL_INFO *CallInfo, IRNode **NewIR) override {
-    throw NotYetImplementedException("loadVirtFunc");
-  };
+                       CORINFO_CALL_INFO *CallInfo, IRNode **NewIR) override;
+
   IRNode *loadPrimitiveType(IRNode *Addr, CorInfoType CorInfoType,
                             ReaderAlignType Alignment, bool IsVolatile,
                             bool IsInterfConst, IRNode **NewIR) override;

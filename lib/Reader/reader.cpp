@@ -1079,7 +1079,7 @@ void *ReaderBase::getAddressOfPInvokeFixup(CORINFO_METHOD_HANDLE Method,
 }
 
 void *ReaderBase::getPInvokeUnmanagedTarget(CORINFO_METHOD_HANDLE Method) {
-  void *Unused;
+  void *Unused = nullptr;
   // Always retuns the entry point of the call or null.
   return JitInfo->getPInvokeUnmanagedTarget(Method, &Unused);
 }
@@ -5557,34 +5557,65 @@ void ReaderBase::rdrMakeCallTargetNode(ReaderCallTargetData *CallTargetData,
   CallTargetData->CallTargetNode = Target;
 }
 
+IRNode *ReaderBase::rdrMakeLdFtnTargetNode(
+    CORINFO_RESOLVED_TOKEN *ResolvedToken, CORINFO_CALL_INFO *CallInfo,
+    IRNode **NewIR) {
+  bool Unused = false;
+
+  switch (CallInfo->kind) {
+  case CORINFO_CALL:
+    // Direct Call
+    return rdrGetDirectCallTarget(CallInfo->hMethod, ResolvedToken->token,
+                                  CallInfo->nullInstanceCheck == TRUE, true,
+                                  Unused, NewIR);
+  case CORINFO_CALL_CODE_POINTER:
+    // Runtime lookup required (code sharing w/o using inst param)
+    return rdrGetCodePointerLookupCallTarget(CallInfo, Unused, NewIR);
+
+  default:
+    ASSERTNR("Bad CORINFO_CALL_KIND for ldftn");
+    return NULL;
+  }
+}
+
+IRNode *ReaderBase::rdrGetDirectCallTarget(ReaderCallTargetData *CallTargetData,
+                                           IRNode **NewIR) {
+  return rdrGetDirectCallTarget(CallTargetData->getMethodHandle(),
+                                CallTargetData->getMethodToken(),
+                                CallTargetData->NeedsNullCheck,
+                                canMakeDirectCall(CallTargetData),
+                                CallTargetData->UsesMethodDesc, NewIR);
+}
+
 // Generate the target for a direct call. "Direct call" can either be
 // true direct calls if the runtime allows, or they can be indirect
 // calls through the method descriptor.
-IRNode *ReaderBase::rdrGetDirectCallTarget(ReaderCallTargetData *CallTargetData,
+IRNode *ReaderBase::rdrGetDirectCallTarget(CORINFO_METHOD_HANDLE Method,
+                                           mdToken MethodToken,
+                                           bool NeedsNullCheck,
+                                           bool CanMakeDirectCall,
+                                           bool &UsesMethodDesc,
                                            IRNode **NewIR) {
   CORINFO_CONST_LOOKUP AddressInfo;
-  CORINFO_METHOD_HANDLE Method = CallTargetData->getMethodHandle();
-  getFunctionEntryPoint(Method, &AddressInfo, CallTargetData->NeedsNullCheck
+  getFunctionEntryPoint(Method, &AddressInfo, NeedsNullCheck
                                                   ? CORINFO_ACCESS_NONNULL
                                                   : CORINFO_ACCESS_ANY);
 
   IRNode *TargetNode;
-  if ((AddressInfo.accessType == IAT_VALUE) &&
-      canMakeDirectCall(CallTargetData)) {
+  if ((AddressInfo.accessType == IAT_VALUE) && CanMakeDirectCall) {
     TargetNode = makeDirectCallTargetNode(Method, AddressInfo.addr);
   } else {
-    bool IsIndirect = (AddressInfo.accessType != IAT_VALUE) ? true : false;
+    bool IsIndirect = AddressInfo.accessType != IAT_VALUE;
     TargetNode =
-        handleToIRNode(CallTargetData->getMethodToken(), AddressInfo.addr, 0,
-                       IsIndirect, IsIndirect, true, IsIndirect, NewIR);
+        handleToIRNode(MethodToken, AddressInfo.addr, 0, IsIndirect,
+                       IsIndirect, true, IsIndirect, NewIR);
 
     // TODO: call to same constant dominates this load then the load is
     // invariant
     if (AddressInfo.accessType == IAT_PPVALUE) {
       TargetNode = derefAddress(TargetNode, false, true, NewIR);
     }
-    // "indirect" direct calls use method desc
-    CallTargetData->UsesMethodDesc = true;
+    UsesMethodDesc = true;
   }
 
   return TargetNode;
@@ -5600,7 +5631,19 @@ IRNode *ReaderBase::rdrGetDirectCallTarget(ReaderCallTargetData *CallTargetData,
 // expect the JIT to call it with the typeArg parameter directly.
 IRNode *ReaderBase::rdrGetCodePointerLookupCallTarget(
     ReaderCallTargetData *CallTargetData, IRNode **NewIR) {
+  // These calls always follow a uniform calling convention
+  ASSERTNR(!CallTargetData->getSigInfo()->hasTypeArg());
+  ASSERTNR(!CallTargetData->getSigInfo()->isVarArg());
+
   CORINFO_CALL_INFO *CallInfo = CallTargetData->getCallInfo();
+
+  return rdrGetCodePointerLookupCallTarget(CallTargetData->getCallInfo(),
+                                           CallTargetData->IsIndirect,
+                                           NewIR);
+}
+
+IRNode *ReaderBase::rdrGetCodePointerLookupCallTarget(
+    CORINFO_CALL_INFO *CallInfo, bool &IsIndirect, IRNode **NewIR) {
   // The EE has asked us to call by computing a code pointer and then
   // doing an indirect call. This is because a runtime lookup is
   // required to get the code entry point.
@@ -5613,11 +5656,7 @@ IRNode *ReaderBase::rdrGetCodePointerLookupCallTarget(
   ASSERTNR(CallInfo->codePointerLookup.lookupKind.needsRuntimeLookup);
 
   // treat as indirect call
-  CallTargetData->IsIndirect = true;
-
-  // These calls always follow a uniform calling convention
-  ASSERTNR(!CallTargetData->getSigInfo()->hasTypeArg());
-  ASSERTNR(!CallTargetData->getSigInfo()->isVarArg());
+  IsIndirect = true;
 
   return runtimeLookupToNode(
       CallInfo->codePointerLookup.lookupKind.runtimeLookupKind,
@@ -7422,7 +7461,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       handleMemberAccess(CallInfo.accessAllowed, CallInfo.callsiteCalloutHelper,
                          NewIR);
 
-      ResultIR = loadFuncptr(&ResolvedToken, &CallInfo, NewIR);
+      ResultIR = rdrMakeLdFtnTargetNode(&ResolvedToken, &CallInfo, NewIR);
+
       ReaderOperandStack->push(ResultIR, NewIR);
     } break;
 

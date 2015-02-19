@@ -1207,15 +1207,30 @@ public:
 private:
   void rdrMakeCallTargetNode(ReaderCallTargetData *CallTargetData,
                              IRNode **ThisPointer, IRNode **NewIR);
+
+  IRNode *rdrMakeLdFtnTargetNode(CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                                 CORINFO_CALL_INFO *CallInfo, IRNode **NewIR);
+
   IRNode *rdrGetDirectCallTarget(ReaderCallTargetData *CallTargetData,
+                                 IRNode **NewIR);
+
+  IRNode *rdrGetDirectCallTarget(CORINFO_METHOD_HANDLE Method,
+                                 mdToken MethodToken, bool NeedsNullCheck,
+                                 bool CanMakeDirectCall, bool &UsesMethodDesc,
                                  IRNode **NewIR);
   IRNode *
   rdrGetCodePointerLookupCallTarget(ReaderCallTargetData *CallTargetData,
                                     IRNode **NewIR);
+
+  IRNode *rdrGetCodePointerLookupCallTarget(CORINFO_CALL_INFO *CallInfo,
+                                            bool &IsIndirect, IRNode **NewIR);
+
   IRNode *rdrGetIndirectVirtualCallTarget(ReaderCallTargetData *CallTargetData,
                                           IRNode **ThisPointer, IRNode **NewIR);
+
   IRNode *rdrGetVirtualStubCallTarget(ReaderCallTargetData *CallTargetData,
                                       IRNode **NewIR);
+
   IRNode *rdrGetVirtualTableCallTarget(ReaderCallTargetData *CallTargetData,
                                        IRNode **ThisPointer, IRNode **NewIR);
 
@@ -1605,8 +1620,6 @@ public:
   virtual IRNode *loadField(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
                             ReaderAlignType Alignment, bool IsVolatile,
                             IRNode **NewIR) = 0;
-  virtual IRNode *loadFuncptr(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                              CORINFO_CALL_INFO *CallInfo, IRNode **NewIR) = 0;
   virtual IRNode *loadIndir(ReaderBaseNS::LdIndirOpcode Opcode, IRNode *Address,
                             ReaderAlignType Alignement, bool IsVolatile,
                             bool IsInterfReadOnly, IRNode **NewIR);

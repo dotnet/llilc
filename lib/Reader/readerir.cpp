@@ -2894,10 +2894,6 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
     throw NotYetImplementedException("Call intrinsic");
   }
 
-  if (CallTargetInfo->isCallI()) {
-    throw NotYetImplementedException("Calli");
-  }
-
   // TODO: deal with PInvokes and var args.
 
   Call = (IRNode *)CallInst;
@@ -3554,6 +3550,21 @@ IRNode *GenIR::derefAddress(IRNode *Address, bool DstIsGCPtr, bool IsConst,
   return (IRNode *)Result;
 }
 
+IRNode *GenIR::loadVirtFunc(IRNode *Arg1, CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                            CORINFO_CALL_INFO *CallInfo, IRNode **NewIR) {
+  IRNode *TypeToken = genericTokenToNode(ResolvedToken, NewIR, true);
+  IRNode *MethodToken = genericTokenToNode(ResolvedToken, NewIR);
+
+  Type *Ty = Type::getIntNTy(*this->JitContext->LLVMContext,
+                             TargetPointerSizeInBits);
+  IRNode *CodeAddress = callHelperImpl(CORINFO_HELP_VIRTUAL_FUNC_PTR, Ty,
+                                       NewIR, Arg1, TypeToken, MethodToken);
+
+  FunctionType *FunctionType = getFunctionType(CallInfo->hMethod);
+  return (IRNode *)LLVMBuilder->CreateIntToPtr(CodeAddress,
+      getUnmanagedPointerType(FunctionType));
+}
+
 IRNode *GenIR::loadPrimitiveType(IRNode *Addr, CorInfoType CorInfoType,
                                  ReaderAlignType Alignment, bool IsVolatile,
                                  bool IsInterfReadOnly, IRNode **NewIR) {
@@ -3923,9 +3934,9 @@ IRNode *GenIR::newArr(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
 
   // Or token with CORINFO_ANNOT_ARRAY so that we get back an array-type handle
   bool EmbedParent = false;
-  bool MustRestorHandle = true;
+  bool MustRestoreHandle = true;
   IRNode *Token =
-      genericTokenToNode(ResolvedToken, NewIR, EmbedParent, MustRestorHandle,
+      genericTokenToNode(ResolvedToken, NewIR, EmbedParent, MustRestoreHandle,
                          (CORINFO_GENERIC_HANDLE *)&ElementType, NULL);
 
   Type *ArrayType =
