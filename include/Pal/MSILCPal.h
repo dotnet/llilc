@@ -15,14 +15,6 @@
 #ifndef MSILC_PAL
 #define MSILC_PAL
 
-// We still need the PAL EH macros on Windows, so define them here.
-#if defined(_MSC_VER)
-
-#if defined(_DEBUG)
-#include <windows.h> // For UINT
-#endif
-#include "staticcontract.h"
-
 // Compatibility definitions for Architecture-specific attributes.
 //
 // __stdcall is X86 specific. MSVC ignores the attribute on other architectures,
@@ -30,6 +22,14 @@
 #if !defined(_MSC_VER) && !defined(_HOST_X86_)
 #define __stdcall
 #endif // MSC_VER && _HOST_X86
+
+// We still need the PAL EH macros on Windows, so define them here.
+#if defined(_MSC_VER)
+
+#if defined(_DEBUG)
+#include <windows.h> // For UINT
+#endif
+#include "staticcontract.h"
 
 // Note: PAL_SEH_RESTORE_GUARD_PAGE is only ever defined in clrex.h, so we only
 // restore guard pages automatically when these macros are used from within the
