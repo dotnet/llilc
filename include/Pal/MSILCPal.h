@@ -23,6 +23,14 @@
 #endif
 #include "staticcontract.h"
 
+// Compatibility definitions for Architecture-specific attributes.
+//
+// __stdcall is X86 specific. MSVC ignores the attribute on other architectures,
+// whereas other compilers complain about the ignored attribute.
+#if !defined(_MSC_VER) && !defined(_HOST_X86_)
+#define __stdcall
+#endif // MSC_VER && _HOST_X86
+
 // Note: PAL_SEH_RESTORE_GUARD_PAGE is only ever defined in clrex.h, so we only
 // restore guard pages automatically when these macros are used from within the
 // VM.
@@ -167,10 +175,6 @@ extern "C" {
 #define __assume(x) (void)0
 
 #define UNALIGNED
-
-#if !defined(_HOST_X86_)
-#define __stdcall
-#endif
 
 #if defined(__GNUC__)
 #define __cdecl __attribute__((cdecl))

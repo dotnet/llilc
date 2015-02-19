@@ -16,6 +16,7 @@
 #ifndef MSILC_JIT_H
 #define MSILC_JIT_H
 
+#include "Pal/MSILCPal.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/Support/ManagedStatic.h"
