@@ -5682,8 +5682,7 @@ ReaderBase::rdrGetVirtualStubCallTarget(ReaderCallTargetData *CallTargetData,
 }
 
 // Generate the target for a virtual call that will use the virtual
-// call table. This code path is deprecated and the runtime no longer
-// will ask the JIT to do this.
+// call table.
 IRNode *
 ReaderBase::rdrGetVirtualTableCallTarget(ReaderCallTargetData *CallTargetData,
                                          IRNode **ThisPtr, IRNode **NewIR) {
@@ -5694,7 +5693,7 @@ ReaderBase::rdrGetVirtualTableCallTarget(ReaderCallTargetData *CallTargetData,
   // VTable call uses method desc
   CallTargetData->UsesMethodDesc = true;
 
-  IRNode *VTableAddress = derefAddress(ThisPtrCopy, false, true, NewIR);
+  IRNode *VTableAddress = derefAddress(ThisPtrCopy, true, true, NewIR);
 
   // Get the VTable offset of the method.
   uint32_t OffsetOfIndirection;
