@@ -39,7 +39,7 @@
     you can use CheckDiff to bring the diffs into DiffMerge to examine
     in details.
     
-    This scirpt provides some daily routines beside the above four
+    This script provides some daily routines beside the above four
     common tasks:
 
     LLILCHelp, CopyJIT, ReBaseAll, ApplyFilter 
@@ -742,7 +742,7 @@ function Global:RunTest([string]$Arch="x64", [string]$Build="Debug")
   pushd .
   cd $CoreCLRTestAssets\coreclr\tests
 
-  .\runtest $Arch $Build EnableMSILC "$CoreCLRRuntime\$CoreCLRVersion\bin" 
+  .\runtest $Arch $Build EnableMSILC $CoreCLRRuntime\$CoreCLRVersion\bin 
   
   CheckDiff -Create $True -UseDiffTool $False
   popd  
