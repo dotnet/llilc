@@ -1,8 +1,8 @@
-INFO:  jitting method System.AppDomain::SetupDomain using MSILCJit
+INFO:  jitting method System.AppDomain::SetupDomain using LLILCJit
 Failed to read System.AppDomain.SetupDomain[Call needs null check]
-INFO:  jitting method System.AppDomain::SetupFusionStore using MSILCJit
+INFO:  jitting method System.AppDomain::SetupFusionStore using LLILCJit
 Failed to read System.AppDomain.SetupFusionStore[Call needs null check]
-INFO:  jitting method System.AppDomainSetup::VerifyDir using MSILCJit
+INFO:  jitting method System.AppDomainSetup::VerifyDir using LLILCJit
 Successfully read System.AppDomainSetup.VerifyDir
 
 define %System.String addrspace(1)* @System.AppDomainSetup.VerifyDir(%System.AppDomainSetup addrspace(1)* %param0, %System.String addrspace(1)* %param1, i8 %param2) {
@@ -46,17 +46,17 @@ entry:
   ret %System.String addrspace(1)* %17
 }
 
-INFO:  jitting method System.AppDomainSetup::SetupDefaults using MSILCJit
+INFO:  jitting method System.AppDomainSetup::SetupDefaults using LLILCJit
 Failed to read System.AppDomainSetup.SetupDefaults[storeElem]
-INFO:  jitting method System.String::LastIndexOfAny using MSILCJit
+INFO:  jitting method System.String::LastIndexOfAny using LLILCJit
 Failed to read System.String.LastIndexOfAny[Tail call]
-INFO:  jitting method System.String::Substring using MSILCJit
+INFO:  jitting method System.String::Substring using LLILCJit
 Failed to read System.String.Substring[Tail call]
-INFO:  jitting method System.String::InternalSubString using MSILCJit
+INFO:  jitting method System.String::InternalSubString using LLILCJit
 Failed to read System.String.InternalSubString[genNullCheck]
-INFO:  jitting method System.Buffer::Memmove using MSILCJit
+INFO:  jitting method System.Buffer::Memmove using LLILCJit
 Failed to read System.Buffer.Memmove[fgMakeSwitch]
-INFO:  jitting method System.String::Concat using MSILCJit
+INFO:  jitting method System.String::Concat using LLILCJit
 Successfully read System.String.Concat
 
 define %System.String addrspace(1)* @System.String.Concat(%System.String addrspace(1)* %param0, %System.String addrspace(1)* %param1) {
@@ -117,7 +117,7 @@ entry:
   ret %System.String addrspace(1)* %29
 }
 
-INFO:  jitting method System.String::IsNullOrEmpty using MSILCJit
+INFO:  jitting method System.String::IsNullOrEmpty using LLILCJit
 Successfully read System.String.IsNullOrEmpty
 
 define i8 @System.String.IsNullOrEmpty(%System.String addrspace(1)* %param0) {
@@ -141,21 +141,21 @@ entry:
   ret i8 1
 }
 
-INFO:  jitting method System.String::FillStringChecked using MSILCJit
+INFO:  jitting method System.String::FillStringChecked using LLILCJit
 Failed to read System.String.FillStringChecked[genNullCheck]
-INFO:  jitting method System.AppDomain::PrepareDataForSetup using MSILCJit
+INFO:  jitting method System.AppDomain::PrepareDataForSetup using LLILCJit
 Failed to read System.AppDomain.PrepareDataForSetup[Call needs null check]
-INFO:  jitting method System.AppDomainSetup::.ctor using MSILCJit
+INFO:  jitting method System.AppDomainSetup::.ctor using LLILCJit
 Failed to read System.AppDomainSetup..ctor[Call needs null check]
-INFO:  jitting method System.Collections.Generic.List`1[__Canon][System.__Canon]::.cctor using MSILCJit
+INFO:  jitting method System.Collections.Generic.List`1[__Canon][System.__Canon]::.cctor using LLILCJit
 Failed to read System.Collections.Generic.List`1[__Canon][System.__Canon]..cctor[Keep generic context alive]
-INFO:  jitting method System.String::Compare using MSILCJit
+INFO:  jitting method System.String::Compare using LLILCJit
 Failed to read System.String.Compare[fgMakeSwitch]
-INFO:  jitting method System.String::CompareOrdinalIgnoreCaseHelper using MSILCJit
+INFO:  jitting method System.String::CompareOrdinalIgnoreCaseHelper using LLILCJit
 Failed to read System.String.CompareOrdinalIgnoreCaseHelper[genNullCheck]
-INFO:  jitting method System.AppDomain::Setup using MSILCJit
+INFO:  jitting method System.AppDomain::Setup using LLILCJit
 Failed to read System.AppDomain.Setup[loadElem]
-INFO:  jitting method System.Threading.Thread::GetDomain using MSILCJit
+INFO:  jitting method System.Threading.Thread::GetDomain using LLILCJit
 Successfully read System.Threading.Thread.GetDomain
 
 define %System.AppDomain addrspace(1)* @System.Threading.Thread.GetDomain() {
@@ -177,11 +177,11 @@ entry:
   ret %System.AppDomain addrspace(1)* %6
 }
 
-INFO:  jitting method System.AppDomainSetup::GetConfigurationBytes using MSILCJit
+INFO:  jitting method System.AppDomainSetup::GetConfigurationBytes using LLILCJit
 Failed to read System.AppDomainSetup.GetConfigurationBytes[Call needs null check]
-INFO:  jitting method System.AppDomainSetup::get_TargetFrameworkName using MSILCJit
+INFO:  jitting method System.AppDomainSetup::get_TargetFrameworkName using LLILCJit
 Failed to read System.AppDomainSetup.get_TargetFrameworkName[Call needs null check]
-INFO:  jitting method System.AppDomain::get_FusionStore using MSILCJit
+INFO:  jitting method System.AppDomain::get_FusionStore using LLILCJit
 Successfully read System.AppDomain.get_FusionStore
 
 define %System.AppDomainSetup addrspace(1)* @System.AppDomain.get_FusionStore(%System.AppDomain addrspace(1)* %param0) {
@@ -202,25 +202,25 @@ entry:
   ret %System.AppDomainSetup addrspace(1)* %9
 }
 
-INFO:  jitting method System.Diagnostics.Contracts.Contract::Assert using MSILCJit
+INFO:  jitting method System.Diagnostics.Contracts.Contract::Assert using LLILCJit
 Failed to read System.Diagnostics.Contracts.Contract.Assert[Tail call]
-INFO:  jitting method System.String::Equals using MSILCJit
+INFO:  jitting method System.String::Equals using LLILCJit
 Failed to read System.String.Equals[Tail call]
-INFO:  jitting method System.String::EqualsHelper using MSILCJit
+INFO:  jitting method System.String::EqualsHelper using LLILCJit
 Failed to read System.String.EqualsHelper[genNullCheck]
-INFO:  jitting method System.Text.StringBuilder::.ctor using MSILCJit
+INFO:  jitting method System.Text.StringBuilder::.ctor using LLILCJit
 Failed to read System.Text.StringBuilder..ctor[storeElem]
-INFO:  jitting method System.Text.StringBuilder::ThreadSafeCopy using MSILCJit
+INFO:  jitting method System.Text.StringBuilder::ThreadSafeCopy using LLILCJit
 Failed to read System.Text.StringBuilder.ThreadSafeCopy[loadElemA]
-INFO:  jitting method System.IO.Path::.cctor using MSILCJit
+INFO:  jitting method System.IO.Path::.cctor using LLILCJit
 Failed to read System.IO.Path..cctor[storeStaticField]
-INFO:  jitting method System.String::SplitInternal using MSILCJit
+INFO:  jitting method System.String::SplitInternal using LLILCJit
 Failed to read System.String.SplitInternal[Tail call]
-INFO:  jitting method System.String::MakeSeparatorList using MSILCJit
+INFO:  jitting method System.String::MakeSeparatorList using LLILCJit
 Failed to read System.String.MakeSeparatorList[genNullCheck]
-INFO:  jitting method System.String::InternalSplitKeepEmptyEntries using MSILCJit
+INFO:  jitting method System.String::InternalSplitKeepEmptyEntries using LLILCJit
 Failed to read System.String.InternalSplitKeepEmptyEntries[loadElem]
-INFO:  jitting method System.IO.Path::IsRelative using MSILCJit
+INFO:  jitting method System.IO.Path::IsRelative using LLILCJit
 Successfully read System.IO.Path.IsRelative
 
 define i8 @System.IO.Path.IsRelative(%System.String addrspace(1)* %param0) {
@@ -327,13 +327,13 @@ entry:
   ret i8 1
 }
 
-INFO:  jitting method System.IO.Path::NormalizePath using MSILCJit
+INFO:  jitting method System.IO.Path::NormalizePath using LLILCJit
 Failed to read System.IO.Path.NormalizePath[entryLabel]
-INFO:  jitting method System.String::TrimHelper using MSILCJit
+INFO:  jitting method System.String::TrimHelper using LLILCJit
 Failed to read System.String.TrimHelper[loadElem]
-INFO:  jitting method System.String::CreateTrimmedString using MSILCJit
+INFO:  jitting method System.String::CreateTrimmedString using LLILCJit
 Failed to read System.String.CreateTrimmedString[Tail call]
-INFO:  jitting method System.IO.Path::CheckInvalidPathChars using MSILCJit
+INFO:  jitting method System.IO.Path::CheckInvalidPathChars using LLILCJit
 Successfully read System.IO.Path.CheckInvalidPathChars
 
 define void @System.IO.Path.CheckInvalidPathChars(%System.String addrspace(1)* %param0, i8 %param1) {
@@ -375,21 +375,21 @@ entry:
   ret void
 }
 
-INFO:  jitting method System.IO.Path::HasIllegalCharacters using MSILCJit
+INFO:  jitting method System.IO.Path::HasIllegalCharacters using LLILCJit
 Failed to read System.IO.Path.HasIllegalCharacters[Call needs null check]
-INFO:  jitting method System.IO.PathHelper::Append using MSILCJit
+INFO:  jitting method System.IO.PathHelper::Append using LLILCJit
 Failed to read System.IO.PathHelper.Append[storePrimitiveType]
-INFO:  jitting method System.IO.PathHelper::OrdinalStartsWith using MSILCJit
+INFO:  jitting method System.IO.PathHelper::OrdinalStartsWith using LLILCJit
 Failed to read System.IO.PathHelper.OrdinalStartsWith[Tail call]
-INFO:  jitting method System.IO.PathHelper::NullTerminate using MSILCJit
+INFO:  jitting method System.IO.PathHelper::NullTerminate using LLILCJit
 Failed to read System.IO.PathHelper.NullTerminate[storePrimitiveType]
-INFO:  jitting method System.IO.PathHelper::GetFullPathName using MSILCJit
+INFO:  jitting method System.IO.PathHelper::GetFullPathName using LLILCJit
 Failed to read System.IO.PathHelper.GetFullPathName[entryLabel]
-INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using MSILCJit
+INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
 Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[secretParam]
-INFO:  jitting method System.IO.PathHelper::ToString using MSILCJit
+INFO:  jitting method System.IO.PathHelper::ToString using LLILCJit
 Failed to read System.IO.PathHelper.ToString[derefAddress]
-INFO:  jitting method System.String::CtorCharPtrStartLength using MSILCJit
+INFO:  jitting method System.String::CtorCharPtrStartLength using LLILCJit
 Successfully read System.String.CtorCharPtrStartLength
 
 define %System.String addrspace(1)* @System.String.CtorCharPtrStartLength(%System.String addrspace(1)* %param0, i16* %param1, i32 %param2, i32 %param3) {
@@ -517,7 +517,7 @@ entry:
   ret %System.String addrspace(1)* %65
 }
 
-INFO:  jitting method System.Runtime.CompilerServices.RuntimeHelpers::get_OffsetToStringData using MSILCJit
+INFO:  jitting method System.Runtime.CompilerServices.RuntimeHelpers::get_OffsetToStringData using LLILCJit
 Successfully read System.Runtime.CompilerServices.RuntimeHelpers.get_OffsetToStringData
 
 define i32 @System.Runtime.CompilerServices.RuntimeHelpers.get_OffsetToStringData() {
@@ -525,13 +525,13 @@ entry:
   ret i32 12
 }
 
-INFO:  jitting method System.String::wstrcpy using MSILCJit
+INFO:  jitting method System.String::wstrcpy using LLILCJit
 Failed to read System.String.wstrcpy[Tail call]
-INFO:  jitting method System.String::Equals using MSILCJit
+INFO:  jitting method System.String::Equals using LLILCJit
 Failed to read System.String.Equals[fgMakeSwitch]
-INFO:  jitting method System.Text.StringBuilder::Append using MSILCJit
+INFO:  jitting method System.Text.StringBuilder::Append using LLILCJit
 Failed to read System.Text.StringBuilder.Append[storeElem]
-INFO:  jitting method System.Text.StringBuilder::AppendHelper using MSILCJit
+INFO:  jitting method System.Text.StringBuilder::AppendHelper using LLILCJit
 Successfully read System.Text.StringBuilder.AppendHelper
 
 define void @System.Text.StringBuilder.AppendHelper(%System.Text.StringBuilder addrspace(1)* %param0, %System.String addrspace(1)* %param1) {
@@ -573,7 +573,7 @@ entry:
   ret void
 }
 
-INFO:  jitting method System.Text.StringBuilder::Append using MSILCJit
+INFO:  jitting method System.Text.StringBuilder::Append using LLILCJit
 Successfully read System.Text.StringBuilder.Append
 
 define %System.Text.StringBuilder addrspace(1)* @System.Text.StringBuilder.Append(%System.Text.StringBuilder addrspace(1)* %param0, i16* %param1, i32 %param2) {
@@ -714,15 +714,15 @@ entry:
   ret %System.Text.StringBuilder addrspace(1)* %95
 }
 
-INFO:  jitting method System.Text.StringBuilder::ExpandByABlock using MSILCJit
+INFO:  jitting method System.Text.StringBuilder::ExpandByABlock using LLILCJit
 Failed to read System.Text.StringBuilder.ExpandByABlock[Tail call]
-INFO:  jitting method System.Text.StringBuilder::VerifyClassInvariant using MSILCJit
+INFO:  jitting method System.Text.StringBuilder::VerifyClassInvariant using LLILCJit
 Failed to read System.Text.StringBuilder.VerifyClassInvariant[Tail call]
-INFO:  jitting method System.BCLDebug::Correctness using MSILCJit
+INFO:  jitting method System.BCLDebug::Correctness using LLILCJit
 Failed to read System.BCLDebug.Correctness[Call needs null check]
-INFO:  jitting method System.BCLDebug::.cctor using MSILCJit
+INFO:  jitting method System.BCLDebug::.cctor using LLILCJit
 Failed to read System.BCLDebug..cctor[storeStaticField]
-INFO:  jitting method System.SwitchStructure::.ctor using MSILCJit
+INFO:  jitting method System.SwitchStructure::.ctor using LLILCJit
 Successfully read System.SwitchStructure..ctor
 
 define void @System.SwitchStructure..ctor(%System.SwitchStructure addrspace(1)* %param0, %System.String addrspace(1)* %param1, i32 %param2) {
@@ -744,13 +744,13 @@ entry:
   ret void
 }
 
-INFO:  jitting method System.BCLDebug::CheckRegistry using MSILCJit
+INFO:  jitting method System.BCLDebug::CheckRegistry using LLILCJit
 Failed to read System.BCLDebug.CheckRegistry[Call needs null check]
-INFO:  jitting method System.Text.StringBuilder::Append using MSILCJit
+INFO:  jitting method System.Text.StringBuilder::Append using LLILCJit
 Failed to read System.Text.StringBuilder.Append[storeElem]
-INFO:  jitting method System.Text.StringBuilder::Append using MSILCJit
+INFO:  jitting method System.Text.StringBuilder::Append using LLILCJit
 Failed to read System.Text.StringBuilder.Append[storeElem]
-INFO:  jitting method System.Text.StringBuilder::Remove using MSILCJit
+INFO:  jitting method System.Text.StringBuilder::Remove using LLILCJit
 Successfully read System.Text.StringBuilder.Remove
 
 define %System.Text.StringBuilder addrspace(1)* @System.Text.StringBuilder.Remove(%System.Text.StringBuilder addrspace(1)* %param0, i32 %param1, i32 %param2) {
@@ -845,7 +845,7 @@ entry:
   ret %System.Text.StringBuilder addrspace(1)* %48
 }
 
-INFO:  jitting method System.Text.StringBuilder::get_Length using MSILCJit
+INFO:  jitting method System.Text.StringBuilder::get_Length using LLILCJit
 Successfully read System.Text.StringBuilder.get_Length
 
 define i32 @System.Text.StringBuilder.get_Length(%System.Text.StringBuilder addrspace(1)* %param0) {
@@ -862,17 +862,17 @@ entry:
   ret i32 %6
 }
 
-INFO:  jitting method System.Text.StringBuilder::Remove using MSILCJit
+INFO:  jitting method System.Text.StringBuilder::Remove using LLILCJit
 Failed to read System.Text.StringBuilder.Remove[storePrimitiveType]
-INFO:  jitting method System.Text.StringBuilder::ThreadSafeCopy using MSILCJit
+INFO:  jitting method System.Text.StringBuilder::ThreadSafeCopy using LLILCJit
 Failed to read System.Text.StringBuilder.ThreadSafeCopy[loadElemA]
-INFO:  jitting method System.Text.StringBuilder::ToString using MSILCJit
+INFO:  jitting method System.Text.StringBuilder::ToString using LLILCJit
 Failed to read System.Text.StringBuilder.ToString[loadElemA]
-INFO:  jitting method System.Buffer::_Memmove using MSILCJit
+INFO:  jitting method System.Buffer::_Memmove using LLILCJit
 Failed to read System.Buffer._Memmove[Tail call]
-INFO:  jitting method System.AppDomain::SetDataHelper using MSILCJit
+INFO:  jitting method System.AppDomain::SetDataHelper using LLILCJit
 Failed to read System.AppDomain.SetDataHelper[derefAddress]
-INFO:  jitting method System.AppDomain::get_LocalStore using MSILCJit
+INFO:  jitting method System.AppDomain::get_LocalStore using LLILCJit
 Successfully read System.AppDomain.get_LocalStore
 
 define %"System.Collections.Generic.Dictionary`2[System.String,System.Object[]]" addrspace(1)* @System.AppDomain.get_LocalStore(%System.AppDomain addrspace(1)* %param0) {
@@ -904,17 +904,17 @@ entry:
   ret %"System.Collections.Generic.Dictionary`2[System.String,System.Object[]]" addrspace(1)* %15
 }
 
-INFO:  jitting method System.Collections.Generic.Dictionary`2[__Canon,__Canon][System.__Canon,System.__Canon]::.ctor using MSILCJit
+INFO:  jitting method System.Collections.Generic.Dictionary`2[__Canon,__Canon][System.__Canon,System.__Canon]::.ctor using LLILCJit
 Failed to read System.Collections.Generic.Dictionary`2[__Canon,__Canon][System.__Canon,System.__Canon]..ctor[Tail call]
-INFO:  jitting method System.Collections.Generic.Dictionary`2[__Canon,__Canon][System.__Canon,System.__Canon]::.ctor using MSILCJit
+INFO:  jitting method System.Collections.Generic.Dictionary`2[__Canon,__Canon][System.__Canon,System.__Canon]::.ctor using LLILCJit
 Failed to read System.Collections.Generic.Dictionary`2[__Canon,__Canon][System.__Canon,System.__Canon]..ctor[Call HasTypeArg]
-INFO:  jitting method System.Collections.Generic.EqualityComparer`1[__Canon][System.__Canon]::get_Default using MSILCJit
+INFO:  jitting method System.Collections.Generic.EqualityComparer`1[__Canon][System.__Canon]::get_Default using LLILCJit
 Failed to read System.Collections.Generic.EqualityComparer`1[__Canon][System.__Canon].get_Default[Keep generic context alive]
-INFO:  jitting method System.Collections.Generic.EqualityComparer`1[__Canon][System.__Canon]::CreateComparer using MSILCJit
+INFO:  jitting method System.Collections.Generic.EqualityComparer`1[__Canon][System.__Canon]::CreateComparer using LLILCJit
 Failed to read System.Collections.Generic.EqualityComparer`1[__Canon][System.__Canon].CreateComparer[fgMakeSwitch]
-INFO:  jitting method System.RuntimeType::IsAssignableFrom using MSILCJit
+INFO:  jitting method System.RuntimeType::IsAssignableFrom using LLILCJit
 Failed to read System.RuntimeType.IsAssignableFrom[derefAddress]
-INFO:  jitting method System.RuntimeType::get_UnderlyingSystemType using MSILCJit
+INFO:  jitting method System.RuntimeType::get_UnderlyingSystemType using LLILCJit
 Successfully read System.RuntimeType.get_UnderlyingSystemType
 
 define %System.Type addrspace(1)* @System.RuntimeType.get_UnderlyingSystemType(%System.RuntimeType addrspace(1)* %param0) {
@@ -926,15 +926,15 @@ entry:
   ret %System.Type addrspace(1)* %1
 }
 
-INFO:  jitting method System.Collections.Generic.GenericEqualityComparer`1[__Canon][System.__Canon]::.ctor using MSILCJit
+INFO:  jitting method System.Collections.Generic.GenericEqualityComparer`1[__Canon][System.__Canon]::.ctor using LLILCJit
 Failed to read System.Collections.Generic.GenericEqualityComparer`1[__Canon][System.__Canon]..ctor[Tail call]
-INFO:  jitting method System.Collections.HashHelpers::.cctor using MSILCJit
+INFO:  jitting method System.Collections.HashHelpers::.cctor using LLILCJit
 Failed to read System.Collections.HashHelpers..cctor[storeStaticField]
-INFO:  jitting method System.String::UseRandomizedHashing using MSILCJit
+INFO:  jitting method System.String::UseRandomizedHashing using LLILCJit
 Failed to read System.String.UseRandomizedHashing[Tail call]
-INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using MSILCJit
+INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
 Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[secretParam]
-INFO:  jitting method System.Object::.ctor using MSILCJit
+INFO:  jitting method System.Object::.ctor using LLILCJit
 Successfully read System.Object..ctor
 
 define void @System.Object..ctor(%System.Object addrspace(1)* %param0) {
@@ -944,37 +944,37 @@ entry:
   ret void
 }
 
-INFO:  jitting method System.Collections.Generic.Dictionary`2[__Canon,__Canon][System.__Canon,System.__Canon]::System.Collections.ICollection.get_SyncRoot using MSILCJit
+INFO:  jitting method System.Collections.Generic.Dictionary`2[__Canon,__Canon][System.__Canon,System.__Canon]::System.Collections.ICollection.get_SyncRoot using LLILCJit
 Failed to read System.Collections.Generic.Dictionary`2[__Canon,__Canon][System.__Canon,System.__Canon].System.Collections.ICollection.get_SyncRoot[genNullCheck]
-INFO:  jitting method System.Collections.Generic.Dictionary`2[__Canon,__Canon][System.__Canon,System.__Canon]::TryGetValue using MSILCJit
+INFO:  jitting method System.Collections.Generic.Dictionary`2[__Canon,__Canon][System.__Canon,System.__Canon]::TryGetValue using LLILCJit
 Failed to read System.Collections.Generic.Dictionary`2[__Canon,__Canon][System.__Canon,System.__Canon].TryGetValue[loadElemA]
-INFO:  jitting method System.Collections.Generic.Dictionary`2[__Canon,__Canon][System.__Canon,System.__Canon]::FindEntry using MSILCJit
+INFO:  jitting method System.Collections.Generic.Dictionary`2[__Canon,__Canon][System.__Canon,System.__Canon]::FindEntry using LLILCJit
 Failed to read System.Collections.Generic.Dictionary`2[__Canon,__Canon][System.__Canon,System.__Canon].FindEntry[Keep generic context alive]
-INFO:  jitting method System.Collections.Generic.Dictionary`2[__Canon,__Canon][System.__Canon,System.__Canon]::Insert using MSILCJit
+INFO:  jitting method System.Collections.Generic.Dictionary`2[__Canon,__Canon][System.__Canon,System.__Canon]::Insert using LLILCJit
 Failed to read System.Collections.Generic.Dictionary`2[__Canon,__Canon][System.__Canon,System.__Canon].Insert[Keep generic context alive]
-INFO:  jitting method System.Collections.Generic.Dictionary`2[__Canon,__Canon][System.__Canon,System.__Canon]::Initialize using MSILCJit
+INFO:  jitting method System.Collections.Generic.Dictionary`2[__Canon,__Canon][System.__Canon,System.__Canon]::Initialize using LLILCJit
 Failed to read System.Collections.Generic.Dictionary`2[__Canon,__Canon][System.__Canon,System.__Canon].Initialize[Keep generic context alive]
-INFO:  jitting method System.Collections.HashHelpers::GetPrime using MSILCJit
+INFO:  jitting method System.Collections.HashHelpers::GetPrime using LLILCJit
 Failed to read System.Collections.HashHelpers.GetPrime[loadElem]
-INFO:  jitting method System.Collections.Generic.GenericEqualityComparer`1[__Canon][System.__Canon]::GetHashCode using MSILCJit
+INFO:  jitting method System.Collections.Generic.GenericEqualityComparer`1[__Canon][System.__Canon]::GetHashCode using LLILCJit
 Failed to read System.Collections.Generic.GenericEqualityComparer`1[__Canon][System.__Canon].GetHashCode[derefAddress]
-INFO:  jitting method System.String::GetHashCode using MSILCJit
+INFO:  jitting method System.String::GetHashCode using LLILCJit
 Failed to read System.String.GetHashCode[Tail call]
-INFO:  jitting method System.IO.Path::NormalizePath using MSILCJit
+INFO:  jitting method System.IO.Path::NormalizePath using LLILCJit
 Failed to read System.IO.Path.NormalizePath[Tail call]
-INFO:  jitting method System.String::op_Equality using MSILCJit
+INFO:  jitting method System.String::op_Equality using LLILCJit
 Failed to read System.String.op_Equality[Tail call]
-INFO:  jitting method System.Text.StringBuilder::.ctor using MSILCJit
+INFO:  jitting method System.Text.StringBuilder::.ctor using LLILCJit
 Failed to read System.Text.StringBuilder..ctor[Tail call]
-INFO:  jitting method System.Collections.HashHelpers::ExpandPrime using MSILCJit
+INFO:  jitting method System.Collections.HashHelpers::ExpandPrime using LLILCJit
 Failed to read System.Collections.HashHelpers.ExpandPrime[Tail call]
-INFO:  jitting method System.Collections.Generic.Dictionary`2[__Canon,__Canon][System.__Canon,System.__Canon]::Resize using MSILCJit
+INFO:  jitting method System.Collections.Generic.Dictionary`2[__Canon,__Canon][System.__Canon,System.__Canon]::Resize using LLILCJit
 Failed to read System.Collections.Generic.Dictionary`2[__Canon,__Canon][System.__Canon,System.__Canon].Resize[Keep generic context alive]
-INFO:  jitting method System.AppDomain::CreateAppDomainManager using MSILCJit
+INFO:  jitting method System.AppDomain::CreateAppDomainManager using LLILCJit
 Failed to read System.AppDomain.CreateAppDomainManager[methodNeedsSecurityCheck]
-INFO:  jitting method System.AppDomain::GetData using MSILCJit
+INFO:  jitting method System.AppDomain::GetData using LLILCJit
 Failed to read System.AppDomain.GetData[Call needs null check]
-INFO:  jitting method System.AppDomainSetup::Locate using MSILCJit
+INFO:  jitting method System.AppDomainSetup::Locate using LLILCJit
 Successfully read System.AppDomainSetup.Locate
 
 define i32 @System.AppDomainSetup.Locate(%System.String addrspace(1)* %param0) {
@@ -1022,7 +1022,7 @@ entry:
   ret i32 -1
 }
 
-INFO:  jitting method System.AppDomainSetup::get_LoaderOptimizationKey using MSILCJit
+INFO:  jitting method System.AppDomainSetup::get_LoaderOptimizationKey using LLILCJit
 Successfully read System.AppDomainSetup.get_LoaderOptimizationKey
 
 define %System.String addrspace(1)* @System.AppDomainSetup.get_LoaderOptimizationKey() {
@@ -1031,33 +1031,33 @@ entry:
   ret %System.String addrspace(1)* %0
 }
 
-INFO:  jitting method System.String::Equals using MSILCJit
+INFO:  jitting method System.String::Equals using LLILCJit
 Failed to read System.String.Equals[Tail call]
-INFO:  jitting method System.Threading.Monitor::Enter using MSILCJit
+INFO:  jitting method System.Threading.Monitor::Enter using LLILCJit
 Failed to read System.Threading.Monitor.Enter[Tail call]
-INFO:  jitting method System.Collections.Generic.GenericEqualityComparer`1[__Canon][System.__Canon]::Equals using MSILCJit
+INFO:  jitting method System.Collections.Generic.GenericEqualityComparer`1[__Canon][System.__Canon]::Equals using LLILCJit
 Failed to read System.Collections.Generic.GenericEqualityComparer`1[__Canon][System.__Canon].Equals[Keep generic context alive]
-INFO:  jitting method System.AppDomain::SetupBindingPaths using MSILCJit
+INFO:  jitting method System.AppDomain::SetupBindingPaths using LLILCJit
 Failed to read System.AppDomain.SetupBindingPaths[Tail call]
-INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using MSILCJit
+INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
 Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[genNullCheck]
-INFO:  jitting method System.AppDomain::GetAppDomainManagerType using MSILCJit
+INFO:  jitting method System.AppDomain::GetAppDomainManagerType using LLILCJit
 Failed to read System.AppDomain.GetAppDomainManagerType[Return refany or value class]
-INFO:  jitting method System.AppDomain::GetNativeHandle using MSILCJit
+INFO:  jitting method System.AppDomain::GetNativeHandle using LLILCJit
 Failed to read System.AppDomain.GetNativeHandle[genNullCheck]
-INFO:  jitting method System.Runtime.CompilerServices.JitHelpers::UnsafeCastToStackPointer using MSILCJit
+INFO:  jitting method System.Runtime.CompilerServices.JitHelpers::UnsafeCastToStackPointer using LLILCJit
 Failed to read System.Runtime.CompilerServices.JitHelpers.UnsafeCastToStackPointer[Call HasTypeArg]
-INFO:  jitting method System.AppDomain::InitializeCompatibilityFlags using MSILCJit
+INFO:  jitting method System.AppDomain::InitializeCompatibilityFlags using LLILCJit
 Failed to read System.AppDomain.InitializeCompatibilityFlags[Call needs null check]
-INFO:  jitting method System.CompatibilitySwitches::InitializeSwitches using MSILCJit
+INFO:  jitting method System.CompatibilitySwitches::InitializeSwitches using LLILCJit
 Failed to read System.CompatibilitySwitches.InitializeSwitches[storeStaticField]
-INFO:  jitting method System.CompatibilitySwitches::IsCompatibilitySwitchSet using MSILCJit
+INFO:  jitting method System.CompatibilitySwitches::IsCompatibilitySwitchSet using LLILCJit
 Failed to read System.CompatibilitySwitches.IsCompatibilitySwitchSet[Call needs null check]
-INFO:  jitting method System.AppDomain::IsCompatibilitySwitchSet using MSILCJit
+INFO:  jitting method System.AppDomain::IsCompatibilitySwitchSet using LLILCJit
 Failed to read System.AppDomain.IsCompatibilitySwitchSet[Call needs null check]
-INFO:  jitting method System.AppDomain::InitializeDomainSecurity using MSILCJit
+INFO:  jitting method System.AppDomain::InitializeDomainSecurity using LLILCJit
 Failed to read System.AppDomain.InitializeDomainSecurity[Call needs null check]
-INFO:  jitting method System.AppDomainSetup::InternalGetApplicationTrust using MSILCJit
+INFO:  jitting method System.AppDomainSetup::InternalGetApplicationTrust using LLILCJit
 Successfully read System.AppDomainSetup.InternalGetApplicationTrust
 
 define %System.Security.Policy.ApplicationTrust addrspace(1)* @System.AppDomainSetup.InternalGetApplicationTrust(%System.AppDomainSetup addrspace(1)* %param0) {
@@ -1083,11 +1083,11 @@ entry:
   ret %System.Security.Policy.ApplicationTrust addrspace(1)* %10
 }
 
-INFO:  jitting method System.Security.NamedPermissionSet::GetBuiltInSet using MSILCJit
+INFO:  jitting method System.Security.NamedPermissionSet::GetBuiltInSet using LLILCJit
 Failed to read System.Security.NamedPermissionSet.GetBuiltInSet[Call needs null check]
-INFO:  jitting method System.Security.PermissionSet::.ctor using MSILCJit
+INFO:  jitting method System.Security.PermissionSet::.ctor using LLILCJit
 Failed to read System.Security.PermissionSet..ctor[Tail call]
-INFO:  jitting method System.Security.Policy.ApplicationTrust::.ctor using MSILCJit
+INFO:  jitting method System.Security.Policy.ApplicationTrust::.ctor using LLILCJit
 Successfully read System.Security.Policy.ApplicationTrust..ctor
 
 define void @System.Security.Policy.ApplicationTrust..ctor(%System.Security.Policy.ApplicationTrust addrspace(1)* %param0, %System.Security.PermissionSet addrspace(1)* %param1) {
@@ -1112,13 +1112,13 @@ entry:
   ret void
 }
 
-INFO:  jitting method System.Security.Policy.EvidenceBase::.ctor using MSILCJit
+INFO:  jitting method System.Security.Policy.EvidenceBase::.ctor using LLILCJit
 Failed to read System.Security.Policy.EvidenceBase..ctor[Tail call]
-INFO:  jitting method System.Security.Policy.ApplicationTrust::InitDefaultGrantSet using MSILCJit
+INFO:  jitting method System.Security.Policy.ApplicationTrust::InitDefaultGrantSet using LLILCJit
 Failed to read System.Security.Policy.ApplicationTrust.InitDefaultGrantSet[Tail call]
-INFO:  jitting method System.Security.Policy.PolicyStatement::.ctor using MSILCJit
+INFO:  jitting method System.Security.Policy.PolicyStatement::.ctor using LLILCJit
 Failed to read System.Security.Policy.PolicyStatement..ctor[derefAddress]
-INFO:  jitting method System.Security.PermissionSet::Copy using MSILCJit
+INFO:  jitting method System.Security.PermissionSet::Copy using LLILCJit
 Successfully read System.Security.PermissionSet.Copy
 
 define %System.Security.PermissionSet addrspace(1)* @System.Security.PermissionSet.Copy(%System.Security.PermissionSet addrspace(1)* %param0) {
@@ -1131,9 +1131,9 @@ entry:
   ret %System.Security.PermissionSet addrspace(1)* %1
 }
 
-INFO:  jitting method System.Security.PermissionSet::.ctor using MSILCJit
+INFO:  jitting method System.Security.PermissionSet::.ctor using LLILCJit
 Failed to read System.Security.PermissionSet..ctor[Tail call]
-INFO:  jitting method System.Security.Policy.PolicyStatement::ValidProperties using MSILCJit
+INFO:  jitting method System.Security.Policy.PolicyStatement::ValidProperties using LLILCJit
 Successfully read System.Security.Policy.PolicyStatement.ValidProperties
 
 define i8 @System.Security.Policy.PolicyStatement.ValidProperties(i32 %param0) {
@@ -1157,17 +1157,17 @@ entry:
   unreachable
 }
 
-INFO:  jitting method System.Security.Policy.ApplicationTrust::set_DefaultGrantSet using MSILCJit
+INFO:  jitting method System.Security.Policy.ApplicationTrust::set_DefaultGrantSet using LLILCJit
 Failed to read System.Security.Policy.ApplicationTrust.set_DefaultGrantSet[Call needs null check]
-INFO:  jitting method System.Security.Policy.PolicyStatement::get_PermissionSet using MSILCJit
+INFO:  jitting method System.Security.Policy.PolicyStatement::get_PermissionSet using LLILCJit
 Failed to read System.Security.Policy.PolicyStatement.get_PermissionSet[derefAddress]
-INFO:  jitting method System.Security.SecurityManager::GetSpecialFlags using MSILCJit
+INFO:  jitting method System.Security.SecurityManager::GetSpecialFlags using LLILCJit
 Failed to read System.Security.SecurityManager.GetSpecialFlags[Call needs null check]
-INFO:  jitting method System.Collections.Generic.List`1[__Canon][System.__Canon]::.ctor using MSILCJit
+INFO:  jitting method System.Collections.Generic.List`1[__Canon][System.__Canon]::.ctor using LLILCJit
 Failed to read System.Collections.Generic.List`1[__Canon][System.__Canon]..ctor[Keep generic context alive]
-INFO:  jitting method System.Collections.Generic.List`1[__Canon][System.__Canon]::AsReadOnly using MSILCJit
+INFO:  jitting method System.Collections.Generic.List`1[__Canon][System.__Canon]::AsReadOnly using LLILCJit
 Failed to read System.Collections.Generic.List`1[__Canon][System.__Canon].AsReadOnly[Keep generic context alive]
-INFO:  jitting method System.Collections.ObjectModel.ReadOnlyCollection`1[__Canon][System.__Canon]::.ctor using MSILCJit
+INFO:  jitting method System.Collections.ObjectModel.ReadOnlyCollection`1[__Canon][System.__Canon]::.ctor using LLILCJit
 Successfully read System.Collections.ObjectModel.ReadOnlyCollection`1[__Canon][System.__Canon]..ctor
 
 define void @"System.Collections.ObjectModel.ReadOnlyCollection`1[__Canon][System.__Canon]..ctor"(%"System.Collections.ObjectModel.ReadOnlyCollection`1[System.__Canon]" addrspace(1)* %param0, %"System.Collections.Generic.IList`1[System.__Canon]" addrspace(1)* %param1) {
@@ -1195,17 +1195,17 @@ entry:
   ret void
 }
 
-INFO:  jitting method System.AppDomain::SetupDomainSecurityForHomogeneousDomain using MSILCJit
+INFO:  jitting method System.AppDomain::SetupDomainSecurityForHomogeneousDomain using LLILCJit
 Failed to read System.AppDomain.SetupDomainSecurityForHomogeneousDomain[Call needs null check]
-INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using MSILCJit
+INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
 Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[secretParam]
-INFO:  jitting method System.AppDomain::SetupDomainSecurity using MSILCJit
+INFO:  jitting method System.AppDomain::SetupDomainSecurity using LLILCJit
 Failed to read System.AppDomain.SetupDomainSecurity[Return refany or value class]
-INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using MSILCJit
+INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
 Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[secretParam]
-INFO:  jitting method System.AppDomain::RunInitializer using MSILCJit
+INFO:  jitting method System.AppDomain::RunInitializer using LLILCJit
 Failed to read System.AppDomain.RunInitializer[Call needs null check]
-INFO:  jitting method _isinst::main using MSILCJit
+INFO:  jitting method _isinst::main using LLILCJit
 Successfully read _isinst.main
 
 define i32 @_isinst.main(%"System.String[]" addrspace(1)* %param0) {
@@ -1239,7 +1239,7 @@ entry:
   ret i32 0
 }
 
-INFO:  jitting method Sub::.ctor using MSILCJit
+INFO:  jitting method Sub::.ctor using LLILCJit
 Failed to read Sub..ctor[Tail call]
-INFO:  jitting method Super::.ctor using MSILCJit
+INFO:  jitting method Super::.ctor using LLILCJit
 Failed to read Super..ctor[Tail call]

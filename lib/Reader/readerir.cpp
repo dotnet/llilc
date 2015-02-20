@@ -1,6 +1,6 @@
 //===---- lib/MSILReader/readerir.cpp ---------------------------*- C++ -*-===//
 //
-// LLVM-MSILC
+// LLILC
 //
 // Copyright (c) Microsoft. All rights reserved.
 // Licensed under the MIT license. 
@@ -67,7 +67,7 @@ void GenStack::push(IRNode *NewVal, IRNode **NewIR) {
 IRNode *GenStack::pop() {
   ASSERTM(Top >= 0, "stack underflow");
   if (Top < 0)
-    MSILCJit::fatal(CORJIT_BADCODE);
+    LLILCJit::fatal(CORJIT_BADCODE);
 
   return Stack[Top--];
 }
@@ -676,7 +676,7 @@ void ReaderBase::debugError(const char *Filename, unsigned Linenumber,
 };
 
 // Fatal error, reader cannot continue.
-void ReaderBase::fatal(int ErrNum) { MSILCJit::fatal(MSILCJIT_FATAL_ERROR); }
+void ReaderBase::fatal(int ErrNum) { LLILCJit::fatal(LLILCJIT_FATAL_ERROR); }
 
 #pragma endregion
 

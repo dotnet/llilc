@@ -1,6 +1,6 @@
 //===------------------- include/Reader/vtypeinfo.h -------------*- C++ -*-===//
 //
-// LLVM-MSILC
+// LLILC
 //
 // Copyright (c) Microsoft. All rights reserved.
 // Licensed under the MIT license.

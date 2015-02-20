@@ -1,6 +1,6 @@
 //===---- lib/Jit/EEMemoryManager.cpp ---------------------------*- C++ -*-===//
 //
-// LLVM-MSILC
+// LLILC
 //
 // Copyright (c) Microsoft. All rights reserved.
 // Licensed under the MIT license.
@@ -15,7 +15,7 @@
 
 #include "EEMemoryManager.h"
 #include "jitpch.h"
-#include "MSILCJit.h"
+#include "LLILCJit.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/MCJIT.h"
 #include "llvm/IR/DataLayout.h"

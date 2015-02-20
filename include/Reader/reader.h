@@ -1,6 +1,6 @@
 //===------------------- include/Reader/reader.h ----------------*- C++ -*-===//
 //
-// LLVM-MSILC
+// LLILC
 //
 // Copyright (c) Microsoft. All rights reserved.
 // Licensed under the MIT license.
@@ -24,7 +24,7 @@
 #include <map>
 
 #include "global.h"
-#include "Pal/MSILCPal.h"
+#include "Pal/LLILCPal.h"
 #if !defined(_MSC_VER)
 #include "ntimage.h"
 #endif
@@ -109,22 +109,22 @@
 //
 // Internal JIT exceptions.
 
-#define FACILITY_MSILCJIT 0x64 // This is a made up facility code
+#define FACILITY_LLILCJIT 0x64 // This is a made up facility code
 
 // Some fatal error occurred
-#define MSILCJIT_FATAL_ERROR CORJIT_INTERNALERROR
-// An out of memory error occurred in the MSILCJIT
-#define MSILCJIT_NOMEM_ERROR CORJIT_OUTOFMEM
+#define LLILCJIT_FATAL_ERROR CORJIT_INTERNALERROR
+// An out of memory error occurred in the LLILCJIT
+#define LLILCJIT_NOMEM_ERROR CORJIT_OUTOFMEM
 
-#define MSILCJIT_FATALEXCEPTION_CODE (0xE0000000 | FACILITY_MSILCJIT << 16 | 1)
-#define MSILCJIT_READEREXCEPTION_CODE (0xE0000000 | FACILITY_MSILCJIT << 16 | 2)
+#define LLILCJIT_FATALEXCEPTION_CODE (0xE0000000 | FACILITY_LLILCJIT << 16 | 1)
+#define LLILCJIT_READEREXCEPTION_CODE (0xE0000000 | FACILITY_LLILCJIT << 16 | 2)
 
 //===========================================================================
 
 // Function: jitFilter
 //
 //  Filter to detect/handle internal JIT exceptions.
-//  Returns EXCEPTION_EXECUTE_HANDLER for MSILCJIT exceptions,
+//  Returns EXCEPTION_EXECUTE_HANDLER for LLILCJIT exceptions,
 //  and EXCEPTION_CONTINUE_SEARCH for all others.
 //
 #ifdef __cplusplus

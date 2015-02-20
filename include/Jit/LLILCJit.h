@@ -1,6 +1,6 @@
-//===----------------- include/Jit/MSILCJit.h -------------------*- C++ -*-===//
+//===----------------- include/Jit/LLILCJit.h -------------------*- C++ -*-===//
 //
-// LLVM-MSILC
+// LLILC
 //
 // Copyright (c) Microsoft. All rights reserved.
 // Licensed under the MIT license.
@@ -13,16 +13,16 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#ifndef MSILC_JIT_H
-#define MSILC_JIT_H
+#ifndef LLILC_JIT_H
+#define LLILC_JIT_H
 
-#include "Pal/MSILCPal.h"
+#include "Pal/LLILCPal.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/ThreadLocal.h"
 
-struct MSILCJitPerThreadState;
+struct LLILCJitPerThreadState;
 
 /// \brief This struct holds per-jit request state.
 ///
@@ -30,11 +30,11 @@ struct MSILCJitPerThreadState;
 /// time compileMethod is invoked. Note that the Jit
 /// can be re-entered on this thread if while in the middle
 /// of jitting a method, other methods must be run.
-class MSILCJitContext {
+class LLILCJitContext {
 
 public:
-  MSILCJitContext(MSILCJitPerThreadState *State);
-  ~MSILCJitContext();
+  LLILCJitContext(LLILCJitPerThreadState *State);
+  ~LLILCJitContext();
   std::unique_ptr<llvm::Module>
   getModuleForMethod(CORINFO_METHOD_INFO *MethodInfo);
   void outputDebugMethodName();
@@ -50,8 +50,8 @@ public:
   std::string MethodName;
   llvm::ExecutionEngine *EE;
   bool HasLoadedBitCode;
-  MSILCJitContext *Next;
-  MSILCJitPerThreadState *State;
+  LLILCJitContext *Next;
+  LLILCJitPerThreadState *State;
   CORINFO_EE_INFO EEInfo;
   llvm::LLVMContext *LLVMContext;
 
@@ -73,14 +73,14 @@ public:
 ///
 /// The per thread state also provides access to the
 /// current Jit context in case it's needed.
-struct MSILCJitPerThreadState {
+struct LLILCJitPerThreadState {
 public:
-  MSILCJitPerThreadState()
+  LLILCJitPerThreadState()
       : LLVMContext(), ClassTypeMap(), ArrayTypeMap(), FieldIndexMap(),
         JitContext(NULL) {}
 
   llvm::LLVMContext LLVMContext;
-  MSILCJitContext *JitContext;
+  LLILCJitContext *JitContext;
   std::map<CORINFO_CLASS_HANDLE, llvm::Type *> ClassTypeMap;
   std::map<std::tuple<CorInfoType, CORINFO_CLASS_HANDLE, uint32_t>,
            llvm::Type *> ArrayTypeMap;
@@ -90,9 +90,9 @@ public:
 /// \brief The Jit interface to the EE.
 ///
 /// This class implements the Jit interface to the EE.
-class MSILCJit : public ICorJitCompiler {
+class LLILCJit : public ICorJitCompiler {
 public:
-  MSILCJit();
+  LLILCJit();
 
   CorJitResult __stdcall compileMethod(ICorJitInfo *JitInfo,
                                        CORINFO_METHOD_INFO *MethodInfo,
@@ -102,21 +102,21 @@ public:
   void clearCache() override;
   BOOL isCacheCleanupRequired() override;
   void getVersionIdentifier(GUID *VersionIdentifier) override;
-  static MSILCJitContext *getMSILCJitContext() {
+  static LLILCJitContext *getLLILCJitContext() {
     return TheJit->State.get()->JitContext;
   }
   static void __cdecl fatal(int Errnum, ...);
   static void signalHandler(void *Cookie);
 
 private:
-  bool readMethod(MSILCJitContext *JitContext);
-  bool outputGCInfo(MSILCJitContext *JitContext);
+  bool readMethod(LLILCJitContext *JitContext);
+  bool outputGCInfo(LLILCJitContext *JitContext);
 
 public:
-  static MSILCJit *TheJit;
+  static LLILCJit *TheJit;
 
 private:
-  llvm::sys::ThreadLocal<MSILCJitPerThreadState> State;
+  llvm::sys::ThreadLocal<LLILCJitPerThreadState> State;
 };
 
-#endif // MSILC_JIT_H
+#endif // LLILC_JIT_H
