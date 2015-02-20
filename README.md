@@ -1,4 +1,10 @@
 # Welcome to LLILC
+
+|   |Windows|Linux|
+|:-:|:-:|:-:|
+|**Debug**|[![Build status](http://dotnet-ci.cloudapp.net/job/dotnet_llilc_windows_debug_win64/badge/icon)](http://dotnet-ci.cloudapp.net/job/dotnet_llilc_windows_debug_win64/)|[![Build Status](http://dotnet-ci.cloudapp.net/job/dotnet_llilc_linux_debug/badge/icon)](http://dotnet-ci.cloudapp.net/job/dotnet_llilc_linux_debug/)|
+|**Release**|[![Build status](http://dotnet-ci.cloudapp.net/job/dotnet_llilc_windows_release_win64/badge/icon)](http://dotnet-ci.cloudapp.net/job/dotnet_llilc_windows_release_win64/)|[![Build Status](http://dotnet-ci.cloudapp.net/job/dotnet_llilc_linux_release/badge/icon)](http://dotnet-ci.cloudapp.net/job/dotnet_llilc_linux_release/)|
+
 ## Introduction
 LLILC is an **LL**VM based MS**IL** **C**ompiler - we pronounce it 'lilac' - with a goal of producing a set of cross-platform .NET code generation tools. Today LLILC is being developed against the [dotnet/CoreCLR](https://github.com/dotnet/coreclr) for use as a JIT, but an ahead of time (AOT) compiler planned for the future.  
 
