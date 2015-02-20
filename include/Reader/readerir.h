@@ -170,18 +170,14 @@ public:
     throw NotYetImplementedException("abs");
   };
 
-  IRNode *argList(IRNode **NewIR) override {
-    throw NotYetImplementedException("argList");
-  };
-  IRNode *instParam(IRNode **NewIR) override {
-    throw NotYetImplementedException("instParam");
-  };
+  IRNode *argList(IRNode **NewIR) override;
+  IRNode *instParam(IRNode **NewIR) override;
+  
   IRNode *secretParam(IRNode **NewIR) override {
     throw NotYetImplementedException("secretParam");
   };
-  IRNode *thisObj(IRNode **NewIR) override {
-    throw NotYetImplementedException("thisObj");
-  };
+  IRNode *thisObj(IRNode **NewIR) override;
+
   void boolBranch(ReaderBaseNS::BoolBranchOpcode Opcode, IRNode *Arg1,
                   IRNode **NewIR) override;
 
@@ -684,9 +680,7 @@ public:
             ReaderSpecialSymbolType SymType = Reader_NotSpecialSymbol) override;
 
   IRNode *derefAddress(IRNode *Address, bool DstIsGCPtr, bool IsConst,
-                       IRNode **NewIR) override {
-    throw NotYetImplementedException("derefAddress");
-  };
+                       IRNode **NewIR) override;
 
   IRNode *conditionalDerefAddress(IRNode *Address, IRNode **NewIR) override {
     throw NotYetImplementedException("conditionalDerefAddress");
@@ -776,6 +770,8 @@ private:
   llvm::Function *getFunction(CORINFO_METHOD_HANDLE Method);
 
   llvm::FunctionType *getFunctionType(CORINFO_METHOD_HANDLE Method);
+  llvm::FunctionType *getFunctionType(CORINFO_SIG_INFO &Sig,
+                                      CORINFO_CLASS_HANDLE ThisClass);
 
   llvm::Type *getClassType(CORINFO_CLASS_HANDLE ClassHandle,
                            bool IsRefClass, bool GetRefClassFields);
@@ -867,6 +863,7 @@ private:
   bool HasThis;
   bool HasTypeParameter;
   bool HasVarargsToken;
+  bool KeepGenericContextAlive;
   llvm::BasicBlock *EntryBlock;
   llvm::Instruction *TempInsertionPoint;
   uint32_t TargetPointerSizeInBits;

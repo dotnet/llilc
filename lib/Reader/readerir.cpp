@@ -361,6 +361,7 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   HasThis = JitContext->MethodInfo->args.hasThis();
   HasTypeParameter = JitContext->MethodInfo->args.hasTypeArg();
   HasVarargsToken = JitContext->MethodInfo->args.isVarArg();
+  KeepGenericContextAlive = false;
 
   initParamsAndAutos(NumArgs, NumLocals);
 
@@ -386,8 +387,30 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
 void GenIR::readerMiddlePass() { return; }
 
 void GenIR::readerPostPass(bool IsImportOnly) {
+
+  // If the generic context must be kept live,
+  // insert the necessary code to make it so.
+  Value *ContextAddress = nullptr;
+
+  if (KeepGenericContextAlive) {
+    CorInfoOptions Options = JitContext->MethodInfo->options;
+    if (Options & CORINFO_GENERICS_CTXT_FROM_THIS) {
+      ASSERT(HasThis);
+      ContextAddress = Arguments[0];
+      throw NotYetImplementedException("keep alive generic context: this");
+    } else {
+      ASSERT(Options &
+             (CORINFO_GENERICS_CTXT_FROM_METHODDESC |
+             CORINFO_GENERICS_CTXT_FROM_METHODTABLE));
+      ASSERT(HasTypeParameter);
+      ContextAddress = Arguments[HasThis ? (HasVarargsToken ? 2 : 1) : 0];
+      throw NotYetImplementedException("keep alive generic context: !this");
+    }
+  }
+
+  // Cleanup the memory we've been using.
   delete LLVMBuilder;
-  return;
+
 }
 
 #pragma endregion
@@ -524,6 +547,39 @@ Instruction *GenIR::createTemporary(Type * Ty) {
   LLVMBuilder->restoreIP(IP);
   
   return AllocaInst;
+}
+
+// Get the value of the unmodified this object.
+IRNode *GenIR::thisObj(IRNode **NewIR) {
+  ASSERT(HasThis);
+  Function::arg_iterator Args = Function->arg_begin();
+  Value *UnmodifiedThis = Args++;
+  return (IRNode *)UnmodifiedThis;
+}
+
+// Get the value of the varargs token (aka argList).
+IRNode *GenIR::argList(IRNode **NewIR) {
+  ASSERT(HasVarargsToken);
+  Function::arg_iterator Args = Function->arg_begin();
+  if (HasThis) {
+    Args++;
+  }
+  Value *ArgList = Args++;
+  return (IRNode *)ArgList;
+}
+
+// Get the value of the instantiation parameter (aka type parameter).
+IRNode *GenIR::instParam(IRNode **NewIR) {
+  ASSERT(HasTypeParameter);
+  Function::arg_iterator Args = Function->arg_begin();
+  if (HasThis) {
+    Args++;
+  }
+  if (HasVarargsToken) {
+    Args++;
+  }
+  Value *TypeParameter = Args++;
+  return (IRNode *)TypeParameter;
 }
 
 #pragma endregion
@@ -965,9 +1021,13 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
   if (IsObject) {
     ASSERT(NumFields == 0);
     ASSERT(IsRefClass);
-    Type *VtableTy = Type::getInt8PtrTy(LLVMContext);
-    Fields.push_back(VtableTy);
-    ByteOffset += DataLayout->getTypeSizeInBits(VtableTy) / 8;
+    // Vtable is an array of pointer-sized things.
+    Type *VtableSlotTy = 
+      Type::getIntNPtrTy(LLVMContext, TargetPointerSizeInBits);
+    Type *VtableTy = ArrayType::get(VtableSlotTy, 0); 
+    Type *VtablePtrTy = VtableTy->getPointerTo();
+    Fields.push_back(VtablePtrTy);
+    ByteOffset += DataLayout->getTypeSizeInBits(VtablePtrTy) / 8;
   } else {
     // If we have a ref class, make sure the parent class 
     // field information is filled in first.
@@ -1141,7 +1201,8 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
         getChildType(ClassHandle, &ArrayElementHandle);
 
       if (ArrayElementCorTy == CORINFO_TYPE_CLASS) {
-        Type *ArrayElementFieldTy = Type::getInt8PtrTy(LLVMContext);
+        Type *ArrayElementFieldTy = 
+            Type::getIntNPtrTy(LLVMContext, TargetPointerSizeInBits);
         Fields.push_back(ArrayElementFieldTy);
         ByteOffset += DataLayout->getTypeSizeInBits(ArrayElementFieldTy) / 8;
       }
@@ -1244,20 +1305,32 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
   return ResultTy;
 }
 
+// Obtain an LLVM function type from a method handle.
 FunctionType *GenIR::getFunctionType(CORINFO_METHOD_HANDLE Method) {
   CORINFO_SIG_INFO Sig;
   getMethodSig(Method, &Sig);
+  CORINFO_CLASS_HANDLE Class = getMethodClass(Method);
+  FunctionType *Result = getFunctionType(Sig, Class);
+  return Result;
+}
+
+// Obtain an LLVM function type from a signature.
+//
+// If the signature has an implicit 'this' parameter,
+// ThisClass must be passed in as the appropriate class handle.
+FunctionType *GenIR::getFunctionType(CORINFO_SIG_INFO &Sig, 
+                                     CORINFO_CLASS_HANDLE ThisClass) {
   CorInfoType ReturnType = Sig.retType;
-  CORINFO_CLASS_HANDLE Class = Sig.retTypeClass;
-  Type *LLVMReturnType = this->getType(ReturnType, Class);
+  CORINFO_CLASS_HANDLE ReturnClass = Sig.retTypeClass;
+  Type *LLVMReturnType = this->getType(ReturnType, ReturnClass);
   std::vector<Type *> Arguments;
 
   if (Sig.hasThis()) {
-    // Get the handle for the class which this method is part of.
-    CORINFO_CLASS_HANDLE Class = getMethodClass(Method);
+    // We'd better have a valid class handle.
+    ASSERT(ThisClass != nullptr);
 
-    // See if the current class is an valueclass
-    uint32_t Attribs = getClassAttribs(Class);
+    // See if the this pointer class is an valueclass
+    uint32_t Attribs = getClassAttribs(ThisClass);
 
     CorInfoType CorType;
 
@@ -1267,7 +1340,7 @@ FunctionType *GenIR::getFunctionType(CORINFO_METHOD_HANDLE Method) {
       CorType = CORINFO_TYPE_BYREF;
     }
 
-    Type *LLVMArgType = this->getType(CorType, Class);
+    Type *LLVMArgType = this->getType(CorType, ThisClass);
     Arguments.push_back(LLVMArgType);
   }
 
@@ -2789,6 +2862,30 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
     Arguments.push_back(Arg);
   }
 
+  // We may need to fix the type on the TargetNode.
+  const bool FixFunctionType = 
+    CallTargetInfo->isCallVirt() || CallTargetInfo->isCallI();
+  if (FixFunctionType) {
+    CORINFO_CLASS_HANDLE ThisClass = nullptr;
+    if (SigInfo->hasThis()) {
+      ThisClass = ArgArray[0].ArgClass;
+    }
+    Type *FunctionTy = 
+      getUnmanagedPointerType(getFunctionType(*SigInfo, ThisClass));
+    if (TargetNode->getType()->isPointerTy()) {
+      TargetNode =
+        (IRNode *)LLVMBuilder->CreatePointerCast(TargetNode, FunctionTy);
+    } else {
+      ASSERT(TargetNode->getType()->isIntegerTy());
+      TargetNode =
+        (IRNode *)LLVMBuilder->CreateIntToPtr(TargetNode, FunctionTy);
+    }
+  } else {
+    // We should have a usable type already.
+    ASSERT(TargetNode->getType()->isPointerTy());
+    ASSERT(TargetNode->getType()->getPointerElementType()->isFunctionTy());
+  }
+
   CallInst *CallInst = LLVMBuilder->CreateCall(TargetNode, Arguments);
   CorInfoIntrinsics IntrinsicID = CallTargetInfo->getCorInstrinsic();
 
@@ -3289,9 +3386,9 @@ void GenIR::setEHInfo(EHRegion *EhRegionTree, EHRegionList *EhRegionList) {
   // TODO: anything we need here?
 }
 
-void GenIR::methodNeedsToKeepAliveGenericsContext(bool KeepGenericsCtxtAlive) {
-  if (KeepGenericsCtxtAlive) {
-    throw NotYetImplementedException("Keep generic context alive");
+void GenIR::methodNeedsToKeepAliveGenericsContext(bool NewValue) {
+  if (NewValue) {
+    KeepGenericContextAlive = true;
   }
 }
 
@@ -3405,7 +3502,56 @@ IRNode *GenIR::handleToIRNode(mdToken Token, void *EmbHandle, void *RealHandle,
 // So for now, deliberately we keep this API to retain the call site.
 IRNode *GenIR::makePtrNode(ReaderPtrType PtrType) {
    return loadNull(nullptr);
-};
+}
+
+// Load a pointer-sized value from the indicated address.
+// Used when navigating through runtime data structures.
+// This should not be used for accessing user data types.
+IRNode *GenIR::derefAddress(IRNode *Address, bool DstIsGCPtr, bool IsConst,
+                            IRNode **NewIR) {
+
+  // TODO: If IsConst is false, the load could cause a null pointer exception,
+  // so we may need an explicit null check. Not sure if there's a covering
+  // upstream check or not, so be cautious now.
+  if (!IsConst) {
+    throw NotYetImplementedException("non-const derefAddress");
+  }
+
+  // We don't know the true referent type so just use a pointer sized
+  // integer for the result.
+  Type *ReferentTy = Type::getIntNTy(*JitContext->LLVMContext,
+                                     TargetPointerSizeInBits);
+
+  // Address is a pointer, but since it may come from dereferencing into
+  // runtime data structures with unknown field types, we may need a cast here
+  // to make it so.
+  Type *AddressTy = Address->getType();
+  if (!AddressTy->isPointerTy()) {
+    // Ensure we have a suitable integer value
+    ASSERT(AddressTy->isIntegerTy());
+    ASSERT(AddressTy->getScalarSizeInBits() == TargetPointerSizeInBits);
+    // We should not be trying to cast an integer value to a GC pointer.
+    ASSERT(!DstIsGCPtr);
+    // Cast to get a pointer-sized referent type.
+    Type *CastTy = getUnmanagedPointerType(ReferentTy);
+    Address = (IRNode *)LLVMBuilder->CreateIntToPtr(Address, CastTy);
+  } else if (DstIsGCPtr) {
+    // Verify we have a managed pointer.
+    ASSERT(isManagedPointerType(cast<PointerType>(AddressTy)));
+    // Cast to get a pointer-sized referent type.
+    Type *CastTy = getManagedPointerType(ReferentTy);
+    Address = (IRNode *)LLVMBuilder->CreatePointerCast(Address, CastTy);
+  } else {
+    // Verify we have an unmanaged pointer.
+    ASSERT(!isManagedPointerType(cast<PointerType>(AddressTy)));
+    // Cast to get a pointer-sized referent type.
+    Type *CastTy = getUnmanagedPointerType(ReferentTy);
+    Address = (IRNode *)LLVMBuilder->CreatePointerCast(Address, CastTy);
+  }
+
+  Value *Result = LLVMBuilder->CreateLoad(Address);
+  return (IRNode *)Result;
+}
 
 IRNode *GenIR::loadPrimitiveType(IRNode *Addr, CorInfoType CorInfoType,
                                  ReaderAlignType Alignment, bool IsVolatile,
