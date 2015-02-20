@@ -7,9 +7,10 @@
 // See LICENSE file in the project root for full license information.
 //
 //===----------------------------------------------------------------------===//
-//
-// Result code literals for Verifier Type Interface
-//
+///
+/// \file
+/// \brief Result code literals for Verifier Type Interface
+///
 //===----------------------------------------------------------------------===//
 
 #define MVER_E_HRESULT           "[HRESULT 0x%08X]"

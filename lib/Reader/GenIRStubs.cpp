@@ -7,10 +7,11 @@
 // See LICENSE file in the project root for full license information.
 //
 //===----------------------------------------------------------------------===//
-//
-// Common reader functionality that is either not yet implemented
-// or stubbed out.
-//
+///
+/// \file
+/// \brief Common reader functionality that is either not yet implemented
+/// or stubbed out.
+///
 //===----------------------------------------------------------------------===//
 
 #include "reader.h"

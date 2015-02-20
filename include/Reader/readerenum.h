@@ -7,10 +7,11 @@
 // See LICENSE file in the project root for full license information.
 //
 //===----------------------------------------------------------------------===//
-//
-// Enumerations that are useful in translating from MSIL bytecode to some
-// other representation.
-//
+///
+/// \file
+/// \brief Enumerations that are useful in translating from MSIL bytecode to some
+/// other representation.
+///
 //===----------------------------------------------------------------------===//
 
 #ifndef MSIL_READER_ENUM_H

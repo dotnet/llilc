@@ -7,7 +7,8 @@
 // See LICENSE file in the project root for full license information.
 //
 //===----------------------------------------------------------------------===//
-//
-// Dummy ole2.h for non-Windows platforms.
-//
+///
+/// \file
+/// \brief Dummy ole2.h for non-Windows platforms.
+///
 //===----------------------------------------------------------------------===//

@@ -7,9 +7,10 @@
 // See LICENSE file in the project root for full license information.
 //
 //===----------------------------------------------------------------------===//
-//
-// Declares data structures useful for MSIL bytecode verification.
-//
+///
+/// \file
+/// \brief Declares data structures useful for MSIL bytecode verification.
+///
 //===----------------------------------------------------------------------===//
 
 #ifndef MSIL_READER_GVERIFY_H

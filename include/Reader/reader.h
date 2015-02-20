@@ -7,10 +7,11 @@
 // See LICENSE file in the project root for full license information.
 //
 //===----------------------------------------------------------------------===//
-//
-// Declares the ReaderBase class, which provides a generic framework for
-// translating MSIL bytecode into some other representation.
-//
+///
+/// \file
+/// \brief Declares the ReaderBase class, which provides a generic framework for
+/// translating MSIL bytecode into some other representation.
+///
 //===----------------------------------------------------------------------===//
 
 #ifndef MSIL_READER_H

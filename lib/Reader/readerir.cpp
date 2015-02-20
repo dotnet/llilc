@@ -7,9 +7,10 @@
 // See LICENSE file in the project root for full license information.
 //
 //===----------------------------------------------------------------------===//
-//
-// Convert from MSIL bytecode to LLVM IR.
-//
+///
+/// \file
+/// \brief Convert from MSIL bytecode to LLVM IR.
+///
 //===----------------------------------------------------------------------===//
 
 #include "readerir.h"

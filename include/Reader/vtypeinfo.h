@@ -7,9 +7,10 @@
 // See LICENSE file in the project root for full license information.
 //
 //===----------------------------------------------------------------------===//
-//
-// Type information for an MSIL verifier.
-//
+///
+/// \file
+/// \brief Type information for an MSIL verifier.
+///
 //===----------------------------------------------------------------------===//
 
 #ifndef MSIL_READER_TYPEINFO_H

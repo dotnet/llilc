@@ -7,9 +7,10 @@
 // See LICENSE file in the project root for full license information.
 //
 //===----------------------------------------------------------------------===//
-//
-// Debugging String literal definitions for Verifier Type Interface
-//
+///
+/// \file
+/// \brief Debugging String literal definitions for Verifier Type Interface
+///
 //===----------------------------------------------------------------------===//
 
 #define MVER_E_HRESULT                        VER_E_HRESULT

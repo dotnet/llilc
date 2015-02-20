@@ -7,9 +7,10 @@
 // See LICENSE file in the project root for full license information.
 //
 //===----------------------------------------------------------------------===//
-//
-// Host and target defines.
-//
+///
+/// \file
+/// \brief Host and target defines.
+///
 //===----------------------------------------------------------------------===//
 
 #ifndef JIT_GLOBAL_H

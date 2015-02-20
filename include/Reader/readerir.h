@@ -7,10 +7,11 @@
 // See LICENSE file in the project root for full license information.
 //
 //===----------------------------------------------------------------------===//
-//
-// Declares the GenIR class, which overrides ReaderBase to generate LLVM IR
-// from MSIL bytecode.
-//
+///
+/// \file
+/// \brief Declares the GenIR class, which overrides ReaderBase to generate LLVM IR
+/// from MSIL bytecode.
+///
 //===----------------------------------------------------------------------===//
 
 #ifndef MSIL_READER_IR_H
