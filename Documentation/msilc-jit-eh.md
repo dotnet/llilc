@@ -535,6 +535,7 @@ In summary, the plan/status is:
      - [ ] Null dereference
      - [ ] Divide by zero
      - [ ] Arithmetic overflow
+     - [ ] Convert with overflow
  2. [ ] Handler bring-up in EH branch
    - [ ] Catch handler support
      - [ ] In reader (includes updating throws to use `invoke` rather than
