@@ -61,13 +61,13 @@
     
 .EXAMPLE
     LLILCEnv.ps1
-    LLILCEnv.ps1 -Arch x64 -Build Release
+    LLILCEnv.ps1 -Arch x64 -Build Debug
 #>
 
 [CmdletBinding()]
 Param(
    [string]$Arch="x64",
-   [string]$Build="Release"
+   [string]$Build="Debug"
 )
 
 # -------------------------------------------------------------------------
@@ -161,7 +161,7 @@ function Global:LLILCTest
   return "$LLILCSource\test"
 }
 
-function Global:LLILCJit([string]$Build="Release")
+function Global:LLILCJit([string]$Build="Debug")
 {
   $LLVMBuild = LLVMBuild
   $LLILCJit = "$LLVMBUILD\bin\$Build\LLILCJit.dll"
@@ -175,7 +175,7 @@ function Global:DefaultLLILCTestResult
 
 function Global:LLILCTestResult
 {
-  $LLILCTestResult = Test-Path Env:\LLILCTESTRESULT
+  $LLILCTestResultExists = Test-Path Env:\LLILCTESTRESULT
   if (!$LLILCTestResultExists) {
     $DefaultLLILCTestResult = DefaultLLILCTestResult 
     return "$DefaultLLILCTestResult"
@@ -507,7 +507,7 @@ function LLILCEnvInit
 #
 # -------------------------------------------------------------------------
 
-function Global:CopyJIT([string]$Build="Release")
+function Global:CopyJIT([string]$Build="Debug")
 {
   $CoreCLRRuntime = CoreCLRRuntime
   $CoreCLRVersion = CoreCLRVersion
@@ -555,7 +555,7 @@ function Global:ConfigureLLVM([string]$Arch="x64")
 #
 # -------------------------------------------------------------------------
 
-function Global:BuildLLVM([string]$Arch="x64", [string]$Build="Release", [bool]$Parallel=$False)
+function Global:BuildLLVM([string]$Arch="x64", [string]$Build="Debug", [bool]$Parallel=$False)
 {
   $LLVMBuild = LLVMBuild
   $TempBat = Join-Path $Env:TEMP "buildllvm.bat"
@@ -580,7 +580,7 @@ function Global:BuildLLVM([string]$Arch="x64", [string]$Build="Release", [bool]$
 #
 # -------------------------------------------------------------------------
 
-function Global:BuildAll([string]$Arch="x64", [string]$Build="Release", [bool]$Parallel=$False)
+function Global:BuildAll([string]$Arch="x64", [string]$Build="Debug", [bool]$Parallel=$False)
 {
   ConfigureLLVM -Arch $Arch
   BuildLLVM -Arch $Arch -Build $Build -Parallel $Parallel
@@ -592,7 +592,7 @@ function Global:BuildAll([string]$Arch="x64", [string]$Build="Release", [bool]$P
 #
 # -------------------------------------------------------------------------
 
-function Global:Build([string]$Arch="x64", [string]$Build="Release", [bool]$Parallel=$False)
+function Global:Build([string]$Arch="x64", [string]$Build="Debug", [bool]$Parallel=$False)
 {
   $LLVMBuild = LLVMBuild
   $TempBat = Join-Path $Env:TEMP "buildllilc.bat"
@@ -860,11 +860,11 @@ function Global:CheckDiff([bool]$Create = $false, [bool]$UseDiffTool = $True, [s
 function Global:LLILCHelp
 {
   Write-Output("ApplyFilter       - Filter to suppress allowable LLVM IR difference. Example: AppyFilter -File FileName")
-  Write-Output("Build             - Build LLILC JIT. Example: Build -Arch x64 -Build Release -Parallel `$False")
-  Write-Output("BuildAll          - Configure and Build LLVM including LLILC JIT. Example: BuildLLVM -Arch x64 -Build Release -Parallel `$False")
+  Write-Output("Build             - Build LLILC JIT. Example: Build -Arch x64 -Build Debug -Parallel `$False")
+  Write-Output("BuildAll          - Configure and Build LLVM including LLILC JIT. Example: BuildLLVM -Arch x64 -Build Debug -Parallel `$False")
   Write-Output("BuildTest         - Build CoreCLR regression tests. Example: BuildTest -Arch x64 -Build Release")
   Write-Output("CheckDiff         - Check the LLVM IR dump diff between run and baseline. Example: CheckDiff -Create `$False -UseDiffTool `$True -Arch x64 -Build Release")
-  Write-Output("CopyJIT           - Copy LLILC JIT dll into CoreCLR Runtime. Example: CopyJIT -Build Release")
+  Write-Output("CopyJIT           - Copy LLILC JIT dll into CoreCLR Runtime. Example: CopyJIT -Build Debug")
   Write-Output("LLILCHelp         - List and explain available commands. Example: LLILCHelp")
   Write-Output("ReBaseAll         - Re-create the base line for all regression test cases. Example: -Arch x64 -Build Release")
   Write-Output("RunTest           - Run LLILC enabled CoreCLR regression tests. Example: RunTest -Arch x64 -Build Release")
