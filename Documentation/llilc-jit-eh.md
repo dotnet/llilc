@@ -1,25 +1,25 @@
-Exception Handling in the llvm-msilc JIT
+Exception Handling in the LLILC JIT
 ========================================
 
 Introduction
 ------------
 
-This document provides a high-level overview of the llvm-msilc jit's
-processing of exception handling constructs in the code it compiles.  It is
-not a fully detailed specification, but rather is intended to capture the
-key design decisions and rationale behind them.  The first sections provide
-a brief background on exception handling in MSIL, LLVM IR, and the CLR;
-subsequent sections describe the plan for llvm-msilc.
+This document provides a high-level overview of the LLILC jit's processing
+of exception handling constructs in the code it compiles.  It is not a fully
+detailed specification, but rather is intended to capture the key design
+decisions and rationale behind them.  The first sections provide a brief
+background on exception handling in MSIL, LLVM IR, and the CLR; subsequent
+sections describe the plan for LLILC.
 
 ### Priorities
-The first target architecture for llvm-msilc will be x86_64.  Accordingly,
-this document currently focuses specifically on that target.
+The first target architecture for LLILC will be x86_64.  Accordingly, this
+document currently focuses specifically on that target.
 
-Also, llvm-msilc specifically targets the CoreCLR profile.  Any features of
+Also, LLILC specifically targets the CoreCLR profile.  Any features of
 the Desktop CLR that are not supported in the CoreCLR are not considered
 here.  In particular, this means that the extra requirements around
 ThreadAbortException on the Destktop CLR are not requirements for
-llvm-msilc, and not discussed in this document.
+LLILC, and not discussed in this document.
 
 This document pertains specifically to just-in-time compilation.  Details
 for ahead-of-time compilation would possibly differ.
@@ -156,9 +156,9 @@ These details are the same regardless whether the CLR is running on Windows
 or Linux; the Execution Engine handles communicating the necessary
 information to the OS and supplying an appropriate personality routine.
 
-The first priority target architecture for llvm-msilc is x86_64.  The
-details of this section may differ for other architectures (particularly
-x86), where unwinding may proceed differently.
+The first priority target architecture for LLILC is x86_64.  The details of
+this section may differ for other architectures (particularly x86), where
+unwinding may proceed differently.
 
 
 LLVM IR Model for Exception/Cleanup Flow
@@ -180,7 +180,7 @@ quite the same as the MSIL `rethrow` instruction, which may be caught by an
 enclosing handler in the same function).
 
 There's also some current work in flight to support native Windows EH in
-LLVM, which will be relevant to llvm-msilc due to similarities between the
+LLVM, which will be relevant to LLILC due to similarities between the
 requirements imposed by Windows and by the CLR Execution Engine.  [This
 thread on llvmdev](http://thread.gmane.org/gmane.comp.compilers.llvm.devel/79965)
 and [this section of the EH documentation](http://llvm.org/docs/ExceptionHandling.html#c-exception-handling-using-the-windows-runtime)
@@ -202,8 +202,8 @@ Potential Sticking Points
 
 There are a number of design points where the .Net Jit/EE have taken a
 different approach than most of the targets that LLVM supports.  The
-llvm-msilc jit may therefore find itself caught between opposing assumptions
-of the LLVM codebase on the one hand and restrictions of the .Net Execution
+LLILC jit may therefore find itself caught between opposing assumptions of
+the LLVM codebase on the one hand and restrictions of the .Net Execution
 Engine on the other.  Such cases are described here.  For the most part, the
 plan is to follow the approach of the work to support Windows EH in LLVM,
 since it faces essentially the same issues.
@@ -223,9 +223,9 @@ rejected](http://article.gmane.org/gmane.comp.compilers.llvm.devel/78958) on
 llvmdev).  The approach [currently being implemented](http://reviews.llvm.org/D7363)
 for Windows C++ EH in LLVM is to outline handlers into separate functions (i.e.
 the funclets), after optimizations and before translation to machine code;
-and to outline filters in the front-end.  The plan for llvm-msilc is to
-perform the same outlining (with filter outlining done in the reader).
-The modeling of `rethrow` and the [`llvm.eh.begincatch`](http://llvm.org/docs/ExceptionHandling.html#llvm-eh-begincatch)
+and to outline filters in the front-end.  The plan for LLILC is to perform
+the same outlining (with filter outlining done in the reader).  The modeling
+of `rethrow` and the [`llvm.eh.begincatch`](http://llvm.org/docs/ExceptionHandling.html#llvm-eh-begincatch)
 and [`llvm.eh.endcatch`](http://llvm.org/docs/ExceptionHandling.html#llvm-eh-endcatch)
 sentinels present before outlining must ensure that they are not reordered
 with respect to each other.
@@ -235,7 +235,7 @@ nested handlers inside the protected region) as a contiguous piece of code
 in the main function.  This is not a hard requirement of the runtime
 (discrete segments of a non-contiguous region can be reported separately so
 long as all but the first are marked as duplicates), and will not be ensured
-by llvm-msilc.  This will allow greater freedom to optimize try regions (as
+by LLILC.  This will allow greater freedom to optimize try regions (as
 opposed to the relatively cold catch regions that get outlined) and perform
 block layout based on performance-centric rather than region-centric
 heuristics.
@@ -249,10 +249,10 @@ to it.  Traditional LLVM targets, conversely, transfer control to the
 handler with the stack already unwound to the main function's frame;
 handlers at their exits call a special helper to signal the end of the catch
 to the unwinder, and then simply jump back to the main function.  The CLR
-requirements imply that llvm-msilc will need to generate handler prologs and
+requirements imply that LLILC will need to generate handler prologs and
 epilogs, and have a mechanism for finding the parent frame in a funclet (in
 order to access local variables).  The current LLVM work to support native
-Windows EH has these same requirements, so llvm-msilc should follow that
+Windows EH has these same requirements, so LLILC should follow that
 approach, making sure that the frame-finding part agrees with the Previous
 Stack Pointer Symbol handshake with the CLR Execution Engine.
 
@@ -268,9 +268,9 @@ propagation to an outer cleanup within the function, the inner cleanup
 typically just branches to the outer cleanup.  The outlining being added to
 support Windows EH in LLVM expects to see this explicit branching to outer
 cleanups, and ends each outlined handler where it jumps to the next outer
-handler, so that the right code will be executed at runtime; llvm-msilc
-should generate this explicit branching in order to be consistent with what
-the llvm optimizer and funclet outliner both expect.
+handler, so that the right code will be executed at runtime; LLILC should
+generate this explicit branching in order to be consistent with what the
+llvm optimizer and funclet outliner both expect.
 
 ### Handler Selection/Dispatch in Landing Pad vs. Runtime
 Different exceptions raised at one instruction may need to be handled by
@@ -298,9 +298,9 @@ are to use the traditional LLVM IR representation, with explicit inlined
 dispatch and branching from inner to outer handlers, thoughout the
 middle-end, and to use the new `llvm.eh.actions` intrinsic representing the
 multiple calls to handlers once the handlers have been outlined.  Adopting
-this approach in llvm-msilc will fit best with LLVM's expectations for IR
-shape.  It should also make it easier to adopt native EH lowering for
-ahead-of-time compilation, should that prove desirable.
+this approach in LLILC will fit best with LLVM's expectations for IR shape.
+It should also make it easier to adopt native EH lowering for ahead-of-time
+compilation, should that prove desirable.
 
 ### Implicit Exceptions and Machine Traps
 In LLVM IR, the only instruction that can raise an exception is `invoke`.
@@ -315,10 +315,10 @@ runtime.  The idea of allowing implicit exceptions in LLVM IR has been
 [discussed on llvmdev](http://thread.gmane.org/gmane.comp.compilers.llvm.devel/71773),
 resulting in consensus opinion that it's best to keep the IR model simpler
 in the absence of compelling performance data.  Accordingly, the plan for
-llvm-msilc is to insert explicit tests and throws in the IR for implicit
-MSIL exceptions, to be lowered to explicit compares and branches, at least
-initially.  This can be revisited when llvm-msilc is in a mature enough
-state to prototype other approaches and gather performance data.
+LLILC is to insert explicit tests and throws in the IR for implicit MSIL
+exceptions, to be lowered to explicit compares and branches, at least
+initially.  This can be revisited when LLILC is in a mature enough state to
+prototype other approaches and gather performance data.
 
 Should this be revisited, the following points should be kept in mind:
  * The choice whether to use implicit or explicit exceptions in the IR can
@@ -354,9 +354,9 @@ finally/fault handler is inlined into a filter-protected try region in a
 caller.  The SEH support currently being added to LLVM expects filters to be
 outlined by the front-end (and support for this outlining has been [added to
 clang](http://reviews.llvm.org/rL226760)).  Similar outlining will need to
-be performed by llvm-msilc.  With this approach, the invocation of the
-outlined filter can conceptually be modeled as part of the execution of the
-beginfinally/beginfault intrinsic that [llvm-msilc will insert](#finally-handlers)
+be performed by LLILC.  With this approach, the invocation of the outlined
+filter can conceptually be modeled as part of the execution of the
+beginfinally/beginfault intrinsic that [LLILC will insert](#finally-handlers)
 at the start of each finally/fault handler.
 
 
@@ -414,11 +414,11 @@ have a `cleanup` clause.  The code of the finally handler will follow the
 `landingpad`, prefixed by a `beginfinally`.  The `beginfinally` intrinsic
 will model the effects of potentially calling outer filters before invoking
 the finally (Note: LLVM currently does not have a `beginfinally` intrinsic;
-it can be specific to llvm-msilc initially but may be a good candidate to
-push up into llvm).  Control at the end of a finally handler may flow to a
-number of different places (an outer exception handler, or the target of any
-`leave` instruction that crosses the finally handler).  The code used for
-this sequence should match what the LLVM optimizer and funclet outliner
+it can be specific to LLILC initially but may be a good candidate to push up
+into llvm).  Control at the end of a finally handler may flow to a number of
+different places (an outer exception handler, or the target of any `leave`
+instruction that crosses the finally handler).  The code used for this
+sequence should match what the LLVM optimizer and funclet outliner
 expect to see; the outliner logic is [still being
 decided](http://thread.gmane.org/gmane.comp.compilers.llvm.devel/82245), and
 Clang [handles SEH `__finally` clauses](http://reviews.llvm.org/rL228222)
@@ -426,10 +426,10 @@ the same way it handles destructor calls when scopes are exited by gotos; by
 manufacturing continuation selector variables that are set by each callsite
 before entering the finally block and then used in explicit compares and
 branches to return control at the end of the finally.  Following suit is the
-plan at least initially in llvm-msilc; after correct functionality is
-established, we can evaluate whether this approach leaves unnecessary cruft
-in the generated code and make revisions if warranted (possibly pushing
-those revisions back up to LLVM).
+plan at least initially in LLILC; after correct functionality is established,
+we can evaluate whether this approach leaves unnecessary cruft in the
+generated code and make revisions if warranted (possibly pushing those
+revisions back up to LLVM).
 
 One performance consideration of note for finally handlers is that jits
 often make a clone of the finally handler for the primary non-exceptional
@@ -481,9 +481,9 @@ exits.
 Translation from LLVM IR to EH Tables
 -------------------------------------
 
-The plan for llvm-msilc is to use the LLVM code that is currently being
-developed to support native Windows EH in order to identify the structure of
-the protected regions; then communicate these regions to the .Net Execution
+The plan for LLILC is to use the LLVM code that is currently being developed
+to support native Windows EH in order to identify the structure of the
+protected regions; then communicate these regions to the .Net Execution
 Engine as EH Clauses.  Details are still TBD, but the region structure being
 encoded in the two cases is essentially similar, so a mapping should be
 feasible.
@@ -495,20 +495,20 @@ Staging Plan and Current Status
 Full EH support will take a while to implement, and many jit tests don't
 throw exceptions at runtime and therefore don't require full EH support to
 function correctly.  Thus, in order to unblock progress in other areas of
-llvm-msilc during bring-up, initially the EH support will be stubbed out,
-with just enough functionality for such test programs to pass.  In
-particular, code with EH constructs is expected to compile cleanly, but it
-is only expected to behave correctly if it does not attempt to raise
-exceptions or make nontrivial finally clause invocations at runtime.  To
-avoid silent bad code generation, any nontrivial finally clause invocations
-(i.e. invocations where control upon exit from the finally needs to be
-transferred anywhere other than the MSIL immediately following the finally
-handler) will be detected and rejected at compile-time.  The throw operator
-and the explicit test/throw sequences for implicit MSIL exceptions will be
-implemented on top of the stub support (with throws using `call` rather
-than `invoke`), to reflect correct program semantics and allow compilation
-of code with conditional exceptions that will execute correctly if the
-exception conditions don't arise at run-time.
+LLILC during bring-up, initially the EH support will be stubbed out, with
+just enough functionality for such test programs to pass.  In particular,
+code with EH constructs is expected to compile cleanly, but it is only
+expected to behave correctly if it does not attempt to raise exceptions or
+make nontrivial finally clause invocations at runtime.  To avoid silent bad
+code generation, any nontrivial finally clause invocations (i.e. invocations
+where control upon exit from the finally needs to be transferred anywhere
+other than the MSIL immediately following the finally handler) will be
+detected and rejected at compile-time.  The throw operator and the explicit
+test/throw sequences for implicit MSIL exceptions will be implemented on top
+of the stub support (with throws using `call` rather than `invoke`), to
+reflect correct program semantics and allow compilation of code with
+conditional exceptions that will execute correctly if the exception
+conditions don't arise at run-time.
 
 Once the stub support (with explicit and implicit exceptions) is in place,
 the next steps will be to translate handlers in the reader and generate EH
@@ -535,6 +535,7 @@ In summary, the plan/status is:
      - [ ] Null dereference
      - [ ] Divide by zero
      - [ ] Arithmetic overflow
+     - [ ] Convert with overflow
  2. [ ] Handler bring-up in EH branch
    - [ ] Catch handler support
      - [ ] In reader (includes updating throws to use `invoke` rather than
@@ -569,16 +570,16 @@ Open Questions
  1. Can filter outlining leverage some of the same outlining utilities used
     by the late outlining of handlers in LLVM, or is it best performed
     directly in the reader?
- 2. How is llvm-msilc specific functionality added to llvm?  This document
-    assumes llvm-msilc can reuse utilities in the windows-msvc target,
-    create its own intrinsics, etc.; the engineering specifics of how to
-    accomplish that are TBD.
+ 2. How is LLILC specific functionality added to llvm?  This document
+    assumes LLILC can reuse utilities in the windows-msvc target, create its
+    own intrinsics, etc.; the engineering specifics of how to accomplish
+    that are TBD.
  3. How exactly will the outlined funclets be reported back to the JIT?
     This document doesn't cover the JIT driver structure in LLVM or the
     .Net EE, but assumes that reporting funclets along with the parent
-    function is a solvable problem.  The current use of MCJIT for llvm-msilc
+    function is a solvable problem.  The current use of MCJIT for LLILC
     should be convenient here.  The MCJIT driver compiles a module at a time,
-    and llvm-msilc represents each MSIL function as a module; adding the
-    outlined functions to that module should facilitate grouping/ordering
-    the funclets and reporting them as a combined `.text` section to the
-    .Net EE as it requires.
+    and LLILC represents each MSIL function as a module; adding the outlined
+    functions to that module should facilitate grouping/ordering the
+    funclets and reporting them as a combined `.text` section to the .Net
+    EE as it requires.
