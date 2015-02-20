@@ -17,7 +17,7 @@
 
     2. LLVM and MSILC source are downloaded and an LLVM build directory
     are specified. Note that MSILC source should be located at the
-    correct place under LLVM: tools\llvm-msilc .
+    correct place under LLVM: tools\llilc .
     
     3. A separate MSILC work directory is specified, where CLR, MSILC
     JIT, and test cases from CLR drop will be copied into so that you can
@@ -253,12 +253,12 @@ function ValidatePreConditions
   # Validate MSILC
 
   if ($LLVMSourceExists) {
-    $MSILCSourceExists = Test-Path "$Env:LLVMSOURCE\tools\llvm-msilc"
+    $MSILCSourceExists = Test-Path "$Env:LLVMSOURCE\tools\llilc"
     if (!$MSILCSourceExists) {
       throw "!!! MSILC Source not available."
     }
     else {
-      $Env:MSILCSOURCE = "$Env:LLVMSOURCE\tools\llvm-msilc"
+      $Env:MSILCSOURCE = "$Env:LLVMSOURCE\tools\llilc"
     }
   }
 
