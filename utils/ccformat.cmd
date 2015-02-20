@@ -23,7 +23,7 @@ if "%LLVMBUILD%"=="" (
 )
 
 if "%MSILCSOURCE%"=="" (
-   set MSILCSOURCE=%LLVMSOURCE%\Tools\MSILC
+   set MSILCSOURCE=%LLVMSOURCE%\tools\llilc
 )
 
 set MSILCLIB=%MSILCSOURCE%\lib
@@ -32,9 +32,12 @@ set CLRINC=%MSILCINC%\clr
 set LLVMINC=%LLVMSOURCE%\include
 
 SET RETURN=0
-set FIX=
-set FORMAT=Check
+set FORMATFIX=
+set TIDYFIX=
+set FORMAT=Yes
 set TIDY=Yes
+set BASE=origin
+set TIDYCHECKS=llvm*,misc*,microsoft*
 
 :parse
 
@@ -45,11 +48,18 @@ REM ***********************************************
 if "%1"=="" (
     goto done_parsing
 ) else if /I .%1==./fix ( 
-    set FIX=-fix
+    set FORMATFIX=-i
+    set TIDYFIX=-fix
 ) else if /I .%1==./untidy ( 
     set TIDY=No
 ) else if /I .%1==./noformat ( 
     set FORMAT=No    
+) else if /I .%1==./checks (     
+    set TIDYCHECKS=%2
+    shift /1
+) else if /I .%1==./base (
+    set BASE=%2
+    shift /1
 ) else if /I .%1==./help ( 
     goto help   
 ) else if /I .%1==./? ( 
@@ -65,98 +75,36 @@ goto parse
 
 :done_parsing
 
-:tidy
-
 REM ***********************************************
 REM Run Clang Tidy
 REM ***********************************************
+:tidy
 
 if .%TIDY%==.No (
-    goto Format
+    goto format
 )
 
-set INC=-I%MSILCLIB%\Jit -I%MSILCLIB%\MSILReader -I%MSILCINC% -I%LLVMINC% -I%CLRINC% -I%MSILCINC%\Driver -I%MSILCINC%\Jit -I%MSILCINC%\Reader -I%LLVMBUILD%\tools\MSILC\lib\Reader -I%LLVMBUILD%\tools\MSILC\include -I%LLVMBUILD%\include 
+set INC=-I%MSILCLIB%\Jit -I%MSILCLIB%\MSILReader -I%MSILCINC% -I%LLVMINC% -I%CLRINC% -I%MSILCINC%\Driver -I%MSILCINC%\Jit -I%MSILCINC%\Reader -I%MSILCINC%\Pal -I%MSILCINC%\Pal\Rt -I%LLVMBUILD%\tools\MSILC\lib\Reader -I%LLVMBUILD%\tools\MSILC\include -I%LLVMBUILD%\include 
 set DEF=-D_DEBUG -D_CRT_SECURE_NO_DEPRECATE -D_CRT_SECURE_NO_WARNINGS -D_CRT_NONSTDC_NO_DEPRECATE -D_CRT_NONSTDC_NO_WARNINGS -D_SCL_SECURE_NO_DEPRECATE -D_SCL_SECURE_NO_WARNINGS -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS-D__STDC_LIMIT_MACROS -D_GNU_SOURCE -DMSILCJit_EXPORTS -D_WINDLL -D_MBCS 
 
 pushd %MSILCSOURCE%
 for /f %%f in ('dir /s /b *.c *.cpp') do (
-   clang-tidy %FIX% -checks=llvm*,misc*,microsoft* -header-filter="MSILC.*(Reader)|(Jit)" %%f -- %DEF% %INC%
+   clang-tidy %TIDYFIX% -checks=%TIDYCHECKS% -header-filter="MSILC.*(Reader)|(Jit)|(Pal)" %%f -- %DEF% %INC%
    if ERRORLEVEL 1 set RETURN=1
 )
 popd
 
-:Format
 
 REM ***********************************************
 REM Run Clang Format
 REM ***********************************************
+:format
 
 if .%FORMAT%==.No (
     goto done
 )
 
-if .%FIX%==.-fix (
-    goto FormatFix
-)
-
-:FormatCheck
-
-REM Clang Format -- check only
-REM Check if the formatted output from clang-format 
-REM is any different from the source code file
-
-set TMP_DIR=%TMP%\ccformat
-IF NOT EXIST %TMP_DIR% mkdir %TMP_DIR%
-
-pushd %MSILCSOURCE%
-for /f %%f in ('dir /s /b *.c *.cpp') do (
-   clang-format -style=LLVM %%f > %TMP_DIR%\%%~nxf
-   diff -u %%f %TMP_DIR%\%%~nxf
-   if ERRORLEVEL 1 set RETURN=1
-)
-popd
-
-REM CLR headers are exempt from formatting checks
-
-pushd %MSILCINC%
-for /f %%d in ('dir /AD /b') do (
-    if /i not .%%d==.clr (
-        pushd %%d
-        for /f %%f in ('dir /s /b *.h *.inc 2^>nul') do (
-            clang-format -style=LLVM %%f > %TMP_DIR%\%%~nxf
-            diff -u %%f %TMP_DIR%\%%~nxf
-            if ERRORLEVEL 1 set RETURN=1
-        )
-        popd
-    )
-)
-popd
-
-rmdir /q /s %TMP_DIR% 
-
-goto done
-
-:FormatFix
-
-REM Clang Format -- fix errors
-
-pushd %MSILCSOURCE%
-for /f %%f in ('dir /s /b *.c *.cpp') do (
-   clang-format.exe -style=LLVM -i %%f
-)
-popd
-
-pushd %MSILCINC%
-for /f %%d in ('dir /AD /b') do (
-    if /i not .%%d==.clr (
-        pushd %%d
-        for /f %%f in ('dir /s /b *.h *.inc 2^>nul') do (
-           clang-format.exe -style=LLVM -i %%f
-        )
-        popd
-    )
-)
-popd
+git diff %BASE% -U0 2>nul | clang-format-diff -p1 %FORMATFIX%
 
 goto done
 
@@ -167,14 +115,17 @@ REM Help Section
 REM ***********************************************
 
 echo.Usage: ccFormat [/Check] [/Fix] [/?]
-echo.  /fix      Fix failures when possible
-echo.  /untidy   Don't run clang-tidy
-echo.  /noformat Don't run clang-format
-echo.  /help     Display this help message.
+echo.  /fix          Fix failures when possible
+echo.  /untidy       Don't run clang-tidy
+echo.  /noformat     Don't run clang-format
+echo.  /checks ^<chk^> Clang Tidy checks to run
+echo.  /base ^<base^>  Base for obtaining Diffs 
+echo.  /help         Display this help message.
 echo.
 echo.Requirements:
 echo.  Environment variables: LLVMSOURCE, LLVMBUILD
-echo.  Tools (on path): clang-format.exe, clang-tidy.exe
+echo.  Tools (on path): clang-format.exe, clang-tidy.exe clang-format-diff.py
+echo.  Tool Dependencies: Python 2.7
 echo.
 
 :done 
