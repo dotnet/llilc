@@ -193,7 +193,7 @@ Failed to read HashHelpers..cctor[storeStaticField]
 INFO:  jitting method String::UseRandomizedHashing using LLILCJit
 Failed to read String.UseRandomizedHashing[Tail call]
 INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
-Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[secretParam]
+Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[publish secret param]
 INFO:  jitting method Object::.ctor using LLILCJit
 Successfully read Object..ctor
 
@@ -250,7 +250,7 @@ Failed to read CultureData.get_Invariant[storeElem]
 INFO:  jitting method CalendarData::.cctor using LLILCJit
 Failed to read CalendarData..cctor[storeElem]
 INFO:  jitting method CalendarData::.ctor using LLILCJit
-Failed to read CalendarData..ctor[Tail call]
+Failed to read CalendarData..ctor[init class]
 INFO:  jitting method CultureData::get_CultureName using LLILCJit
 Successfully read CultureData.get_CultureName
 
@@ -304,7 +304,7 @@ Failed to read CultureInfo.InitUserDefaultCulture[Tail call]
 INFO:  jitting method CultureInfo::GetDefaultLocaleName using LLILCJit
 Failed to read CultureInfo.GetDefaultLocaleName[Return refany or value class]
 INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
-Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[secretParam]
+Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[publish secret param]
 INFO:  jitting method CultureInfo::GetCultureByName using LLILCJit
 Successfully read CultureInfo.GetCultureByName
 
@@ -372,7 +372,7 @@ Failed to read CultureInfo.InitUserDefaultUICulture[Tail call]
 INFO:  jitting method CultureInfo::GetUserDefaultUILanguage using LLILCJit
 Failed to read CultureInfo.GetUserDefaultUILanguage[Return refany or value class]
 INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
-Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[secretParam]
+Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[publish secret param]
 INFO:  jitting method CultureInfo::get_UserDefaultCulture using LLILCJit
 Failed to read CultureInfo.get_UserDefaultCulture[storeStaticField]
 INFO:  jitting method CultureInfo::get_Name using LLILCJit
@@ -493,7 +493,7 @@ Failed to read CultureInfo.get_UseUserOverride[Tail call]
 INFO:  jitting method CompareInfo::.ctor using LLILCJit
 Failed to read CompareInfo..ctor[Call needs null check]
 INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
-Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[genNullCheck]
+Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[publish secret param]
 INFO:  jitting method CompatibilitySwitches::get_IsCompatibilityBehaviorDefined using LLILCJit
 Successfully read CompatibilitySwitches.get_IsCompatibilityBehaviorDefined
 
@@ -800,7 +800,7 @@ Failed to read PathHelper.NullTerminate[storePrimitiveType]
 INFO:  jitting method PathHelper::GetFullPathName using LLILCJit
 Failed to read PathHelper.GetFullPathName[entryLabel]
 INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
-Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[secretParam]
+Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[publish secret param]
 INFO:  jitting method PathHelper::ToString using LLILCJit
 Failed to read PathHelper.ToString[Tail call]
 INFO:  jitting method String::CtorCharPtrStartLength using LLILCJit
@@ -1446,7 +1446,7 @@ Failed to read HashHelpers.ExpandPrime[Tail call]
 INFO:  jitting method Dictionary`2::Resize using LLILCJit
 Failed to read Dictionary`2.Resize[non-const derefAddress]
 INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
-Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[genNullCheck]
+Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[publish secret param]
 INFO:  jitting method AppDomain::CreateAppDomainManager using LLILCJit
 Failed to read AppDomain.CreateAppDomainManager[methodNeedsSecurityCheck]
 INFO:  jitting method AppDomain::get_FusionStore using LLILCJit
@@ -1521,7 +1521,7 @@ Failed to read GenericEqualityComparer`1.Equals[non-const derefAddress]
 INFO:  jitting method AppDomain::SetupBindingPaths using LLILCJit
 Failed to read AppDomain.SetupBindingPaths[Tail call]
 INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
-Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[genNullCheck]
+Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[publish secret param]
 INFO:  jitting method AppDomain::GetAppDomainManagerType using LLILCJit
 Failed to read AppDomain.GetAppDomainManagerType[Return refany or value class]
 INFO:  jitting method AppDomain::GetNativeHandle using LLILCJit
@@ -1832,11 +1832,11 @@ entry:
 }
 
 INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
-Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[secretParam]
+Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[publish secret param]
 INFO:  jitting method AppDomain::SetupDomainSecurity using LLILCJit
 Failed to read AppDomain.SetupDomainSecurity[Return refany or value class]
 INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
-Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[secretParam]
+Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[publish secret param]
 INFO:  jitting method AppDomain::RunInitializer using LLILCJit
 Failed to read AppDomain.RunInitializer[Call needs null check]
 INFO:  jitting method PermissionSet::.ctor using LLILCJit
@@ -1872,7 +1872,7 @@ Failed to read Console.EnsureInitialized[Call HasTypeArg]
 INFO:  jitting method Console::<get_Out>b__2 using LLILCJit
 Failed to read Console.<get_Out>b__2[Tail call]
 INFO:  jitting method DomainBoundILStubClass::IL_STUB_PInvoke using LLILCJit
-Failed to read DomainBoundILStubClass.IL_STUB_PInvoke[secretParam]
+Failed to read DomainBoundILStubClass.IL_STUB_PInvoke[publish secret param]
 INFO:  jitting method ConsolePal::GetStandardFile using LLILCJit
 Successfully read ConsolePal.GetStandardFile
 
@@ -1991,7 +1991,7 @@ entry:
 }
 
 INFO:  jitting method DomainBoundILStubClass::IL_STUB_PInvoke using LLILCJit
-Failed to read DomainBoundILStubClass.IL_STUB_PInvoke[secretParam]
+Failed to read DomainBoundILStubClass.IL_STUB_PInvoke[publish secret param]
 INFO:  jitting method WindowsConsoleStream::.ctor using LLILCJit
 Successfully read WindowsConsoleStream..ctor
 
@@ -2707,7 +2707,7 @@ Failed to read Thread.get_CurrentCulture[Tail call]
 INFO:  jitting method AppDomain::get_Flags using LLILCJit
 Failed to read AppDomain.get_Flags[storeStaticField]
 INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
-Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[secretParam]
+Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[publish secret param]
 INFO:  jitting method Thread::GetCurrentCultureNoAppX using LLILCJit
 Failed to read Thread.GetCurrentCultureNoAppX[Tail call]
 INFO:  jitting method TextWriter::.ctor using LLILCJit
