@@ -1,6 +1,6 @@
 //===------------------- include/Reader/readerir.h --------------*- C++ -*-===//
 //
-// LLVM-MSILC
+// LLILC
 //
 // Copyright (c) Microsoft. All rights reserved.
 // Licensed under the MIT license.
@@ -24,7 +24,7 @@
 #include "llvm/IR/Verifier.h"
 #include "llvm/IR/CFG.h"
 #include "reader.h"
-#include "MSILCJit.h"
+#include "LLILCJit.h"
 
 class FlowGraphNode : public llvm::BasicBlock {};
 
@@ -128,7 +128,7 @@ private:
 class GenIR : public ReaderBase {
 
 public:
-  GenIR(MSILCJitContext *JitContext,
+  GenIR(LLILCJitContext *JitContext,
         std::map<CORINFO_CLASS_HANDLE, llvm::Type *> *ClassTypeMap,
         std::map<std::tuple<CorInfoType, CORINFO_CLASS_HANDLE, uint32_t>,
                  llvm::Type *> *ArrayTypeMap,
@@ -851,7 +851,7 @@ private:
                  llvm::Value *ValueToStore, bool IsVolatile, IRNode **NewIR);
 
 private:
-  MSILCJitContext *JitContext;
+  LLILCJitContext *JitContext;
   llvm::Function *Function;
   llvm::IRBuilder<> *LLVMBuilder;
   std::map<CORINFO_CLASS_HANDLE, llvm::Type *> *ClassTypeMap;

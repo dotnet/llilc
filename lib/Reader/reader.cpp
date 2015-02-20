@@ -1,6 +1,6 @@
 //===---- lib/MSILReader/reader.cpp -----------------------------*- C++ -*-===//
 //
-// LLVM-MSILC
+// LLILC
 //
 // Copyright (c) Microsoft. All rights reserved.
 // Licensed under the MIT license.
@@ -3727,7 +3727,7 @@ ReaderBase::fgBuildBasicBlocksFromBytes(uint8_t *Buffer, uint32_t BufferSize) {
     //
     // The client is also free to insert his own edges/code annotations.
     //
-    // TODO: figure out how much of this we need in MSILC:
+    // TODO: figure out how much of this we need in LLILC:
     // fgInsertEHAnnotations(EhRegionTree);
   }
 
@@ -3817,7 +3817,7 @@ IRNode *ReaderBase::genericTokenToNode(CORINFO_RESOLVED_TOKEN *ResolvedToken,
       return NULL;
   } else {
     // TODO: runtime lookup may be incompatible with inlining.
-    // MSILC doesn't do any inlining yet...
+    // LLILC doesn't do any inlining yet...
 
     return runtimeLookupToNode(Result.lookup.lookupKind.runtimeLookupKind,
                                &Result.lookup.runtimeLookup, NewIR);
@@ -6532,7 +6532,7 @@ LONG objectFilter(PEXCEPTION_POINTERS ExceptionPointersPtr, void *Param) {
       (ReadBytesForFlowGraphNodeHelperParam *)Param;
 
   if (ExceptionPointersPtr->ExceptionRecord->ExceptionCode ==
-      MSILCJIT_READEREXCEPTION_CODE) {
+      LLILCJIT_READEREXCEPTION_CODE) {
     ReadParam->Excep =
         *(ReaderException **)
              ExceptionPointersPtr->ExceptionRecord->ExceptionInformation;

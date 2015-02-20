@@ -1,6 +1,6 @@
-//===--- include/Pal/MSILCPal.h ---------------------------------*- C++ -*-===//
+//===--- include/Pal/LLILCPal.h ---------------------------------*- C++ -*-===//
 //
-// LLVM-MSILC
+// LLILC
 //
 // Copyright (c) Microsoft. All rights reserved.
 // Licensed under the MIT license. 
@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef MSILC_PAL
-#define MSILC_PAL
+#ifndef LLILC_PAL
+#define LLILC_PAL
 
 // Compatibility definitions for Architecture-specific attributes.
 //
@@ -886,4 +886,4 @@ struct tagVARIANT
 
 #endif // _MSC_VER
 
-#endif // MSILC_PAL
+#endif // LLILC_PAL

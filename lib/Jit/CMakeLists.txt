@@ -15,52 +15,49 @@ set(LLVM_LINK_COMPONENTS
   native
   )
 
-set(MSILCJIT_LINK_LIBRARIES msilcReader)
+set(LLILCJIT_LINK_LIBRARIES LLILCReader)
 
 if (WIN32)
   set(CMAKE_CXX_FLAGS "-EHsc")
 
   # Create .def file containing a list of exports preceeded by
-  # 'EXPORTS'.  The file "MSILCJit.exports" already contains the list, so we
-  # massage it into the correct format here to create "MSILCJit.exports.def".
-  set(MSILCJIT_EXPORTS_DEF ${CMAKE_CURRENT_BINARY_DIR}/MSILCJit.exports.def)
-  set(MSILCJIT_EXPORTS_DEF_TEMP ${MSILCJIT_EXPORTS_DEF}.txt)
-  file(READ "MSILCJit.exports" exports_list)
-  file(WRITE ${MSILCJIT_EXPORTS_DEF_TEMP} "LIBRARY MSILCJIT\n")
-  file(APPEND ${MSILCJIT_EXPORTS_DEF_TEMP} "EXPORTS\n")
-  file(APPEND ${MSILCJIT_EXPORTS_DEF_TEMP} ${exports_list})
+  # 'EXPORTS'.  The file "LLILCJit.exports" already contains the list, so we
+  # massage it into the correct format here to create "LLILCJit.exports.def".
+  set(LLILCJIT_EXPORTS_DEF ${CMAKE_CURRENT_BINARY_DIR}/LLILCJit.exports.def)
+  set(LLILCJIT_EXPORTS_DEF_TEMP ${LLILCJIT_EXPORTS_DEF}.txt)
+  file(READ "LLILCJit.exports" exports_list)
+  file(WRITE ${LLILCJIT_EXPORTS_DEF_TEMP} "LIBRARY LLILCJIT\n")
+  file(APPEND ${LLILCJIT_EXPORTS_DEF_TEMP} "EXPORTS\n")
+  file(APPEND ${LLILCJIT_EXPORTS_DEF_TEMP} ${exports_list})
 
   # Copy the file only if it has changed.
   execute_process(COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    ${MSILCJIT_EXPORTS_DEF_TEMP} ${MSILCJIT_EXPORTS_DEF})
+    ${LLILCJIT_EXPORTS_DEF_TEMP} ${LLILCJIT_EXPORTS_DEF})
 
-  set(SHARED_LIB_SOURCES ${SOURCES} ${MSILCJIT_EXPORTS_DEF})
+  set(SHARED_LIB_SOURCES ${SOURCES} ${LLILCJIT_EXPORTS_DEF})
 else()
   if (UNIX)
-    set(MSILCJIT_LINK_LIBRARIES ${MSILCJIT_LINK_LIBRARIES} coreclr)
+    set(LLILCJIT_LINK_LIBRARIES ${LLILCJIT_LINK_LIBRARIES} coreclr)
   endif()
 
   set(SHARED_LIB_SOURCES ${SOURCES})
 endif()
 
-set(LLVM_EXPORTED_SYMBOL_FILE ${MSILCJIT_EXPORTS_DEF})
+set(LLVM_EXPORTED_SYMBOL_FILE ${LLILCJIT_EXPORTS_DEF})
 
-add_msilcjit_library(
-  msilcjit
+add_llilcjit_library(
+  llilcjit
   SHARED
   jitpch.cpp
-  MSILCJit.cpp
+  LLILCJit.cpp
   EEMemoryManager.cpp
-  ${MSILCJIT_EXPORTS_DEF}
+  ${LLILCJIT_EXPORTS_DEF}
   )
 
-add_dependencies(
-  msilcjit
-  msilcReader
-  )
+add_dependencies(llilcjit LLILCReader)
 
 target_link_libraries(
-  msilcjit
+  llilcjit
   ${cmake_2_8_12_PRIVATE}
-  ${MSILCJIT_LINK_LIBRARIES}
+  ${LLILCJIT_LINK_LIBRARIES}
   )

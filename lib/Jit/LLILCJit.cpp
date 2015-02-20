@@ -1,6 +1,6 @@
-//===---- lib/Jit/MSILCJit.cpp --------------------------------*- C++ -*-===//
+//===---- lib/Jit/LLILCJit.cpp --------------------------------*- C++ -*-===//
 //
-// LLVM-MSILC
+// LLILC
 //
 // Copyright (c) Microsoft. All rights reserved.
 // Licensed under the MIT license.
@@ -14,7 +14,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "jitpch.h"
-#include "MSILCJit.h"
+#include "LLILCJit.h"
 #include "readerir.h"
 #include "EEMemoryManager.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
@@ -40,31 +40,31 @@
 using namespace llvm;
 
 // The one and only Jit Object.
-MSILCJit *MSILCJit::TheJit = NULL;
+LLILCJit *LLILCJit::TheJit = NULL;
 
 // This is guaranteed to be called by the EE
 // in single-threaded mode.
 ICorJitCompiler *__stdcall getJit() {
 
-  if (MSILCJit::TheJit == NULL) {
+  if (LLILCJit::TheJit == NULL) {
     // These are one-time only operations.
     // Create the singleton jit object.
-    MSILCJit::TheJit = new MSILCJit();
+    LLILCJit::TheJit = new LLILCJit();
 
     // Register a signal handler, mainly so that the critical
     // section that is entered on windows when LLVM gets a fatal error
     // is properly initialized.
-    sys::AddSignalHandler(&MSILCJit::signalHandler, MSILCJit::TheJit);
+    sys::AddSignalHandler(&LLILCJit::signalHandler, LLILCJit::TheJit);
 
     // Allow LLVM to pick up options via the environment
-    cl::ParseEnvironmentOptions("MSILCJit", "COMplus_altjitOptions");
+    cl::ParseEnvironmentOptions("LLILCJit", "COMplus_altjitOptions");
   }
 
-  return MSILCJit::TheJit;
+  return LLILCJit::TheJit;
 }
 
 // Construct the JIT instance
-MSILCJit::MSILCJit() {
+LLILCJit::LLILCJit() {
   InitializeNativeTarget();
   InitializeNativeTargetAsmPrinter();
   InitializeNativeTargetAsmParser();
@@ -87,31 +87,31 @@ void __stdcall sxsJitStartup(void *CcCallbacks) {
   // nothing to do
 }
 
-void MSILCJitContext::outputDebugMethodName() {
+void LLILCJitContext::outputDebugMethodName() {
   const size_t SizeOfBuffer = 512;
   char TempBuffer[SizeOfBuffer];
   const char *DebugClassName = NULL;
   const char *DebugMethodName = NULL;
 
   DebugMethodName = JitInfo->getMethodName(MethodInfo->ftn, &DebugClassName);
-  dbgs() << format("INFO:  jitting method %s::%s using MSILCJit\n",
+  dbgs() << format("INFO:  jitting method %s::%s using LLILCJit\n",
                    DebugClassName, DebugMethodName);
 }
 
-MSILCJitContext::MSILCJitContext(MSILCJitPerThreadState *PerThreadState)
+LLILCJitContext::LLILCJitContext(LLILCJitPerThreadState *PerThreadState)
     : State(PerThreadState), HasLoadedBitCode(false) {
   this->Next = State->JitContext;
   State->JitContext = this;
 }
 
-MSILCJitContext::~MSILCJitContext() {
-  MSILCJitContext *TopContext = State->JitContext;
+LLILCJitContext::~LLILCJitContext() {
+  LLILCJitContext *TopContext = State->JitContext;
   assert(this == TopContext && "Unbalanced contexts!");
   State->JitContext = TopContext->Next;
 }
 
 // This is the method invoked by the EE to Jit code.
-CorJitResult MSILCJit::compileMethod(ICorJitInfo *JitInfo,
+CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
                                      CORINFO_METHOD_INFO *MethodInfo,
                                      UINT Flags, BYTE **NativeEntry,
                                      ULONG *NativeSizeOfCode) {
@@ -127,14 +127,14 @@ CorJitResult MSILCJit::compileMethod(ICorJitInfo *JitInfo,
   *NativeSizeOfCode = NULL;
 
   // Set up state for this thread (if necessary)
-  MSILCJitPerThreadState *PerThreadState = State.get();
+  LLILCJitPerThreadState *PerThreadState = State.get();
   if (PerThreadState == NULL) {
-    PerThreadState = new MSILCJitPerThreadState();
+    PerThreadState = new LLILCJitPerThreadState();
     State.set(PerThreadState);
   }
 
   // Set up context for this Jit request
-  MSILCJitContext Context = MSILCJitContext(PerThreadState);
+  LLILCJitContext Context = LLILCJitContext(PerThreadState);
 
   // Fill in context information from the CLR
   Context.JitInfo = JitInfo;
@@ -212,7 +212,7 @@ CorJitResult MSILCJit::compileMethod(ICorJitInfo *JitInfo,
 }
 
 std::unique_ptr<Module>
-MSILCJitContext::getModuleForMethod(CORINFO_METHOD_INFO *MethodInfo) {
+LLILCJitContext::getModuleForMethod(CORINFO_METHOD_INFO *MethodInfo) {
   // Grab name info from the EE.
   const char *DebugClassName = NULL;
   const char *DebugMethodName = NULL;
@@ -256,14 +256,14 @@ MSILCJitContext::getModuleForMethod(CORINFO_METHOD_INFO *MethodInfo) {
 }
 
 // Read method MSIL and construct LLVM bitcode
-bool MSILCJit::readMethod(MSILCJitContext *JitContext) {
+bool LLILCJit::readMethod(LLILCJitContext *JitContext) {
   if (JitContext->HasLoadedBitCode) {
     // This is a case where we side loaded a llvm bitcode module.
     // The module is already complete so we avoid reading entirely.
     return true;
   }
 
-  MSILCJitPerThreadState *PerThreadState = State.get();
+  LLILCJitPerThreadState *PerThreadState = State.get();
   GenIR Reader(JitContext, &PerThreadState->ClassTypeMap,
                &PerThreadState->ArrayTypeMap, &PerThreadState->FieldIndexMap);
 
@@ -296,7 +296,7 @@ bool MSILCJit::readMethod(MSILCJitContext *JitContext) {
 // This avoids a crash in the EE.
 // Assuming that this will be replaced by an override of the GCMetaData
 // or similar writer in LLVM once we move to the safepoint design.
-bool MSILCJit::outputGCInfo(MSILCJitContext *JitContext) {
+bool LLILCJit::outputGCInfo(LLILCJitContext *JitContext) {
   size_t Size = 5;
   void *GCInfoBuffer = JitContext->JitInfo->allocGCInfo(Size);
 
@@ -314,19 +314,19 @@ bool MSILCJit::outputGCInfo(MSILCJitContext *JitContext) {
 }
 
 // Notification from the runtime that any caches should be cleaned up.
-void MSILCJit::clearCache() { return; }
+void LLILCJit::clearCache() { return; }
 
 // Notify runtime if we have something to clean up
-BOOL MSILCJit::isCacheCleanupRequired() { return FALSE; }
+BOOL LLILCJit::isCacheCleanupRequired() { return FALSE; }
 
 // Verify the JIT/EE interface identifier.
-void MSILCJit::getVersionIdentifier(GUID *VersionIdentifier) {
+void LLILCJit::getVersionIdentifier(GUID *VersionIdentifier) {
   _ASSERTE(VersionIdentifier != nullptr);
   memcpy(VersionIdentifier, &JITEEVersionIdentifier, sizeof(GUID));
 }
 
 // Raise a fatal error.
-void __cdecl MSILCJit::fatal(int Errnum, ...) {
+void __cdecl LLILCJit::fatal(int Errnum, ...) {
   _ASSERTE(FAILED(Errnum));
   ULONG_PTR ExceptArg = Errnum;
   RaiseException(CORJIT_INTERNALERROR, EXCEPTION_NONCONTINUABLE, 1, &ExceptArg);
@@ -334,6 +334,6 @@ void __cdecl MSILCJit::fatal(int Errnum, ...) {
 
 //  Handle an abort signal from LLVM. We don't do anything, but registering
 //  this handler avoids a crash when LLVM goes down.
-void MSILCJit::signalHandler(void *Cookie) {
+void LLILCJit::signalHandler(void *Cookie) {
   // do nothing
 }

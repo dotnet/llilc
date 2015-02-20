@@ -1,6 +1,6 @@
 //===--------------- include/Jit/EEMemoryManager.h --------------*- C++ -*-===//
 //
-// LLVM-MSILC
+// LLILC
 //
 // Copyright (c) Microsoft. All rights reserved.
 // Licensed under the MIT license.
@@ -17,7 +17,7 @@
 
 #include "llvm/ExecutionEngine/RuntimeDyld.h"
 
-class MSILCJitContext;
+class LLILCJitContext;
 
 namespace llvm {
 
@@ -27,7 +27,7 @@ namespace llvm {
 class EEMemoryManager : public RTDyldMemoryManager {
 
 public:
-  EEMemoryManager(MSILCJitContext *C)
+  EEMemoryManager(LLILCJitContext *C)
       : Context(C), HotCodeBlock(nullptr), ColdCodeBlock(nullptr),
         ReadOnlyDataBlock(nullptr) {}
   ~EEMemoryManager() override;
@@ -84,7 +84,7 @@ public:
   void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
 
 private:
-  MSILCJitContext *Context;
+  LLILCJitContext *Context;
 
   uint8_t *HotCodeBlock;
   uint8_t *ColdCodeBlock;

@@ -1,10 +1,10 @@
-# GC Support in LLVM MSILC
+# GC Support in LLILC
 
 This page describes the functional requirements for supporting the
-[CoreCLR](https://github.com/dotnet/coreclr) GC in the LLVM-MSILC codebase,
+[CoreCLR](https://github.com/dotnet/coreclr) GC in the LLILC codebase,
 the GC support currently offered by [LLVM](http://llvm.org), the
 problems that arise mapping the CoreCLR requirements onto what LLVM supports,
-and suggested plans for building out functionality in LLVM-MSILC.
+and suggested plans for building out functionality in LLILC.
 
 ## CoreCLR Requirements
 
@@ -93,7 +93,7 @@ Part of Reames' motivation was better support for a precise, fully relocating
 collector, something that is also required for CoreCLR's GC. Given that
 `Statepoints` provide a useful superset of what GCRoot provides, and that
 the work is ongoing and still a bit malleable, it seems prudent to build upon
-this work for supporting the CoreCLR GC in LLVM-MSILC.
+this work for supporting the CoreCLR GC in LLILC.
 
 `Statepoints` essentially allow for tracked location reporting. Each safepoint
 can describe a different set of locations to report to the GC, including
@@ -116,7 +116,7 @@ particular, GC pointers are required to be in `addrspace(1)` or be in an
 address space with some distinguishing GC attribute. Then identifying the set
 of necessary safepoints and liveness analysis could drive wiring up the
 SSA uses and definitions. We have adopted this address space convention in
-LLVM-MSILC.
+LLILC.
 
 ## Open Issues - Correctness
 
@@ -162,7 +162,7 @@ safepoint.
 
 While the use of `addrspace (1)` or similar convention helps locate GC
 pointers, it does not distinguish between
-[object and interior pointers](https://github.com/dotnet/llvm-msilc/issues/28)
+[object and interior pointers](https://github.com/dotnet/llilc/issues/28)
 We need to find a way to do this since we must report these differently.
 
 Initially, at some performance cost, we can report all references as interior
@@ -178,7 +178,7 @@ pointers.
 
 ### Pinned Pointers
 
-[Pinned pointers](https://github.com/dotnet/llvm-msilc/issues/29)
+[Pinned pointers](https://github.com/dotnet/llilc/issues/29)
 must be reported live and pinned for at least the duration of
 the pin. If a pinned pointer is copied, at least one of the references must be
 reported as pinned at each safepoint in the pinned range.
@@ -206,7 +206,7 @@ can't tell which calls or indirect stores might or might not update it.
 ### Custom GC Info Encoding
 
 As noted, the current `Statepoint` work does not support custom encoding
-formats.  [Adding this](https://github.com/dotnet/llvm-msilc/issues/31)
+formats.  [Adding this](https://github.com/dotnet/llilc/issues/31)
 seems straightforward, but we might push to have the
 base layer provide a more customizable foundation.
 
@@ -399,7 +399,7 @@ This will be sufficient for building up most of the other Jit functionality.
 ### Conservative GC
 
 Initially, we'll enable the
-[conservative mode](https://github.com/dotnet/llvm-msilc/issues/27)
+[conservative mode](https://github.com/dotnet/llilc/issues/27)
 of the CoreCLR GC.  We've taken a preliminary look and this
 seems to work well enough, but we need to do further vetting. Alternatively we
 can adjust the GC's segment size to forestall GC as long as possible. This
@@ -412,20 +412,20 @@ GC segements sizes to defer GC as long as possible.
 
 This will be an initial implementation using `Statepoints`. We'll have to
 implement custom encoding (We can leverage the
-[GC encoding library](ttps://github.com/dotnet/llvm-msilc/issues/30)
+[GC encoding library](ttps://github.com/dotnet/llilc/issues/30)
 that the CoreCLR provides for this) and
-[find some method](https://github.com/dotnet/llvm-msilc/issues/30)
+[find some method](https://github.com/dotnet/llilc/issues/30)
 of distinguishing interior pointers from object pointers. This will possibly
 be a dataflow analysis along with some hinting from LLVM metadata or similar.
 We'll have to find some way to report
-[GC fields from aggregates](https://github.com/dotnet/llvm-msilc/issues/33),
+[GC fields from aggregates](https://github.com/dotnet/llilc/issues/33),
 maybe by blending some of the `GCRoot` support back in for such slots.
 As needed we plan to help fill in missing pieces of
 the experimental implementation in LLVM. For instance, we'll probably implement
 our take on the
-[late insertion of safepoints](https://github.com/dotnet/llvm-msilc/issues/32).
+[late insertion of safepoints](https://github.com/dotnet/llilc/issues/32).
 And we'll likely try and write a
-[downstream checker](https://github.com/dotnet/llvm-msilc/issues/34)
+[downstream checker](https://github.com/dotnet/llilc/issues/34)
 that runs at encoding time
 or similar to verify that no unreported GC pointers exist.
 
@@ -445,9 +445,9 @@ The requirements imposed on a code generator by the CoreCLR present new
 challenges for GC reporting in LLVM, both for correct reporting and for
 optimization in the presence of GC reporting requirements.
 
-LLVM-MSILC is a new JIT for the CoreCLR that will leverage LLVM for code
+LLILC is a new JIT for the CoreCLR that will leverage LLVM for code
 generation. We plan to work with the community to enhance LLVM to become a
-robust and performant platform for managed code generators like LLVM-MSILC.
+robust and performant platform for managed code generators like LLILC.
 
 ## Terminology
 

@@ -1,6 +1,6 @@
 //===--------------- include/Jit/jitpch.h -----------------------*- C++ -*-===//
 //
-// LLVM-MSILC
+// LLILC
 //
 // Copyright (c) Microsoft. All rights reserved.
 // Licensed under the MIT license.
@@ -16,7 +16,7 @@
 #define JIT_PCH_H
 
 #include "global.h"
-#include "MSILCPal.h"
+#include "LLILCPal.h"
 
 #if defined(_MSC_VER)
 #include <windows.h>
