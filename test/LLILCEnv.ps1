@@ -99,7 +99,7 @@ function ValidatePreConditions
 
   # Validate GnuWin32
 
-  IsOnPath("grep.exe")
+  IsOnPath("wget.exe")
 
   # Validate Diff Tool
   
@@ -560,12 +560,14 @@ function Global:BuildLLVM([string]$Arch="x64", [string]$Build="Debug", [bool]$Pa
   $LLVMBuild = LLVMBuild
   $TempBat = Join-Path $Env:TEMP "buildllvm.bat"
   $File = "$Env:VS120COMNTOOLS\..\..\VC\vcvarsall.bat"
-  if ($Parallel) { 
-    ("call ""$File"" x86", "msbuild $LLVMBuild\LLVM.sln /p:Configuration=$Build /p:Platfrom=$Arch /t:ALL_BUILD /m") | Out-File -Encoding ascii $TempBat
+
+  $MSwitch = ""
+  if ($Parallel) {
+    $MSwitch = " /m "
   }
-  else {
-    ("call ""$File"" x86", "msbuild $LLVMBuild\LLVM.sln /p:Configuration=$Build /p:Platfrom=$Arch /t:ALL_BUILD") | Out-File -Encoding ascii $TempBat
-  }
+
+  ("call ""$File"" x86", "msbuild $LLVMBuild\LLVM.sln /p:Configuration=$Build /p:Platfrom=$Arch /t:ALL_BUILD $MSwitch") | Out-File -Encoding ascii $TempBat
+  
   Write-Output ("Building LLVM...")
   $CmdOut = cmd /c $TempBat
   Remove-Item -force $TempBat | Out-Null
@@ -593,15 +595,16 @@ function Global:BuildAll([string]$Arch="x64", [string]$Build="Debug", [bool]$Par
 function Global:Build([string]$Arch="x64", [string]$Build="Debug", [bool]$Parallel=$False)
 {
   $LLVMBuild = LLVMBuild
-
   $TempBat = Join-Path $Env:TEMP "buildllilc.bat"
-  $File = "$Env:VS120COMNTOOLS\..\..\VC\vcvarsall.bat" 
+  $File = "$Env:VS120COMNTOOLS\..\..\VC\vcvarsall.bat"
+  
+  $MSwitch = ""
   if ($Parallel) {
-    ("call ""$File"" x86", "msbuild $LLVMBuild\LLVM.sln /p:Configuration=$Build /p:Platfrom=$Arch /t:llilcreader /p:BuildProjectReferences=false /m") | Out-File -Encoding ascii $TempBat
+    $MSwitch = " /m "
   }
-  else {
-    ("call ""$File"" x86", "msbuild $LLVMBuild\LLVM.sln /p:Configuration=$Build /p:Platfrom=$Arch /t:llilcreader /p:BuildProjectReferences=false") | Out-File -Encoding ascii $TempBat
-  }
+ 
+  ("call ""$File"" x86", "msbuild $LLVMBuild\LLVM.sln /p:Configuration=$Build /p:Platfrom=$Arch /t:llilcreader /p:BuildProjectReferences=false $MSwitch") | Out-File -Encoding ascii $TempBat
+
   $CmdOut = cmd /c $TempBat
   Remove-Item -force $TempBat | Out-Null
   CopyJIT -Build $Build
@@ -734,10 +737,13 @@ function Global:RunTest([string]$Arch="x64", [string]$Build="Debug")
   # Workaround exception handling issue
   chcp 65001 | Out-Null
 
+
   $Env:SkipTestAssemblies = "Common;Exceptions;GC;Loader;managed;packages;Regressions;runtime;Tests;TestWrappers_x64_release;Threading" 
   pushd .
   cd $CoreCLRTestAssets\coreclr\tests
-  .\runtest $Arch $Build EnableLLILC $CoreCLRRuntime\$CoreCLRVersion\bin 
+
+  .\runtest $Arch $Build EnableMSILC "$CoreCLRRuntime\$CoreCLRVersion\bin" 
+  
   CheckDiff -Create $True -UseDiffTool $False
   popd  
 }
@@ -853,15 +859,15 @@ function Global:CheckDiff([bool]$Create = $false, [bool]$UseDiffTool = $True, [s
 
 function Global:LLILCHelp
 {
-  Write-Output("ApplyFilter       - Filter to suppress allowable LLVM IR difference. Example: AppyFilter -File FileName -TmpFile TmpFileName")
-  Write-Output("Build             - Build LLILC JIT. Example: Build")
-  Write-Output("BuildAll          - Configure and Build LLVM including LLILC JIT. Example: BuildLLVM")
-  Write-Output("BuildTest         - Build CoreCLR regression tests. Example: BuildTest")
-  Write-Output("CheckDiff         - Check the LLVM IR dump diff between run and baseline. Example: CheckDiff")
-  Write-Output("CopyJIT           - Copy LLILC JIT dll into CoreCLR Runtime. Example: CopyJIT")
+  Write-Output("ApplyFilter       - Filter to suppress allowable LLVM IR difference. Example: AppyFilter -File FileName")
+  Write-Output("Build             - Build LLILC JIT. Example: Build -Arch x64 -Build Debug -Parallel `$False")
+  Write-Output("BuildAll          - Configure and Build LLVM including LLILC JIT. Example: BuildLLVM -Arch x64 -Build Debug -Parallel `$False")
+  Write-Output("BuildTest         - Build CoreCLR regression tests. Example: BuildTest -Arch x64 -Build Debug")
+  Write-Output("CheckDiff         - Check the LLVM IR dump diff between run and baseline. Example: CheckDiff -Create `$False -UseDiffTool `$True -Arch x64 -Build=Debug")
+  Write-Output("CopyJIT           - Copy LLILC JIT dll into CoreCLR Runtime. Example: CopyJIT -Build Debug")
   Write-Output("LLILCHelp         - List and explain available commands. Example: LLILCHelp")
-  Write-Output("ReBaseAll         - Re-create the base line for all regression test cases. Example: ReBaseAll")
-  Write-Output("RunTest           - Run LLILC enabled CoreCLR regression tests. Example: RunTest")
+  Write-Output("ReBaseAll         - Re-create the base line for all regression test cases. Example: -Arch x64 -Build=Debug")
+  Write-Output("RunTest           - Run LLILC enabled CoreCLR regression tests. Example: RunTest -Arch x64 -Build=Debug")
 }
 
 # -------------------------------------------------------------------------
