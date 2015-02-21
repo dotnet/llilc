@@ -285,10 +285,10 @@ bool rgnGetFinallyEndIsReachable(EHRegion *FinallyRegion) { return false; }
 void rgnSetFinallyEndIsReachable(EHRegion *FinallyRegion, bool IsReachable) {
   return;
 }
-EHRegion *rgnGetFaultTryRegion(EHRegion *FaultRegion) { return NULL; };
+EHRegion *rgnGetFaultTryRegion(EHRegion *FaultRegion) { return NULL; }
 void rgnSetFaultTryRegion(EHRegion *FaultRegion, EHRegion *TryRegion) {
   return;
-};
+}
 EHRegion *rgnGetCatchTryRegion(EHRegion *CatchRegion) { return NULL; }
 void rgnSetCatchTryRegion(EHRegion *CatchRegion, EHRegion *TryRegion) {
   return;
@@ -383,7 +383,7 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   }
 
   return;
-};
+}
 
 void GenIR::readerMiddlePass() { return; }
 
@@ -727,7 +727,7 @@ void ReaderBase::debugError(const char *Filename, unsigned Linenumber,
   // TODO
   // if (s) JitContext->JitInfo->doAssert(Filename, Linenumber, S);
   // ASSERTNR(UNREACHED);
-};
+}
 
 // Fatal error, reader cannot continue.
 void ReaderBase::fatal(int ErrNum) { LLILCJit::fatal(LLILCJIT_FATAL_ERROR); }
@@ -799,7 +799,7 @@ Type *GenIR::getType(CorInfoType CorType, CORINFO_CLASS_HANDLE ClassHandle,
     CORINFO_CLASS_HANDLE ChildClassHandle = NULL;
     CorInfoType ChildCorType = getChildType(ClassHandle, &ChildClassHandle);
     // LLVM does not allow void*, so use char* instead.
-    if (ChildCorType == ELEMENT_TYPE_VOID) {
+    if (ChildCorType == CORINFO_TYPE_VOID) {
       ASSERT(IsPtr);
       ClassType = getType(CORINFO_TYPE_CHAR, NULL);
     } else if (ChildCorType == CORINFO_TYPE_UNDEF) {
@@ -953,7 +953,7 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
                              &UTF8Start[UTF8Size], strictConversion);
       if (Result == conversionOK) {
         ASSERT((size_t)(&WideCharBuffer[BufferLength] -
-                        (char16_t *)UTF16Start) == 0);
+                        (const char16_t *)UTF16Start) == 0);
         StructTy->setName((char *)ClassName);
       }
       delete[] ClassName;
@@ -2680,7 +2680,7 @@ IRNode *GenIR::call(ReaderBaseNS::CallOpcode Opcode, mdToken Token,
   }
   IRNode *CallNode;
   return rdrCall(Data, Opcode, &CallNode, NewIR);
-};
+}
 
 bool isNonVolatileWriteHelperCall(CorInfoHelpFunc HelperId) {
   switch (HelperId) {
@@ -2805,7 +2805,7 @@ IRNode *GenIR::makeDirectCallTargetNode(CORINFO_METHOD_HANDLE Method,
 
   return (IRNode *)LLVMBuilder->CreateIntToPtr(
       CodeAddrValue, getUnmanagedPointerType(FunctionType));
-};
+}
 
 IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
                        CallArgTriple *ArgArray, uint32_t NumArgs,
@@ -3430,7 +3430,7 @@ IRNode *GenIR::loadStr(mdToken Token, IRNode **NewIR) {
   ASSERTNR(StringHandle != NULL);
 
   return stringLiteral(Token, StringHandle, Iat, NewIR);
-};
+}
 
 IRNode *GenIR::stringLiteral(mdToken Token, void *StringHandle,
                              InfoAccessType Iat, IRNode **NewIR) {

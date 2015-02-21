@@ -111,7 +111,7 @@ inline TITypes jitType2TIType(CorInfoType Type) {
 
   assertx(MapTIType[Type] != TI_Error || Type == CORINFO_TYPE_VOID);
   return MapTIType[Type];
-};
+}
 
 /*****************************************************************************
  * Declares the TypeInfo class, which represents the type of an entity on the
@@ -264,7 +264,7 @@ public:
 
   union {
     // Valid only for TI_Struct or TI_Ref
-    CORINFO_CLASS_HANDLE Cls;
+    CORINFO_CLASS_HANDLE Class;
     // Valid only for type TI_Method
     CORINFO_METHOD_HANDLE Method;
   };
@@ -272,7 +272,7 @@ public:
 public:
   TypeInfo() : Flags(TI_Error) {
     Bits.Type = TI_Error;
-    WHENDEBUG(Cls = BadClassHandle);
+    WHENDEBUG(Class = BadClassHandle);
   }
 
   TypeInfo(TITypes TiType) {
@@ -280,27 +280,27 @@ public:
     assertx(TiType <= TI_FLAG_DATA_MASK);
 
     Flags = (uint32_t)TiType;
-    WHENDEBUG(Cls = BadClassHandle);
+    WHENDEBUG(Class = BadClassHandle);
   }
 
   TypeInfo(CorInfoType VarType) {
     Flags = (uint32_t)jitType2TIType(VarType);
-    WHENDEBUG(Cls = BadClassHandle);
+    WHENDEBUG(Class = BadClassHandle);
   }
 
-  TypeInfo(TITypes TiType, CORINFO_CLASS_HANDLE Cls, bool TypeVar = false) {
+  TypeInfo(TITypes TiType, CORINFO_CLASS_HANDLE Class, bool TypeVar = false) {
     assertx(TiType == TI_Struct || TiType == TI_Ref);
-    assertx(Cls != 0 && Cls != CORINFO_CLASS_HANDLE(0xcccccccc));
+    assertx(Class != 0 && Class != CORINFO_CLASS_HANDLE(0xcccccccc));
     Flags = TiType;
     if (TypeVar)
       Flags |= TI_FLAG_GENERIC_TYPE_VAR;
-    Cls = Cls;
+    this->Class = Class;
   }
 
   TypeInfo(CORINFO_METHOD_HANDLE Method) {
     assertx(Method != 0 && Method != CORINFO_METHOD_HANDLE(0xcccccccc));
     Flags = TI_Method;
-    Method = Method;
+    this->Method = Method;
   }
 
   bool operator==(const TypeInfo &Ti) const {
@@ -336,8 +336,8 @@ public:
       return true;
     if (LType == TI_Error)
       return false; // TI_Error != TI_Error
-    assertx(Cls != BadClassHandle && Ti.Cls != BadClassHandle);
-    return Cls == Ti.Cls;
+    assertx(Class != BadClassHandle && Ti.Class != BadClassHandle);
+    return Class == Ti.Class;
   }
 
   static bool tiMergeToCommonParent(ICorJitInfo *JitInfo, TypeInfo *PDest,
@@ -388,7 +388,7 @@ public:
   TypeInfo &dereferenceByRef() {
     if (!isByRef()) {
       Flags = TI_Error;
-      WHENDEBUG(Cls = BadClassHandle);
+      WHENDEBUG(Class = BadClassHandle);
     }
     Flags &= ~(TI_FLAG_THIS_PTR | TI_ALL_BYREF_FLAGS);
     return *this;
@@ -430,19 +430,19 @@ public:
     if (!isType(TI_Ref) && !isType(TI_Struct))
       return 0;
 
-    return Cls;
+    return Class;
   }
 
   CORINFO_CLASS_HANDLE getClassHandleForValueClass() const {
     assertx(isType(TI_Struct));
-    assertx(Cls && Cls != BadClassHandle);
-    return Cls;
+    assertx(Class && Class != BadClassHandle);
+    return Class;
   }
 
   CORINFO_CLASS_HANDLE getClassHandleForObjRef() const {
     assertx(isType(TI_Ref));
-    assertx(Cls && Cls != BadClassHandle);
-    return Cls;
+    assertx(Class && Class != BadClassHandle);
+    return Class;
   }
 
   CORINFO_METHOD_HANDLE getMethod() const {
@@ -504,9 +504,9 @@ public:
 
   // Does not return true for primitives. Will return true for value types that
   // behave as primitives
-  bool isValueClassWithClsHnd() const {
+  bool isValueClassWithClassHnd() const {
     if ((getType() == TI_Struct) ||
-        (Cls && getType() != TI_Ref && getType() != TI_Method &&
+        (Class && getType() != TI_Ref && getType() != TI_Method &&
          getType() != TI_Error)) // necessary because if byref bit is set, we
                                  // return TI_Error)
     {
@@ -579,9 +579,9 @@ public:
 
 private:
   // used to make functions that return typeinfo efficient.
-  TypeInfo(uint32_t Flags, CORINFO_CLASS_HANDLE Cls) {
-    Cls = Cls;
-    Flags = Flags;
+  TypeInfo(uint32_t Flags, CORINFO_CLASS_HANDLE Class) {
+    this->Class = Class;
+    this->Flags = Flags;
   }
 
   friend TypeInfo byRef(const TypeInfo &Ti);

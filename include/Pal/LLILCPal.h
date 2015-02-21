@@ -482,7 +482,7 @@ void *__cxa_begin_catch(void *exceptionObject) throw();
 void __cxa_end_catch();
 
 #if defined(__cplusplus)
-};
+}
 #endif                               // __cplusplus
 
 typedef LONG EXCEPTION_DISPOSITION;
