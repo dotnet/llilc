@@ -514,7 +514,7 @@ function Global:CopyJIT([string]$Build="Debug")
   $LLILCJit = LLILCJit($Build)
   $OldJitName = "MSILCJit.dll"
 
-  $WorkLLILCJitExists = Test-Path $CoreCLRRuntime\$CoreCLRVersion\bin\LLILCit.dll
+  $WorkLLILCJitExists = Test-Path $CoreCLRRuntime\$CoreCLRVersion\bin\$OldJitName
   if ($WorkLLILCJitExists) {
     Remove-Item $CoreCLRRuntime\$CoreCLRVersion\bin\$OldJitName | Out-Null
   }
