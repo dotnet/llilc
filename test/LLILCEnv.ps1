@@ -175,7 +175,7 @@ function Global:DefaultLLILCTestResult
 
 function Global:LLILCTestResult
 {
-  $LLILCTestResult = Test-Path Env:\LLILCTESTRESULT
+  $LLILCTestResultExists = Test-Path Env:\LLILCTESTRESULT
   if (!$LLILCTestResultExists) {
     $DefaultLLILCTestResult = DefaultLLILCTestResult 
     return "$DefaultLLILCTestResult"
@@ -512,17 +512,22 @@ function Global:CopyJIT([string]$Build="Debug")
   $CoreCLRRuntime = CoreCLRRuntime
   $CoreCLRVersion = CoreCLRVersion
   $LLILCJit = LLILCJit($Build)
+  $OldJitName = "MSILCJit.dll"
 
-  $WorkLLILCJitExists = Test-Path $CoreCLRRuntime\$CoreCLRVersion\bin\LLILCit.dll
+  $WorkLLILCJitExists = Test-Path $CoreCLRRuntime\$CoreCLRVersion\bin\$OldJitName
   if ($WorkLLILCJitExists) {
-    Remove-Item $CoreCLRRuntime\$CoreCLRVersion\bin\LLILCJit.dll | Out-Null
+    Remove-Item $CoreCLRRuntime\$CoreCLRVersion\bin\$OldJitName | Out-Null
   }
 
   pushd .
   cd $CoreCLRRuntime\$CoreCLRVersion\bin\
 
   Write-Output ("Copying LLILC JIT")
-  copy $LLILCJit .
+
+  # In CoreCLR test assets, the hookup of LLILC is still using old name MSILC
+  # Accomodate that for now. Will update here once CoreCLR is updated.
+
+  copy $LLILCJit $OldJitName
   Write-Output ("LLILC JIT Copied")
 
   popd
@@ -693,7 +698,7 @@ function Global:ApplyFilter([string]$File)
 #
 # -------------------------------------------------------------------------
 
-function Global:ExcludeTest([string]$Arch="x64", [string]$Build="Debug")
+function Global:ExcludeTest([string]$Arch="x64", [string]$Build="Release")
 {
   $CoreCLRTestAssets = CoreCLRTestAssets
   pushd .
@@ -711,7 +716,7 @@ function Global:ExcludeTest([string]$Arch="x64", [string]$Build="Debug")
 #
 # -------------------------------------------------------------------------
 
-function Global:BuildTest([string]$Arch="x64", [string]$Build="Debug")
+function Global:BuildTest([string]$Arch="x64", [string]$Build="Release")
 {
   $CoreCLRTestAssets = CoreCLRTestAssets
 
@@ -728,7 +733,7 @@ function Global:BuildTest([string]$Arch="x64", [string]$Build="Debug")
 #
 # -------------------------------------------------------------------------
 
-function Global:RunTest([string]$Arch="x64", [string]$Build="Debug")
+function Global:RunTest([string]$Arch="x64", [string]$Build="Release")
 {
   $CoreCLRTestAssets = CoreCLRTestAssets
   $CoreCLRRuntime = CoreCLRRuntime
@@ -744,7 +749,7 @@ function Global:RunTest([string]$Arch="x64", [string]$Build="Debug")
 
   .\runtest $Arch $Build EnableMSILC $CoreCLRRuntime\$CoreCLRVersion\bin 
   
-  CheckDiff -Create $True -UseDiffTool $False
+  CheckDiff -Create $True -UseDiffTool $False -Arch $Arch -Build $Build
   popd  
 }
 
@@ -754,7 +759,7 @@ function Global:RunTest([string]$Arch="x64", [string]$Build="Debug")
 #
 # -------------------------------------------------------------------------
 
-function Global:ReBaseAll([string]$Arch="x64", [string]$Build="Debug")
+function Global:ReBaseAll([string]$Arch="x64", [string]$Build="Release")
 {
   $LLILCTest = LLILCTest
   $CoreCLRTestAssets = CoreCLRTestAssets
@@ -776,7 +781,7 @@ function Global:ReBaseAll([string]$Arch="x64", [string]$Build="Debug")
 #
 # -------------------------------------------------------------------------
 
-function Global:CheckDiff([bool]$Create = $false, [bool]$UseDiffTool = $True, [string]$Arch="x64", [string]$Build="Debug")
+function Global:CheckDiff([bool]$Create = $false, [bool]$UseDiffTool = $True, [string]$Arch="x64", [string]$Build="Release")
 {
   $LLILCTest = LLILCTest
   $LLILCTestResult = LLILCTestResult
@@ -862,12 +867,12 @@ function Global:LLILCHelp
   Write-Output("ApplyFilter       - Filter to suppress allowable LLVM IR difference. Example: AppyFilter -File FileName")
   Write-Output("Build             - Build LLILC JIT. Example: Build -Arch x64 -Build Debug -Parallel `$False")
   Write-Output("BuildAll          - Configure and Build LLVM including LLILC JIT. Example: BuildLLVM -Arch x64 -Build Debug -Parallel `$False")
-  Write-Output("BuildTest         - Build CoreCLR regression tests. Example: BuildTest -Arch x64 -Build Debug")
-  Write-Output("CheckDiff         - Check the LLVM IR dump diff between run and baseline. Example: CheckDiff -Create `$False -UseDiffTool `$True -Arch x64 -Build=Debug")
+  Write-Output("BuildTest         - Build CoreCLR regression tests. Example: BuildTest -Arch x64 -Build Release")
+  Write-Output("CheckDiff         - Check the LLVM IR dump diff between run and baseline. Example: CheckDiff -Create `$False -UseDiffTool `$True -Arch x64 -Build Release")
   Write-Output("CopyJIT           - Copy LLILC JIT dll into CoreCLR Runtime. Example: CopyJIT -Build Debug")
   Write-Output("LLILCHelp         - List and explain available commands. Example: LLILCHelp")
-  Write-Output("ReBaseAll         - Re-create the base line for all regression test cases. Example: -Arch x64 -Build=Debug")
-  Write-Output("RunTest           - Run LLILC enabled CoreCLR regression tests. Example: RunTest -Arch x64 -Build=Debug")
+  Write-Output("ReBaseAll         - Re-create the base line for all regression test cases. Example: -Arch x64 -Build Release")
+  Write-Output("RunTest           - Run LLILC enabled CoreCLR regression tests. Example: RunTest -Arch x64 -Build Release")
 }
 
 # -------------------------------------------------------------------------
