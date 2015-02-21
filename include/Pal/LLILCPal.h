@@ -86,7 +86,7 @@
     class __Body                                                               \
     {                                                                          \
     public:                                                                    \
-        static void Run(__ParamType __paramDef)                                \
+        static void run(__ParamType __paramDef)                                \
     {                                                                          \
         PAL_TRY_HANDLER_DBG_BEGIN
  
@@ -95,7 +95,7 @@
         }                                                                      \
     };                                                                         \
         PAL_TRY_NAKED                                                          \
-    __Body::Run(__param);                                                      \
+    __Body::run(__param);                                                      \
     PAL_EXCEPT_NAKED(Disposition)
 
 #define PAL_EXCEPT_FILTER(pfnFilter)                                           \
@@ -103,7 +103,7 @@
         }                                                                      \
     };                                                                         \
     PAL_TRY_NAKED                                                              \
-    __Body::Run(__param);                                                      \
+    __Body::run(__param);                                                      \
     PAL_EXCEPT_FILTER_NAKED(pfnFilter, __paramToPassToFilter)
 
 #define PAL_FINALLY                                                            \
@@ -111,7 +111,7 @@
         }                                                                      \
     };                                                                         \
     PAL_TRY_NAKED                                                              \
-    __Body::Run(__param);                                                      \
+    __Body::run(__param);                                                      \
     PAL_FINALLY_NAKED
 
 #define PAL_ENDTRY                                                             \
@@ -620,7 +620,7 @@ public:
     class __Body                                                               \
     {                                                                          \
     public:                                                                    \
-        static void Run(void *__pvHandlerData)                                 \
+        static void run(void *__pvHandlerData)                                 \
         {                                                                      \
             __ParamType __paramDef =                                           \
                 ((__HandlerData *)__pvHandlerData)->__param;                   \
@@ -655,7 +655,7 @@ public:
     };                                                                         \
     BOOL __fExecuteHandler;                                                    \
     _Unwind_Exception *__exception =                                           \
-        PAL_TryExcept(__Body::Run, __Body::Handler, &__handlerData,            \
+        PAL_TryExcept(__Body::run, __Body::Handler, &__handlerData,            \
                       &__fExecuteHandler);                                     \
     PAL_NoHolder __exceptionHolder;                                            \
     if (__exception && __fExecuteHandler)                                      \
@@ -686,7 +686,7 @@ public:
     };                                                                         \
     BOOL __fExecuteHandler;                                                    \
     _Unwind_Exception *__exception =                                           \
-        PAL_TryExcept(__Body::Run, __Body::Filter, &__handlerData,             \
+        PAL_TryExcept(__Body::run, __Body::Filter, &__handlerData,             \
                       &__fExecuteHandler);                                     \
     PAL_ExceptionHolder __exceptionHolder(__exception);                        \
     {

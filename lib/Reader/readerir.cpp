@@ -950,10 +950,10 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
       UTF8 *ClassName = new UTF8[UTF8Size];
       UTF8 *UTF8Start = ClassName;
       const UTF16 *UTF16Start = (UTF16 *)WideCharBuffer;
-      ConversionResult result =
+      ConversionResult Result =
           ConvertUTF16toUTF8(&UTF16Start, &UTF16Start[NameSize + 1], &UTF8Start,
                              &UTF8Start[UTF8Size], strictConversion);
-      if (result == conversionOK) {
+      if (Result == conversionOK) {
         ASSERT((size_t)(&WideCharBuffer[BufferLength] -
             (char16_t *)UTF16Start) == 0);
         StructTy->setName((char *)ClassName);
@@ -1822,12 +1822,12 @@ bool GenIR::fgCall(ReaderBaseNS::OPCODE Opcode, mdToken Token,
 // so that it can be called in a loop in FgNodeGetIDom.
 // TODO (Issue #38): currently we conservatively return single predecessor without 
 // computing the immediate dominator.
-FlowGraphNode *getNextIDom(FlowGraphNode *fgNode) {
-   return (FlowGraphNode*)fgNode->getSinglePredecessor();
+FlowGraphNode *getNextIDom(FlowGraphNode *FgNode) {
+   return (FlowGraphNode*)FgNode->getSinglePredecessor();
 }
 
-FlowGraphNode *GenIR::fgNodeGetIDom(FlowGraphNode *fgNode) {
-   FlowGraphNode* Idom = getNextIDom(fgNode);
+FlowGraphNode *GenIR::fgNodeGetIDom(FlowGraphNode *FgNode) {
+   FlowGraphNode* Idom = getNextIDom(FgNode);
 
    //  If the dominating block is in an EH region
    //  and the original block is not in the same region, then this
@@ -1836,7 +1836,7 @@ FlowGraphNode *GenIR::fgNodeGetIDom(FlowGraphNode *fgNode) {
    //  block or there are no more blocks.
    while (nullptr != Idom
      && fgNodeGetRegion(Idom) != fgNodeGetRegion(Function)
-     && fgNodeGetRegion(Idom) != fgNodeGetRegion(fgNode)) {
+     && fgNodeGetRegion(Idom) != fgNodeGetRegion(FgNode)) {
      Idom = getNextIDom(Idom);
    }
 
@@ -2158,16 +2158,16 @@ IRNode *GenIR::binaryOp(ReaderBaseNS::BinaryOpcode Opcode, IRNode *Arg1,
     //   
     // TODO: it may be possible to delay this lowering by updating the JIT
     // APIs to allow the definition of a target library (via TargeLibraryInfo).
-    CorInfoHelpFunc helper = CORINFO_HELP_UNDEF;
+    CorInfoHelpFunc Helper = CORINFO_HELP_UNDEF;
     if (ResultType->isFloatTy()) {
-      helper = CORINFO_HELP_FLTREM;
+      Helper = CORINFO_HELP_FLTREM;
     } else if (ResultType->isDoubleTy()) {
-      helper = CORINFO_HELP_DBLREM;
+      Helper = CORINFO_HELP_DBLREM;
     } else {
       llvm_unreachable("Bad floating point type!");
     }
 
-    Result = callHelperImpl(helper, ResultType, NewIR, Arg1, Arg2);
+    Result = callHelperImpl(Helper, ResultType, NewIR, Arg1, Arg2);
   } else {
     Result = (IRNode *)LLVMBuilder->CreateBinOp(Op, Arg1, Arg2);
   }
