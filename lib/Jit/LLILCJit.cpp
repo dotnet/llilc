@@ -82,8 +82,7 @@ BOOL WINAPI DllMain(HANDLE Instance, DWORD Reason, LPVOID Reserved) {
 }
 #endif // LLVM_ON_WIN32
 
-extern "C"
-void __stdcall sxsJitStartup(void *CcCallbacks) {
+extern "C" void __stdcall sxsJitStartup(void *CcCallbacks) {
   // nothing to do
 }
 

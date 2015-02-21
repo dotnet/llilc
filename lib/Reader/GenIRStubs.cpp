@@ -57,8 +57,7 @@ IRNode *irNodeGetInsertPointAfterMSILOffset(IRNode *Node, uint32_t Offset) {
   throw NotYetImplementedException("irNodeGetInsertPointAfterMSILOffset");
 }
 
-IRNode *irNodeGetInsertPointBeforeMSILOffset(IRNode *Node,
-                                             uint32_t Offset) {
+IRNode *irNodeGetInsertPointBeforeMSILOffset(IRNode *Node, uint32_t Offset) {
   throw NotYetImplementedException("irNodeGetInsertPointBeforeMSILOffset");
 }
 
@@ -284,7 +283,8 @@ void ReaderBase::verifyDup(VerificationState *Vstate, const uint8_t *CodeAddr) {
   return;
 }
 
-void ReaderBase::verifyEndFilter(VerificationState *Vstate, uint32_t MsilOffset) {
+void ReaderBase::verifyEndFilter(VerificationState *Vstate,
+                                 uint32_t MsilOffset) {
   return;
 }
 
@@ -314,8 +314,7 @@ void ReaderBase::verifyNewObj(VerificationState *Vstate,
 }
 
 void ReaderBase::verifyBoolBranch(VerificationState *Vstate,
-                                  uint32_t NextOffset,
-                                  uint32_t TargetOffset) {
+                                  uint32_t NextOffset, uint32_t TargetOffset) {
   return;
 }
 
@@ -445,8 +444,8 @@ void ReaderBase::verifyLeave(VerificationState *Vstate) { return; }
 
 void ReaderBase::verifyBranchTarget(VerificationState *Vstate,
                                     FlowGraphNode *CurrentFGNode,
-                                    EHRegion *SrcRegion,
-                                    uint32_t TargetOffset, bool IsLeave) {
+                                    EHRegion *SrcRegion, uint32_t TargetOffset,
+                                    bool IsLeave) {
   return;
 }
 
@@ -458,7 +457,8 @@ void ReaderBase::verifyFallThrough(VerificationState *Vstate,
 }
 
 bool verCheckDelegateCreation(ReaderBaseNS::OPCODE Opcode,
-                              VerificationState *Vstate, const uint8_t *CodeAddr,
+                              VerificationState *Vstate,
+                              const uint8_t *CodeAddr,
                               mdMemberRef &TargetMemberRef, VerType FtnType,
                               VerType ObjType) {
   return false;

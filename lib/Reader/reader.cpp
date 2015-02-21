@@ -8292,7 +8292,8 @@ void ReaderBase::msilToIR(void) {
 
   // Set up the initial stack
   ReaderOperandStack = createStack(
-      std::min(MethodInfo->maxStack, std::min(100u, MethodInfo->ILCodeSize)), this);
+      std::min(MethodInfo->maxStack, std::min(100u, MethodInfo->ILCodeSize)), 
+      this);
   ASSERTNR(ReaderOperandStack);
   fgNodeSetOperandStack(FgHead, ReaderOperandStack);
 
