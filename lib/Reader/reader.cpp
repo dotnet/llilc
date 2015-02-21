@@ -2486,6 +2486,8 @@ ReaderBase::fgReplaceBranchTarget(uint32_t Offset,
     StartBlock = fgGetHeadBlock();
   }
 
+  bool FoundTargetBlock = false;
+
   // Iterate over all blocks until block that contains the offset is found.
   for (Block = StartBlock; Block != NULL; Block = NextBlock) {
 
@@ -2519,9 +2521,13 @@ ReaderBase::fgReplaceBranchTarget(uint32_t Offset,
       // the branch instructions.
       replaceFlowGraphNodeUses(TempBranchTarget, Block);
 
+      FoundTargetBlock = true;
+
       break;
     }
   }
+
+  ASSERTNR(FoundTargetBlock);
 
   return Block;
 }
@@ -3381,7 +3387,7 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
       verifyReturnFlow(CurrentOffset);
       fgNodeSetEndMSILOffset(Block, NextOffset);
       if (NextOffset < ILInputSize) {
-        Block = makeFlowGraphNode(TargetOffset, NULL);
+        Block = makeFlowGraphNode(NextOffset, NULL);
       }
       break;
 

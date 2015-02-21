@@ -1710,7 +1710,8 @@ FlowGraphNode *GenIR::fgSplitBlock(FlowGraphNode *Block, IRNode *Node) {
   BasicBlock *TheBasicBlock = (BasicBlock *)Block;
   BasicBlock *NewBlock;
   if (Inst == NULL) {
-    NewBlock = BasicBlock::Create(*JitContext->LLVMContext, "", Function);
+    NewBlock = BasicBlock::Create(*JitContext->LLVMContext, "", Function,
+      TheBasicBlock->getNextNode());
     TerminatorInst *TermInst = TheBasicBlock->getTerminator();
     if (TermInst != NULL) {
       if (isa<UnreachableInst>(TermInst)) {
