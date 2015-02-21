@@ -576,7 +576,7 @@ function Global:BuildLLVM([string]$Arch="x64", [string]$Build="Debug", [bool]$Pa
   Write-Output ("Building LLVM...")
   $CmdOut = cmd /c $TempBat
   Remove-Item -force $TempBat | Out-Null
-  CopyJIT
+  CopyJIT -Build $Build
 }
 
 # -------------------------------------------------------------------------
