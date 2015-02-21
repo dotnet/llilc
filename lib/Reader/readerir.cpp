@@ -3,8 +3,8 @@
 // LLILC
 //
 // Copyright (c) Microsoft. All rights reserved.
-// Licensed under the MIT license. 
-// See LICENSE file in the project root for full license information. 
+// Licensed under the MIT license.
+// See LICENSE file in the project root for full license information.
 //
 //===----------------------------------------------------------------------===//
 //
@@ -260,7 +260,9 @@ ReaderBaseNS::TryKind rgnGetTryType(EHRegion *Region) {
 }
 void rgnSetTryType(EHRegion *Region, ReaderBaseNS::TryKind Type) { return; }
 int rgnGetTryCanonicalExitOffset(EHRegion *TryRegion) { return 0; }
-void rgnSetTryCanonicalExitOffset(EHRegion *TryRegion, int32_t Offset) { return; }
+void rgnSetTryCanonicalExitOffset(EHRegion *TryRegion, int32_t Offset) {
+  return;
+}
 EHRegion *rgnGetExceptFilterRegion(EHRegion *Region) { return NULL; }
 void rgnSetExceptFilterRegion(EHRegion *Region, EHRegion *FilterRegion) {
   return;
@@ -340,8 +342,7 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   getMethodSig(MethodHandle, &Sig);
   ReturnCorType = Sig.retType;
 
-  EntryBlock =
-    BasicBlock::Create(*JitContext->LLVMContext, "entry", Function);
+  EntryBlock = BasicBlock::Create(*JitContext->LLVMContext, "entry", Function);
 
   LLVMBuilder = new IRBuilder<>(*this->JitContext->LLVMContext);
   LLVMBuilder->SetInsertPoint(EntryBlock);
@@ -353,7 +354,7 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   uint32_t NumArgs = Function->getFunctionType()->getFunctionNumParams();
   ASSERT(NumArgs >= JitContext->MethodInfo->args.totalILArgs());
   uint32_t NumLocals = JitContext->MethodInfo->locals.numArgs;
-  
+
   LocalVars.resize(NumLocals);
   LocalVarCorTypes.resize(NumLocals);
   Arguments.resize(NumArgs);
@@ -399,9 +400,8 @@ void GenIR::readerPostPass(bool IsImportOnly) {
       ContextAddress = Arguments[0];
       throw NotYetImplementedException("keep alive generic context: this");
     } else {
-      ASSERT(Options &
-             (CORINFO_GENERICS_CTXT_FROM_METHODDESC |
-             CORINFO_GENERICS_CTXT_FROM_METHODTABLE));
+      ASSERT(Options & (CORINFO_GENERICS_CTXT_FROM_METHODDESC |
+                        CORINFO_GENERICS_CTXT_FROM_METHODTABLE));
       ASSERT(HasTypeParameter);
       ContextAddress = Arguments[HasThis ? (HasVarargsToken ? 2 : 1) : 0];
       throw NotYetImplementedException("keep alive generic context: !this");
@@ -410,7 +410,6 @@ void GenIR::readerPostPass(bool IsImportOnly) {
 
   // Cleanup the memory we've been using.
   delete LLVMBuilder;
-
 }
 
 #pragma endregion
@@ -452,9 +451,9 @@ void GenIR::createSym(uint32_t Num, bool IsAuto, CorInfoType CorType,
                       CORINFO_CLASS_HANDLE Class, bool IsPinned,
                       ReaderSpecialSymbolType SymType) {
 
-  // Give the symbol a plausible name. 
+  // Give the symbol a plausible name.
   //
-  // The user names for args and locals are stored in the PDB, 
+  // The user names for args and locals are stored in the PDB,
   // not in the metadata, so we can't directly access it via the jit interface.
   const char *SymName = IsAuto ? "loc" : "arg";
   bool UseNumber = false;
@@ -518,13 +517,13 @@ Function *GenIR::getFunction(CORINFO_METHOD_HANDLE MethodHandle) {
   return F;
 }
 
-// Return true if this IR node is a reference to the 
+// Return true if this IR node is a reference to the
 // original this pointer passed to the method. Can
 // conservatively return false.
 bool GenIR::objIsThis(IRNode *Obj) { return false; }
 
 // Create a new temporary with the indicated type.
-Instruction *GenIR::createTemporary(Type * Ty) {
+Instruction *GenIR::createTemporary(Type *Ty) {
   // Put the alloca for this temporary into the entry block so
   // the temporary uses can appear anywhere.
   IRBuilder<>::InsertPoint IP = LLVMBuilder->saveIP();
@@ -533,9 +532,8 @@ Instruction *GenIR::createTemporary(Type * Ty) {
     // There are no local, param or temp allocas in the entry block, so set
     // the insertion point to the first point in the block.
     LLVMBuilder->SetInsertPoint(EntryBlock->getFirstInsertionPt());
-  }
-  else {
-    // There are local, param or temp allocas. TempInsertionPoint refers to 
+  } else {
+    // There are local, param or temp allocas. TempInsertionPoint refers to
     // the last of them. Set the insertion point to the next instruction since
     // the builder will insert new instructions before the insertion point.
     LLVMBuilder->SetInsertPoint(TempInsertionPoint->getNextNode());
@@ -545,7 +543,7 @@ Instruction *GenIR::createTemporary(Type * Ty) {
   // Update the end of the alloca range.
   TempInsertionPoint = AllocaInst;
   LLVMBuilder->restoreIP(IP);
-  
+
   return AllocaInst;
 }
 
@@ -724,7 +722,7 @@ void GenIR::verifyStaticAlignment(void *FieldAddress, CorInfoType CorType,
 }
 
 void ReaderBase::debugError(const char *Filename, unsigned Linenumber,
-                                  const char *S) {
+                            const char *S) {
   assert(0);
   // TODO
   // if (s) JitContext->JitInfo->doAssert(Filename, Linenumber, S);
@@ -745,7 +743,7 @@ void ReaderBase::fatal(int ErrNum) { LLILCJit::fatal(LLILCJIT_FATAL_ERROR); }
 //===----------------------------------------------------------------------===//
 
 Type *GenIR::getType(CorInfoType CorType, CORINFO_CLASS_HANDLE ClassHandle,
-                           bool GetRefClassFields) {
+                     bool GetRefClassFields) {
   LLVMContext &LLVMContext = *this->JitContext->LLVMContext;
 
   switch (CorType) {
@@ -849,7 +847,7 @@ Type *GenIR::getType(CorInfoType CorType, CORINFO_CLASS_HANDLE ClassHandle,
 // field information for ref classes. This is used to avoid
 // getting trapped in cycles in the type reference graph.
 Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
-                                bool GetRefClassFields) {
+                          bool GetRefClassFields) {
   // Check if we've already created a type for this class handle.
   Type *ResultTy = NULL;
   StructType *StructTy = NULL;
@@ -864,7 +862,7 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
   if (IsArray) {
     ArrayElementType = getChildType(ClassHandle, &ArrayElementHandle);
     auto MapElement = ArrayTypeMap->find(
-      std::make_tuple(ArrayElementType, ArrayElementHandle, ArrayRank));
+        std::make_tuple(ArrayElementType, ArrayElementHandle, ArrayRank));
     if (MapElement != ArrayTypeMap->end()) {
       ResultTy = MapElement->second;
     }
@@ -897,7 +895,7 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
       ASSERT(ResultTy->isStructTy());
       ASSERT(!cast<StructType>(ResultTy)->isOpaque());
     }
-   
+
     if (CanReturnCachedType) {
       return ResultTy;
     }
@@ -907,7 +905,7 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
   LLVMContext &LLVMContext = *JitContext->LLVMContext;
   const DataLayout *DataLayout = JitContext->EE->getDataLayout();
 
-  // We need to fill in or create a new type for this class. 
+  // We need to fill in or create a new type for this class.
   if (StructTy == NULL) {
     // Need to create one ... add it to the map now so it's
     // there if we make a recursive request.
@@ -950,12 +948,12 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
       UTF8 *ClassName = new UTF8[UTF8Size];
       UTF8 *UTF8Start = ClassName;
       const UTF16 *UTF16Start = (UTF16 *)WideCharBuffer;
-      ConversionResult result =
+      ConversionResult Result =
           ConvertUTF16toUTF8(&UTF16Start, &UTF16Start[NameSize + 1], &UTF8Start,
                              &UTF8Start[UTF8Size], strictConversion);
-      if (result == conversionOK) {
+      if (Result == conversionOK) {
         ASSERT((size_t)(&WideCharBuffer[BufferLength] -
-            (char16_t *)UTF16Start) == 0);
+                        (char16_t *)UTF16Start) == 0);
         StructTy->setName((char *)ClassName);
       }
       delete[] ClassName;
@@ -989,11 +987,11 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
   bool IsObject = false;
   bool IsTypedByref = false;
   CORINFO_CLASS_HANDLE ObjectClassHandle =
-    getBuiltinClass(CorInfoClassId::CLASSID_SYSTEM_OBJECT);
+      getBuiltinClass(CorInfoClassId::CLASSID_SYSTEM_OBJECT);
   CORINFO_CLASS_HANDLE StringClassHandle =
-    getBuiltinClass(CorInfoClassId::CLASSID_STRING);
+      getBuiltinClass(CorInfoClassId::CLASSID_STRING);
   CORINFO_CLASS_HANDLE TypedByrefClassHandle =
-    getBuiltinClass(CorInfoClassId::CLASSID_TYPED_BYREF);
+      getBuiltinClass(CorInfoClassId::CLASSID_TYPED_BYREF);
 
   if (ClassHandle == ObjectClassHandle) {
     IsObject = true;
@@ -1022,18 +1020,18 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
     ASSERT(NumFields == 0);
     ASSERT(IsRefClass);
     // Vtable is an array of pointer-sized things.
-    Type *VtableSlotTy = 
-      Type::getIntNPtrTy(LLVMContext, TargetPointerSizeInBits);
-    Type *VtableTy = ArrayType::get(VtableSlotTy, 0); 
+    Type *VtableSlotTy =
+        Type::getIntNPtrTy(LLVMContext, TargetPointerSizeInBits);
+    Type *VtableTy = ArrayType::get(VtableSlotTy, 0);
     Type *VtablePtrTy = VtableTy->getPointerTo();
     Fields.push_back(VtablePtrTy);
     ByteOffset += DataLayout->getTypeSizeInBits(VtablePtrTy) / 8;
   } else {
-    // If we have a ref class, make sure the parent class 
+    // If we have a ref class, make sure the parent class
     // field information is filled in first.
     if (IsRefClass) {
       CORINFO_CLASS_HANDLE ParentClassHandle =
-        JitContext->JitInfo->getParentType(ClassHandle);
+          JitContext->JitInfo->getParentType(ClassHandle);
       // It's always ok to ask for the details of a parent type.
       Type *PointerToParentTy = getClassType(ParentClassHandle, true, true);
       // It's possible that we added the fields to this struct if a parent
@@ -1043,7 +1041,7 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
       }
 
       StructType *ParentTy =
-        cast<StructType>(PointerToParentTy->getPointerElementType());
+          cast<StructType>(PointerToParentTy->getPointerElementType());
 
       // Add all the parent fields into the current struct.
       for (auto FieldIterator = ParentTy->subtype_begin();
@@ -1072,7 +1070,7 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
       DerivedFields.push_back(std::make_pair(FieldOffset, FieldHandle));
     }
 
-    // Putting offset first in the pair lets us use the 
+    // Putting offset first in the pair lets us use the
     // default comparator here.
     std::sort(DerivedFields.begin(), DerivedFields.end());
 
@@ -1108,7 +1106,7 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
         (*FieldIndexMap)[FieldHandle] = Fields.size();
       }
 
-      // Add this field to the collection. 
+      // Add this field to the collection.
       //
       // If this field is a ref class reference, we don't need the full
       // details on the referred-to class, and asking for the details here
@@ -1168,8 +1166,8 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
 
       if (EndPadSize > 0) {
         // We ought to be able to assert that the pad size
-        // is not too large, but there are cases like 
-        // System.Reflection.MetadataEnumResult.<smallResult>e__FixedBuffer 
+        // is not too large, but there are cases like
+        // System.Reflection.MetadataEnumResult.<smallResult>e__FixedBuffer
         // where the runtime adds a lot more padding than one might
         // expect.
         Type *PadTy = ArrayType::get(Type::getInt8Ty(LLVMContext), EndPadSize);
@@ -1198,10 +1196,10 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
       // type.
       CORINFO_CLASS_HANDLE ArrayElementHandle = NULL;
       CorInfoType ArrayElementCorTy =
-        getChildType(ClassHandle, &ArrayElementHandle);
+          getChildType(ClassHandle, &ArrayElementHandle);
 
       if (ArrayElementCorTy == CORINFO_TYPE_CLASS) {
-        Type *ArrayElementFieldTy = 
+        Type *ArrayElementFieldTy =
             Type::getIntNPtrTy(LLVMContext, TargetPointerSizeInBits);
         Fields.push_back(ArrayElementFieldTy);
         ByteOffset += DataLayout->getTypeSizeInBits(ArrayElementFieldTy) / 8;
@@ -1230,8 +1228,7 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
   if (!IsRefClass) {
 
     // Verify overall size matches up.
-    const uint32_t LLVMClassSize =
-      DataLayout->getTypeSizeInBits(StructTy) / 8;
+    const uint32_t LLVMClassSize = DataLayout->getTypeSizeInBits(StructTy) / 8;
     const uint32_t EEClassSize = getClassSize(ClassHandle);
     ASSERT(EEClassSize == LLVMClassSize);
 
@@ -1239,18 +1236,18 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
     // as the GC field info from the runtime.
     GCLayoutStruct *RuntimeGCInfo = getClassGCLayout(ClassHandle);
     const StructLayout *MainStructLayout =
-      DataLayout->getStructLayout(StructTy);
+        DataLayout->getStructLayout(StructTy);
     const uint32_t PointerSize = DataLayout->getPointerSize();
 
-    // Walk through the type in pointer-sized jumps. 
+    // Walk through the type in pointer-sized jumps.
     for (uint32_t GCOffset = 0; GCOffset < EEClassSize;
          GCOffset += PointerSize) {
       const bool ExpectGCPointer =
-        (RuntimeGCInfo != NULL) &&
+          (RuntimeGCInfo != NULL) &&
           (RuntimeGCInfo->GCLayout[GCOffset / PointerSize] !=
-        CorInfoGCType::TYPE_GC_NONE);
+           CorInfoGCType::TYPE_GC_NONE);
       const uint32_t FieldIndex =
-        MainStructLayout->getElementContainingOffset(GCOffset);
+          MainStructLayout->getElementContainingOffset(GCOffset);
       Type *FieldTy = StructTy->getStructElementType(FieldIndex);
 
       // If the field is a value class we need to dive in
@@ -1265,7 +1262,7 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
         while (FieldTy->isStructTy()) {
           // Offset of the Inner class within the outer class
           const uint32_t InnerBaseOffset =
-            OuterStructLayout->getElementOffset(OuterIndex);
+              OuterStructLayout->getElementOffset(OuterIndex);
           // Inner class should start at or before the outer offset
           ASSERT(InnerBaseOffset <= OuterOffset);
           // Determine target offset relative to this inner class.
@@ -1273,10 +1270,10 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
           // Get the inner class layout
           StructType *InnerStructTy = cast<StructType>(FieldTy);
           const StructLayout *InnerStructLayout =
-            DataLayout->getStructLayout(InnerStructTy);
+              DataLayout->getStructLayout(InnerStructTy);
           // Find the field at that target offset.
           const uint32_t InnerIndex =
-            InnerStructLayout->getElementContainingOffset(InnerOffset);
+              InnerStructLayout->getElementContainingOffset(InnerOffset);
           // Update for next iteration.
           FieldTy = InnerStructTy->getStructElementType(InnerIndex);
           OuterStructLayout = InnerStructLayout;
@@ -1318,7 +1315,7 @@ FunctionType *GenIR::getFunctionType(CORINFO_METHOD_HANDLE Method) {
 //
 // If the signature has an implicit 'this' parameter,
 // ThisClass must be passed in as the appropriate class handle.
-FunctionType *GenIR::getFunctionType(CORINFO_SIG_INFO &Sig, 
+FunctionType *GenIR::getFunctionType(CORINFO_SIG_INFO &Sig,
                                      CORINFO_CLASS_HANDLE ThisClass) {
   CorInfoType ReturnType = Sig.retType;
   CORINFO_CLASS_HANDLE ReturnClass = Sig.retTypeClass;
@@ -1348,7 +1345,7 @@ FunctionType *GenIR::getFunctionType(CORINFO_SIG_INFO &Sig,
 
   if (IsVarArg) {
     CORINFO_CLASS_HANDLE Class =
-      getBuiltinClass(CorInfoClassId::CLASSID_ARGUMENT_HANDLE);
+        getBuiltinClass(CorInfoClassId::CLASSID_ARGUMENT_HANDLE);
     Type *VarArgCookieType = getType(CORINFO_TYPE_PTR, Class);
     Arguments.push_back(VarArgCookieType);
   }
@@ -1356,10 +1353,10 @@ FunctionType *GenIR::getFunctionType(CORINFO_SIG_INFO &Sig,
   bool HasTypeArg = Sig.hasTypeArg();
 
   if (HasTypeArg) {
-    // maybe not the right type... for now just match what we pick in 
+    // maybe not the right type... for now just match what we pick in
     // ReaderBase::buildUpParams
     CORINFO_CLASS_HANDLE Class =
-      getBuiltinClass(CorInfoClassId::CLASSID_TYPE_HANDLE);
+        getBuiltinClass(CorInfoClassId::CLASSID_TYPE_HANDLE);
     Type *TypeArgType = getType(CORINFO_TYPE_PTR, Class);
     Arguments.push_back(TypeArgType);
   }
@@ -1797,7 +1794,7 @@ IRNode *fgNodeGetEndInsertIRNode(FlowGraphNode *FgNode) {
   } else {
     return (IRNode *)&(((BasicBlock *)FgNode)->back());
   }
-  }
+}
 
 void GenIR::replaceFlowGraphNodeUses(FlowGraphNode *OldNode,
                                      FlowGraphNode *NewNode) {
@@ -1821,27 +1818,28 @@ bool GenIR::fgCall(ReaderBaseNS::OPCODE Opcode, mdToken Token,
 
 // Small helper function that gets the next IDOM. It was pulled out-of-line
 // so that it can be called in a loop in FgNodeGetIDom.
-// TODO (Issue #38): currently we conservatively return single predecessor without 
+// TODO (Issue #38): currently we conservatively return single predecessor
+// without
 // computing the immediate dominator.
-FlowGraphNode *getNextIDom(FlowGraphNode *fgNode) {
-   return (FlowGraphNode*)fgNode->getSinglePredecessor();
+FlowGraphNode *getNextIDom(FlowGraphNode *FgNode) {
+  return (FlowGraphNode *)FgNode->getSinglePredecessor();
 }
 
-FlowGraphNode *GenIR::fgNodeGetIDom(FlowGraphNode *fgNode) {
-   FlowGraphNode* Idom = getNextIDom(fgNode);
+FlowGraphNode *GenIR::fgNodeGetIDom(FlowGraphNode *FgNode) {
+  FlowGraphNode *Idom = getNextIDom(FgNode);
 
-   //  If the dominating block is in an EH region
-   //  and the original block is not in the same region, then this
-   //  is not a true dominance relationship. Progress to the next
-   //  dominator in the chain until we reach a true dominating
-   //  block or there are no more blocks.
-   while (nullptr != Idom
-     && fgNodeGetRegion(Idom) != fgNodeGetRegion(Function)
-     && fgNodeGetRegion(Idom) != fgNodeGetRegion(fgNode)) {
-     Idom = getNextIDom(Idom);
-   }
+  //  If the dominating block is in an EH region
+  //  and the original block is not in the same region, then this
+  //  is not a true dominance relationship. Progress to the next
+  //  dominator in the chain until we reach a true dominating
+  //  block or there are no more blocks.
+  while (nullptr != Idom &&
+         fgNodeGetRegion(Idom) != fgNodeGetRegion(Function) &&
+         fgNodeGetRegion(Idom) != fgNodeGetRegion(FgNode)) {
+    Idom = getNextIDom(Idom);
+  }
 
-   return Idom;
+  return Idom;
 }
 
 FlowGraphEdgeList *fgNodeGetSuccessorList(FlowGraphNode *FgNode) {
@@ -1982,7 +1980,7 @@ IRNode *GenIR::loadLen(IRNode *Address, IRNode **NewIR) {
   Value *Length = LLVMBuilder->CreateLoad(LengthFieldAddress);
 
   // Result is an unsigned native int.
-  IRNode *Result = convertToStackType((IRNode *)Length, 
+  IRNode *Result = convertToStackType((IRNode *)Length,
                                       CorInfoType::CORINFO_TYPE_NATIVEUINT);
   return (IRNode *)Result;
 }
@@ -1998,7 +1996,7 @@ IRNode *GenIR::loadStringLen(IRNode *Address, IRNode **NewIR) {
   // Verify this type is a string.
   StringRef StringName = cast<StructType>(StringTy)->getStructName();
   ASSERT(StringName.startswith("System.String"));
-  
+
   // Length field is at field index 1. Get its address.
   Value *LengthFieldAddress = LLVMBuilder->CreateStructGEP(Address, 1);
 
@@ -2045,7 +2043,7 @@ IRNode *GenIR::loadNull(IRNode **NewIR) {
 }
 
 IRNode *GenIR::unaryOp(ReaderBaseNS::UnaryOpcode Opcode, IRNode *Arg1,
-  IRNode **NewIR) {
+                       IRNode **NewIR) {
 
   if (Opcode == ReaderBaseNS::Neg) {
     if (Arg1->getType()->isFloatingPointTy()) {
@@ -2053,7 +2051,7 @@ IRNode *GenIR::unaryOp(ReaderBaseNS::UnaryOpcode Opcode, IRNode *Arg1,
     } else {
       return (IRNode *)LLVMBuilder->CreateNeg(Arg1);
     }
-    }
+  }
 
   if (Opcode == ReaderBaseNS::Not) {
     return (IRNode *)LLVMBuilder->CreateNot(Arg1);
@@ -2117,17 +2115,17 @@ IRNode *GenIR::binaryOp(ReaderBaseNS::BinaryOpcode Opcode, IRNode *Arg1,
   // If the result is a pointer, see if we have simple
   // pointer + int op...
   if (ResultType->isPointerTy()) {
-     if (Opcode == ReaderBaseNS::Add) {
-        IRNode *PtrAdd = genPointerAdd(Arg1, Arg2);
-        if (PtrAdd != NULL) {
-           return PtrAdd;
-        }
-     } else if (Opcode == ReaderBaseNS::Sub) {
-        IRNode *PtrSub = genPointerSub(Arg1, Arg2);
-        if (PtrSub != NULL) {
-           return PtrSub;
-        }
-     }
+    if (Opcode == ReaderBaseNS::Add) {
+      IRNode *PtrAdd = genPointerAdd(Arg1, Arg2);
+      if (PtrAdd != NULL) {
+        return PtrAdd;
+      }
+    } else if (Opcode == ReaderBaseNS::Sub) {
+      IRNode *PtrSub = genPointerSub(Arg1, Arg2);
+      if (PtrSub != NULL) {
+        return PtrSub;
+      }
+    }
   }
 
   bool IsFloat = ResultType->isFloatingPointTy();
@@ -2151,24 +2149,23 @@ IRNode *GenIR::binaryOp(ReaderBaseNS::BinaryOpcode Opcode, IRNode *Arg1,
     Arg2 = convert(ResultType, Arg2, !IsUnsigned);
   }
 
-
   IRNode *Result;
   if (IsFloat && Op == Instruction::BinaryOps::FRem) {
     // FRem must be lowered to a JIT helper call to avoid undefined symbols
     // during emit.
-    //   
+    //
     // TODO: it may be possible to delay this lowering by updating the JIT
     // APIs to allow the definition of a target library (via TargeLibraryInfo).
-    CorInfoHelpFunc helper = CORINFO_HELP_UNDEF;
+    CorInfoHelpFunc Helper = CORINFO_HELP_UNDEF;
     if (ResultType->isFloatTy()) {
-      helper = CORINFO_HELP_FLTREM;
+      Helper = CORINFO_HELP_FLTREM;
     } else if (ResultType->isDoubleTy()) {
-      helper = CORINFO_HELP_DBLREM;
+      Helper = CORINFO_HELP_DBLREM;
     } else {
       llvm_unreachable("Bad floating point type!");
     }
 
-    Result = callHelperImpl(helper, ResultType, NewIR, Arg1, Arg2);
+    Result = callHelperImpl(Helper, ResultType, NewIR, Arg1, Arg2);
   } else {
     Result = (IRNode *)LLVMBuilder->CreateBinOp(Op, Arg1, Arg2);
   }
@@ -2179,7 +2176,7 @@ Type *GenIR::binaryOpType(Type *Type1, Type *Type2) {
   if (Type1->isPointerTy()) {
     if (Type2->isPointerTy()) {
       return Type::getIntNTy(*this->JitContext->LLVMContext,
-        TargetPointerSizeInBits);
+                             TargetPointerSizeInBits);
     }
     ASSERTNR(!Type2->isFloatingPointTy());
     return Type1;
@@ -2214,7 +2211,7 @@ Type *GenIR::binaryOpType(Type *Type1, Type *Type2) {
 // Handle simple field access via a structural GEP.
 IRNode *GenIR::simpleFieldAddress(IRNode *BaseAddress,
                                   CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                                        CORINFO_FIELD_INFO *FieldInfo,
+                                  CORINFO_FIELD_INFO *FieldInfo,
                                   IRNode **NewIR) {
   // Determine field index and referent type.
   CORINFO_FIELD_HANDLE FieldHandle = ResolvedToken->hField;
@@ -2233,14 +2230,13 @@ IRNode *GenIR::simpleFieldAddress(IRNode *BaseAddress,
     // in unverifiable IL we may not have proper referent types and
     // so may see what appear to be unrelated field accesses.
     if (BaseObjStructTy->getNumElements() >= FieldIndex) {
-       const DataLayout *DataLayout = JitContext->EE->getDataLayout();
-       const StructLayout *StructLayout =
+      const DataLayout *DataLayout = JitContext->EE->getDataLayout();
+      const StructLayout *StructLayout =
           DataLayout->getStructLayout(BaseObjStructTy);
-       const uint32_t FieldOffset = 
-          StructLayout->getElementOffset(FieldIndex);
-       ASSERT(FieldOffset == FieldInfo->offset);
+      const uint32_t FieldOffset = StructLayout->getElementOffset(FieldIndex);
+      ASSERT(FieldOffset == FieldInfo->offset);
 
-       Address = LLVMBuilder->CreateStructGEP(BaseAddress, FieldIndex);
+      Address = LLVMBuilder->CreateStructGEP(BaseAddress, FieldIndex);
     }
   }
 
@@ -2252,7 +2248,7 @@ IRNode *GenIR::simpleFieldAddress(IRNode *BaseAddress,
     // via ICorJitInfo interface so we can't create a struct version of GEP.
 
     Address = binaryOp(ReaderBaseNS::Add, BaseAddress,
-      loadConstantI(FieldInfo->offset, NewIR), NewIR);
+                       loadConstantI(FieldInfo->offset, NewIR), NewIR);
   }
 
   return (IRNode *)Address;
@@ -2298,44 +2294,44 @@ IRNode *GenIR::genPointerAdd(IRNode *Arg1, IRNode *Arg2) {
 // Handle pointer - int by emitting a flattened LLVM GEP.
 IRNode *GenIR::genPointerSub(IRNode *Arg1, IRNode *Arg2) {
 
-   // Assume 1 is base and 2 is offset
-   IRNode *BasePtr = Arg1;
-   IRNode *Offset = Arg2;
+  // Assume 1 is base and 2 is offset
+  IRNode *BasePtr = Arg1;
+  IRNode *Offset = Arg2;
 
-   // Reconsider based on types.
-   bool Arg1IsPointer = Arg1->getType()->isPointerTy();
-   bool Arg2IsPointer = Arg2->getType()->isPointerTy();
-   ASSERT(Arg1IsPointer);
+  // Reconsider based on types.
+  bool Arg1IsPointer = Arg1->getType()->isPointerTy();
+  bool Arg2IsPointer = Arg2->getType()->isPointerTy();
+  ASSERT(Arg1IsPointer);
 
-   // Bail if both args are already pointer types.
-   if (Arg1IsPointer && Arg2IsPointer) {
-      return NULL;
-   }
+  // Bail if both args are already pointer types.
+  if (Arg1IsPointer && Arg2IsPointer) {
+    return NULL;
+  }
 
-   // Bail if offset is not integral.
-   Type *OffsetTy = Offset->getType();
-   if (!OffsetTy->isIntegerTy()) {
-      return NULL;
-   }
+  // Bail if offset is not integral.
+  Type *OffsetTy = Offset->getType();
+  if (!OffsetTy->isIntegerTy()) {
+    return NULL;
+  }
 
-   // Build an LLVM GEP for the resulting address.
-   // For now we "flatten" to byte offsets.
-   Type *CharPtrTy = Type::getInt8PtrTy(
+  // Build an LLVM GEP for the resulting address.
+  // For now we "flatten" to byte offsets.
+  Type *CharPtrTy = Type::getInt8PtrTy(
       *JitContext->LLVMContext, BasePtr->getType()->getPointerAddressSpace());
-   Value *BasePtrCast = LLVMBuilder->CreateBitCast(BasePtr, CharPtrTy);
-   Value *NegOffset = LLVMBuilder->CreateNeg(Offset);
-   Value *ResultPtr = LLVMBuilder->CreateGEP(BasePtrCast, NegOffset);
-   return (IRNode *)ResultPtr;
+  Value *BasePtrCast = LLVMBuilder->CreateBitCast(BasePtr, CharPtrTy);
+  Value *NegOffset = LLVMBuilder->CreateNeg(Offset);
+  Value *ResultPtr = LLVMBuilder->CreateGEP(BasePtrCast, NegOffset);
+  return (IRNode *)ResultPtr;
 }
 
 void GenIR::storeLocal(uint32_t LocalOrdinal, IRNode *Arg1,
-                             ReaderAlignType Alignment, bool IsVolatile,
-                             IRNode **NewIR) {
+                       ReaderAlignType Alignment, bool IsVolatile,
+                       IRNode **NewIR) {
   uint32_t LocalIndex = LocalOrdinal;
   Value *LocalAddress = LocalVars[LocalIndex];
   Type *LocalTy = LocalAddress->getType()->getPointerElementType();
-  IRNode *Value = 
-    convertFromStackType(Arg1, LocalVarCorTypes[LocalIndex], LocalTy);
+  IRNode *Value =
+      convertFromStackType(Arg1, LocalVarCorTypes[LocalIndex], LocalTy);
   LLVMBuilder->CreateStore(Value, LocalAddress);
 }
 
@@ -2396,7 +2392,7 @@ GenIR::loadManagedAddress(const std::vector<Value *> &UnmanagedAddresses,
 // Load the address of the field described by pResolvedToken
 // from the object Obj.
 IRNode *GenIR::loadFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                                      IRNode *Obj, IRNode **NewIR) {
+                                IRNode *Obj, IRNode **NewIR) {
   bool ObjIsThis = objIsThis(Obj);
   CORINFO_FIELD_INFO FieldInfo;
 
@@ -2454,7 +2450,7 @@ IRNode *GenIR::loadField(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Obj,
   CORINFO_FIELD_INFO FieldInfo;
   getFieldInfo(ResolvedToken, (CORINFO_ACCESS_FLAGS)AccessFlags, &FieldInfo);
 
-  // LoadStaticField and GetFieldAddress already generate 
+  // LoadStaticField and GetFieldAddress already generate
   // checkFieldAuthorization calls, so
   // only put them in the paths that terminate other ways.
 
@@ -2473,21 +2469,21 @@ IRNode *GenIR::loadField(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Obj,
   CORINFO_CLASS_HANDLE Class = FieldInfo.structType;
   Type *FieldTy = getType(CorInfoType, Class);
 
-  // Fields typed as GC pointers are always aligned, 
+  // Fields typed as GC pointers are always aligned,
   // so ignore any smaller alignment prefix
   if (FieldTy->isPointerTy() &&
       isManagedPointerType(cast<PointerType>(FieldTy))) {
     AlignmentPrefix = Reader_AlignNatural;
   }
 
-  // If accessing the field requires a helper, then we need to 
+  // If accessing the field requires a helper, then we need to
   // call the helper routine; we can't just load the address
   // and do a load-indirect off it.
   if (FieldInfo.fieldAccessor == CORINFO_FIELD_INSTANCE_HELPER) {
     throw NotYetImplementedException("LoadField via helper");
   }
- 
-  // The operand on top of the stack may be the address of the 
+
+  // The operand on top of the stack may be the address of the
   // valuetype, or it could be an instance of the valuetype. If
   // it's an instance, we need to get its address.
   //
@@ -2513,8 +2509,8 @@ IRNode *GenIR::loadField(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Obj,
   } else {
     LoadInst *LoadInst = LLVMBuilder->CreateLoad(Address, IsVolatile);
     uint32_t Align = (AlignmentPrefix == Reader_AlignNatural)
-      ? TargetPointerSizeInBits / 8
-      : AlignmentPrefix;
+                         ? TargetPointerSizeInBits / 8
+                         : AlignmentPrefix;
     LoadInst->setAlignment(Align);
 
     IRNode *Result = convertToStackType((IRNode *)LoadInst, CorInfoType);
@@ -2547,7 +2543,7 @@ void GenIR::storeField(CORINFO_RESOLVED_TOKEN *FieldToken, IRNode *ValueToStore,
   Type *FieldTy = getType(FieldCorType, FieldClassHandle);
   const bool IsStructTy = FieldTy->isStructTy();
 
-  // Fields typed as GC pointers are always aligned, 
+  // Fields typed as GC pointers are always aligned,
   // so ignore any smaller alignment prefix
   if ((FieldCorType == CorInfoType::CORINFO_TYPE_CLASS) ||
       (FieldCorType == CorInfoType::CORINFO_TYPE_BYREF)) {
@@ -2560,7 +2556,7 @@ void GenIR::storeField(CORINFO_RESOLVED_TOKEN *FieldToken, IRNode *ValueToStore,
   // If the EE has asked us to use a helper to store the
   // value, then do so.
   if (FieldInfo.fieldAccessor == CORINFO_FIELD_INSTANCE_HELPER) {
-    handleMemberAccess(FieldInfo.accessAllowed, FieldInfo.accessCalloutHelper, 
+    handleMemberAccess(FieldInfo.accessAllowed, FieldInfo.accessCalloutHelper,
                        NewIR);
 
     throw NotYetImplementedException("store field via helper");
@@ -2568,13 +2564,13 @@ void GenIR::storeField(CORINFO_RESOLVED_TOKEN *FieldToken, IRNode *ValueToStore,
   }
 
   // Otherwise, obtain the address of the field.
-  IRNode *Address = 
-    getFieldAddress(FieldToken, &FieldInfo, Object, false, NewIR);
+  IRNode *Address =
+      getFieldAddress(FieldToken, &FieldInfo, Object, false, NewIR);
 
   // Stores might require write barriers. If so, call the appropriate
   // helper method.
   const bool NeedsWriteBarrier =
-    JitContext->JitInfo->isWriteBarrierHelperRequired(FieldHandle);
+      JitContext->JitInfo->isWriteBarrierHelperRequired(FieldHandle);
   if (NeedsWriteBarrier) {
     rdrCallWriteBarrierHelper(Address, ValueToStore, Alignment, IsVolatile,
                               NewIR, FieldToken, !IsStructTy, false, true,
@@ -2612,7 +2608,7 @@ void GenIR::makeStore(Type *Ty, Value *Address, Value *ValueToStore,
 }
 
 IRNode *GenIR::loadStaticField(CORINFO_RESOLVED_TOKEN *FieldToken,
-                                      bool IsVolatile, IRNode **NewIR) {
+                               bool IsVolatile, IRNode **NewIR) {
   // Gather information about the field.
   CORINFO_FIELD_HANDLE FieldHandle = FieldToken->hField;
   CORINFO_FIELD_INFO FieldInfo;
@@ -2627,7 +2623,7 @@ IRNode *GenIR::loadStaticField(CORINFO_RESOLVED_TOKEN *FieldToken,
   if (FieldInfo.fieldAccessor == CORINFO_FIELD_INTRINSIC_EMPTY_STRING) {
     void *StringHandle;
     InfoAccessType Iat = JitContext->JitInfo->emptyStringLiteral(&StringHandle);
-      return stringLiteral(mdTokenNil, StringHandle, Iat, NewIR);
+    return stringLiteral(mdTokenNil, StringHandle, Iat, NewIR);
   }
 
   // Gather information about the field type.
@@ -2642,8 +2638,7 @@ IRNode *GenIR::loadStaticField(CORINFO_RESOLVED_TOKEN *FieldToken,
   Type *PtrToFieldTy = getUnmanagedPointerType(FieldTy);
   if (Address->getType()->isIntegerTy()) {
     Address = LLVMBuilder->CreateIntToPtr(Address, PtrToFieldTy);
-  }
-  else {
+  } else {
     ASSERT(Address->getType()->isPointerTy());
     Address = LLVMBuilder->CreatePointerCast(Address, PtrToFieldTy);
   }
@@ -2669,10 +2664,10 @@ void GenIR::branch(IRNode **NewIR) {
 }
 
 IRNode *GenIR::call(ReaderBaseNS::CallOpcode Opcode, mdToken Token,
-                          mdToken ConstraintTypeRef, mdToken LoadFtnToken,
-                          bool HasReadOnlyPrefix, bool HasTailCallPrefix,
-                          bool IsUnmarkedTailCall, uint32_t CurrOffset,
-                          bool *RecursiveTailCall, IRNode **NewIR) {
+                    mdToken ConstraintTypeRef, mdToken LoadFtnToken,
+                    bool HasReadOnlyPrefix, bool HasTailCallPrefix,
+                    bool IsUnmarkedTailCall, uint32_t CurrOffset,
+                    bool *RecursiveTailCall, IRNode **NewIR) {
   ReaderCallTargetData *Data =
       (ReaderCallTargetData *)_alloca(sizeof(ReaderCallTargetData));
   if (Opcode == ReaderBaseNS::NewObj) {
@@ -2767,7 +2762,7 @@ IRNode *GenIR::callHelperImpl(CorInfoHelpFunc HelperID, Type *ReturnType,
 
   bool IsVarArg = false;
   FunctionType *FunctionType =
-    FunctionType::get(ReturnType, ArgumentTypes, IsVarArg);
+      FunctionType::get(ReturnType, ArgumentTypes, IsVarArg);
 
   Value *Target = LLVMBuilder->CreateIntToPtr(
       Address, getUnmanagedPointerType(FunctionType));
@@ -2791,7 +2786,7 @@ IRNode *GenIR::getHelperCallAddress(CorInfoHelpFunc HelperId, IRNode **NewIR) {
   // the token here is really an inlined call to
   // IMetaMakeJitHelperToken(helperId)
   return handleToIRNode((mdToken)(mdtJitHelper | HelperId), Descriptor, 0,
-    IsIndirect, IsIndirect, true, false, NewIR);
+                        IsIndirect, IsIndirect, true, false, NewIR);
 }
 
 bool GenIR::canMakeDirectCall(ReaderCallTargetData *CallTargetData) {
@@ -2799,7 +2794,7 @@ bool GenIR::canMakeDirectCall(ReaderCallTargetData *CallTargetData) {
 }
 
 IRNode *GenIR::makeDirectCallTargetNode(CORINFO_METHOD_HANDLE Method,
-  void *CodeAddr) {
+                                        void *CodeAddr) {
   uint32_t NumBits = TargetPointerSizeInBits;
   bool IsSigned = false;
 
@@ -2813,8 +2808,8 @@ IRNode *GenIR::makeDirectCallTargetNode(CORINFO_METHOD_HANDLE Method,
 };
 
 IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
-  CallArgTriple *ArgArray, uint32_t NumArgs,
-  IRNode **CallNode, IRNode **NewIR) {
+                       CallArgTriple *ArgArray, uint32_t NumArgs,
+                       IRNode **CallNode, IRNode **NewIR) {
 
   IRNode *Call = NULL, *ReturnNode = NULL;
   IRNode *TargetNode = CallTargetInfo->getCallTargetNode();
@@ -2864,22 +2859,22 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
   }
 
   // We may need to fix the type on the TargetNode.
-  const bool FixFunctionType = 
-    CallTargetInfo->isCallVirt() || CallTargetInfo->isCallI();
+  const bool FixFunctionType =
+      CallTargetInfo->isCallVirt() || CallTargetInfo->isCallI();
   if (FixFunctionType) {
     CORINFO_CLASS_HANDLE ThisClass = nullptr;
     if (SigInfo->hasThis()) {
       ThisClass = ArgArray[0].ArgClass;
     }
-    Type *FunctionTy = 
-      getUnmanagedPointerType(getFunctionType(*SigInfo, ThisClass));
+    Type *FunctionTy =
+        getUnmanagedPointerType(getFunctionType(*SigInfo, ThisClass));
     if (TargetNode->getType()->isPointerTy()) {
       TargetNode =
-        (IRNode *)LLVMBuilder->CreatePointerCast(TargetNode, FunctionTy);
+          (IRNode *)LLVMBuilder->CreatePointerCast(TargetNode, FunctionTy);
     } else {
       ASSERT(TargetNode->getType()->isIntegerTy());
       TargetNode =
-        (IRNode *)LLVMBuilder->CreateIntToPtr(TargetNode, FunctionTy);
+          (IRNode *)LLVMBuilder->CreateIntToPtr(TargetNode, FunctionTy);
     }
   } else {
     // We should have a usable type already.
@@ -2924,7 +2919,7 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
   }
 }
 
-// Canonicalizes a newobj call. 
+// Canonicalizes a newobj call.
 // Returns true if the call is done being processed.
 // Outparam is the value to be pushed on the stack (this pointer of new object).
 bool GenIR::canonNewObjCall(IRNode *CallNode,
@@ -2957,11 +2952,11 @@ bool GenIR::canonNewObjCall(IRNode *CallNode,
   } else if (IsVarObjSize) {
     // We are allocating an object whose size depends on constructor args
     // (e.g., string). In this case the call to the constructor will allocate
-    // the object. 
+    // the object.
 
     // Leave the 'this' argument to the constructor call as null.
     ASSERTNR(CallInstruction->getArgOperand(0)->getValueID() ==
-      Value::ConstantPointerNullVal);
+             Value::ConstantPointerNullVal);
 
     // Change the type of the called function and
     // the type of the CallInstruction.
@@ -2970,7 +2965,7 @@ bool GenIR::canonNewObjCall(IRNode *CallNode,
     PointerType *CalledValueType =
         dyn_cast<PointerType>(CalledValue->getType());
     FunctionType *FuncType =
-      dyn_cast<FunctionType>(CalledValueType->getElementType());
+        dyn_cast<FunctionType>(CalledValueType->getElementType());
 
     // Construct the new function type.
     std::vector<Type *> Arguments;
@@ -2980,7 +2975,7 @@ bool GenIR::canonNewObjCall(IRNode *CallNode,
     }
 
     FunctionType *NewFunctionType = FunctionType::get(
-      FuncType->getParamType(0), Arguments, FuncType->isVarArg());
+        FuncType->getParamType(0), Arguments, FuncType->isVarArg());
 
     // Create a call target with the right type.
     Value *NewCalledValue = LLVMBuilder->CreatePointerCast(
@@ -3029,7 +3024,7 @@ bool GenIR::canonNewObjCall(IRNode *CallNode,
     CorInfoHelpFunc HelperId = getNewHelper(CallTargetData->getResolvedToken());
     Value *Dest = CallInstruction->getArgOperand(0);
     Value *ThisPointer = callHelper(HelperId, (IRNode *)Dest, NewIR,
-      CallTargetData->getClassHandleNode(NewIR));
+                                    CallTargetData->getClassHandleNode(NewIR));
     CallInstruction->setArgOperand(0, ThisPointer);
     LLVMBuilder->SetInsertPoint(CurrentBlock, SavedInsertPoint);
     *OutResult = (IRNode *)ThisPointer;
@@ -3045,9 +3040,9 @@ void GenIR::canonNewArrayCall(IRNode *Call,
   Value *CalledValue = CallInstruction->getCalledValue();
   PointerType *CalledValueType = dyn_cast<PointerType>(CalledValue->getType());
   FunctionType *FuncType =
-    dyn_cast<FunctionType>(CalledValueType->getElementType());
+      dyn_cast<FunctionType>(CalledValueType->getElementType());
 
-  // To construct the array we need to call a helper passing it the class handle 
+  // To construct the array we need to call a helper passing it the class handle
   // for the constructor method, the number of arguments to the constructor and
   // the arguments to the constructor.
 
@@ -3067,7 +3062,7 @@ void GenIR::canonNewArrayCall(IRNode *Call,
   bool IsSigned = true;
   Value *NumArgs = ConstantInt::get(
       *JitContext->LLVMContext,
-    APInt(NumBits, CallTargetData->getSigInfo()->numArgs, IsSigned));
+      APInt(NumBits, CallTargetData->getSigInfo()->numArgs, IsSigned));
   ASSERTNR(NumArgs);
 
   NewTypeArguments.push_back(NumArgs->getType());
@@ -3106,14 +3101,14 @@ bool GenIR::callIsCorVarArgs(IRNode *CallNode) {
 }
 
 IRNode *GenIR::conv(ReaderBaseNS::ConvOpcode Opcode, IRNode *Arg1,
-  IRNode **NewIR) {
+                    IRNode **NewIR) {
 
   struct ConvertInfo {
     CorInfoType CorType;
     bool CheckForOverflow;
     bool SourceIsUnsigned;
   };
- 
+
   static const ConvertInfo Map[ReaderBaseNS::LastConvOpcode] = {
       {CorInfoType::CORINFO_TYPE_BYTE, false, false},       // CONV_I1
       {CorInfoType::CORINFO_TYPE_SHORT, false, false},      // CONV_I2
@@ -3170,10 +3165,10 @@ IRNode *GenIR::conv(ReaderBaseNS::ConvOpcode Opcode, IRNode *Arg1,
     Conversion = LLVMBuilder->CreatePtrToInt(Arg1, TargetTy);
   } else if (SourceTy->isIntegerTy() && TargetTy->isFloatingPointTy()) {
     Conversion = SourceIsSigned ? LLVMBuilder->CreateSIToFP(Arg1, TargetTy)
-      : LLVMBuilder->CreateUIToFP(Arg1, TargetTy);
+                                : LLVMBuilder->CreateUIToFP(Arg1, TargetTy);
   } else if (SourceTy->isFloatingPointTy() && TargetTy->isIntegerTy()) {
     Conversion = DestIsSigned ? LLVMBuilder->CreateFPToSI(Arg1, TargetTy)
-      : LLVMBuilder->CreateFPToUI(Arg1, TargetTy);
+                              : LLVMBuilder->CreateFPToUI(Arg1, TargetTy);
   } else if (SourceTy->isFloatingPointTy() && TargetTy->isFloatingPointTy()) {
     Conversion = LLVMBuilder->CreateFPCast(Arg1, TargetTy);
   } else {
@@ -3218,7 +3213,7 @@ IRNode *GenIR::makeCallReturnNode(CORINFO_SIG_INFO *Sig,
 // The debug messages are only wanted when checking the general case
 // and not for special recursive checks.
 bool GenIR::commonTailCallChecks(CORINFO_METHOD_HANDLE DeclaredMethod,
-                            CORINFO_METHOD_HANDLE ExactMethod,
+                                 CORINFO_METHOD_HANDLE ExactMethod,
                                  bool IsUnmarkedTailCall, bool SuppressMsgs) {
   // Note that localloc works with tail call provided that we don't perform
   // recursive tail call optimization, so there is a special check for
@@ -3258,7 +3253,7 @@ bool GenIR::commonTailCallChecks(CORINFO_METHOD_HANDLE DeclaredMethod,
   ASSERTNR(Reason != NULL);
   if (!SuppressMsgs) {
     fprintf(stderr, "ALL: %splicit tail call request not honored due to %s\n",
-      IsUnmarkedTailCall ? "im" : "ex", Reason);
+            IsUnmarkedTailCall ? "im" : "ex", Reason);
   }
   return false;
 }
@@ -3293,16 +3288,16 @@ bool GenIR::fgOptRecurse(ReaderCallTargetData *Data) {
 
   uint32_t MethodCompFlags = getCurrentMethodAttribs();
   if ((Method != getCurrentMethodHandle())
-          // Not yet implemented (but can do a regular tail call)
+      // Not yet implemented (but can do a regular tail call)
       ||
       (MethodCompFlags & CORINFO_FLG_SHAREDINST)
 #if 0
     || (SS_ATTRIB(CI_Entry(ciPtr)) & AA_VARARGS)
-#endif 
+#endif
       ||
       !Data->recordCommonTailCallChecks(commonTailCallChecks(
           Method, Method, Data->isUnmarkedTailCall(), false))
-           // treat as inlining since we're removing the call
+      // treat as inlining since we're removing the call
       ||
       (canInline(Method, Method, NULL) != INLINE_PASS)) {
     // we might want a DBFLAG msg here, but since this routine may be
@@ -3332,7 +3327,7 @@ bool GenIR::fgOptRecurse(mdToken Token) {
   PAL_TRY(Param *, PParam, &Params) {
     CORINFO_RESOLVED_TOKEN ResolvedToken;
     PParam->This->resolveToken(PParam->Token, CORINFO_TOKENKIND_Method,
-      &ResolvedToken);
+                               &ResolvedToken);
     PParam->Method = ResolvedToken.hMethod;
   }
   PAL_EXCEPT_FILTER(runtimeFilter) {
@@ -3342,19 +3337,19 @@ bool GenIR::fgOptRecurse(mdToken Token) {
   PAL_ENDTRY
 
   if (!Params.Method) {
-      return false;
-    }
+    return false;
+  }
 
   uint32_t MethodCompFlags = getCurrentMethodAttribs();
   if ((Params.Method != getCurrentMethodHandle())
-          // Not yet implemented (but can do a regular tail call)
+      // Not yet implemented (but can do a regular tail call)
       ||
       (MethodCompFlags & CORINFO_FLG_SHAREDINST)
 #if 0
     || (SS_ATTRIB(CI_Entry(ciPtr)) & AA_VARARGS)
 #endif
       || (!commonTailCallChecks(Params.Method, Params.Method, false, true))
-             // treat as inlining since we're removing the call
+      // treat as inlining since we're removing the call
       ||
       (canInline(Params.Method, Params.Method, NULL) != INLINE_PASS)) {
     // we might want a DBFLAG msg here, but since this routine may be
@@ -3421,7 +3416,7 @@ void GenIR::throwOpcode(IRNode *Arg1, IRNode **NewIR) {
 }
 
 void GenIR::leave(uint32_t TargetOffset, bool IsNonLocal,
-  bool EndsWithNonLocalGoto, IRNode **NewIR) {
+                  bool EndsWithNonLocalGoto, IRNode **NewIR) {
   // TODO: handle exiting through nested finallies
   // currently FG-building phase 1 generates an appropriate
   // branch instruction for trivial leaves and rejects others
@@ -3454,14 +3449,14 @@ IRNode *GenIR::stringLiteral(mdToken Token, void *StringHandle,
         Token, StringHandle, 0, (Iat == IAT_PPVALUE), true, true, false, NewIR);
     // Cast it to the right address type.
     CORINFO_CLASS_HANDLE StringClassHandle =
-      getBuiltinClass(CorInfoClassId::CLASSID_STRING);
+        getBuiltinClass(CorInfoClassId::CLASSID_STRING);
     Type *StringRefTy = getType(CORINFO_TYPE_CLASS, StringClassHandle);
     Type *AddressTy = getUnmanagedPointerType(StringRefTy);
-    IRNode *TypedAddress = 
+    IRNode *TypedAddress =
         (IRNode *)LLVMBuilder->CreateIntToPtr(RawAddress, AddressTy);
     // Fetch the string reference.
     StringPtrNode = loadIndir(ReaderBaseNS::LdindRef, TypedAddress,
-                                    Reader_AlignNatural, false, false, NewIR);
+                              Reader_AlignNatural, false, false, NewIR);
     break;
   }
   default:
@@ -3497,9 +3492,7 @@ IRNode *GenIR::handleToIRNode(mdToken Token, void *EmbHandle, void *RealHandle,
 
 // TODO: currently PtrType telling base or interior pointer is ignored.
 // So for now, deliberately we keep this API to retain the call site.
-IRNode *GenIR::makePtrNode(ReaderPtrType PtrType) {
-   return loadNull(nullptr);
-}
+IRNode *GenIR::makePtrNode(ReaderPtrType PtrType) { return loadNull(nullptr); }
 
 // Load a pointer-sized value from the indicated address.
 // Used when navigating through runtime data structures.
@@ -3516,8 +3509,8 @@ IRNode *GenIR::derefAddress(IRNode *Address, bool DstIsGCPtr, bool IsConst,
 
   // We don't know the true referent type so just use a pointer sized
   // integer for the result.
-  Type *ReferentTy = Type::getIntNTy(*JitContext->LLVMContext,
-                                     TargetPointerSizeInBits);
+  Type *ReferentTy =
+      Type::getIntNTy(*JitContext->LLVMContext, TargetPointerSizeInBits);
 
   // Address is a pointer, but since it may come from dereferencing into
   // runtime data structures with unknown field types, we may need a cast here
@@ -3592,20 +3585,20 @@ IRNode *GenIR::loadPrimitiveType(IRNode *Addr, CorInfoType CorInfoType,
     ASSERT(isManagedPointerType(ReferentPtrTy));
     ASSERT(ReferentTy->getPointerElementType()->isStructTy());
     // GC pointers are always naturally aligned
-    Alignment = Reader_AlignNatural; 
+    Alignment = Reader_AlignNatural;
   } else {
     // For the true primitve case we may need to cast the address.
     Type *ExpectedTy = this->getType(CorInfoType, NULL);
     if (ReferentTy != ExpectedTy) {
       Type *PtrToExpectedTy = getUnmanagedPointerType(ExpectedTy);
-      TypedAddr = 
+      TypedAddr =
           (IRNode *)LLVMBuilder->CreatePointerCast(Addr, PtrToExpectedTy);
     }
   }
 
   uint32_t Align = (Alignment == Reader_AlignNatural)
-    ? TargetPointerSizeInBits / 8
-    : Alignment;
+                       ? TargetPointerSizeInBits / 8
+                       : Alignment;
   LoadInst *LoadInst = LLVMBuilder->CreateLoad(TypedAddr, IsVolatile);
   LoadInst->setAlignment(Align);
 
@@ -3671,7 +3664,7 @@ IRNode *GenIR::cmp(ReaderBaseNS::CmpOpcode Opcode, IRNode *Arg1, IRNode *Arg2,
       Arg2 = (IRNode *)LLVMBuilder->CreateIntCast(Arg2, Ty1, IsSigned);
     }
   } else if (Ty1 != Ty2) {
-  // Make types agree without perturbing bit patterns.
+    // Make types agree without perturbing bit patterns.
     // Must be ptr-ptr or int-ptr case.
     ASSERT(IsPointer1 || IsPointer2);
 
@@ -3684,7 +3677,7 @@ IRNode *GenIR::cmp(ReaderBaseNS::CmpOpcode Opcode, IRNode *Arg1, IRNode *Arg2,
       } else {
         // Cast ptr Arg1 to match int Arg2
         Arg1 = (IRNode *)LLVMBuilder->CreatePointerCast(Arg1, Ty2);
-    }
+      }
     } else {
       // Cast ptr Arg2 to match int Arg1
       Arg2 = (IRNode *)LLVMBuilder->CreatePointerCast(Arg2, Ty1);
@@ -3700,14 +3693,14 @@ IRNode *GenIR::cmp(ReaderBaseNS::CmpOpcode Opcode, IRNode *Arg1, IRNode *Arg2,
       CmpInst::Predicate::ICMP_UGT, // CGT_UN,
       CmpInst::Predicate::ICMP_SLT, // CLT,
       CmpInst::Predicate::ICMP_ULT  // CLT_UN,
-    };
+  };
 
   static const CmpInst::Predicate FloatCmpMap[ReaderBaseNS::LastCmpOpcode] = {
-    CmpInst::Predicate::FCMP_OEQ, // CEQ,
-    CmpInst::Predicate::FCMP_OGT, // CGT,
-    CmpInst::Predicate::FCMP_UGT, // CGT_UN,
-    CmpInst::Predicate::FCMP_OLT, // CLT,
-    CmpInst::Predicate::FCMP_ULT  // CLT_UN,
+      CmpInst::Predicate::FCMP_OEQ, // CEQ,
+      CmpInst::Predicate::FCMP_OGT, // CGT,
+      CmpInst::Predicate::FCMP_UGT, // CGT_UN,
+      CmpInst::Predicate::FCMP_OLT, // CLT,
+      CmpInst::Predicate::FCMP_ULT  // CLT_UN,
   };
 
   Value *Cmp;
@@ -3727,11 +3720,11 @@ void GenIR::boolBranch(ReaderBaseNS::BoolBranchOpcode Opcode, IRNode *Arg1,
                        IRNode **NewIR) {
   static const CmpInst::Predicate
       BranchMap[ReaderBaseNS::LastBoolBranchOpcode] = {
-    CmpInst::Predicate::ICMP_EQ, // BR_FALSE = 0,
-    CmpInst::Predicate::ICMP_EQ, // BR_FALSE_S,
-    CmpInst::Predicate::ICMP_NE, // BR_TRUE,
-    CmpInst::Predicate::ICMP_NE  // BR_TRUE_S,
-  };
+          CmpInst::Predicate::ICMP_EQ, // BR_FALSE = 0,
+          CmpInst::Predicate::ICMP_EQ, // BR_FALSE_S,
+          CmpInst::Predicate::ICMP_NE, // BR_TRUE,
+          CmpInst::Predicate::ICMP_NE  // BR_TRUE_S,
+      };
 
   CmpInst::Predicate Predicate = BranchMap[Opcode];
   Constant *ZeroConst = Constant::getNullValue(Arg1->getType());
@@ -3785,7 +3778,7 @@ void GenIR::condBranch(ReaderBaseNS::CondBranchOpcode Opcode, IRNode *Arg1,
       } else {
         // Cast ptr Arg1 to match int Arg2
         Arg1 = (IRNode *)LLVMBuilder->CreatePointerCast(Arg1, Ty2);
-    }
+      }
     } else {
       // Cast ptr Arg2 to match int Arg1
       Arg2 = (IRNode *)LLVMBuilder->CreatePointerCast(Arg2, Ty1);
@@ -3795,53 +3788,53 @@ void GenIR::condBranch(ReaderBaseNS::CondBranchOpcode Opcode, IRNode *Arg1,
   // Types should now match up.
   ASSERT(Arg1->getType() == Arg2->getType());
 
-  static const CmpInst::Predicate 
+  static const CmpInst::Predicate
       IntBranchMap[ReaderBaseNS::LastCondBranchOpcode] = {
-      CmpInst::Predicate::ICMP_EQ,  // BEQ,
-      CmpInst::Predicate::ICMP_EQ,  // BEQ_S,
-      CmpInst::Predicate::ICMP_SGE, // BGE,
-      CmpInst::Predicate::ICMP_SGE, // BGE_S,
-      CmpInst::Predicate::ICMP_UGE, // BGE_UN,
-      CmpInst::Predicate::ICMP_UGE, // BGE_UN_S,
-      CmpInst::Predicate::ICMP_SGT, // BGT,
-      CmpInst::Predicate::ICMP_SGT, // BGT_S,
-      CmpInst::Predicate::ICMP_UGT, // BGT_UN,
-      CmpInst::Predicate::ICMP_UGT, // BGT_UN_S,
-      CmpInst::Predicate::ICMP_SLE, // BLE,
-      CmpInst::Predicate::ICMP_SLE, // BLE_S,
-      CmpInst::Predicate::ICMP_ULE, // BLE_UN,
-      CmpInst::Predicate::ICMP_ULE, // BLE_UN_S,
-      CmpInst::Predicate::ICMP_SLT, // BLT,
-      CmpInst::Predicate::ICMP_SLT, // BLT_S,
-      CmpInst::Predicate::ICMP_ULT, // BLT_UN,
-      CmpInst::Predicate::ICMP_ULT, // BLT_UN_S,
-      CmpInst::Predicate::ICMP_NE,  // BNE_UN,
-      CmpInst::Predicate::ICMP_NE   // BNE_UN_S,
-  };
+          CmpInst::Predicate::ICMP_EQ,  // BEQ,
+          CmpInst::Predicate::ICMP_EQ,  // BEQ_S,
+          CmpInst::Predicate::ICMP_SGE, // BGE,
+          CmpInst::Predicate::ICMP_SGE, // BGE_S,
+          CmpInst::Predicate::ICMP_UGE, // BGE_UN,
+          CmpInst::Predicate::ICMP_UGE, // BGE_UN_S,
+          CmpInst::Predicate::ICMP_SGT, // BGT,
+          CmpInst::Predicate::ICMP_SGT, // BGT_S,
+          CmpInst::Predicate::ICMP_UGT, // BGT_UN,
+          CmpInst::Predicate::ICMP_UGT, // BGT_UN_S,
+          CmpInst::Predicate::ICMP_SLE, // BLE,
+          CmpInst::Predicate::ICMP_SLE, // BLE_S,
+          CmpInst::Predicate::ICMP_ULE, // BLE_UN,
+          CmpInst::Predicate::ICMP_ULE, // BLE_UN_S,
+          CmpInst::Predicate::ICMP_SLT, // BLT,
+          CmpInst::Predicate::ICMP_SLT, // BLT_S,
+          CmpInst::Predicate::ICMP_ULT, // BLT_UN,
+          CmpInst::Predicate::ICMP_ULT, // BLT_UN_S,
+          CmpInst::Predicate::ICMP_NE,  // BNE_UN,
+          CmpInst::Predicate::ICMP_NE   // BNE_UN_S,
+      };
 
   static const CmpInst::Predicate
       FloatBranchMap[ReaderBaseNS::LastCondBranchOpcode] = {
-      CmpInst::Predicate::FCMP_OEQ, // BEQ,
-      CmpInst::Predicate::FCMP_OEQ, // BEQ_S,
-      CmpInst::Predicate::FCMP_OGE, // BGE,
-      CmpInst::Predicate::FCMP_OGE, // BGE_S,
-      CmpInst::Predicate::FCMP_UGE, // BGE_UN,
-      CmpInst::Predicate::FCMP_UGE, // BGE_UN_S,
-      CmpInst::Predicate::FCMP_OGT, // BGT,
-      CmpInst::Predicate::FCMP_OGT, // BGT_S,
-      CmpInst::Predicate::FCMP_UGT, // BGT_UN,
-      CmpInst::Predicate::FCMP_UGT, // BGT_UN_S,
-      CmpInst::Predicate::FCMP_OLE, // BLE,
-      CmpInst::Predicate::FCMP_OLE, // BLE_S,
-      CmpInst::Predicate::FCMP_ULE, // BLE_UN,
-      CmpInst::Predicate::FCMP_ULE, // BLE_UN_S,
-      CmpInst::Predicate::FCMP_OLT, // BLT,
-      CmpInst::Predicate::FCMP_OLT, // BLT_S,
-      CmpInst::Predicate::FCMP_ULT, // BLT_UN,
-      CmpInst::Predicate::FCMP_ULT, // BLT_UN_S,
-      CmpInst::Predicate::FCMP_UNE, // BNE_UN,
-      CmpInst::Predicate::FCMP_UNE  // BNE_UN_S,
-  };
+          CmpInst::Predicate::FCMP_OEQ, // BEQ,
+          CmpInst::Predicate::FCMP_OEQ, // BEQ_S,
+          CmpInst::Predicate::FCMP_OGE, // BGE,
+          CmpInst::Predicate::FCMP_OGE, // BGE_S,
+          CmpInst::Predicate::FCMP_UGE, // BGE_UN,
+          CmpInst::Predicate::FCMP_UGE, // BGE_UN_S,
+          CmpInst::Predicate::FCMP_OGT, // BGT,
+          CmpInst::Predicate::FCMP_OGT, // BGT_S,
+          CmpInst::Predicate::FCMP_UGT, // BGT_UN,
+          CmpInst::Predicate::FCMP_UGT, // BGT_UN_S,
+          CmpInst::Predicate::FCMP_OLE, // BLE,
+          CmpInst::Predicate::FCMP_OLE, // BLE_S,
+          CmpInst::Predicate::FCMP_ULE, // BLE_UN,
+          CmpInst::Predicate::FCMP_ULE, // BLE_UN_S,
+          CmpInst::Predicate::FCMP_OLT, // BLT,
+          CmpInst::Predicate::FCMP_OLT, // BLT_S,
+          CmpInst::Predicate::FCMP_ULT, // BLT_UN,
+          CmpInst::Predicate::FCMP_ULT, // BLT_UN_S,
+          CmpInst::Predicate::FCMP_UNE, // BNE_UN,
+          CmpInst::Predicate::FCMP_UNE  // BNE_UN_S,
+      };
 
   Value *Condition =
       IsFloat1 ? LLVMBuilder->CreateFCmp(FloatBranchMap[Opcode], Arg1, Arg2)
@@ -3856,7 +3849,7 @@ void GenIR::condBranch(ReaderBaseNS::CondBranchOpcode Opcode, IRNode *Arg1,
 }
 
 IRNode *GenIR::getStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-  IRNode **NewIR) {
+                                     IRNode **NewIR) {
   CORINFO_FIELD_INFO FieldInfo;
   getFieldInfo(ResolvedToken, CORINFO_ACCESS_ADDRESS, &FieldInfo);
   return rdrGetStaticFieldAddress(ResolvedToken, &FieldInfo, NewIR);
@@ -3873,10 +3866,10 @@ IRNode *GenIR::shift(ReaderBaseNS::ShiftOpcode Opcode, IRNode *ShiftAmount,
   // shift amounts have undefined behavior we can unilaterally treat the
   // amount as unsigned here.
   if (OperandType != AmountType) {
-    ShiftAmount = 
-      (IRNode *)LLVMBuilder->CreateIntCast(ShiftAmount, OperandType, false);
+    ShiftAmount =
+        (IRNode *)LLVMBuilder->CreateIntCast(ShiftAmount, OperandType, false);
   }
-  
+
   // MSIL ReaderBaseNS::SHL lowered to LLVM Instruction::BinaryOps::Shl
   if (Opcode == ReaderBaseNS::Shl) {
     return (IRNode *)LLVMBuilder->CreateShl(ShiftOperand, ShiftAmount);
@@ -3891,7 +3884,7 @@ IRNode *GenIR::shift(ReaderBaseNS::ShiftOpcode Opcode, IRNode *ShiftAmount,
   return (IRNode *)LLVMBuilder->CreateLShr(ShiftOperand, ShiftAmount);
 }
 
-/// Generate IR for MSIL Sizeof instruction. 
+/// Generate IR for MSIL Sizeof instruction.
 IRNode *GenIR::sizeofOpcode(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                             IRNode **NewIR) {
   uint32_t ClassSize = getClassSize(ResolvedToken->hClass);
@@ -3904,8 +3897,8 @@ IRNode *GenIR::sizeofOpcode(CORINFO_RESOLVED_TOKEN *ResolvedToken,
   return Result;
 }
 
-IRNode *GenIR::newObj(mdToken Token, mdToken LoadFtnToken,
-                      uint32_t CurrOffset, IRNode **NewIR) {
+IRNode *GenIR::newObj(mdToken Token, mdToken LoadFtnToken, uint32_t CurrOffset,
+                      IRNode **NewIR) {
   // Generate the constructor call
   // rdrCall and GenCall process newobj
   //  so there's nothing else to do.
@@ -3915,7 +3908,7 @@ IRNode *GenIR::newObj(mdToken Token, mdToken LoadFtnToken,
   bool IsUnmarkedTailCall = false;
   IRNode *Result = call(ReaderBaseNS::NewObj, Token, mdTokenNil, LoadFtnToken,
                         ReadOnlyPrefix, TailCallPrefix, IsUnmarkedTailCall,
-                               CurrOffset, &IsRecursive, NewIR);
+                        CurrOffset, &IsRecursive, NewIR);
   ASSERTNR(!IsRecursive); // No tail recursive new-obj calls
   return Result;
 }
@@ -3929,8 +3922,8 @@ IRNode *GenIR::newArr(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
   // This needs to be of type native int.
   Type *NumOfElementsType =
       Type::getIntNTy(*this->JitContext->LLVMContext, TargetPointerSizeInBits);
-  IRNode *NumOfElements = 
-    convertToStackType(Arg1, CorInfoType::CORINFO_TYPE_NATIVEINT);
+  IRNode *NumOfElements =
+      convertToStackType(Arg1, CorInfoType::CORINFO_TYPE_NATIVEINT);
 
   // Or token with CORINFO_ANNOT_ARRAY so that we get back an array-type handle
   bool EmbedParent = false;
@@ -3967,9 +3960,9 @@ IRNode *GenIR::castOp(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *ObjRefNode,
       // enable cast class optimization.
       HelperId = CORINFO_HELP_CHKCASTCLASS_SPECIAL;
 
-      //
-      // FALL-THROUGH
-      //
+    //
+    // FALL-THROUGH
+    //
 
     case CORINFO_HELP_ISINSTANCEOFCLASS: {
       uint32_t Flags = getClassAttribs((CORINFO_CLASS_HANDLE)HandleType);
@@ -4132,7 +4125,7 @@ void TypeInfo::dump() const {
   if (TiType == TI_Ref || TiType == TI_Struct) {
     dbgs() << "< " << toStaticString() << " m:" << Method
            << " isbyref:" << isByRef() << " isreadonly:" << isReadonlyByRef()
-      << " isthis:" << isThisPtr() 
+           << " isthis:" << isThisPtr()
            << " isvar:" << ((Flags & TI_FLAG_GENERIC_TYPE_VAR) != 0) << " >";
   } else {
     dbgs() << "< " << toStaticString() << " >";
@@ -4168,7 +4161,7 @@ std::string TypeInfo::toStaticString() const {
     OS << "<generic>";
 
   TITypes TiType = getRawType();
-  
+
 #if 0
   if (hasByRefLocalInfo())
     OS << format("(local %d)", getByRefLocalInfo());

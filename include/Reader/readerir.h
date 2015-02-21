@@ -172,7 +172,7 @@ public:
 
   IRNode *argList(IRNode **NewIR) override;
   IRNode *instParam(IRNode **NewIR) override;
-  
+
   IRNode *secretParam(IRNode **NewIR) override {
     throw NotYetImplementedException("secretParam");
   };
@@ -823,7 +823,7 @@ private:
   ///
   /// \p Ty - Type for the new variable.
   /// \returns Instruction establishing the variable's location.
-  llvm::Instruction * createTemporary(llvm::Type * Ty);
+  llvm::Instruction *createTemporary(llvm::Type *Ty);
 
   IRNode *
   loadManagedAddress(const std::vector<llvm::Value *> &UnmanagedAddresses,

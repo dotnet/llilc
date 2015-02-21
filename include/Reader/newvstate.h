@@ -178,15 +178,15 @@ public:
 
   union {
     uint32_t DwOffset; // #of bytes from start of method
-    long Offset;    // for backward compat with Metadata validator
+    long Offset;       // for backward compat with Metadata validator
   };
 
   union {
     mdToken Token; // for backward compat with metadata validator
     uint8_t CallConv;
     CorElementType Elem;
-    uint32_t StackSlot;        // positon in the Stack
-    uint32_t Padding2; // to match with idl generated struct size
+    uint32_t StackSlot; // positon in the Stack
+    uint32_t Padding2;  // to match with idl generated struct size
   };
 
   union {

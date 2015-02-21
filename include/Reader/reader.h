@@ -193,7 +193,6 @@ struct JITFilterCommonParams {
   EXCEPTION_POINTERS ExceptionPointers;
 };
 
-
 // Forward declarations for client defined structures
 class GenIR;  // Compiler dependent IR production
 class IRNode; // Your compiler intermediate representation
@@ -601,10 +600,8 @@ struct VerificationBranchInfo {
   VerificationBranchInfo *Next;
 };
 
-ReaderBaseNS::OPCODE parseMSILOpcode(uint8_t *ILCursor,
-                                     uint8_t **OperandCursor,
-                                     uint32_t *Increment,
-                                     ReaderBase *Reader);
+ReaderBaseNS::OPCODE parseMSILOpcode(uint8_t *ILCursor, uint8_t **OperandCursor,
+                                     uint32_t *Increment, ReaderBase *Reader);
 ReaderBaseNS::OPCODE
 parseMSILOpcodeSafely(uint8_t *ILInput, uint32_t CurretOffset,
                       uint32_t ILInputSize, uint8_t **Operand,
@@ -906,7 +903,8 @@ public:
   void verifyEqual(const VerType &A, const VerType &B);
   void verifyEqualNotEquivalent(const VerType &A, const VerType &B);
   void verifyAndReportFound(int32_t Cond, const VerType &Type, HRESULT Message);
-  void verifyAndReportFound(int32_t Cond, const VerType &Type, const char *Message);
+  void verifyAndReportFound(int32_t Cond, const VerType &Type,
+                            const char *Message);
   void verifyIsNumberType(const VerType &Type);
   void verifyIsIntegerType(const VerType &Type);
   void verifyIsObjRef(const VerType &Type);
@@ -953,8 +951,7 @@ protected:
 
   // Client defined function to initialize verification state.
   void verifyNeedsVerification();
-  VerificationState *verifyInitializeBlock(FlowGraphNode *,
-                                           uint32_t ILOffset);
+  VerificationState *verifyInitializeBlock(FlowGraphNode *, uint32_t ILOffset);
   void verPropEHInitFlow(FlowGraphNode *Block);
   void verPropHandlerInitFlow(FlowGraphNode *Block);
 
@@ -1342,8 +1339,8 @@ public:
   char *getCurrentMethodName(const char **ModuleName);
   void getCurrentMethodSigData(CorInfoCallConv *Conv, CorInfoType *ReturnType,
                                CORINFO_CLASS_HANDLE *ReturnClass,
-                               int32_t *TotalILArgs, bool *IsVarArg, bool *HasThis,
-                               uint8_t *RetSig);
+                               int32_t *TotalILArgs, bool *IsVarArg,
+                               bool *HasThis, uint8_t *RetSig);
 
   // Get entry point for function (used *only* by direct calls)
   void getFunctionEntryPoint(CORINFO_METHOD_HANDLE Function,
@@ -1379,8 +1376,8 @@ public:
                              uint32_t *OffsetAfterIndirection);
   const char *getClassName(CORINFO_CLASS_HANDLE Class);
   int32_t appendClassName(char16_t **Buffer, int32_t *BufferLen,
-                      CORINFO_CLASS_HANDLE Class, bool IncludeNamespace,
-                      bool FullInst, bool IncludeAssembly);
+                          CORINFO_CLASS_HANDLE Class, bool IncludeNamespace,
+                          bool FullInst, bool IncludeAssembly);
   GCLayoutStruct *getClassGCLayout(CORINFO_CLASS_HANDLE Class);
   uint32_t getClassAttribs(CORINFO_CLASS_HANDLE Class);
   uint32_t getClassSize(CORINFO_CLASS_HANDLE Class);
@@ -1441,8 +1438,9 @@ public:
                                CORINFO_CLASS_HANDLE *RetTypeClass,
                                const char **ModuleName);
   void getMethodSigData(CorInfoCallConv *Conv, CorInfoType *ReturnType,
-                        CORINFO_CLASS_HANDLE *ReturnClass, uint32_t *TotalILArgs,
-                        bool *IsVarArg, bool *HasThis, uint8_t *RetSig);
+                        CORINFO_CLASS_HANDLE *ReturnClass,
+                        uint32_t *TotalILArgs, bool *IsVarArg, bool *HasThis,
+                        uint8_t *RetSig);
   void getMethodInfo(CORINFO_METHOD_HANDLE Handle, CORINFO_METHOD_INFO *Info);
   void methodMustBeLoadedBeforeCodeIsRun(CORINFO_METHOD_HANDLE Handle);
 
@@ -1577,8 +1575,7 @@ public:
 
   virtual FlowGraphNode *fgNodeGetNext(FlowGraphNode *FgNode) = 0;
   virtual uint32_t fgNodeGetStartMSILOffset(FlowGraphNode *Fg) = 0;
-  virtual void fgNodeSetStartMSILOffset(FlowGraphNode *Fg,
-                                        uint32_t Offset) = 0;
+  virtual void fgNodeSetStartMSILOffset(FlowGraphNode *Fg, uint32_t Offset) = 0;
   virtual uint32_t fgNodeGetEndMSILOffset(FlowGraphNode *Fg) = 0;
   virtual void fgNodeSetEndMSILOffset(FlowGraphNode *FgNode,
                                       uint32_t Offset) = 0;
@@ -1602,8 +1599,7 @@ public:
 
   virtual void leave(uint32_t TargetOffset, bool IsNonLocal,
                      bool EndsWithNonLocalGoto, IRNode **NewIR) = 0;
-  virtual IRNode *loadArg(uint32_t ArgOrdinal, bool IsJmp,
-                          IRNode **NewIR) = 0;
+  virtual IRNode *loadArg(uint32_t ArgOrdinal, bool IsJmp, IRNode **NewIR) = 0;
   virtual IRNode *loadLocal(uint32_t ArgOrdinal, IRNode **NewIR) = 0;
   virtual IRNode *loadArgAddress(uint32_t ArgOrdinal, IRNode **NewIR) = 0;
   virtual IRNode *loadLocalAddress(uint32_t LocOrdinal, IRNode **NewIR) = 0;
@@ -1808,7 +1804,7 @@ public:
   // Allocate temporary (Reader lifetime) memory
   virtual void *getTempMemory(size_t Bytes) = 0;
 
- // Allocate procedure-lifetime memory
+  // Allocate procedure-lifetime memory
   virtual void *getProcMemory(size_t Bytes) = 0;
 
   virtual EHRegion *rgnAllocateRegion() = 0;
@@ -1858,8 +1854,7 @@ public:
   virtual IRNode *fgMakeBranch(IRNode *LabelNode, IRNode *BlockNode,
                                uint32_t CurrentOffset, bool IsConditional,
                                bool IsNominal) = 0;
-  virtual IRNode *fgMakeEndFinally(IRNode *BlockNode,
-                                   uint32_t CurrentOffset,
+  virtual IRNode *fgMakeEndFinally(IRNode *BlockNode, uint32_t CurrentOffset,
                                    bool IsLexicalEnd) = 0;
 
   // turns an unconditional branch to the entry label into a fall-through
@@ -2178,25 +2173,17 @@ public:
   }
 #endif
 
-inline int8_t readInt8(uint8_t *ILCursor) {
-  IL_LOADTYPE(ILCursor, int8_t);
-}
+inline int8_t readInt8(uint8_t *ILCursor) { IL_LOADTYPE(ILCursor, int8_t); }
 
-inline uint8_t readUInt8(uint8_t *ILCursor) {
-  IL_LOADTYPE(ILCursor, uint8_t);
-}
+inline uint8_t readUInt8(uint8_t *ILCursor) { IL_LOADTYPE(ILCursor, uint8_t); }
 
-inline int16_t readInt16(uint8_t *ILCursor) {
-  IL_LOADTYPE(ILCursor, int16_t);
-}
+inline int16_t readInt16(uint8_t *ILCursor) { IL_LOADTYPE(ILCursor, int16_t); }
 
 inline uint16_t readUInt16(uint8_t *ILCursor) {
   IL_LOADTYPE(ILCursor, uint16_t);
 }
 
-inline int32_t readInt32(uint8_t *ILCursor) {
-  IL_LOADTYPE(ILCursor, int32_t);
-}
+inline int32_t readInt32(uint8_t *ILCursor) { IL_LOADTYPE(ILCursor, int32_t); }
 
 inline uint32_t readUInt32(uint8_t *ILCursor) {
   IL_LOADTYPE(ILCursor, uint32_t);

@@ -70,31 +70,31 @@ typedef uint32_t VerErrType;
 #define PREFIX_ASSERT(x)
 #endif
 
-SELECTANY const TITypes MapTIType[CORINFO_TYPE_COUNT] =
-    {           // see the definition of enum CorInfoType in file inc/corinfo.h
-     TI_Error,  // CORINFO_TYPE_UNDEF
-     TI_Error,  // CORINFO_TYPE_VOID
-     TI_Byte,   // CORINFO_TYPE_BOOL
-     TI_Short,  // CORINFO_TYPE_CHAR
-     TI_Byte,   // CORINFO_TYPE_BYTE
-     TI_Byte,   // CORINFO_TYPE_UBYTE
-     TI_Short,  // CORINFO_TYPE_SHORT
-     TI_Short,  // CORINFO_TYPE_USHORT
-     TI_Int,    // CORINFO_TYPE_INT
-     TI_Int,    // CORINFO_TYPE_UINT
-     TI_Long,   // CORINFO_TYPE_LONG
-     TI_Long,   // CORINFO_TYPE_ULONG
-     TI_I,      // CORINFO_TYPE_NATIVEINT
-     TI_I,      // CORINFO_TYPE_NATIVEUINT
-     TI_Float,  // CORINFO_TYPE_FLOAT
-     TI_Double, // CORINFO_TYPE_DOUBLE
-     TI_Ref,    // CORINFO_TYPE_STRING
-     TI_Ptr,    // CORINFO_TYPE_PTR
-     TI_Error,  // CORINFO_TYPE_BYREF
-     TI_Struct, // CORINFO_TYPE_VALUECLASS
-     TI_Ref,    // CORINFO_TYPE_CLASS
-     TI_Struct, // CORINFO_TYPE_REFANY
-     TI_Ref,    // CORINFO_TYPE_VAR
+SELECTANY const TITypes MapTIType[CORINFO_TYPE_COUNT] = {
+    // see the definition of enum CorInfoType in file inc/corinfo.h
+    TI_Error,  // CORINFO_TYPE_UNDEF
+    TI_Error,  // CORINFO_TYPE_VOID
+    TI_Byte,   // CORINFO_TYPE_BOOL
+    TI_Short,  // CORINFO_TYPE_CHAR
+    TI_Byte,   // CORINFO_TYPE_BYTE
+    TI_Byte,   // CORINFO_TYPE_UBYTE
+    TI_Short,  // CORINFO_TYPE_SHORT
+    TI_Short,  // CORINFO_TYPE_USHORT
+    TI_Int,    // CORINFO_TYPE_INT
+    TI_Int,    // CORINFO_TYPE_UINT
+    TI_Long,   // CORINFO_TYPE_LONG
+    TI_Long,   // CORINFO_TYPE_ULONG
+    TI_I,      // CORINFO_TYPE_NATIVEINT
+    TI_I,      // CORINFO_TYPE_NATIVEUINT
+    TI_Float,  // CORINFO_TYPE_FLOAT
+    TI_Double, // CORINFO_TYPE_DOUBLE
+    TI_Ref,    // CORINFO_TYPE_STRING
+    TI_Ptr,    // CORINFO_TYPE_PTR
+    TI_Error,  // CORINFO_TYPE_BYREF
+    TI_Struct, // CORINFO_TYPE_VALUECLASS
+    TI_Ref,    // CORINFO_TYPE_CLASS
+    TI_Struct, // CORINFO_TYPE_REFANY
+    TI_Ref,    // CORINFO_TYPE_VAR
 };
 
 inline TITypes jitType2TIType(CorInfoType Type) {
@@ -253,9 +253,9 @@ public:
       uint32_t UninitObj : 1; // used
       uint32_t ByRef : 1;     // used
       uint32_t ByRefReadOnly : 1;
-      uint32_t : 3;                // unused?
-      uint32_t ThisPtr : 1;        // used
-      uint32_t : 1;                // unused?
+      uint32_t : 3;           // unused?
+      uint32_t ThisPtr : 1;   // used
+      uint32_t : 1;           // unused?
       uint32_t GenericTypeVar : 1; // used
     } Bits;
 
