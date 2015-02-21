@@ -109,6 +109,8 @@ if( UNIX )
   if( EXISTS "${CORECLR_SO_PATH}" )
     get_filename_component(WITH_CORECLR_ABS "${CORECLR_SO_PATH}" DIRECTORY CACHE)
     link_directories("${WITH_CORECLR_ABS}")
+  else()
+    message(FATAL_ERROR "Could not find libcoreclr.so. Please set WITH_CORECLR to a directory where CoreCLR was built or installed.")
   endif()
 endif()
 
