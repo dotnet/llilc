@@ -21,6 +21,7 @@
 #include <cwchar>
 #include <cstring>
 #include <cstdio>
+#include <cassert>
 #include <map>
 
 #include "global.h"

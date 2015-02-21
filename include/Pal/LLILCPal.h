@@ -514,152 +514,88 @@ typedef EXCEPTION_DISPOSITION (*PFN_PAL_EXCEPTION_FILTER)(
     PAL_DISPATCHER_CONTEXT *DispatcherContext, void *pvParam);
 
 PALIMPORT
-PALAPI
-struct _Unwind_Exception *PAL_TryExcept(PFN_PAL_BODY pfnBody,
-                                        PFN_PAL_EXCEPTION_FILTER pfnFilter,
-                                        void *pvParam, BOOL *pfExecuteHandler);
-
-PALIMPORT
 VOID PALAPI RaiseException(DWORD dwExceptionCode, DWORD dwExceptionFlags,
                            DWORD nNumberOfArguments,
                            const ULONG_PTR *lpArguments);
 
-//
-// Possible results from PAL_TryExcept:
-//
-//   returned exception  pfExecuteHandler  means
-//   ------------------  ----------------  -----------------------------------
-//   NULL                any               No exception escaped from the try
-//                                           block.
-//   non-NULL            FALSE             An exception escaped from the try
-//                                           block, but the filter did not want
-//                                           to handle it.
-//   non-NULL            TRUE              An exception escaped from the try
-//                                           block, and the filter wanted to
-//                                           handle it.
-//
-
-#define DEBUG_OK_TO_RETURN_BEGIN(arg)
-#define DEBUG_OK_TO_RETURN_END(arg)
-
-#define PAL_DUMMY_CALL
-
 #if defined(__cplusplus)
-class PAL_CatchHolder {
-public:
-  PAL_CatchHolder(_Unwind_Exception *exceptionObject) {
-    __cxa_begin_catch(exceptionObject);
-  }
 
-  ~PAL_CatchHolder() { __cxa_end_catch(); }
-};
-
-class PAL_ExceptionHolder {
-private:
-  _Unwind_Exception *m_exceptionObject;
+class PAL_SEHException
+{
+    // We never want to create these directly, since technically this is an
+    // incomplete definition of the type.
+    PAL_SEHException() { }
 
 public:
-  PAL_ExceptionHolder(_Unwind_Exception *exceptionObject) {
-    m_exceptionObject = exceptionObject;
-  }
-
-  ~PAL_ExceptionHolder() {
-    if (m_exceptionObject) {
-      _Unwind_DeleteException(m_exceptionObject);
-    }
-  }
-
-  void SuppressRelease() { m_exceptionObject = 0; }
+    // Note that the following two are actually embedded in this heap-allocated
+    // instance - in contrast to Win32, where the exception record would usually
+    // be allocated on the stack.  This is needed because foreign cleanup
+    // handlers partially unwind the stack on the second pass.
+    EXCEPTION_POINTERS ExceptionPointers;
+    EXCEPTION_RECORD ExceptionRecord;
 };
 
-class PAL_NoHolder {
-public:
-  void SuppressRelease() {}
-};
 #endif // __cplusplus
 
-#define PAL_TRY(__ParamType, __paramDef, __paramRef)                           \
-  {                                                                            \
-    struct __HandlerData {                                                     \
-      __ParamType __param;                                                     \
-      EXCEPTION_DISPOSITION __handlerDisposition;                              \
-      __HandlerData(__ParamType param) : __param(param) {}                     \
+// Start of a try block for exceptions raised by RaiseException
+#define PAL_TRY(__ParamType, __ParamDef, __ParamRef)                           \
+{                                                                              \
+    __ParamType __Param = __ParamRef;                                          \
+    auto __TryBlock = [](__ParamType __ParamDef)                               \
+    {
+
+// Start of an exception handler. If an exception raised by the RaiseException 
+// occurs in the try block and the disposition is EXCEPTION_EXECUTE_HANDLER, 
+// the handler code is executed. If the disposition is EXCEPTION_CONTINUE_SEARCH,
+// the exception is rethrown. The EXCEPTION_CONTINUE_EXECUTION disposition is
+// not supported.
+#define PAL_EXCEPT(DispositionExpression)                                      \
     };                                                                         \
-    __HandlerData __handlerData(__paramRef);                                   \
-    class __Body {                                                             \
-    public:                                                                    \
-      static void run(void *__pvHandlerData) {                                 \
-        __ParamType __paramDef = ((__HandlerData *)__pvHandlerData)->__param;  \
-        PAL_DUMMY_CALL;
+    const bool __IsFinally = false;                                            \
+    auto __FinallyBlock = []() {};                                             \
+    try                                                                        \
+    {                                                                          \
+        __TryBlock(__Param);                                                   \
+    }                                                                          \
+    catch (PAL_SEHException *__Ex)                                             \
+    {                                                                          \
+        EXCEPTION_DISPOSITION __Disposition = DispositionExpression;           \
+        _ASSERTE(__Disposition != EXCEPTION_CONTINUE_EXECUTION);               \
+        if (__Disposition == EXCEPTION_CONTINUE_SEARCH)                        \
+        {                                                                      \
+            throw;                                                             \
+        }
 
-// On Windows 32bit, we dont invoke filters on the second pass. To ensure the
-// same happens on other platforms, we check if we are in the first phase or
-// not. If we are, we invoke the filter and save the disposition in a local
-// static.
-//
-// However, if we are not in the first phase but in the second, and thus
-// unwinding, then we return the disposition saved from the first pass back
-// (similar to how CRT does it on x86).
-#define PAL_EXCEPT(dispositionExpression)                                      \
-  }                                                                            \
-  static EXCEPTION_DISPOSITION Handler(                                        \
-      EXCEPTION_POINTERS *ExceptionPointers,                                   \
-      PAL_DISPATCHER_CONTEXT *DispatcherContext, void *pvHandlerData) {        \
-    DEBUG_OK_TO_RETURN_BEGIN(PAL_EXCEPT)                                       \
-    __HandlerData *pHandlerData = (__HandlerData *)pvHandlerData;              \
-    void *pvParam = NULL;                                                      \
-    pvParam = pHandlerData->__param;                                           \
-    if (!(ExceptionPointers->ExceptionRecord->ExceptionFlags &                 \
-          EXCEPTION_UNWINDING))                                                \
-      pHandlerData->__handlerDisposition =                                     \
-          (EXCEPTION_DISPOSITION)(dispositionExpression);                      \
-    return pHandlerData->__handlerDisposition;                                 \
-    DEBUG_OK_TO_RETURN_END(PAL_EXCEPT)                                         \
-  }                                                                            \
-  }                                                                            \
-  ;                                                                            \
-  BOOL __fExecuteHandler;                                                      \
-  _Unwind_Exception *__exception = PAL_TryExcept(                              \
-      __Body::run, __Body::Handler, &__handlerData, &__fExecuteHandler);       \
-  PAL_NoHolder __exceptionHolder;                                              \
-  if (__exception && __fExecuteHandler) {                                      \
-    PAL_CatchHolder __catchHolder(__exception);                                \
-    __exception = NULL;
+// Start of an exception handler. It works the same way as the PAL_EXCEPT except
+// that the disposition is obtained by calling the specified filter.
+#define PAL_EXCEPT_FILTER(Filter)                                              \
+    PAL_EXCEPT(Filter(&__Ex->ExceptionPointers, __Param))
 
-#define PAL_EXCEPT_FILTER(filter) PAL_EXCEPT(filter(ExceptionPointers, pvParam))
-
-// Executes the handler if the specified exception code matches
-// the one in the exception. Otherwise, returns EXCEPTION_CONTINUE_SEARCH.
-#define PAL_EXCEPT_IF_EXCEPTION_CODE(dwExceptionCode)                          \
-  PAL_EXCEPT(                                                                  \
-      ((ExceptionPointers->ExceptionRecord->ExceptionCode == dwExceptionCode)  \
-           ? EXCEPTION_EXECUTE_HANDLER                                         \
-           : EXCEPTION_CONTINUE_SEARCH))
-
+// Start of a finally block. The finally block is executed both when the try
+// block finishes or when an exception is raised using the RaiseException in it.
 #define PAL_FINALLY                                                            \
-  }                                                                            \
-  static EXCEPTION_DISPOSITION Filter(                                         \
-      EXCEPTION_POINTERS *ExceptionPointers,                                   \
-      PAL_DISPATCHER_CONTEXT *DispatcherContext, void *pvHandlerData) {        \
-    DEBUG_OK_TO_RETURN_BEGIN(PAL_FINALLY)                                      \
-    return EXCEPTION_CONTINUE_SEARCH;                                          \
-    DEBUG_OK_TO_RETURN_END(PAL_FINALLY)                                        \
-  }                                                                            \
-  }                                                                            \
-  ;                                                                            \
-  BOOL __fExecuteHandler;                                                      \
-  _Unwind_Exception *__exception = PAL_TryExcept(                              \
-      __Body::run, __Body::Filter, &__handlerData, &__fExecuteHandler);        \
-  PAL_ExceptionHolder __exceptionHolder(__exception);                          \
-  {
+    };                                                                         \
+    const bool __IsFinally = true;                                             \
+    auto __FinallyBlock = [&]()                                                \
+    {
 
+// End of an except or a finally block.
 #define PAL_ENDTRY                                                             \
-  }                                                                            \
-  if (__exception) {                                                           \
-    __exceptionHolder.SuppressRelease();                                       \
-    _Unwind_Resume(__exception);                                               \
-  }                                                                            \
-  }
+    };                                                                         \
+    if (__IsFinally)                                                           \
+    {                                                                          \
+        try                                                                    \
+        {                                                                      \
+            __TryBlock(__Param);                                               \
+        }                                                                      \
+        catch (...)                                                            \
+        {                                                                      \
+            __FinallyBlock();                                                  \
+            throw;                                                             \
+        }                                                                      \
+        __FinallyBlock();                                                      \
+    }                                                                          \
+}
 
 // COM
 typedef struct _GUID {
