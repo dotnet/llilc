@@ -153,7 +153,7 @@ Failed to read AppDomain.PrepareDataForSetup[Call needs null check]
 INFO:  jitting method AppDomainSetup::.ctor using LLILCJit
 Failed to read AppDomainSetup..ctor[Call needs null check]
 INFO:  jitting method List`1::.cctor using LLILCJit
-Failed to read List`1..cctor[Keep generic context alive]
+Failed to read List`1..cctor[callRuntimeHandleHelper]
 INFO:  jitting method String::Compare using LLILCJit
 Failed to read String.Compare[fgMakeSwitch]
 INFO:  jitting method String::CompareOrdinalIgnoreCaseHelper using LLILCJit
@@ -163,17 +163,17 @@ Failed to read List`1.Add[storeElem]
 INFO:  jitting method List`1::EnsureCapacity using LLILCJit
 Failed to read List`1.EnsureCapacity[Tail call]
 INFO:  jitting method List`1::set_Capacity using LLILCJit
-Failed to read List`1.set_Capacity[Keep generic context alive]
+Failed to read List`1.set_Capacity[non-const derefAddress]
 INFO:  jitting method AppDomainSetup::SetCompatibilitySwitches using LLILCJit
-Failed to read AppDomainSetup.SetCompatibilitySwitches[derefAddress]
+Failed to read AppDomainSetup.SetCompatibilitySwitches[Call needs null check]
 INFO:  jitting method Dictionary`2::.ctor using LLILCJit
 Failed to read Dictionary`2..ctor[Call HasTypeArg]
 INFO:  jitting method EqualityComparer`1::get_Default using LLILCJit
-Failed to read EqualityComparer`1.get_Default[Keep generic context alive]
+Failed to read EqualityComparer`1.get_Default[Call HasTypeArg]
 INFO:  jitting method EqualityComparer`1::CreateComparer using LLILCJit
 Failed to read EqualityComparer`1.CreateComparer[fgMakeSwitch]
 INFO:  jitting method RuntimeType::IsAssignableFrom using LLILCJit
-Failed to read RuntimeType.IsAssignableFrom[derefAddress]
+Failed to read RuntimeType.IsAssignableFrom[Tail call]
 INFO:  jitting method RuntimeType::get_UnderlyingSystemType using LLILCJit
 Successfully read RuntimeType.get_UnderlyingSystemType
 
@@ -344,7 +344,7 @@ entry:
 INFO:  jitting method CultureInfo::.ctor using LLILCJit
 Failed to read CultureInfo..ctor[Tail call]
 INFO:  jitting method CultureData::AnsiToLower using LLILCJit
-Failed to read CultureData.AnsiToLower[derefAddress]
+Failed to read CultureData.AnsiToLower[Tail call]
 INFO:  jitting method StringBuilder::.ctor using LLILCJit
 Failed to read StringBuilder..ctor[storeElem]
 INFO:  jitting method StringBuilder::ThreadSafeCopy using LLILCJit
@@ -358,17 +358,17 @@ Failed to read CultureData.CreateCultureData[Call needs null check]
 INFO:  jitting method Dictionary`2::System.Collections.ICollection.get_SyncRoot using LLILCJit
 Failed to read Dictionary`2.System.Collections.ICollection.get_SyncRoot[genNullCheck]
 INFO:  jitting method Dictionary`2::Insert using LLILCJit
-Failed to read Dictionary`2.Insert[Keep generic context alive]
+Failed to read Dictionary`2.Insert[non-const derefAddress]
 INFO:  jitting method Dictionary`2::Initialize using LLILCJit
-Failed to read Dictionary`2.Initialize[Keep generic context alive]
+Failed to read Dictionary`2.Initialize[non-const derefAddress]
 INFO:  jitting method HashHelpers::GetPrime using LLILCJit
 Failed to read HashHelpers.GetPrime[loadElem]
 INFO:  jitting method GenericEqualityComparer`1::GetHashCode using LLILCJit
-Failed to read GenericEqualityComparer`1.GetHashCode[derefAddress]
+Failed to read GenericEqualityComparer`1.GetHashCode[Tail call]
 INFO:  jitting method String::GetHashCode using LLILCJit
 Failed to read String.GetHashCode[Tail call]
 INFO:  jitting method CultureInfo::InitUserDefaultUICulture using LLILCJit
-Failed to read CultureInfo.InitUserDefaultUICulture[derefAddress]
+Failed to read CultureInfo.InitUserDefaultUICulture[Tail call]
 INFO:  jitting method CultureInfo::GetUserDefaultUILanguage using LLILCJit
 Failed to read CultureInfo.GetUserDefaultUILanguage[Return refany or value class]
 INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
@@ -380,13 +380,134 @@ Failed to read CultureInfo.get_Name[Call needs null check]
 INFO:  jitting method String::EqualsHelper using LLILCJit
 Failed to read String.EqualsHelper[genNullCheck]
 INFO:  jitting method CultureAwareComparer::.ctor using LLILCJit
-Failed to read CultureAwareComparer..ctor[derefAddress]
+Successfully read CultureAwareComparer..ctor
+
+define void @CultureAwareComparer..ctor(%System.CultureAwareComparer addrspace(1)* %param0, %System.Globalization.CultureInfo addrspace(1)* %param1, i8 %param2) {
+entry:
+  %this = alloca %System.CultureAwareComparer addrspace(1)*
+  %arg1 = alloca %System.Globalization.CultureInfo addrspace(1)*
+  %arg2 = alloca i8
+  store %System.CultureAwareComparer addrspace(1)* %param0, %System.CultureAwareComparer addrspace(1)** %this
+  store %System.Globalization.CultureInfo addrspace(1)* %param1, %System.Globalization.CultureInfo addrspace(1)** %arg1
+  store i8 %param2, i8* %arg2
+  %0 = load %System.CultureAwareComparer addrspace(1)** %this
+  %1 = bitcast %System.CultureAwareComparer addrspace(1)* %0 to %System.StringComparer addrspace(1)*
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (%System.StringComparer addrspace(1)*)*)(%System.StringComparer addrspace(1)* %1)
+  %2 = load %System.CultureAwareComparer addrspace(1)** %this
+  %3 = load %System.Globalization.CultureInfo addrspace(1)** %arg1
+  %4 = bitcast %System.Globalization.CultureInfo addrspace(1)* %3 to i64 addrspace(1)*
+  %5 = load i64 addrspace(1)* %4
+  %6 = add i64 %5, 72
+  %7 = inttoptr i64 %6 to i64*
+  %8 = load i64* %7
+  %9 = add i64 %8, 16
+  %10 = inttoptr i64 %9 to i64*
+  %11 = load i64* %10
+  %12 = inttoptr i64 %11 to %System.Globalization.CompareInfo addrspace(1)* (%System.Globalization.CultureInfo addrspace(1)*)*
+  %13 = call %System.Globalization.CompareInfo addrspace(1)* %12(%System.Globalization.CultureInfo addrspace(1)* %3)
+  %14 = getelementptr inbounds %System.CultureAwareComparer addrspace(1)* %2, i32 0, i32 1
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (%System.Globalization.CompareInfo addrspace(1)* addrspace(1)*, %System.Globalization.CompareInfo addrspace(1)*)*)(%System.Globalization.CompareInfo addrspace(1)* addrspace(1)* %14, %System.Globalization.CompareInfo addrspace(1)* %13)
+  %15 = load %System.CultureAwareComparer addrspace(1)** %this
+  %16 = load i8* %arg2
+  %17 = zext i8 %16 to i32
+  %18 = trunc i32 %17 to i8
+  %19 = getelementptr inbounds %System.CultureAwareComparer addrspace(1)* %15, i32 0, i32 2
+  store i8 %18, i8 addrspace(1)* %19
+  ret void
+}
+
+INFO:  jitting method StringComparer::.ctor using LLILCJit
+Failed to read StringComparer..ctor[Tail call]
 INFO:  jitting method CultureInfo::get_CompareInfo using LLILCJit
-Failed to read CultureInfo.get_CompareInfo[derefAddress]
+Successfully read CultureInfo.get_CompareInfo
+
+define %System.Globalization.CompareInfo addrspace(1)* @CultureInfo.get_CompareInfo(%System.Globalization.CultureInfo addrspace(1)* %param0) {
+entry:
+  %this = alloca %System.Globalization.CultureInfo addrspace(1)*
+  %loc0 = alloca %System.Globalization.CompareInfo addrspace(1)*
+  store %System.Globalization.CultureInfo addrspace(1)* %param0, %System.Globalization.CultureInfo addrspace(1)** %this
+  %0 = load %System.Globalization.CultureInfo addrspace(1)** %this
+  %1 = getelementptr inbounds %System.Globalization.CultureInfo addrspace(1)* %0, i32 0, i32 1
+  %2 = load %System.Globalization.CompareInfo addrspace(1)* addrspace(1)* %1, align 8
+  %3 = icmp ne %System.Globalization.CompareInfo addrspace(1)* %2, null
+  br i1 %3, label %38, label %4
+
+; <label>:4                                       ; preds = %entry
+  %5 = load %System.Globalization.CultureInfo addrspace(1)** %this
+  %6 = call i8 inttoptr (i64 NORMALIZED_ADDRESS to i8 (%System.Globalization.CultureInfo addrspace(1)*)*)(%System.Globalization.CultureInfo addrspace(1)* %5)
+  %7 = zext i8 %6 to i32
+  %8 = icmp ne i32 %7, 0
+  br i1 %8, label %12, label %9
+
+; <label>:9                                       ; preds = %4
+  %10 = load %System.Globalization.CultureInfo addrspace(1)** %this
+  %11 = call %System.Globalization.CompareInfo addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.Globalization.CompareInfo addrspace(1)* (i64)*)(i64 NORMALIZED_ADDRESS)
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (%System.Globalization.CompareInfo addrspace(1)*, %System.Globalization.CultureInfo addrspace(1)*)*)(%System.Globalization.CompareInfo addrspace(1)* %11, %System.Globalization.CultureInfo addrspace(1)* %10)
+  br label %27
+
+; <label>:12                                      ; preds = %4
+  %13 = load %System.Globalization.CultureInfo addrspace(1)** %this
+  %14 = getelementptr inbounds %System.Globalization.CultureInfo addrspace(1)* %13, i32 0, i32 7
+  %15 = load %System.String addrspace(1)* addrspace(1)* %14, align 8
+  %16 = call %System.Globalization.CultureInfo addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.Globalization.CultureInfo addrspace(1)* (%System.String addrspace(1)*)*)(%System.String addrspace(1)* %15)
+  %17 = bitcast %System.Globalization.CultureInfo addrspace(1)* %16 to i64 addrspace(1)*
+  %18 = load i64 addrspace(1)* %17
+  %19 = add i64 %18, 72
+  %20 = inttoptr i64 %19 to i64*
+  %21 = load i64* %20
+  %22 = add i64 %21, 16
+  %23 = inttoptr i64 %22 to i64*
+  %24 = load i64* %23
+  %25 = inttoptr i64 %24 to %System.Globalization.CompareInfo addrspace(1)* (%System.Globalization.CultureInfo addrspace(1)*)*
+  %26 = call %System.Globalization.CompareInfo addrspace(1)* %25(%System.Globalization.CultureInfo addrspace(1)* %16)
+  br label %27
+
+; <label>:27                                      ; preds = %9, %12
+  %28 = phi %System.Globalization.CompareInfo addrspace(1)* [ %11, %9 ], [ %26, %12 ]
+  store %System.Globalization.CompareInfo addrspace(1)* %28, %System.Globalization.CompareInfo addrspace(1)** %loc0
+  %29 = call i8 inttoptr (i64 NORMALIZED_ADDRESS to i8 ()*)()
+  %30 = zext i8 %29 to i32
+  %31 = icmp eq i32 %30, 0
+  br i1 %31, label %36, label %32
+
+; <label>:32                                      ; preds = %27
+  %33 = load %System.Globalization.CultureInfo addrspace(1)** %this
+  %34 = load %System.Globalization.CompareInfo addrspace(1)** %loc0
+  %35 = getelementptr inbounds %System.Globalization.CultureInfo addrspace(1)* %33, i32 0, i32 1
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (%System.Globalization.CompareInfo addrspace(1)* addrspace(1)*, %System.Globalization.CompareInfo addrspace(1)*)*)(%System.Globalization.CompareInfo addrspace(1)* addrspace(1)* %35, %System.Globalization.CompareInfo addrspace(1)* %34)
+  br label %38
+
+; <label>:36                                      ; preds = %27
+  %37 = load %System.Globalization.CompareInfo addrspace(1)** %loc0
+  ret %System.Globalization.CompareInfo addrspace(1)* %37
+
+; <label>:38                                      ; preds = %entry, %32
+  %39 = load %System.Globalization.CultureInfo addrspace(1)** %this
+  %40 = getelementptr inbounds %System.Globalization.CultureInfo addrspace(1)* %39, i32 0, i32 1
+  %41 = load %System.Globalization.CompareInfo addrspace(1)* addrspace(1)* %40, align 8
+  ret %System.Globalization.CompareInfo addrspace(1)* %41
+}
+
+INFO:  jitting method CultureInfo::get_UseUserOverride using LLILCJit
+Failed to read CultureInfo.get_UseUserOverride[Tail call]
 INFO:  jitting method CompareInfo::.ctor using LLILCJit
 Failed to read CompareInfo..ctor[Call needs null check]
 INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
 Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[genNullCheck]
+INFO:  jitting method CompatibilitySwitches::get_IsCompatibilityBehaviorDefined using LLILCJit
+Successfully read CompatibilitySwitches.get_IsCompatibilityBehaviorDefined
+
+define i8 @CompatibilitySwitches.get_IsCompatibilityBehaviorDefined() {
+entry:
+  %0 = call i8 addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to i8 addrspace(1)* (i64, i64)*)(i64 NORMALIZED_ADDRESS, i64 154)
+  %1 = getelementptr inbounds i8 addrspace(1)* %0, i64 1986
+  %2 = addrspacecast i8 addrspace(1)* %1 to i8*
+  %3 = load i8* %2
+  %4 = zext i8 %3 to i32
+  %5 = trunc i32 %4 to i8
+  ret i8 %5
+}
+
 INFO:  jitting method OrdinalComparer::.ctor using LLILCJit
 Successfully read OrdinalComparer..ctor
 
@@ -408,8 +529,6 @@ entry:
   ret void
 }
 
-INFO:  jitting method StringComparer::.ctor using LLILCJit
-Failed to read StringComparer..ctor[Tail call]
 INFO:  jitting method OrdinalComparer::Equals using LLILCJit
 Failed to read OrdinalComparer.Equals[Tail call]
 INFO:  jitting method Enumerator::MoveNextRare using LLILCJit
@@ -674,20 +793,16 @@ INFO:  jitting method Path::HasIllegalCharacters using LLILCJit
 Failed to read Path.HasIllegalCharacters[Call needs null check]
 INFO:  jitting method PathHelper::Append using LLILCJit
 Failed to read PathHelper.Append[storePrimitiveType]
-INFO:  jitting method PathHelper::TryExpandShortFileName using LLILCJit
-Failed to read PathHelper.TryExpandShortFileName[entryLabel]
-INFO:  jitting method PathHelper::NullTerminate using LLILCJit
-Failed to read PathHelper.NullTerminate[storePrimitiveType]
-INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
-Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[secretParam]
 INFO:  jitting method PathHelper::OrdinalStartsWith using LLILCJit
 Failed to read PathHelper.OrdinalStartsWith[Tail call]
+INFO:  jitting method PathHelper::NullTerminate using LLILCJit
+Failed to read PathHelper.NullTerminate[storePrimitiveType]
 INFO:  jitting method PathHelper::GetFullPathName using LLILCJit
 Failed to read PathHelper.GetFullPathName[entryLabel]
 INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
 Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[secretParam]
 INFO:  jitting method PathHelper::ToString using LLILCJit
-Failed to read PathHelper.ToString[derefAddress]
+Failed to read PathHelper.ToString[Tail call]
 INFO:  jitting method String::CtorCharPtrStartLength using LLILCJit
 Successfully read String.CtorCharPtrStartLength
 
@@ -1283,7 +1398,7 @@ Failed to read StringBuilder.ThreadSafeCopy[loadElemA]
 INFO:  jitting method Buffer::_Memmove using LLILCJit
 Failed to read Buffer._Memmove[Tail call]
 INFO:  jitting method AppDomain::SetDataHelper using LLILCJit
-Failed to read AppDomain.SetDataHelper[derefAddress]
+Failed to read AppDomain.SetDataHelper[Call needs null check]
 INFO:  jitting method AppDomain::get_LocalStore using LLILCJit
 Successfully read AppDomain.get_LocalStore
 
@@ -1321,7 +1436,7 @@ Failed to read Dictionary`2..ctor[Tail call]
 INFO:  jitting method Dictionary`2::TryGetValue using LLILCJit
 Failed to read Dictionary`2.TryGetValue[loadElemA]
 INFO:  jitting method Dictionary`2::FindEntry using LLILCJit
-Failed to read Dictionary`2.FindEntry[Keep generic context alive]
+Failed to read Dictionary`2.FindEntry[non-const derefAddress]
 INFO:  jitting method Path::NormalizePath using LLILCJit
 Failed to read Path.NormalizePath[Tail call]
 INFO:  jitting method StringBuilder::.ctor using LLILCJit
@@ -1329,7 +1444,7 @@ Failed to read StringBuilder..ctor[Tail call]
 INFO:  jitting method HashHelpers::ExpandPrime using LLILCJit
 Failed to read HashHelpers.ExpandPrime[Tail call]
 INFO:  jitting method Dictionary`2::Resize using LLILCJit
-Failed to read Dictionary`2.Resize[Keep generic context alive]
+Failed to read Dictionary`2.Resize[non-const derefAddress]
 INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
 Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[genNullCheck]
 INFO:  jitting method AppDomain::CreateAppDomainManager using LLILCJit
@@ -1402,7 +1517,7 @@ Failed to read String.Equals[Tail call]
 INFO:  jitting method Monitor::Enter using LLILCJit
 Failed to read Monitor.Enter[Tail call]
 INFO:  jitting method GenericEqualityComparer`1::Equals using LLILCJit
-Failed to read GenericEqualityComparer`1.Equals[Keep generic context alive]
+Failed to read GenericEqualityComparer`1.Equals[non-const derefAddress]
 INFO:  jitting method AppDomain::SetupBindingPaths using LLILCJit
 Failed to read AppDomain.SetupBindingPaths[Tail call]
 INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
@@ -1414,7 +1529,7 @@ Failed to read AppDomain.GetNativeHandle[genNullCheck]
 INFO:  jitting method AppDomain::InitializeCompatibilityFlags using LLILCJit
 Failed to read AppDomain.InitializeCompatibilityFlags[Call needs null check]
 INFO:  jitting method Dictionary`2::.ctor using LLILCJit
-Failed to read Dictionary`2..ctor[Keep generic context alive]
+Failed to read Dictionary`2..ctor[non-const derefAddress]
 INFO:  jitting method Dictionary`2::get_Count using LLILCJit
 Successfully read Dictionary`2.get_Count
 
@@ -1529,7 +1644,66 @@ Failed to read EvidenceBase..ctor[Tail call]
 INFO:  jitting method ApplicationTrust::InitDefaultGrantSet using LLILCJit
 Failed to read ApplicationTrust.InitDefaultGrantSet[Tail call]
 INFO:  jitting method PolicyStatement::.ctor using LLILCJit
-Failed to read PolicyStatement..ctor[derefAddress]
+Successfully read PolicyStatement..ctor
+
+define void @PolicyStatement..ctor(%System.Security.Policy.PolicyStatement addrspace(1)* %param0, %System.Security.PermissionSet addrspace(1)* %param1, i32 %param2) {
+entry:
+  %this = alloca %System.Security.Policy.PolicyStatement addrspace(1)*
+  %arg1 = alloca %System.Security.PermissionSet addrspace(1)*
+  %arg2 = alloca i32
+  store %System.Security.Policy.PolicyStatement addrspace(1)* %param0, %System.Security.Policy.PolicyStatement addrspace(1)** %this
+  store %System.Security.PermissionSet addrspace(1)* %param1, %System.Security.PermissionSet addrspace(1)** %arg1
+  store i32 %param2, i32* %arg2
+  %0 = load %System.Security.Policy.PolicyStatement addrspace(1)** %this
+  %1 = bitcast %System.Security.Policy.PolicyStatement addrspace(1)* %0 to %System.Object addrspace(1)*
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (%System.Object addrspace(1)*)*)(%System.Object addrspace(1)* %1)
+  %2 = load %System.Security.PermissionSet addrspace(1)** %arg1
+  %3 = icmp ne %System.Security.PermissionSet addrspace(1)* %2, null
+  br i1 %3, label %8, label %4
+
+; <label>:4                                       ; preds = %entry
+  %5 = load %System.Security.Policy.PolicyStatement addrspace(1)** %this
+  %6 = call %System.Security.PermissionSet addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.Security.PermissionSet addrspace(1)* (i64)*)(i64 NORMALIZED_ADDRESS)
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (%System.Security.PermissionSet addrspace(1)*, i8)*)(%System.Security.PermissionSet addrspace(1)* %6, i8 0)
+  %7 = getelementptr inbounds %System.Security.Policy.PolicyStatement addrspace(1)* %5, i32 0, i32 1
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (%System.Security.PermissionSet addrspace(1)* addrspace(1)*, %System.Security.PermissionSet addrspace(1)*)*)(%System.Security.PermissionSet addrspace(1)* addrspace(1)* %7, %System.Security.PermissionSet addrspace(1)* %6)
+  br label %22
+
+; <label>:8                                       ; preds = %entry
+  %9 = load %System.Security.Policy.PolicyStatement addrspace(1)** %this
+  %10 = load %System.Security.PermissionSet addrspace(1)** %arg1
+  %11 = bitcast %System.Security.PermissionSet addrspace(1)* %10 to i64 addrspace(1)*
+  %12 = load i64 addrspace(1)* %11
+  %13 = add i64 %12, 72
+  %14 = inttoptr i64 %13 to i64*
+  %15 = load i64* %14
+  %16 = add i64 %15, 32
+  %17 = inttoptr i64 %16 to i64*
+  %18 = load i64* %17
+  %19 = inttoptr i64 %18 to %System.Security.PermissionSet addrspace(1)* (%System.Security.PermissionSet addrspace(1)*)*
+  %20 = call %System.Security.PermissionSet addrspace(1)* %19(%System.Security.PermissionSet addrspace(1)* %10)
+  %21 = getelementptr inbounds %System.Security.Policy.PolicyStatement addrspace(1)* %9, i32 0, i32 1
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (%System.Security.PermissionSet addrspace(1)* addrspace(1)*, %System.Security.PermissionSet addrspace(1)*)*)(%System.Security.PermissionSet addrspace(1)* addrspace(1)* %21, %System.Security.PermissionSet addrspace(1)* %20)
+  br label %22
+
+; <label>:22                                      ; preds = %4, %8
+  %23 = load i32* %arg2
+  %24 = call i8 inttoptr (i64 NORMALIZED_ADDRESS to i8 (i32)*)(i32 %23)
+  %25 = zext i8 %24 to i32
+  %26 = icmp eq i32 %25, 0
+  br i1 %26, label %31, label %27
+
+; <label>:27                                      ; preds = %22
+  %28 = load %System.Security.Policy.PolicyStatement addrspace(1)** %this
+  %29 = load i32* %arg2
+  %30 = getelementptr inbounds %System.Security.Policy.PolicyStatement addrspace(1)* %28, i32 0, i32 2
+  store i32 %29, i32 addrspace(1)* %30
+  br label %31
+
+; <label>:31                                      ; preds = %22, %27
+  ret void
+}
+
 INFO:  jitting method PermissionSet::Copy using LLILCJit
 Successfully read PermissionSet.Copy
 
@@ -1572,13 +1746,63 @@ entry:
 INFO:  jitting method ApplicationTrust::set_DefaultGrantSet using LLILCJit
 Failed to read ApplicationTrust.set_DefaultGrantSet[Call needs null check]
 INFO:  jitting method PolicyStatement::get_PermissionSet using LLILCJit
-Failed to read PolicyStatement.get_PermissionSet[derefAddress]
+Successfully read PolicyStatement.get_PermissionSet
+
+define %System.Security.PermissionSet addrspace(1)* @PolicyStatement.get_PermissionSet(%System.Security.Policy.PolicyStatement addrspace(1)* %param0) {
+entry:
+  %this = alloca %System.Security.Policy.PolicyStatement addrspace(1)*
+  %loc0 = alloca i8
+  %loc1 = alloca %System.Security.PermissionSet addrspace(1)*
+  %loc2 = alloca %System.Security.Policy.PolicyStatement addrspace(1)*
+  store %System.Security.Policy.PolicyStatement addrspace(1)* %param0, %System.Security.Policy.PolicyStatement addrspace(1)** %this
+  store i8 0, i8* %loc0
+  %0 = load %System.Security.Policy.PolicyStatement addrspace(1)** %this
+  store %System.Security.Policy.PolicyStatement addrspace(1)* %0, %System.Security.Policy.PolicyStatement addrspace(1)** %loc2
+  %1 = addrspacecast i8* %loc0 to i8 addrspace(1)*
+  %2 = bitcast %System.Security.Policy.PolicyStatement addrspace(1)* %0 to %System.Object addrspace(1)*
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (%System.Object addrspace(1)*, i8 addrspace(1)*)*)(%System.Object addrspace(1)* %2, i8 addrspace(1)* %1)
+  %3 = load %System.Security.Policy.PolicyStatement addrspace(1)** %this
+  %4 = getelementptr inbounds %System.Security.Policy.PolicyStatement addrspace(1)* %3, i32 0, i32 1
+  %5 = load %System.Security.PermissionSet addrspace(1)* addrspace(1)* %4, align 8
+  %6 = bitcast %System.Security.PermissionSet addrspace(1)* %5 to i64 addrspace(1)*
+  %7 = load i64 addrspace(1)* %6
+  %8 = add i64 %7, 72
+  %9 = inttoptr i64 %8 to i64*
+  %10 = load i64* %9
+  %11 = add i64 %10, 32
+  %12 = inttoptr i64 %11 to i64*
+  %13 = load i64* %12
+  %14 = inttoptr i64 %13 to %System.Security.PermissionSet addrspace(1)* (%System.Security.PermissionSet addrspace(1)*)*
+  %15 = call %System.Security.PermissionSet addrspace(1)* %14(%System.Security.PermissionSet addrspace(1)* %5)
+  store %System.Security.PermissionSet addrspace(1)* %15, %System.Security.PermissionSet addrspace(1)** %loc1
+  br label %16
+
+; <label>:16                                      ; preds = %entry
+  %17 = load i8* %loc0
+  %18 = zext i8 %17 to i32
+  %19 = icmp eq i32 %18, 0
+  br i1 %19, label %23, label %20
+
+; <label>:20                                      ; preds = %16
+  %21 = load %System.Security.Policy.PolicyStatement addrspace(1)** %loc2
+  %22 = bitcast %System.Security.Policy.PolicyStatement addrspace(1)* %21 to %System.Object addrspace(1)*
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (%System.Object addrspace(1)*)*)(%System.Object addrspace(1)* %22)
+  br label %23
+
+; <label>:23                                      ; preds = %16, %20
+  br label %24
+
+; <label>:24                                      ; preds = %23
+  %25 = load %System.Security.PermissionSet addrspace(1)** %loc1
+  ret %System.Security.PermissionSet addrspace(1)* %25
+}
+
 INFO:  jitting method SecurityManager::GetSpecialFlags using LLILCJit
 Failed to read SecurityManager.GetSpecialFlags[Call needs null check]
 INFO:  jitting method List`1::.ctor using LLILCJit
-Failed to read List`1..ctor[Keep generic context alive]
+Failed to read List`1..ctor[non-const derefAddress]
 INFO:  jitting method List`1::AsReadOnly using LLILCJit
-Failed to read List`1.AsReadOnly[Keep generic context alive]
+Failed to read List`1.AsReadOnly[non-const derefAddress]
 INFO:  jitting method ReadOnlyCollection`1::.ctor using LLILCJit
 Successfully read ReadOnlyCollection`1..ctor
 
