@@ -729,6 +729,29 @@ function Global:BuildTest([string]$Arch="x64", [string]$Build="Release")
 
 # -------------------------------------------------------------------------
 #
+# Return the number of failures of RunTest
+# Return -1 if the log file does not exist
+#
+# -------------------------------------------------------------------------
+
+function Global:CheckFailure([string]$Arch="x64", [string]$Build="Release")
+{
+  $CoreCLRTestAssets = CoreCLRTestAssets
+  $RunResult = "$CoreCLRTestAssets\coreclr\binaries\Logs\TestRunResults_"
+  $RunResult  = $RunResult + "$Arch"
+  $RunResult  = $RunResult + "__$Build.log"
+  $RunResultsExists = Test-Path $RunResult
+  if (!$RunResultsExists) {
+    return -1;
+  }
+  else {
+    Get-Content $RunResult | Where-Object { $_.Contains("Failed: ") } | ForEach-Object { $_ -match "Failed: (\d+)," } | Out-Null
+    return $matches[1]
+  }
+}
+
+# -------------------------------------------------------------------------
+#
 # Run LLILC enabled CoreCLR regression tests
 #
 # -------------------------------------------------------------------------
@@ -742,15 +765,15 @@ function Global:RunTest([string]$Arch="x64", [string]$Build="Release")
   # Workaround exception handling issue
   chcp 65001 | Out-Null
 
-
   $Env:SkipTestAssemblies = "Common;Exceptions;GC;Loader;managed;packages;Regressions;runtime;Tests;TestWrappers_x64_release;Threading" 
   pushd .
   cd $CoreCLRTestAssets\coreclr\tests
 
   .\runtest $Arch $Build EnableMSILC $CoreCLRRuntime\$CoreCLRVersion\bin 
-  
   CheckDiff -Create $True -UseDiffTool $False -Arch $Arch -Build $Build
-  popd  
+  $NumFailures = CheckFailure -Arch $Arch -Build $Build
+  popd
+  return $NumFailures 
 }
 
 # -------------------------------------------------------------------------
