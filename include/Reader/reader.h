@@ -1337,7 +1337,7 @@ public:
   CORINFO_CONTEXT_HANDLE getCurrentContext(void);
   uint32_t getCurrentMethodHash(void);
   uint32_t getCurrentMethodAttribs(void);
-  char *getCurrentMethodName(const char **ModuleName);
+  const char *getCurrentMethodName(const char **ModuleName);
   void getCurrentMethodSigData(CorInfoCallConv *Conv, CorInfoType *ReturnType,
                                CORINFO_CLASS_HANDLE *ReturnClass,
                                int32_t *TotalILArgs, bool *IsVarArg,

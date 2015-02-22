@@ -258,7 +258,7 @@ typedef enum {
   TRY_Xcpt,  // native SEH except
   TRY_CCatch // native C++ catch
 } TryKind;
-};
+}
 
 // Used to map read opcodes to function-specific opcode enumerations.
 // Uses the same ordering as openum.h.

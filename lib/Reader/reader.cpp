@@ -122,14 +122,14 @@ class FlowGraphNodeOffsetList {
   IRNode *ReaderStack;
 
 public:
-  FlowGraphNodeOffsetList *getNext(void) { return Next; }
+  FlowGraphNodeOffsetList *getNext(void) const { return Next; }
   void setNext(FlowGraphNodeOffsetList *N) { Next = N; }
-  FlowGraphNode *getNode(void) { return Node; }
+  FlowGraphNode *getNode(void) const { return Node; }
   void setNode(FlowGraphNode *N) { Node = N; }
-  uint32_t getOffset(void) { return Offset; }
+  uint32_t getOffset(void) const { return Offset; }
   void setOffset(uint32_t O) { Offset = O; }
 
-  IRNode *getStack(void) { return ReaderStack; }
+  IRNode *getStack(void) const { return ReaderStack; }
   void setStack(IRNode *RS) { ReaderStack = RS; }
 };
 
@@ -716,8 +716,8 @@ ReaderBase::getCurrentMethodAttribs(void) {
   return JitInfo->getMethodAttribs(getCurrentMethodHandle());
 }
 
-char *ReaderBase::getCurrentMethodName(const char **ModuleName) {
-  return (char *)JitInfo->getMethodName(getCurrentMethodHandle(), ModuleName);
+const char *ReaderBase::getCurrentMethodName(const char **ModuleName) {
+  return JitInfo->getMethodName(getCurrentMethodHandle(), ModuleName);
 }
 
 mdToken ReaderBase::getMethodDefFromMethod(CORINFO_METHOD_HANDLE Handle) {
@@ -1149,7 +1149,7 @@ void ReaderBase::getMethodSigData(CorInfoCallConv *CallingConvention,
   *TotalILArgs = (uint32_t)Sig.totalILArgs();
   *IsVarArg = Sig.isVarArg();
   *HasThis = Sig.hasThis();
-  *RetSig = NULL;
+  *RetSig = 0;
 }
 
 void ReaderBase::getMethodInfo(CORINFO_METHOD_HANDLE Method,
@@ -2535,8 +2535,8 @@ ReaderBase::fgReplaceBranchTarget(uint32_t Offset,
 int __cdecl labelSortFunction(const void *C1, const void *C2) {
   uint32_t O1, O2;
 
-  O1 = ((FlowGraphNodeOffsetList *)C1)->getOffset();
-  O2 = ((FlowGraphNodeOffsetList *)C2)->getOffset();
+  O1 = ((const FlowGraphNodeOffsetList *)C1)->getOffset();
+  O2 = ((const FlowGraphNodeOffsetList *)C2)->getOffset();
 
   if (O1 < O2)
     return -1;
@@ -7409,7 +7409,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
     case ReaderBaseNS::CEE_LDELEM_R4:
     case ReaderBaseNS::CEE_LDELEM_R8:
     case ReaderBaseNS::CEE_LDELEM_REF:
-      Token = NULL;
+      Token = mdTokenNil;
     LOAD_ELEMENT:
       verifyLoadElem(TheVerificationState, Opcode, &ResolvedToken);
       BREAK_ON_VERIFY_ONLY;
@@ -7844,7 +7844,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
     case ReaderBaseNS::CEE_STELEM_R4:
     case ReaderBaseNS::CEE_STELEM_R8:
     case ReaderBaseNS::CEE_STELEM_REF:
-      Token = NULL;
+      Token = mdTokenNil;
     STORE_ELEMENT:
       verifyStoreElem(TheVerificationState,
                       (ReaderBaseNS::StElemOpcode)MappedValue, &ResolvedToken);
@@ -8927,4 +8927,4 @@ void ReaderBase::resolveToken(mdToken Token, CorInfoTokenKind TokenType,
                               CORINFO_RESOLVED_TOKEN *ResolvedToken) {
   return resolveToken(Token, getCurrentContext(), getCurrentModuleHandle(),
                       TokenType, ResolvedToken);
-};
+}

@@ -123,7 +123,7 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
 
   // Prep main outputs
   *NativeEntry = NULL;
-  *NativeSizeOfCode = NULL;
+  *NativeSizeOfCode = 0;
 
   // Set up state for this thread (if necessary)
   LLILCJitPerThreadState *PerThreadState = State.get();
