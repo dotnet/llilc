@@ -382,7 +382,41 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
     LLVMBuilder->CreateStore(CurrentArg, Arguments[I]);
   }
 
-  return;
+  // Check for special cases where the Jit needs to do extra work.
+  const uint32_t MethodFlags = getCurrentMethodAttribs();
+  const uint32_t JitFlags = JitContext->Flags;
+
+  // TODO: support for synchronized methods
+  if (MethodFlags & CORINFO_FLG_SYNCH) {
+    throw NotYetImplementedException("synchronized method");
+  }
+
+  // TODO: support for JustMyCode hook
+  if ((JitFlags & CORJIT_FLG_DEBUG_CODE) &&
+      !(JitFlags & CORJIT_FLG_IL_STUB)) { 
+
+    bool IsIndirect = false;
+    void * DebugHandle = 
+      getJustMyCodeHandle(getCurrentMethodHandle(), &IsIndirect);
+
+    if (DebugHandle != nullptr) {
+      throw NotYetImplementedException("just my code hook");
+    }
+  }
+
+  // TODO: support for secret parameter for shared IL stubs
+  if ((JitFlags & CORJIT_FLG_IL_STUB) &&
+      (JitFlags & CORJIT_FLG_PUBLISH_SECRET_PARAM)) {
+    throw NotYetImplementedException("publish secret param");
+  }
+
+  // TODO: Insert class initialization check if necessary
+  CorInfoInitClassResult InitResult =
+    initClass(NULL, getCurrentMethodHandle(), getCurrentContext());
+  const bool InitClass = InitResult & CORINFO_INITCLASS_USE_HELPER;
+  if (InitClass) {
+     throw NotYetImplementedException("init class");
+  }
 }
 
 void GenIR::readerMiddlePass() { return; }
