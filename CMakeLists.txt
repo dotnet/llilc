@@ -390,6 +390,30 @@ add_subdirectory(include)
 add_subdirectory(lib)
 add_subdirectory(tools)
 
+option (LLILC_ENABLE_DOXYGEN "Use doxygen to generate LLILC API documentation." ON)
+if (DOXYGEN_FOUND)
+if (LLVM_ENABLE_DOXYGEN)
+  set(abs_top_srcdir ${CMAKE_CURRENT_SOURCE_DIR})
+  set(abs_top_builddir ${CMAKE_CURRENT_BINARY_DIR})
+  
+  if (HAVE_DOT)
+    set(DOT ${LLVM_PATH_DOT})
+  endif()
+
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Documentation/doxygen.cfg.in
+    ${CMAKE_CURRENT_BINARY_DIR}/Documentation/doxygen.cfg @ONLY)
+
+  set(abs_top_srcdir)
+  set(abs_top_builddir)
+  set(DOT)
+
+  add_custom_target(doxygen-llilc
+    COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Documentation/doxygen.cfg
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Generating LLILC doxygen documentation." VERBATIM)
+endif()
+endif()
+
 option(LLILC_INCLUDE_TESTS
        "Generate build targets for the LLILCJit unit tests."
        ${LLVM_INCLUDE_TESTS})
