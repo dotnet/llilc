@@ -29,38 +29,92 @@
 
 class FlowGraphNode : public llvm::BasicBlock {};
 
+/// \brief Information associated with a Basic Block (aka Flow Graph Node)
+///
+/// This is used when processing MSIL to track the starting and ending
+/// positions in the IL and the state of the operand stack.
 struct FlowGraphNodeInfo {
 public:
+  /// Byte Offset in the MSIL instruction stream to the first instruction
+  /// in this basic block.
   uint32_t StartMSILOffset;
+
+  /// Byte offset that is just past the last MSIL instruction of the Basic Block.
   uint32_t EndMSILOffset;
+
+  /// In algorithms traversing the flow graph, used to track which basic blocks
+  /// have been visited.
   bool IsVisited;
+
+  /// Used to track what is on the operand stack on entry to the basic block.
   ReaderStack *TheReaderStack;
 };
 
+/// \brief Represent a node in the LLILC compiler intermediate representation.
+///
+/// The MSIL reader expects to use a type called IRNode to represent the
+/// translation of the MSIL instructions. But the LLVM infrastructure uses
+/// the llvm::Value type as the base class of its IR representation. 
+/// To reconcile these we make IRNode a class that merely derives from 
+/// llvm::Value.
 class IRNode : public llvm::Value {};
 
+/// \brief Abstract class representing a list of flow graph edges.
+///
+/// The list acts like an iterator which has a current position from which
+/// source and sink nodes can be found.
 class FlowGraphEdgeList {
 public:
+  /// Constructor
   FlowGraphEdgeList(){};
 
+  /// Move the current location in the flow graph edge list to the next edge.
   virtual void moveNext() = 0;
 
+  /// \return The sink (aka target or destination) node of the current edge.
   virtual FlowGraphNode *getSink() = 0;
 
+  /// \return The source (aka From) node of the current edge.
   virtual FlowGraphNode *getSource() = 0;
 };
 
+
+/// \brief A list of predecessor edges of a given flow graph node.
+///
+/// This is used for iterating over the predecessors of a flow graph node.
+/// After creating the predecessor edge list the getSource method is used
+/// to get the first predecessor (if any). As long as the result of getSource()
+/// is non-null, the moveNext() method may be used to advance to the next
+/// predecessor edge. When getSource() returns null there are no more 
+/// predecessor edges (or predecessors). 
+/// \invariant The current edge iterator either points to a real edge or else
+/// equals the end iterator meaning the list has been exhausted.
 class FlowGraphPredecessorEdgeList : public FlowGraphEdgeList {
 public:
+  /// Construct a flow graph edge list for iterating over the predecessors
+  /// of the \p Fg node.
+  /// \param Fg The node whose predecessors are desired.
+  /// \pre \p Fg != NULL.
+  /// \post **this** is a predecessor edge list representing the predecessors
+  /// of \p Fg.
   FlowGraphPredecessorEdgeList(FlowGraphNode *Fg)
       : FlowGraphEdgeList(), PredIterator(Fg), PredIteratorEnd(Fg, true) {}
 
+  /// Move the current location in the flow graph edge list to the next edge.
+  /// \pre The current edge has not reached the end of the edge list.
+  /// \post The current edge has been advanced to the next, or has possibly
+  /// reached the end iterator (meaning no more predecessors). 
   void moveNext() override { PredIterator++; }
 
+  /// \return The sink of the current edge which will be \p Fg node.
+  /// \pre The current edge has not reached the end of the edge list.
   FlowGraphNode *getSink() override {
     return (FlowGraphNode *)PredIterator.getUse().get();
   }
 
+  /// \return The source of the current edge which will be one of the predecessors
+  /// of the \p Fg node, unless the list has been exhausted in which case
+  /// return NULL.
   FlowGraphNode *getSource() override {
     return (PredIterator == PredIteratorEnd) ? NULL
                                              : (FlowGraphNode *)*PredIterator;
