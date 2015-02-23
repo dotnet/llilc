@@ -10,7 +10,7 @@
 ///
 /// \file
 /// \brief Data structures for holding verification state.
-//
+///
 //===----------------------------------------------------------------------===//
 
 #ifndef MSIL_READER_NEW_VSTATE_H

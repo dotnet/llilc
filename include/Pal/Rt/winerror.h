@@ -7,7 +7,8 @@
 // See LICENSE file in the project root for full license information.
 //
 //===----------------------------------------------------------------------===//
-//
-// Dummy winerror.h for non-Windows platforms.
-//
+///
+/// \file
+/// \brief Dummy winerror.h for non-Windows platforms.
+///
 //===----------------------------------------------------------------------===//

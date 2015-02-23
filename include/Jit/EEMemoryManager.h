@@ -7,9 +7,10 @@
 // See LICENSE file in the project root for full license information.
 //
 //===----------------------------------------------------------------------===//
-//
-// Declaration of the memory manager interface to the EE.
-//
+///
+/// \file
+/// \brief Declaration of the memory manager interface to the EE.
+///
 //===----------------------------------------------------------------------===//
 
 #ifndef EE_MEMORYMANAGER_H

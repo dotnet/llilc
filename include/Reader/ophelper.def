@@ -7,13 +7,27 @@
 // See LICENSE file in the project root for full license information. 
 //
 //===----------------------------------------------------------------------===//
-//
-// Include file to make cleaner use of the opcode.def file to create mappings
-// for info on MSIL ops.
-//
-// To use this header:
-// #define OPDEF_HELPER
-//
+///
+/// \file
+/// \brief Include file to make cleaner use of the opcode.def file to create mappings
+/// for info on MSIL ops.
+///
+/// To use this header you must use
+///
+/// ~~~
+/// #define OPDEF_HELPER <desired-result>
+/// #include ophelper.def
+/// ~~~
+///
+/// This has the effect of extracting information from the opcode.def file. In particular
+/// a list of values is produced suitable for initializing a table.
+/// 
+/// <desired-result> is one of these:
+/// - OPDEF_OPCODENAME: to get the opcode name
+/// - OPDEF_OPERANDSIZE: to get the operand size
+/// - OPDEF_PUSHCOUNT: to get the number of operands pushed
+/// - OPDEF_POPCOUNT: to get the number of operands popped
+/// - OPDEF_ISBRANCH: to tell if opcode is for a conditional branch.
 //===----------------------------------------------------------------------===//
 
 #ifndef OPDEF_HELPER
@@ -24,7 +38,7 @@
 #define OPDEF_OPERANDSIZE   123002
 #define OPDEF_PUSHCOUNT     123003
 #define OPDEF_POPCOUNT      123004
-#define OPDEF_ISBRACH       123005
+#define OPDEF_ISBRANCH      123005
 
 
 #if OPDEF_HELPER == OPDEF_OPCODENAME

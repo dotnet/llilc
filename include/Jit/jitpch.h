@@ -7,9 +7,10 @@
 // See LICENSE file in the project root for full license information.
 //
 //===----------------------------------------------------------------------===//
-//
-// Jit precompiled header
-//
+///
+/// \file
+/// \brief Jit precompiled header
+///
 //===----------------------------------------------------------------------===//
 
 #ifndef JIT_PCH_H

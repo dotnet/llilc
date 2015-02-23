@@ -7,19 +7,20 @@
 // See LICENSE file in the project root for full license information.
 //
 //===----------------------------------------------------------------------===//
-//
-// Common code for converting MSIL bytecode into some other representation.
-//
-// The common reader's operation revolves around two central classes.
-// ReaderBase:: the common reader class
-// GenIR::      an opaque vessel for holding the client's state
-//
-// The GenIR class is opaque to the common reader class, all manipulations of
-// GenIR are performed by client implemented code.
-//
-// The common reader generates code through the methods that are implemented in
-// this file, and static member functions that are implemented by the client.
-//
+///
+/// \file
+/// \brief Common code for converting MSIL bytecode into some other representation.
+///
+/// The common reader's operation revolves around two central classes.
+/// ReaderBase:: the common reader class
+/// GenIR::      an opaque vessel for holding the client's state
+///
+/// The GenIR class is opaque to the common reader class, all manipulations of
+/// GenIR are performed by client implemented code.
+///
+/// The common reader generates code through the methods that are implemented in
+/// this file, and static member functions that are implemented by the client.
+///
 //===----------------------------------------------------------------------===//
 
 #include "reader.h"
