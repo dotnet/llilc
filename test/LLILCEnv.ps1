@@ -765,7 +765,7 @@ function Global:RunTest([string]$Arch="x64", [string]$Build="Release")
   pushd .
   cd $CoreCLRTestAssets\coreclr\tests
 
-  .\runtest $Arch $Build EnableAltJit LLILCJit $CoreCLRRuntime\$CoreCLRVersion\bin 
+  .\runtest $Arch $Build EnableAltJit LLILCJit $CoreCLRRuntime\$CoreCLRVersion\bin | Write-Host
   CheckDiff -Create $True -UseDiffTool $False -Arch $Arch -Build $Build
   $NumFailures = CheckFailure -Arch $Arch -Build $Build
   popd
