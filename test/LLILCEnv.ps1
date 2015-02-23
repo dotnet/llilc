@@ -512,22 +512,18 @@ function Global:CopyJIT([string]$Build="Debug")
   $CoreCLRRuntime = CoreCLRRuntime
   $CoreCLRVersion = CoreCLRVersion
   $LLILCJit = LLILCJit($Build)
-  $OldJitName = "MSILCJit.dll"
+  $JitName = "LLILCJit.dll"
 
-  $WorkLLILCJitExists = Test-Path $CoreCLRRuntime\$CoreCLRVersion\bin\$OldJitName
+  $WorkLLILCJitExists = Test-Path $CoreCLRRuntime\$CoreCLRVersion\bin\$JitName
   if ($WorkLLILCJitExists) {
-    Remove-Item $CoreCLRRuntime\$CoreCLRVersion\bin\$OldJitName | Out-Null
+    Remove-Item $CoreCLRRuntime\$CoreCLRVersion\bin\$JitName | Out-Null
   }
 
   pushd .
   cd $CoreCLRRuntime\$CoreCLRVersion\bin\
 
   Write-Output ("Copying LLILC JIT")
-
-  # In CoreCLR test assets, the hookup of LLILC is still using old name MSILC
-  # Accomodate that for now. Will update here once CoreCLR is updated.
-
-  copy $LLILCJit $OldJitName
+  copy $LLILCJit $JitName
   Write-Output ("LLILC JIT Copied")
 
   popd
@@ -769,7 +765,7 @@ function Global:RunTest([string]$Arch="x64", [string]$Build="Release")
   pushd .
   cd $CoreCLRTestAssets\coreclr\tests
 
-  .\runtest $Arch $Build EnableMSILC $CoreCLRRuntime\$CoreCLRVersion\bin 
+  .\runtest $Arch $Build EnableAltJit LLILCJit $CoreCLRRuntime\$CoreCLRVersion\bin 
   CheckDiff -Create $True -UseDiffTool $False -Arch $Arch -Build $Build
   $NumFailures = CheckFailure -Arch $Arch -Build $Build
   popd
