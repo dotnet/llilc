@@ -42,7 +42,7 @@
     This script provides some daily routines beside the above four
     common tasks:
 
-    LLILCHelp, CopyJIT, ReBaseAll, ApplyFilter 
+    LLILCHelp, CopyJIT, ReBaseAll, ApplyFilter, CheckEnv 
     
     LLILC is under the umbrella of LLVM. A default location is used for
     LLVM build directory. You can override the location by specifying
@@ -87,23 +87,23 @@ function ValidatePreConditions
 
   # Validate Git
 
-  IsOnPath("git.exe")
+  IsOnPath -executable "git.exe" -software "Git"
 
   # Validate CMake
 
-  IsOnPath("cmake.exe")
+  IsOnPath -executable "cmake.exe" -software "CMake"
 
   # Validate Python
   
-  IsOnPath("python.exe")
+  IsOnPath -executable "python.exe" -software "Python"
 
   # Validate GnuWin32
 
-  IsOnPath("wget.exe")
+  IsOnPath -executable "wget.exe" -software "GnuWin32"
 
   # Validate Diff Tool
   
-  IsOnPath("sgdm.exe")
+  IsOnPath -executable "sgdm.exe" -software "DiffMerge"
 
   # Validate LLVM
 
@@ -328,10 +328,10 @@ function SetVCVars
 #
 # -------------------------------------------------------------------------
 
-function IsOnPath([string]$executable)
+function IsOnPath([string]$executable, [string]$software)
 {
   if (-Not (Get-Command $executable -ErrorAction SilentlyContinue)) {
-    throw "!!! $executable not on path." 
+    throw  "!!! $executable not on path. Check the installation of $software."
   }
 }
 
@@ -496,6 +496,8 @@ function LLILCEnvInit
   CompleteEnvInit
   CheckEnv
 
+  Write-Output("Use LLILCHelp for a list of commands. Use CheckEnv for a list of work environment.")
+
   # start with LLILC Source Directory
   $LLILCSource = LLILCSource
   cd $LLILCSource
@@ -589,28 +591,22 @@ function Global:BuildAll([string]$Arch="x64", [string]$Build="Debug", [bool]$Par
 
 # -------------------------------------------------------------------------
 #
-# Configure and Build LLILC JIT
+# Build LLILC JIT
 #
 # -------------------------------------------------------------------------
 
-function Global:Build([string]$Arch="x64", [string]$Build="Debug", [bool]$Parallel=$False)
+function Global:Build([string]$Build="Debug")
 {
   $LLVMBuild = LLVMBuild
   $TempBat = Join-Path $Env:TEMP "buildllilc.bat"
   $File = "$Env:VS120COMNTOOLS\..\..\VC\vcvarsall.bat"
   
-  $MSwitch = ""
-  if ($Parallel) {
-    $MSwitch = " /m "
-  }
- 
-  ("call ""$File"" x86", "msbuild $LLVMBuild\LLVM.sln /p:Configuration=$Build /p:Platfrom=$Arch /t:llilcreader /p:BuildProjectReferences=false $MSwitch") | Out-File -Encoding ascii $TempBat
+  ("call ""$File"" x86", "devenv /Build Debug  /Project LLILCReader $LLVMBuild\LLVM.sln", "devenv /Build Debug  /Project llilcjit $LLVMBuild\LLVM.sln") | Out-File -Encoding ascii $TempBat
 
   cmd /c $TempBat
   Remove-Item -force $TempBat | Out-Null
   CopyJIT -Build $Build
 }
-
 
 # -------------------------------------------------------------------------
 #
@@ -884,10 +880,11 @@ function Global:CheckDiff([bool]$Create = $false, [bool]$UseDiffTool = $True, [s
 function Global:LLILCHelp
 {
   Write-Output("ApplyFilter       - Filter to suppress allowable LLVM IR difference. Example: AppyFilter -File FileName")
-  Write-Output("Build             - Build LLILC JIT. Example: Build -Arch x64 -Build Debug -Parallel `$False")
+  Write-Output("Build             - Build LLILC JIT. Example: Build -Build Debug")
   Write-Output("BuildAll          - Configure and Build LLVM including LLILC JIT. Example: BuildLLVM -Arch x64 -Build Debug -Parallel `$False")
   Write-Output("BuildTest         - Build CoreCLR regression tests. Example: BuildTest -Arch x64 -Build Release")
   Write-Output("CheckDiff         - Check the LLVM IR dump diff between run and baseline. Example: CheckDiff -Create `$False -UseDiffTool `$True -Arch x64 -Build Release")
+  Write-Output("CheckEnv          - List the LLILC work environment. Example: CheckEnv")
   Write-Output("CopyJIT           - Copy LLILC JIT dll into CoreCLR Runtime. Example: CopyJIT -Build Debug")
   Write-Output("LLILCHelp         - List and explain available commands. Example: LLILCHelp")
   Write-Output("ReBaseAll         - Re-create the base line for all regression test cases. Example: -Arch x64 -Build Release")
