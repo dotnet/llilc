@@ -570,7 +570,7 @@ function Global:BuildLLVM([string]$Arch="x64", [string]$Build="Debug", [bool]$Pa
   ("call ""$File"" x86", "msbuild $LLVMBuild\LLVM.sln /p:Configuration=$Build /p:Platfrom=$Arch /t:ALL_BUILD $MSwitch") | Out-File -Encoding ascii $TempBat
   
   Write-Output ("Building LLVM...")
-  $CmdOut = cmd /c $TempBat
+  cmd /c $TempBat
   Remove-Item -force $TempBat | Out-Null
   CopyJIT -Build $Build
 }
@@ -606,7 +606,7 @@ function Global:Build([string]$Arch="x64", [string]$Build="Debug", [bool]$Parall
  
   ("call ""$File"" x86", "msbuild $LLVMBuild\LLVM.sln /p:Configuration=$Build /p:Platfrom=$Arch /t:llilcreader /p:BuildProjectReferences=false $MSwitch") | Out-File -Encoding ascii $TempBat
 
-  $CmdOut = cmd /c $TempBat
+  cmd /c $TempBat
   Remove-Item -force $TempBat | Out-Null
   CopyJIT -Build $Build
 }
@@ -765,7 +765,7 @@ function Global:RunTest([string]$Arch="x64", [string]$Build="Release")
   pushd .
   cd $CoreCLRTestAssets\coreclr\tests
 
-  .\runtest $Arch $Build EnableAltJit LLILCJit $CoreCLRRuntime\$CoreCLRVersion\bin 
+  .\runtest $Arch $Build EnableAltJit LLILCJit $CoreCLRRuntime\$CoreCLRVersion\bin | Write-Host
   CheckDiff -Create $True -UseDiffTool $False -Arch $Arch -Build $Build
   $NumFailures = CheckFailure -Arch $Arch -Build $Build
   popd
