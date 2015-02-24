@@ -314,10 +314,10 @@ function SetVCVars
         # Ignore: Setting the prompt environment variable has no
         #         connection to the PowerShell prompt
       } elseif ($N -eq "title") {
-        $host.ui.rawui.windowtitle = $matches[2];
-        Set-Item -Path "env:$N" -Value $matches[2];
+        $host.ui.rawui.windowtitle = $matches[2]
+        Set-Item -Path "env:$N" -Value $matches[2]
       } else {
-        Set-Item -Path "env:$N" -Value $matches[2];
+        Set-Item -Path "env:$N" -Value $matches[2]
       }
     }
     elseif (!$FoundStartFlag) {
@@ -827,8 +827,8 @@ function Global:CheckDiff([bool]$Create = $false, [bool]$UseDiffTool = $True, [s
     New-Item -itemtype directory $LLILCTestResult\Diff\Base | Out-Null
     New-Item -itemtype directory $LLILCTestResult\Diff\Run | Out-Null
 
-    $TotalCount = 0;
-    $DiffCount = 0;
+    $TotalCount = 0
+    $DiffCount = 0
     Get-ChildItem -recurse -path $CoreCLRTestTargetBinaries\Reports | Where {$_.FullName -match "error.txt"} | `
     Foreach-Object {
       $TotalCount = $TotalCount + 1
