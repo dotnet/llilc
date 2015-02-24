@@ -417,7 +417,7 @@ function Global:GetCLRTestAssets
     pushd .
     New-Item $CoreCLRTestAssets -itemtype Directory  | Out-Null
     cd $CoreCLRTestAssets
-    git clone https://github.com/dotnet/coreclr.git
+    git clone git://github.com/dotnet/coreclr.git
     popd
   }
   else {
