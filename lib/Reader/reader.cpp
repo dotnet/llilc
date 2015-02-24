@@ -6910,7 +6910,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       Arg1 = ReaderOperandStack->pop();
 
       if (!ReaderOperandStack->empty()) {
-        maintainOperandStack(&Arg1, &Arg2, NewIR);
+        maintainOperandStack(&Arg1, &Arg2, Fg, NewIR);
         ReaderOperandStack->clearStack();
       }
 
@@ -6938,7 +6938,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
 
       Arg1 = ReaderOperandStack->pop();
       if (!ReaderOperandStack->empty()) {
-        maintainOperandStack(&Arg1, NULL, NewIR);
+        maintainOperandStack(&Arg1, NULL, Fg, NewIR);
         ReaderOperandStack->clearStack();
       }
       boolBranch((ReaderBaseNS::BoolBranchOpcode)MappedValue, Arg1, NewIR);
@@ -6962,7 +6962,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       // Assumes first pass created branch label, here we just assist
       // any live stack operands across the block boundary.
       if (!ReaderOperandStack->empty()) {
-        maintainOperandStack(NULL, NULL, NewIR);
+        maintainOperandStack(NULL, NULL, Fg, NewIR);
         ReaderOperandStack->clearStack();
       }
       branch(NewIR);
@@ -7957,7 +7957,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
         // If the operand stack is non-empty then it must be ushered
         // across the block boundaries.
         if (!ReaderOperandStack->empty()) {
-          maintainOperandStack(NULL, NULL, NewIR);
+          maintainOperandStack(NULL, NULL, Fg, NewIR);
         }
       } else {
         // consume the operand
@@ -8200,7 +8200,7 @@ void ReaderBase::readBytesForFlowGraphNode(FlowGraphNode *Fg,
     // successor edges to be cut, so live operand stack has nowhere
     // to be propagated to.
     if (!(TheParam.LocalFault || ReaderOperandStack->empty())) {
-      maintainOperandStack(NULL, NULL, TheParam.NewIR);
+      maintainOperandStack(NULL, NULL, Fg, TheParam.NewIR);
     }
   }
 }

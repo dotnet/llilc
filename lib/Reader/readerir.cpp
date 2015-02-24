@@ -4176,22 +4176,21 @@ void GenIR::removeStackInterferenceForLocalStore(uint32_t Opcode,
   return;
 }
 
-void GenIR::maintainOperandStack(IRNode **Opr1, IRNode **Opr2, IRNode **NewIR) {
+void GenIR::maintainOperandStack(IRNode **Opr1, IRNode **Opr2,
+                                 FlowGraphNode *CurrentBlock, IRNode **NewIR) {
 
   if (ReaderOperandStack->depth() == 0) {
     return;
   }
 
-  BasicBlock *CurrentBlock = LLVMBuilder->GetInsertBlock();
-  FlowGraphEdgeList *SuccessorList =
-      fgNodeGetSuccessorListActual((FlowGraphNode *)CurrentBlock);
+  FlowGraphEdgeList *SuccessorList = fgNodeGetSuccessorListActual(CurrentBlock);
 
-  if (SuccessorList == NULL) {
+  if (SuccessorList == nullptr) {
     clearStack(NewIR);
     return;
   }
 
-  while (SuccessorList != NULL) {
+  while (SuccessorList != nullptr) {
     FlowGraphNode *SuccessorBlock = fgEdgeListGetSink(SuccessorList);
 
     FlowGraphEdgeList *SuccessorPredecessorList =
@@ -4200,7 +4199,7 @@ void GenIR::maintainOperandStack(IRNode **Opr1, IRNode **Opr2, IRNode **NewIR) {
     FlowGraphEdgeList *SuccessorPredecessorListNext =
         fgEdgeListGetNextPredecessorActual(SuccessorPredecessorList);
 
-    if (SuccessorPredecessorListNext == NULL) {
+    if (SuccessorPredecessorListNext == nullptr) {
       // The current node is the only predecessor of this Successor. We need to
       // create a stack for the Successor and copy the items from the current
       // stack.
@@ -4208,7 +4207,7 @@ void GenIR::maintainOperandStack(IRNode **Opr1, IRNode **Opr2, IRNode **NewIR) {
     } else {
       ReaderStack *SuccessorStack = fgNodeGetOperandStack(SuccessorBlock);
       bool CreatePHIs = false;
-      if (SuccessorStack == NULL) {
+      if (SuccessorStack == nullptr) {
         // We need to create a new stack for the Successor and populate it
         // with PHI instructions corresponding to the values on the current
         // stack.
@@ -4223,14 +4222,14 @@ void GenIR::maintainOperandStack(IRNode **Opr1, IRNode **Opr2, IRNode **NewIR) {
       ReaderStackIterator *Iterator;
       IRNode *Current = ReaderOperandStack->getReverseIterator(&Iterator);
       Instruction *CurrentInst = SuccessorBlock->begin();
-      PHINode *Phi = NULL;
-      while (Current != NULL) {
+      PHINode *Phi = nullptr;
+      while (Current != nullptr) {
         Value *CurrentValue = (Value *)Current;
         if (CreatePHIs) {
           // The Successor has at least 2 predecessors so we use 2 as the
           // hint for the number of PHI sources.
           TerminatorInst *TermInst = SuccessorBlock->getTerminator();
-          if (TermInst != NULL) {
+          if (TermInst != nullptr) {
             Phi = PHINode::Create(CurrentValue->getType(), 2, "", TermInst);
           } else {
             Phi =
@@ -4239,13 +4238,13 @@ void GenIR::maintainOperandStack(IRNode **Opr1, IRNode **Opr2, IRNode **NewIR) {
         } else {
           // PHI instructions should have been inserted already
           Phi = dyn_cast<PHINode>(CurrentInst);
-          ASSERT(Phi != NULL);
+          ASSERT(Phi != nullptr);
           CurrentInst = CurrentInst->getNextNode();
         }
         if (Phi->getType() != CurrentValue->getType()) {
           throw NotYetImplementedException("Phi type mismatch");
         }
-        Phi->addIncoming(CurrentValue, CurrentBlock);
+        Phi->addIncoming(CurrentValue, (BasicBlock *)CurrentBlock);
         SuccessorStack->push((IRNode *)Phi, NewIR);
         Current = ReaderOperandStack->reverseIteratorGetNext(&Iterator);
       }
@@ -4254,7 +4253,7 @@ void GenIR::maintainOperandStack(IRNode **Opr1, IRNode **Opr2, IRNode **NewIR) {
       // stack.
       if (!CreatePHIs) {
         Phi = dyn_cast<PHINode>(CurrentInst);
-        ASSERT(Phi == NULL);
+        ASSERT(Phi == nullptr);
       }
     }
     SuccessorList = fgEdgeListGetNextSuccessorActual(SuccessorList);

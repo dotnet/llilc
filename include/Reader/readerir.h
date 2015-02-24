@@ -516,6 +516,7 @@ public:
 
   // Used to maintain operand stack.
   void maintainOperandStack(IRNode **Opr1, IRNode **Opr2,
+                            FlowGraphNode *CurrentBlock,
                             IRNode **NewIR) override;
   void assignToSuccessorStackNode(FlowGraphNode *, IRNode *Dst, IRNode *Src,
                                   IRNode **NewIR,

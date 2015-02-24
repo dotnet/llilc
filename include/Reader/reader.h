@@ -1770,6 +1770,7 @@ public:
 
   // Used to maintain operand stack.
   virtual void maintainOperandStack(IRNode **Opr1, IRNode **Opr2,
+                                    FlowGraphNode *CurrentBlock,
                                     IRNode **NewIR) = 0;
   virtual void assignToSuccessorStackNode(FlowGraphNode *, IRNode *Destination,
                                           IRNode *Source, IRNode **NewIR,
