@@ -390,28 +390,46 @@ add_subdirectory(include)
 add_subdirectory(lib)
 add_subdirectory(tools)
 
-option (LLILC_ENABLE_DOXYGEN "Use doxygen to generate LLILC API documentation." ON)
-if (DOXYGEN_FOUND)
-if (LLVM_ENABLE_DOXYGEN)
-  set(abs_top_srcdir ${CMAKE_CURRENT_SOURCE_DIR})
-  set(abs_top_builddir ${CMAKE_CURRENT_BINARY_DIR})
-  
-  if (HAVE_DOT)
-    set(DOT ${LLVM_PATH_DOT})
+option (LLILC_ENABLE_DOXYGEN "Use doxygen to generate LLILC API documentation." OFF)
+
+if(LLVM_ENABLE_DOXYGEN)
+  set(LLILC_ENABLE_DOXYGEN ON)
+endif()
+
+if (LLILC_ENABLE_DOXYGEN)
+  if (LLILC_BUILT_STANDALONE OR NOT LLVM_ENABLE_DOXYGEN)
+    find_package(Doxygen REQUIRED)
+
+    find_program(LLVM_PATH_DOT dot)
+    mark_as_advanced(LLVM_PATH_DOT)
+    if (LLVM_PATH_DOT)
+      set(HAVE_DOT 1 CACHE INTERNAL "Is dot available?")
+      mark_as_advanced(HAVE_DOT)
+    else()
+      message(FATAL_ERROR "Could not find dot. Please install graphviz.")
+    endif()
   endif()
 
-  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Documentation/doxygen.cfg.in
-    ${CMAKE_CURRENT_BINARY_DIR}/Documentation/doxygen.cfg @ONLY)
+  if (DOXYGEN_FOUND)
+    set(abs_top_srcdir ${CMAKE_CURRENT_SOURCE_DIR})
+    set(abs_top_builddir ${CMAKE_CURRENT_BINARY_DIR})
+    
+    if (HAVE_DOT)
+      set(DOT ${LLVM_PATH_DOT})
+    endif()
 
-  set(abs_top_srcdir)
-  set(abs_top_builddir)
-  set(DOT)
+    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Documentation/doxygen.cfg.in
+      ${CMAKE_CURRENT_BINARY_DIR}/Documentation/doxygen.cfg @ONLY)
 
-  add_custom_target(doxygen-llilc
-    COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Documentation/doxygen.cfg
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMENT "Generating LLILC doxygen documentation." VERBATIM)
-endif()
+    set(abs_top_srcdir)
+    set(abs_top_builddir)
+    set(DOT)
+
+    add_custom_target(doxygen-llilc
+      COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Documentation/doxygen.cfg
+      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+      COMMENT "Generating LLILC doxygen documentation." VERBATIM)
+  endif()
 endif()
 
 option(LLILC_INCLUDE_TESTS
