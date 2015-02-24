@@ -6796,6 +6796,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
     Opcode =
         parseMSILOpcode(ILInput + CurrentOffset, &Operand, &NextOffset, this);
     CurrInstrOffset = CurrentOffset;
+    NextInstrOffset = NextOffset;
 
     // If we have cached a LoadFtnToken from LDFTN or LDVIRTFTN
     // then clear it if the next opcode is not NEWOBJ
@@ -6870,6 +6871,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       handleClassAccess(&ResolvedToken, NewIR);
       ResultIR =
           box(&ResolvedToken, Arg1, NewIR, &NextOffset, TheVerificationState);
+      NextInstrOffset = NextOffset;
       ReaderOperandStack->push(ResultIR, NewIR);
       break;
 

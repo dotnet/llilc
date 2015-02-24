@@ -654,6 +654,7 @@ public:
 
   bool HasLocAlloc;
   uint32_t CurrInstrOffset; // current instruction IL offset
+  uint32_t NextInstrOffset; // next instruction IL offset
 
 private:
   // Private data (not available to derived client class)
