@@ -42,7 +42,7 @@
     This script provides some daily routines beside the above four
     common tasks:
 
-    LLILCHelp, CopyJIT, ReBaseAll, ApplyFilter, CheckEnv 
+    llilc, CopyJIT, ReBaseAll, ApplyFilter, CheckEnv 
     
     LLILC is under the umbrella of LLVM. A default location is used for
     LLVM build directory. You can override the location by specifying
@@ -502,7 +502,7 @@ function LLILCEnvInit
   CompleteEnvInit
   CheckEnv
 
-  Write-Output("Use LLILCHelp for a list of commands. Use CheckEnv for a list of work environment.")
+  Write-Output("Use llilc for a list of commands. Use CheckEnv for a list of work environment.")
 
   # start with LLILC Source Directory
   $LLILCSource = LLILCSource
@@ -896,18 +896,62 @@ function Global:CheckDiff([bool]$Create = $false, [bool]$UseDiffTool = $True, [s
 #
 # -------------------------------------------------------------------------
 
-function Global:LLILCHelp
+function Global:llilc([string]$Command="")
 {
-  Write-Output("ApplyFilter       - Filter to suppress allowable LLVM IR difference. Example: AppyFilter -File FileName")
-  Write-Output("Build             - Build LLILC JIT. Example: Build -Build Debug")
-  Write-Output("BuildAll          - Configure and Build LLVM including LLILC JIT. Example: BuildLLVM -Arch x64 -Build Debug -Parallel `$False")
-  Write-Output("BuildTest         - Build CoreCLR regression tests. Example: BuildTest -Arch x64 -Build Release")
-  Write-Output("CheckDiff         - Check the LLVM IR dump diff between run and baseline. Example: CheckDiff -Create `$False -UseDiffTool `$True -Arch x64 -Build Release")
-  Write-Output("CheckEnv          - List the LLILC work environment. Example: CheckEnv")
-  Write-Output("CopyJIT           - Copy LLILC JIT dll into CoreCLR Runtime. Example: CopyJIT -Build Debug")
-  Write-Output("LLILCHelp         - List and explain available commands. Example: LLILCHelp")
-  Write-Output("ReBaseAll         - Re-create the base line for all regression test cases. Example: ReBaseAll -Arch x64 -Build Release")
-  Write-Output("RunTest           - Run LLILC enabled CoreCLR regression tests. Example: RunTest -Arch x64 -Build Release")
+  $ListAll = $False
+  if ($Command -eq "") {
+    $ListAll = $True
+  }
+
+  if ($ListAll -Or ($Command -eq "ApplyFilter")) {
+    Write-Output("ApplyFilter       - Filter to suppress allowable LLVM IR difference.")
+    Write-Output("                    Example: AppyFilter -File FileName")
+  }
+
+  if ($ListAll -Or ($Command -eq "Build")) {
+    Write-Output("Build             - Build LLILC JIT.")
+    Write-Output("                    Example: Build -Build Debug")
+  }
+
+  if ($ListAll -Or ($Command -eq "BuildAll")) {
+    Write-Output("BuildAll          - Configure and Build LLVM including LLILC JIT.")
+    Write-Output("                    Example: BuildLLVM -Arch x64 -Build Debug -Parallel `$False")
+  }
+
+  if ($ListAll -Or ($Command -eq "BuildTest")) {
+    Write-Output("BuildTest         - Build CoreCLR regression tests.")
+    Write-Output("                    Example: BuildTest -Arch x64 -Build Release")
+  }
+
+  if ($ListAll -Or ($Command -eq "CheckDiff")) {
+    Write-Output("CheckDiff         - Check the LLVM IR dump diff between run and baseline.")
+    Write-Output("                    Example: CheckDiff -Create `$False -UseDiffTool `$True -Arch x64 -Build Release")
+  }
+
+  if ($ListAll -Or ($Command -eq "CheckEnv")) {
+    Write-Output("CheckEnv          - List the LLILC work environment.")
+    Write-Output("                    Example: CheckEnv")
+  }
+
+  if ($ListAll -Or ($Command -eq "CopyJIT")) {
+    Write-Output("CopyJIT           - Copy LLILC JIT dll into CoreCLR Runtime.")
+    Write-Output("                    Example: CopyJIT -Build Debug")
+  }
+
+  if ($ListAll) {
+    Write-Output("llilc             - List and explain available commands.")
+    Write-Output("                    Example: llilc RunTest")
+  }
+
+  if ($ListAll -Or ($Command -eq "ReBaseAll")) {
+    Write-Output("ReBaseAll         - Re-create the base line for all regression test cases.")
+    Write-Output("                    Example: ReBaseAll -Arch x64 -Build Release")
+  }
+
+  if ($ListAll -Or ($Command -eq "RunTest")) {
+    Write-Output("RunTest           - Run LLILC enabled CoreCLR regression tests.")
+    Write-Output("                    Example: RunTest -Arch x64 -Build Release")
+  }
 }
 
 # -------------------------------------------------------------------------
