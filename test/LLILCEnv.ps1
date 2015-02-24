@@ -314,10 +314,10 @@ function SetVCVars
         # Ignore: Setting the prompt environment variable has no
         #         connection to the PowerShell prompt
       } elseif ($N -eq "title") {
-        $host.ui.rawui.windowtitle = $matches[2];
-        Set-Item -Path "env:$N" -Value $matches[2];
+        $host.ui.rawui.windowtitle = $matches[2]
+        Set-Item -Path "env:$N" -Value $matches[2]
       } else {
-        Set-Item -Path "env:$N" -Value $matches[2];
+        Set-Item -Path "env:$N" -Value $matches[2]
       }
     }
     elseif (!$FoundStartFlag) {
@@ -427,7 +427,7 @@ function Global:GetCLRTestAssets
     popd
   }
   else {
-    Write-OutPut("CoreCLR Test Assets already downloaded.")
+    Write-Host("CoreCLR Test Assets already downloaded.")
   }
 }
 
@@ -735,12 +735,12 @@ function Global:BuildTest([string]$Arch="x64", [string]$Build="Release")
 function Global:CheckFailure([string]$Arch="x64", [string]$Build="Release")
 {
   $CoreCLRTestAssets = CoreCLRTestAssets
-  $RunResult = "$CoreCLRTestAssets\coreclr\binaries\Logs\TestRunResults_"
+  $RunResult = "$CoreCLRTestAssets\coreclr\binaries\Logs\TestRunResults_Windows_NT__"
   $RunResult  = $RunResult + "$Arch"
   $RunResult  = $RunResult + "__$Build.log"
   $RunResultsExists = Test-Path $RunResult
   if (!$RunResultsExists) {
-    return -1;
+    return -1
   }
   else {
     Get-Content $RunResult | Where-Object { $_.Contains("Failed: ") } | ForEach-Object { $_ -match "Failed: (\d+)," } | Out-Null
@@ -768,10 +768,18 @@ function Global:RunTest([string]$Arch="x64", [string]$Build="Release")
   cd $CoreCLRTestAssets\coreclr\tests
 
   .\runtest $Arch $Build EnableAltJit LLILCJit $CoreCLRRuntime\$CoreCLRVersion\bin | Write-Host
-  CheckDiff -Create $True -UseDiffTool $False -Arch $Arch -Build $Build
+  $NumDiff = CheckDiff -Create $True -UseDiffTool $False -Arch $Arch -Build $Build
   $NumFailures = CheckFailure -Arch $Arch -Build $Build
   popd
-  return $NumFailures 
+
+  # If there aren't any failures or diffs, return $True to say we passed
+  # Otherwise return false
+  if (($NumDiff -eq 0) -and ($NumFailures -eq 0)) {
+    return $True
+  }
+  else {
+    return $False
+  }
 }
 
 # -------------------------------------------------------------------------
@@ -808,7 +816,7 @@ function Global:CheckDiff([bool]$Create = $false, [bool]$UseDiffTool = $True, [s
   $LLILCTestResult = LLILCTestResult
   $CoreCLRTestTargetBinaries = CoreCLRTestTargetBinaries -Arch $Arch -Build $Build
 
-  Write-Output ("Checking diff...")
+  Write-Host ("Checking diff...")
   $DiffExists = Test-Path $LLILCTestResult\Diff
   if ($Create) {
     if ($DiffExists) {
@@ -819,8 +827,8 @@ function Global:CheckDiff([bool]$Create = $false, [bool]$UseDiffTool = $True, [s
     New-Item -itemtype directory $LLILCTestResult\Diff\Base | Out-Null
     New-Item -itemtype directory $LLILCTestResult\Diff\Run | Out-Null
 
-    $TotalCount = 0;
-    $DiffCount = 0;
+    $TotalCount = 0
+    $DiffCount = 0
     Get-ChildItem -recurse -path $CoreCLRTestTargetBinaries\Reports | Where {$_.FullName -match "error.txt"} | `
     Foreach-Object {
       $TotalCount = $TotalCount + 1
@@ -841,37 +849,42 @@ function Global:CheckDiff([bool]$Create = $false, [bool]$UseDiffTool = $True, [s
     }
 
     if ($DiffCount -eq 0) {
-      Write-Output ("There is no diff.")
+      Write-Host ("There is no diff.")
       Remove-Item -recurse -force $LLILCTestResult\Diff | Out-Null
     }
     else {
-      Write-Output ("$DiffCount out of $TotalCount have diff.")
+      Write-Host ("$DiffCount out of $TotalCount have diff.")
       if ($UseDiffTool) {
         & sgdm -t1=Base -t2=Run $LLILCTestResult\Diff\Base $LLILCTestResult\Diff\Run
       }
     }
+
+    return $DiffCount
   }
   else {
     if (!$DiffExists) {
-      Write-Output ("There is no diff.")
+      Write-Host ("There is no diff.")
+      return 0
     }
     else {
       if ($UseDiffTool) {
         & sgdm -t1=Base -t2=Run $LLILCTestResult\Diff\Base $LLILCTestResult\Diff\Run
+        return 0
       }
       else {
-        $TotalCount = 0;
-        $DiffCount = 0;
+        $TotalCount = 0
+        $DiffCount = 0
         Get-ChildItem -recurse -path $CoreCLRTestTargetBinaries\Reports | Where {$_.FullName -match "error.txt"} | `
         Foreach-Object {
-          $TotalCount = $TotalCount + 1;
+          $TotalCount = $TotalCount + 1
         }
 
         Get-ChildItem -recurse -path $LLILCTestResult\Diff\Run | Where {$_.FullName -match "error.txt"} | `
         Foreach-Object {
-          $DiffCount = $DiffCount + 1;
+          $DiffCount = $DiffCount + 1
         }
-        Write-Output ("$DiffCount out of $TotalCount have diff.")
+        Write-Host ("$DiffCount out of $TotalCount have diff.")
+        return $DiffCount
       }
     }
   }
