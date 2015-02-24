@@ -2693,6 +2693,54 @@ void GenIR::makeStore(Type *Ty, Value *Address, Value *ValueToStore,
   LLVMBuilder->CreateStore(ValueToStore, Address, IsVolatile);
 }
 
+void GenIR::storeStaticField(CORINFO_RESOLVED_TOKEN *FieldToken,
+                             IRNode *ValueToStore,
+                             bool IsVolatile, IRNode **NewIR) {
+  // Gather information about the field
+  CORINFO_FIELD_HANDLE FieldHandle = FieldToken->hField;
+  CORINFO_FIELD_INFO FieldInfo;
+  getFieldInfo(FieldToken, CORINFO_ACCESS_SET, &FieldInfo);
+
+  // Determine the type of the field element.
+  CORINFO_CLASS_HANDLE FieldClassHandle;
+  CorInfoType FieldCorType = getFieldType(FieldHandle, &FieldClassHandle);
+  Type *FieldTy = getType(FieldCorType, FieldClassHandle);
+  const bool IsStructTy = FieldTy->isStructTy();
+
+  // Coerce the type of the value to store, if necessary.
+  ValueToStore = convertFromStackType(ValueToStore, FieldCorType, FieldTy);
+
+  // Get the address of the field.
+  Value *Address = rdrGetStaticFieldAddress(FieldToken, &FieldInfo, NewIR);
+
+  // If the runtime asks us to use a helper for the store, do so.
+  const bool NeedsWriteBarrier =
+    JitContext->JitInfo->isWriteBarrierHelperRequired(FieldHandle);
+  if (NeedsWriteBarrier) {
+    // Statics are always on the heap, so we can use an unchecked write barrier
+    rdrCallWriteBarrierHelper((IRNode*)Address, ValueToStore,
+                              Reader_AlignNatural, IsVolatile, NewIR,
+                              FieldToken, !IsStructTy,
+                              false, true, true);
+    return;
+  }
+
+  Type *PtrToFieldTy = getUnmanagedPointerType(FieldTy);
+  if (Address->getType()->isIntegerTy()) {
+    Address = LLVMBuilder->CreateIntToPtr(Address, PtrToFieldTy);
+  } else {
+    ASSERT(Address->getType()->isPointerTy());
+    Address = LLVMBuilder->CreatePointerCast(Address, PtrToFieldTy);
+  }
+
+  // Create an assignment which stores the value into the static field.
+  if (!IsStructTy) {
+    makeStore(FieldTy, Address, ValueToStore, IsVolatile, NewIR);
+  } else {
+    throw NotYetImplementedException("Store value type to static field");
+  }
+}
+
 IRNode *GenIR::loadStaticField(CORINFO_RESOLVED_TOKEN *FieldToken,
                                bool IsVolatile, IRNode **NewIR) {
   // Gather information about the field.

@@ -414,10 +414,10 @@ public:
   void storeLocal(uint32_t LocOrdinal, IRNode *Arg1,
                   ReaderAlignType Alignment, bool IsVolatile,
                   IRNode **NewIR) override;
-  void storeStaticField(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
-                        bool IsVolatile, IRNode **NewIR) override {
-    throw NotYetImplementedException("storeStaticField");
-  };
+  void storeStaticField(CORINFO_RESOLVED_TOKEN *FieldToken,
+                        IRNode *ValueToStore,
+                        bool IsVolatile, IRNode **NewIR) override;
+
   IRNode *stringGetChar(IRNode *Arg1, IRNode *Arg2, IRNode **NewIR) override;
 
   bool sqrt(IRNode *Arg1, IRNode **RetVal, IRNode **NewIR) override {
