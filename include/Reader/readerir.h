@@ -743,9 +743,8 @@ public:
     throw NotYetImplementedException("convertToHelperArgumentType");
   };
 
-  IRNode *genNullCheck(IRNode *Node, IRNode **NewIR) override {
-    throw NotYetImplementedException("genNullCheck");
-  };
+  IRNode *genNullCheck(IRNode *Node, IRNode **NewIR) override;
+
   void
   createSym(uint32_t Num, bool IsAuto, CorInfoType CorType,
             CORINFO_CLASS_HANDLE Class, bool IsPinned,

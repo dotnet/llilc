@@ -3571,6 +3571,68 @@ void GenIR::throwOpcode(IRNode *Arg1, IRNode **NewIR) {
   ThrowCall->setDoesNotReturn();
 }
 
+IRNode *GenIR::genNullCheck(IRNode *Node, IRNode **NewIR) {
+  BasicBlock *CheckBlock = LLVMBuilder->GetInsertBlock();
+  BasicBlock::iterator InsertPoint = LLVMBuilder->GetInsertPoint();
+  Instruction *NextInstruction =
+      (InsertPoint == CheckBlock->end() ? nullptr : (Instruction *)InsertPoint);
+
+  // Create the throw block so we can reference it later.
+  // Note: we could generate much smaller IR by reusing the same throw block for
+  // all null checks, but at the cost of not being able to tell in a debugger
+  // what was null.  The current strategy is to favor debuggability.
+  // TODO: Find a way to annotate the throw blocks as cold so they get laid out
+  // out-of-line.
+  BasicBlock *ThrowBlock =
+      BasicBlock::Create(*JitContext->LLVMContext, "ThrowNullRef", Function);
+
+  // Split the block.  This creates a goto connecting the blocks that we'll
+  // replace with the conditional branch.
+  // Note that we split at offset NextInstrOffset rather than CurrInstrOffset.
+  // We're already generating the IR for the instr at CurrInstrOffset, and using
+  // NextInstrOffset here ensures that we won't redundantly try to add this
+  // instruction again when processing moves to the new NonNullBlock.
+  BasicBlock *NonNullBlock = ReaderBase::fgSplitBlock(
+      (FlowGraphNode *)CheckBlock, NextInstrOffset, (IRNode *)NextInstruction);
+  TerminatorInst *Goto = CheckBlock->getTerminator();
+
+  // Insert the compare against null.
+  LLVMBuilder->SetInsertPoint(Goto);
+  Value *Compare = LLVMBuilder->CreateIsNotNull(Node, "NullCheck");
+
+  // Swap the conditional branch in place of the goto.
+  BranchInst *Branch =
+      LLVMBuilder->CreateCondBr(Compare, NonNullBlock, ThrowBlock);
+  Goto->eraseFromParent();
+
+  // FIll in the throw block.
+  LLVMBuilder->SetInsertPoint(ThrowBlock);
+  // TODO: Use throw_null_ref helper once that's available from CoreCLR.  For
+  // now, use throw_div_zero since it has the right signature and we don't
+  // expect exceptions to work dynamically anyway.
+  CallInst *ThrowCall =
+      (CallInst *)callHelper(CORINFO_HELP_THROWDIVZERO, nullptr, NewIR);
+  ThrowCall->setDoesNotReturn();
+  LLVMBuilder->CreateUnreachable();
+
+  // Give the throw block equal start and end offsets so subsequent processing
+  // won't try to translate MSIL into it.
+  fgNodeSetStartMSILOffset((FlowGraphNode *)ThrowBlock, CurrInstrOffset);
+  fgNodeSetEndMSILOffset((FlowGraphNode *)ThrowBlock, CurrInstrOffset);
+
+  // Null out the throw block operand stack.
+  fgNodeSetOperandStack((FlowGraphNode *)ThrowBlock, nullptr);
+
+  // Move the insert point back to the first instruction in the non-null path.
+  if (NextInstruction == nullptr) {
+    LLVMBuilder->SetInsertPoint(NonNullBlock);
+  } else {
+    LLVMBuilder->SetInsertPoint(NonNullBlock->getFirstInsertionPt());
+  }
+
+  return Node;
+};
+
 void GenIR::leave(uint32_t TargetOffset, bool IsNonLocal,
                   bool EndsWithNonLocalGoto, IRNode **NewIR) {
   // TODO: handle exiting through nested finallies
@@ -4203,7 +4265,15 @@ void GenIR::maintainOperandStack(IRNode **Opr1, IRNode **Opr2,
       // The current node is the only predecessor of this Successor. We need to
       // create a stack for the Successor and copy the items from the current
       // stack.
-      fgNodeSetOperandStack(SuccessorBlock, ReaderOperandStack->copy());
+      if ((fgNodeGetStartMSILOffset(SuccessorBlock) ==
+           fgNodeGetEndMSILOffset(SuccessorBlock)) &&
+          (fgNodeGetSuccessorListActual(SuccessorBlock) == nullptr)) {
+        // There is no MSIL for this block and it has no successors, so no need
+        // to propagate the stack.  This is a common case for implicit exception
+        // throw blocks.
+      } else {
+        fgNodeSetOperandStack(SuccessorBlock, ReaderOperandStack->copy());
+      }
     } else {
       ReaderStack *SuccessorStack = fgNodeGetOperandStack(SuccessorBlock);
       bool CreatePHIs = false;

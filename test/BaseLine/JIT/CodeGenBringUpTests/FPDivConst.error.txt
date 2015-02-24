@@ -53,7 +53,66 @@ Failed to read String.LastIndexOfAny[Tail call]
 INFO:  jitting method String::Substring using LLILCJit
 Failed to read String.Substring[Tail call]
 INFO:  jitting method String::InternalSubString using LLILCJit
-Failed to read String.InternalSubString[genNullCheck]
+Successfully read String.InternalSubString
+
+define %System.String addrspace(1)* @String.InternalSubString(%System.String addrspace(1)* %param0, i32 %param1, i32 %param2) {
+entry:
+  %this = alloca %System.String addrspace(1)*
+  %arg1 = alloca i32
+  %arg2 = alloca i32
+  %loc0 = alloca %System.String addrspace(1)*
+  %loc1 = alloca i16 addrspace(1)*
+  %loc2 = alloca i16 addrspace(1)*
+  store %System.String addrspace(1)* %param0, %System.String addrspace(1)** %this
+  store i32 %param1, i32* %arg1
+  store i32 %param2, i32* %arg2
+  %0 = load i32* %arg2
+  %1 = call %System.String addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.String addrspace(1)* (i32)*)(i32 %0)
+  store %System.String addrspace(1)* %1, %System.String addrspace(1)** %loc0
+  %2 = load %System.String addrspace(1)** %loc0
+  %NullCheck = icmp ne %System.String addrspace(1)* %2, null
+  br i1 %NullCheck, label %3, label %ThrowNullRef
+
+; <label>:3                                       ; preds = %entry
+  %4 = getelementptr inbounds %System.String addrspace(1)* %2, i32 0, i32 2
+  %5 = bitcast [0 x i16] addrspace(1)* %4 to i16 addrspace(1)*
+  store i16 addrspace(1)* %5, i16 addrspace(1)** %loc1
+  %6 = load %System.String addrspace(1)** %this
+  %NullCheck2 = icmp ne %System.String addrspace(1)* %6, null
+  br i1 %NullCheck2, label %7, label %ThrowNullRef1
+
+; <label>:7                                       ; preds = %3
+  %8 = getelementptr inbounds %System.String addrspace(1)* %6, i32 0, i32 2
+  %9 = bitcast [0 x i16] addrspace(1)* %8 to i16 addrspace(1)*
+  store i16 addrspace(1)* %9, i16 addrspace(1)** %loc2
+  %10 = load i16 addrspace(1)** %loc1
+  %11 = ptrtoint i16 addrspace(1)* %10 to i64
+  %12 = load i16 addrspace(1)** %loc2
+  %13 = ptrtoint i16 addrspace(1)* %12 to i64
+  %14 = load i32* %arg1
+  %15 = sext i32 %14 to i64
+  %16 = mul i64 %15, 2
+  %17 = add i64 %13, %16
+  %18 = load i32* %arg2
+  %19 = inttoptr i64 %11 to i16*
+  %20 = inttoptr i64 %17 to i16*
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (i16*, i16*, i32)*)(i16* %19, i16* %20, i32 %18)
+  store i16 addrspace(1)* null, i16 addrspace(1)** %loc2
+  store i16 addrspace(1)* null, i16 addrspace(1)** %loc1
+  %21 = load %System.String addrspace(1)** %loc0
+  ret %System.String addrspace(1)* %21
+
+ThrowNullRef:                                     ; preds = %entry
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void ()*)() #0
+  unreachable
+
+ThrowNullRef1:                                    ; preds = %3
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void ()*)() #0
+  unreachable
+}
+
+INFO:  jitting method String::wstrcpy using LLILCJit
+Failed to read String.wstrcpy[Tail call]
 INFO:  jitting method Buffer::Memmove using LLILCJit
 Failed to read Buffer.Memmove[Tail call]
 INFO:  jitting method String::Concat using LLILCJit
@@ -147,7 +206,79 @@ entry:
 }
 
 INFO:  jitting method String::FillStringChecked using LLILCJit
-Failed to read String.FillStringChecked[genNullCheck]
+Successfully read String.FillStringChecked
+
+define void @String.FillStringChecked(%System.String addrspace(1)* %param0, i32 %param1, %System.String addrspace(1)* %param2) {
+entry:
+  %arg0 = alloca %System.String addrspace(1)*
+  %arg1 = alloca i32
+  %arg2 = alloca %System.String addrspace(1)*
+  %loc0 = alloca i16 addrspace(1)*
+  %loc1 = alloca i16 addrspace(1)*
+  store %System.String addrspace(1)* %param0, %System.String addrspace(1)** %arg0
+  store i32 %param1, i32* %arg1
+  store %System.String addrspace(1)* %param2, %System.String addrspace(1)** %arg2
+  %0 = load %System.String addrspace(1)** %arg2
+  %1 = getelementptr inbounds %System.String addrspace(1)* %0, i32 0, i32 1
+  %2 = load i32 addrspace(1)* %1
+  %3 = load %System.String addrspace(1)** %arg0
+  %4 = getelementptr inbounds %System.String addrspace(1)* %3, i32 0, i32 1
+  %5 = load i32 addrspace(1)* %4
+  %6 = load i32* %arg1
+  %7 = sub i32 %5, %6
+  %8 = icmp sle i32 %2, %7
+  br i1 %8, label %11, label %9
+
+; <label>:9                                       ; preds = %entry
+  %10 = call %System.IndexOutOfRangeException addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.IndexOutOfRangeException addrspace(1)* (i64)*)(i64 NORMALIZED_ADDRESS)
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (%System.IndexOutOfRangeException addrspace(1)*)*)(%System.IndexOutOfRangeException addrspace(1)* %10)
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (%System.IndexOutOfRangeException addrspace(1)*)*)(%System.IndexOutOfRangeException addrspace(1)* %10) #0
+  unreachable
+
+; <label>:11                                      ; preds = %entry
+  %12 = load %System.String addrspace(1)** %arg0
+  %NullCheck = icmp ne %System.String addrspace(1)* %12, null
+  br i1 %NullCheck, label %13, label %ThrowNullRef
+
+; <label>:13                                      ; preds = %11
+  %14 = getelementptr inbounds %System.String addrspace(1)* %12, i32 0, i32 2
+  %15 = bitcast [0 x i16] addrspace(1)* %14 to i16 addrspace(1)*
+  store i16 addrspace(1)* %15, i16 addrspace(1)** %loc0
+  %16 = load %System.String addrspace(1)** %arg2
+  %NullCheck2 = icmp ne %System.String addrspace(1)* %16, null
+  br i1 %NullCheck2, label %17, label %ThrowNullRef1
+
+; <label>:17                                      ; preds = %13
+  %18 = getelementptr inbounds %System.String addrspace(1)* %16, i32 0, i32 2
+  %19 = bitcast [0 x i16] addrspace(1)* %18 to i16 addrspace(1)*
+  store i16 addrspace(1)* %19, i16 addrspace(1)** %loc1
+  %20 = load i16 addrspace(1)** %loc0
+  %21 = ptrtoint i16 addrspace(1)* %20 to i64
+  %22 = load i32* %arg1
+  %23 = sext i32 %22 to i64
+  %24 = mul i64 %23, 2
+  %25 = add i64 %21, %24
+  %26 = load i16 addrspace(1)** %loc1
+  %27 = ptrtoint i16 addrspace(1)* %26 to i64
+  %28 = load %System.String addrspace(1)** %arg2
+  %29 = getelementptr inbounds %System.String addrspace(1)* %28, i32 0, i32 1
+  %30 = load i32 addrspace(1)* %29
+  %31 = inttoptr i64 %25 to i16*
+  %32 = inttoptr i64 %27 to i16*
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (i16*, i16*, i32)*)(i16* %31, i16* %32, i32 %30)
+  store i16 addrspace(1)* null, i16 addrspace(1)** %loc1
+  store i16 addrspace(1)* null, i16 addrspace(1)** %loc0
+  ret void
+
+ThrowNullRef:                                     ; preds = %11
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void ()*)() #0
+  unreachable
+
+ThrowNullRef1:                                    ; preds = %13
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void ()*)() #0
+  unreachable
+}
+
 INFO:  jitting method AppDomain::PrepareDataForSetup using LLILCJit
 Failed to read AppDomain.PrepareDataForSetup[Call needs null check]
 INFO:  jitting method AppDomainSetup::.ctor using LLILCJit
@@ -157,7 +288,169 @@ Failed to read List`1..cctor[callRuntimeHandleHelper]
 INFO:  jitting method String::Compare using LLILCJit
 Failed to read String.Compare[Call needs null check]
 INFO:  jitting method String::CompareOrdinalIgnoreCaseHelper using LLILCJit
-Failed to read String.CompareOrdinalIgnoreCaseHelper[genNullCheck]
+Successfully read String.CompareOrdinalIgnoreCaseHelper
+
+define i32 @String.CompareOrdinalIgnoreCaseHelper(%System.String addrspace(1)* %param0, %System.String addrspace(1)* %param1) {
+entry:
+  %arg0 = alloca %System.String addrspace(1)*
+  %arg1 = alloca %System.String addrspace(1)*
+  %loc0 = alloca i32
+  %loc1 = alloca i16 addrspace(1)*
+  %loc2 = alloca i16 addrspace(1)*
+  %loc3 = alloca i16*
+  %loc4 = alloca i16*
+  %loc5 = alloca i32
+  %loc6 = alloca i32
+  %loc7 = alloca i32
+  store %System.String addrspace(1)* %param0, %System.String addrspace(1)** %arg0
+  store %System.String addrspace(1)* %param1, %System.String addrspace(1)** %arg1
+  %0 = load %System.String addrspace(1)** %arg0
+  %1 = getelementptr inbounds %System.String addrspace(1)* %0, i32 0, i32 1
+  %2 = load i32 addrspace(1)* %1
+  %3 = load %System.String addrspace(1)** %arg1
+  %4 = getelementptr inbounds %System.String addrspace(1)* %3, i32 0, i32 1
+  %5 = load i32 addrspace(1)* %4
+  %6 = call i32 inttoptr (i64 NORMALIZED_ADDRESS to i32 (i32, i32)*)(i32 %2, i32 %5)
+  store i32 %6, i32* %loc0
+  %7 = load %System.String addrspace(1)** %arg0
+  %NullCheck = icmp ne %System.String addrspace(1)* %7, null
+  br i1 %NullCheck, label %8, label %ThrowNullRef
+
+; <label>:8                                       ; preds = %entry
+  %9 = getelementptr inbounds %System.String addrspace(1)* %7, i32 0, i32 2
+  %10 = bitcast [0 x i16] addrspace(1)* %9 to i16 addrspace(1)*
+  store i16 addrspace(1)* %10, i16 addrspace(1)** %loc1
+  %11 = load %System.String addrspace(1)** %arg1
+  %NullCheck2 = icmp ne %System.String addrspace(1)* %11, null
+  br i1 %NullCheck2, label %12, label %ThrowNullRef1
+
+; <label>:12                                      ; preds = %8
+  %13 = getelementptr inbounds %System.String addrspace(1)* %11, i32 0, i32 2
+  %14 = bitcast [0 x i16] addrspace(1)* %13 to i16 addrspace(1)*
+  store i16 addrspace(1)* %14, i16 addrspace(1)** %loc2
+  %15 = load i16 addrspace(1)** %loc1
+  %16 = ptrtoint i16 addrspace(1)* %15 to i64
+  %17 = inttoptr i64 %16 to i16*
+  store i16* %17, i16** %loc3
+  %18 = load i16 addrspace(1)** %loc2
+  %19 = ptrtoint i16 addrspace(1)* %18 to i64
+  %20 = inttoptr i64 %19 to i16*
+  store i16* %20, i16** %loc4
+  br label %60
+
+; <label>:21                                      ; preds = %60
+  %22 = load i16** %loc3
+  %23 = load i16* %22, align 8
+  %24 = zext i16 %23 to i32
+  store i32 %24, i32* %loc5
+  %25 = load i16** %loc4
+  %26 = load i16* %25, align 8
+  %27 = zext i16 %26 to i32
+  store i32 %27, i32* %loc6
+  %28 = load i32* %loc5
+  %29 = sub i32 %28, 97
+  %30 = icmp ugt i32 %29, 25
+  br i1 %30, label %34, label %31
+
+; <label>:31                                      ; preds = %21
+  %32 = load i32* %loc5
+  %33 = sub i32 %32, 32
+  store i32 %33, i32* %loc5
+  br label %34
+
+; <label>:34                                      ; preds = %21, %31
+  %35 = load i32* %loc6
+  %36 = sub i32 %35, 97
+  %37 = icmp ugt i32 %36, 25
+  br i1 %37, label %41, label %38
+
+; <label>:38                                      ; preds = %34
+  %39 = load i32* %loc6
+  %40 = sub i32 %39, 32
+  store i32 %40, i32* %loc6
+  br label %41
+
+; <label>:41                                      ; preds = %34, %38
+  %42 = load i32* %loc5
+  %43 = load i32* %loc6
+  %44 = icmp eq i32 %42, %43
+  br i1 %44, label %49, label %45
+
+; <label>:45                                      ; preds = %41
+  %46 = load i32* %loc5
+  %47 = load i32* %loc6
+  %48 = sub i32 %46, %47
+  store i32 %48, i32* %loc7
+  br label %71
+
+; <label>:49                                      ; preds = %41
+  %50 = load i16** %loc3
+  %51 = bitcast i16* %50 to i8*
+  %52 = getelementptr inbounds i8* %51, i64 2
+  %53 = bitcast i8* %52 to i16*
+  store i16* %53, i16** %loc3
+  %54 = load i16** %loc4
+  %55 = bitcast i16* %54 to i8*
+  %56 = getelementptr inbounds i8* %55, i64 2
+  %57 = bitcast i8* %56 to i16*
+  store i16* %57, i16** %loc4
+  %58 = load i32* %loc0
+  %59 = sub i32 %58, 1
+  store i32 %59, i32* %loc0
+  br label %60
+
+; <label>:60                                      ; preds = %12, %49
+  %61 = load i32* %loc0
+  %62 = icmp ne i32 %61, 0
+  br i1 %62, label %21, label %63
+
+; <label>:63                                      ; preds = %60
+  %64 = load %System.String addrspace(1)** %arg0
+  %65 = getelementptr inbounds %System.String addrspace(1)* %64, i32 0, i32 1
+  %66 = load i32 addrspace(1)* %65
+  %67 = load %System.String addrspace(1)** %arg1
+  %68 = getelementptr inbounds %System.String addrspace(1)* %67, i32 0, i32 1
+  %69 = load i32 addrspace(1)* %68
+  %70 = sub i32 %66, %69
+  store i32 %70, i32* %loc7
+  br label %71
+
+; <label>:71                                      ; preds = %45, %63
+  %72 = load i32* %loc7
+  ret i32 %72
+
+ThrowNullRef:                                     ; preds = %entry
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void ()*)() #0
+  unreachable
+
+ThrowNullRef1:                                    ; preds = %8
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void ()*)() #0
+  unreachable
+}
+
+INFO:  jitting method Math::Min using LLILCJit
+Successfully read Math.Min
+
+define i32 @Math.Min(i32 %param0, i32 %param1) {
+entry:
+  %arg0 = alloca i32
+  %arg1 = alloca i32
+  store i32 %param0, i32* %arg0
+  store i32 %param1, i32* %arg1
+  %0 = load i32* %arg0
+  %1 = load i32* %arg1
+  %2 = icmp sle i32 %0, %1
+  br i1 %2, label %5, label %3
+
+; <label>:3                                       ; preds = %entry
+  %4 = load i32* %arg1
+  ret i32 %4
+
+; <label>:5                                       ; preds = %entry
+  %6 = load i32* %arg0
+  ret i32 %6
+}
+
 INFO:  jitting method List`1::Add using LLILCJit
 Failed to read List`1.Add[storeElem]
 INFO:  jitting method List`1::EnsureCapacity using LLILCJit
@@ -401,7 +694,7 @@ Failed to read StringBuilder.ToString[loadElemA]
 INFO:  jitting method CultureData::CreateCultureData using LLILCJit
 Failed to read CultureData.CreateCultureData[Call needs null check]
 INFO:  jitting method Dictionary`2::System.Collections.ICollection.get_SyncRoot using LLILCJit
-Failed to read Dictionary`2.System.Collections.ICollection.get_SyncRoot[genNullCheck]
+Failed to read Dictionary`2.System.Collections.ICollection.get_SyncRoot[Call HasTypeArg]
 INFO:  jitting method Dictionary`2::Insert using LLILCJit
 Failed to read Dictionary`2.Insert[non-const derefAddress]
 INFO:  jitting method Dictionary`2::Initialize using LLILCJit
@@ -423,7 +716,180 @@ Failed to read CultureInfo.get_UserDefaultCulture[Helper performs volatile opera
 INFO:  jitting method CultureInfo::get_Name using LLILCJit
 Failed to read CultureInfo.get_Name[Call needs null check]
 INFO:  jitting method String::EqualsHelper using LLILCJit
-Failed to read String.EqualsHelper[genNullCheck]
+Successfully read String.EqualsHelper
+
+define i8 @String.EqualsHelper(%System.String addrspace(1)* %param0, %System.String addrspace(1)* %param1) {
+entry:
+  %arg0 = alloca %System.String addrspace(1)*
+  %arg1 = alloca %System.String addrspace(1)*
+  %loc0 = alloca i32
+  %loc1 = alloca i16 addrspace(1)*
+  %loc2 = alloca i16 addrspace(1)*
+  %loc3 = alloca i16*
+  %loc4 = alloca i16*
+  %loc5 = alloca i8
+  store %System.String addrspace(1)* %param0, %System.String addrspace(1)** %arg0
+  store %System.String addrspace(1)* %param1, %System.String addrspace(1)** %arg1
+  %0 = load %System.String addrspace(1)** %arg0
+  %1 = getelementptr inbounds %System.String addrspace(1)* %0, i32 0, i32 1
+  %2 = load i32 addrspace(1)* %1
+  store i32 %2, i32* %loc0
+  %3 = load %System.String addrspace(1)** %arg0
+  %NullCheck = icmp ne %System.String addrspace(1)* %3, null
+  br i1 %NullCheck, label %4, label %ThrowNullRef
+
+; <label>:4                                       ; preds = %entry
+  %5 = getelementptr inbounds %System.String addrspace(1)* %3, i32 0, i32 2
+  %6 = bitcast [0 x i16] addrspace(1)* %5 to i16 addrspace(1)*
+  store i16 addrspace(1)* %6, i16 addrspace(1)** %loc1
+  %7 = load %System.String addrspace(1)** %arg1
+  %NullCheck2 = icmp ne %System.String addrspace(1)* %7, null
+  br i1 %NullCheck2, label %8, label %ThrowNullRef1
+
+; <label>:8                                       ; preds = %4
+  %9 = getelementptr inbounds %System.String addrspace(1)* %7, i32 0, i32 2
+  %10 = bitcast [0 x i16] addrspace(1)* %9 to i16 addrspace(1)*
+  store i16 addrspace(1)* %10, i16 addrspace(1)** %loc2
+  %11 = load i16 addrspace(1)** %loc1
+  %12 = ptrtoint i16 addrspace(1)* %11 to i64
+  %13 = inttoptr i64 %12 to i16*
+  store i16* %13, i16** %loc3
+  %14 = load i16 addrspace(1)** %loc2
+  %15 = ptrtoint i16 addrspace(1)* %14 to i64
+  %16 = inttoptr i64 %15 to i16*
+  store i16* %16, i16** %loc4
+  br label %63
+
+; <label>:17                                      ; preds = %63
+  %18 = load i16** %loc3
+  %19 = bitcast i16* %18 to i64*
+  %20 = load i64* %19, align 8
+  %21 = load i16** %loc4
+  %22 = bitcast i16* %21 to i64*
+  %23 = load i64* %22, align 8
+  %24 = icmp eq i64 %20, %23
+  br i1 %24, label %26, label %25
+
+; <label>:25                                      ; preds = %17
+  store i8 0, i8* %loc5
+  br label %96
+
+; <label>:26                                      ; preds = %17
+  %27 = load i16** %loc3
+  %28 = bitcast i16* %27 to i8*
+  %29 = getelementptr inbounds i8* %28, i64 8
+  %30 = bitcast i8* %29 to i64*
+  %31 = load i64* %30, align 8
+  %32 = load i16** %loc4
+  %33 = bitcast i16* %32 to i8*
+  %34 = getelementptr inbounds i8* %33, i64 8
+  %35 = bitcast i8* %34 to i64*
+  %36 = load i64* %35, align 8
+  %37 = icmp eq i64 %31, %36
+  br i1 %37, label %39, label %38
+
+; <label>:38                                      ; preds = %26
+  store i8 0, i8* %loc5
+  br label %96
+
+; <label>:39                                      ; preds = %26
+  %40 = load i16** %loc3
+  %41 = bitcast i16* %40 to i8*
+  %42 = getelementptr inbounds i8* %41, i64 16
+  %43 = bitcast i8* %42 to i64*
+  %44 = load i64* %43, align 8
+  %45 = load i16** %loc4
+  %46 = bitcast i16* %45 to i8*
+  %47 = getelementptr inbounds i8* %46, i64 16
+  %48 = bitcast i8* %47 to i64*
+  %49 = load i64* %48, align 8
+  %50 = icmp eq i64 %44, %49
+  br i1 %50, label %52, label %51
+
+; <label>:51                                      ; preds = %39
+  store i8 0, i8* %loc5
+  br label %96
+
+; <label>:52                                      ; preds = %39
+  %53 = load i16** %loc3
+  %54 = bitcast i16* %53 to i8*
+  %55 = getelementptr inbounds i8* %54, i64 24
+  %56 = bitcast i8* %55 to i16*
+  store i16* %56, i16** %loc3
+  %57 = load i16** %loc4
+  %58 = bitcast i16* %57 to i8*
+  %59 = getelementptr inbounds i8* %58, i64 24
+  %60 = bitcast i8* %59 to i16*
+  store i16* %60, i16** %loc4
+  %61 = load i32* %loc0
+  %62 = sub i32 %61, 12
+  store i32 %62, i32* %loc0
+  br label %63
+
+; <label>:63                                      ; preds = %8, %52
+  %64 = load i32* %loc0
+  %65 = icmp sge i32 %64, 12
+  br i1 %65, label %17, label %66
+
+; <label>:66                                      ; preds = %63
+  br label %86
+
+; <label>:67                                      ; preds = %86
+  %68 = load i16** %loc3
+  %69 = bitcast i16* %68 to i32*
+  %70 = load i32* %69, align 8
+  %71 = load i16** %loc4
+  %72 = bitcast i16* %71 to i32*
+  %73 = load i32* %72, align 8
+  %74 = icmp ne i32 %70, %73
+  br i1 %74, label %89, label %75
+
+; <label>:75                                      ; preds = %67
+  %76 = load i16** %loc3
+  %77 = bitcast i16* %76 to i8*
+  %78 = getelementptr inbounds i8* %77, i64 4
+  %79 = bitcast i8* %78 to i16*
+  store i16* %79, i16** %loc3
+  %80 = load i16** %loc4
+  %81 = bitcast i16* %80 to i8*
+  %82 = getelementptr inbounds i8* %81, i64 4
+  %83 = bitcast i8* %82 to i16*
+  store i16* %83, i16** %loc4
+  %84 = load i32* %loc0
+  %85 = sub i32 %84, 2
+  store i32 %85, i32* %loc0
+  br label %86
+
+; <label>:86                                      ; preds = %66, %75
+  %87 = load i32* %loc0
+  %88 = icmp sgt i32 %87, 0
+  br i1 %88, label %67, label %89
+
+; <label>:89                                      ; preds = %67, %86
+  %90 = load i32* %loc0
+  %91 = icmp sgt i32 %90, 0
+  %92 = sext i1 %91 to i32
+  %93 = icmp eq i32 %92, 0
+  %94 = sext i1 %93 to i32
+  %95 = trunc i32 %94 to i8
+  store i8 %95, i8* %loc5
+  br label %96
+
+; <label>:96                                      ; preds = %25, %38, %51, %89
+  %97 = load i8* %loc5
+  %98 = zext i8 %97 to i32
+  %99 = trunc i32 %98 to i8
+  ret i8 %99
+
+ThrowNullRef:                                     ; preds = %entry
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void ()*)() #0
+  unreachable
+
+ThrowNullRef1:                                    ; preds = %4
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void ()*)() #0
+  unreachable
+}
+
 INFO:  jitting method CultureAwareComparer::.ctor using LLILCJit
 Successfully read CultureAwareComparer..ctor
 
@@ -577,7 +1043,53 @@ entry:
 INFO:  jitting method OrdinalComparer::Equals using LLILCJit
 Failed to read OrdinalComparer.Equals[Tail call]
 INFO:  jitting method Enumerator::MoveNextRare using LLILCJit
-Failed to read Enumerator.MoveNextRare[genNullCheck]
+Successfully read Enumerator.MoveNextRare
+
+define i8 @Enumerator.MoveNextRare(%"System.Collections.Generic.List`1+Enumerator[System.__Canon]" addrspace(1)* %param0, %System.RuntimeTypeHandle* %param1) {
+entry:
+  %this = alloca %"System.Collections.Generic.List`1+Enumerator[System.__Canon]" addrspace(1)*
+  %"$TypeArg" = alloca %System.RuntimeTypeHandle*
+  store %"System.Collections.Generic.List`1+Enumerator[System.__Canon]" addrspace(1)* %param0, %"System.Collections.Generic.List`1+Enumerator[System.__Canon]" addrspace(1)** %this
+  store %System.RuntimeTypeHandle* %param1, %System.RuntimeTypeHandle** %"$TypeArg"
+  %0 = load %"System.Collections.Generic.List`1+Enumerator[System.__Canon]" addrspace(1)** %this
+  %1 = getelementptr inbounds %"System.Collections.Generic.List`1+Enumerator[System.__Canon]" addrspace(1)* %0, i32 0, i32 3
+  %2 = load i32 addrspace(1)* %1, align 8
+  %3 = load %"System.Collections.Generic.List`1+Enumerator[System.__Canon]" addrspace(1)** %this
+  %4 = getelementptr inbounds %"System.Collections.Generic.List`1+Enumerator[System.__Canon]" addrspace(1)* %3, i32 0, i32 0
+  %5 = load %"System.Collections.Generic.List`1[System.__Canon]" addrspace(1)* addrspace(1)* %4, align 8
+  %6 = getelementptr inbounds %"System.Collections.Generic.List`1[System.__Canon]" addrspace(1)* %5, i32 0, i32 4
+  %7 = load i32 addrspace(1)* %6, align 8
+  %8 = icmp eq i32 %2, %7
+  br i1 %8, label %10, label %9
+
+; <label>:9                                       ; preds = %entry
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (i32)*)(i32 32)
+  br label %10
+
+; <label>:10                                      ; preds = %entry, %9
+  %11 = load %"System.Collections.Generic.List`1+Enumerator[System.__Canon]" addrspace(1)** %this
+  %12 = load %"System.Collections.Generic.List`1+Enumerator[System.__Canon]" addrspace(1)** %this
+  %13 = getelementptr inbounds %"System.Collections.Generic.List`1+Enumerator[System.__Canon]" addrspace(1)* %12, i32 0, i32 0
+  %14 = load %"System.Collections.Generic.List`1[System.__Canon]" addrspace(1)* addrspace(1)* %13, align 8
+  %15 = getelementptr inbounds %"System.Collections.Generic.List`1[System.__Canon]" addrspace(1)* %14, i32 0, i32 3
+  %16 = load i32 addrspace(1)* %15, align 8
+  %17 = add i32 %16, 1
+  %18 = getelementptr inbounds %"System.Collections.Generic.List`1+Enumerator[System.__Canon]" addrspace(1)* %11, i32 0, i32 2
+  store i32 %17, i32 addrspace(1)* %18
+  %19 = load %"System.Collections.Generic.List`1+Enumerator[System.__Canon]" addrspace(1)** %this
+  %NullCheck = icmp ne %"System.Collections.Generic.List`1+Enumerator[System.__Canon]" addrspace(1)* %19, null
+  br i1 %NullCheck, label %20, label %ThrowNullRef
+
+; <label>:20                                      ; preds = %10
+  %21 = getelementptr inbounds %"System.Collections.Generic.List`1+Enumerator[System.__Canon]" addrspace(1)* %19, i32 0, i32 1
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (%System.__Canon addrspace(1)* addrspace(1)*, i32, i32)*)(%System.__Canon addrspace(1)* addrspace(1)* %21, i32 0, i32 8)
+  ret i8 0
+
+ThrowNullRef:                                     ; preds = %10
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void ()*)() #0
+  unreachable
+}
+
 INFO:  jitting method Enumerator::Dispose using LLILCJit
 Successfully read Enumerator.Dispose
 
@@ -647,7 +1159,7 @@ entry:
 INFO:  jitting method KeyCollection::System.Collections.Generic.IEnumerable<TKey>.GetEnumerator using LLILCJit
 Failed to read KeyCollection.System.Collections.Generic.IEnumerable<TKey>.GetEnumerator[Call HasTypeArg]
 INFO:  jitting method Enumerator::MoveNext using LLILCJit
-Failed to read Enumerator.MoveNext[genNullCheck]
+Failed to read Enumerator.MoveNext[loadElemA]
 INFO:  jitting method Enumerator::get_Current using LLILCJit
 Successfully read Enumerator.get_Current
 
@@ -682,7 +1194,7 @@ Failed to read Path..cctor[convertHandle]
 INFO:  jitting method String::SplitInternal using LLILCJit
 Failed to read String.SplitInternal[Tail call]
 INFO:  jitting method String::MakeSeparatorList using LLILCJit
-Failed to read String.MakeSeparatorList[genNullCheck]
+Failed to read String.MakeSeparatorList[loadElemA]
 INFO:  jitting method String::InternalSplitKeepEmptyEntries using LLILCJit
 Failed to read String.InternalSplitKeepEmptyEntries[loadElem]
 INFO:  jitting method Path::IsRelative using LLILCJit
@@ -994,8 +1506,6 @@ entry:
   ret i32 12
 }
 
-INFO:  jitting method String::wstrcpy using LLILCJit
-Failed to read String.wstrcpy[Tail call]
 INFO:  jitting method String::Equals using LLILCJit
 Failed to read String.Equals[Call needs null check]
 INFO:  jitting method StringBuilder::Append using LLILCJit
@@ -1265,29 +1775,6 @@ entry:
   %4 = getelementptr inbounds %System.Text.StringBuilder addrspace(1)* %3, i32 0, i32 3
   %5 = load i32 addrspace(1)* %4, align 8
   %6 = add i32 %2, %5
-  ret i32 %6
-}
-
-INFO:  jitting method Math::Min using LLILCJit
-Successfully read Math.Min
-
-define i32 @Math.Min(i32 %param0, i32 %param1) {
-entry:
-  %arg0 = alloca i32
-  %arg1 = alloca i32
-  store i32 %param0, i32* %arg0
-  store i32 %param1, i32* %arg1
-  %0 = load i32* %arg0
-  %1 = load i32* %arg1
-  %2 = icmp sle i32 %0, %1
-  br i1 %2, label %5, label %3
-
-; <label>:3                                       ; preds = %entry
-  %4 = load i32* %arg1
-  ret i32 %4
-
-; <label>:5                                       ; preds = %entry
-  %6 = load i32* %arg0
   ret i32 %6
 }
 
@@ -1590,7 +2077,82 @@ Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[publish secret param]
 INFO:  jitting method AppDomain::GetAppDomainManagerType using LLILCJit
 Failed to read AppDomain.GetAppDomainManagerType[Return refany or value class]
 INFO:  jitting method AppDomain::GetNativeHandle using LLILCJit
-Failed to read AppDomain.GetNativeHandle[genNullCheck]
+Successfully read AppDomain.GetNativeHandle
+
+define %System.AppDomainHandle @AppDomain.GetNativeHandle(%System.AppDomain addrspace(1)* %param0) {
+entry:
+  %this = alloca %System.AppDomain addrspace(1)*
+  %0 = alloca %System.AppDomainHandle
+  store %System.AppDomain addrspace(1)* %param0, %System.AppDomain addrspace(1)** %this
+  %1 = load %System.AppDomain addrspace(1)** %this
+  %NullCheck = icmp ne %System.AppDomain addrspace(1)* %1, null
+  br i1 %NullCheck, label %2, label %ThrowNullRef
+
+; <label>:2                                       ; preds = %entry
+  %3 = getelementptr inbounds %System.AppDomain addrspace(1)* %1, i32 0, i32 15
+  %4 = bitcast i64 addrspace(1)* %3 to %System.IntPtr addrspace(1)*
+  %5 = call i8 inttoptr (i64 NORMALIZED_ADDRESS to i8 (%System.IntPtr addrspace(1)*)*)(%System.IntPtr addrspace(1)* %4)
+  %6 = zext i8 %5 to i32
+  %7 = icmp eq i32 %6, 0
+  br i1 %7, label %12, label %8
+
+; <label>:8                                       ; preds = %2
+  %9 = load %System.String addrspace(1)** inttoptr (i64 NORMALIZED_ADDRESS to %System.String addrspace(1)**), align 8
+  %10 = call %System.String addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.String addrspace(1)* (%System.String addrspace(1)*)*)(%System.String addrspace(1)* %9)
+  %11 = call %System.InvalidOperationException addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.InvalidOperationException addrspace(1)* (i64)*)(i64 NORMALIZED_ADDRESS)
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (%System.InvalidOperationException addrspace(1)*, %System.String addrspace(1)*)*)(%System.InvalidOperationException addrspace(1)* %11, %System.String addrspace(1)* %10)
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (%System.InvalidOperationException addrspace(1)*)*)(%System.InvalidOperationException addrspace(1)* %11) #1
+  unreachable
+
+; <label>:12                                      ; preds = %2
+  %13 = load %System.AppDomain addrspace(1)** %this
+  %14 = getelementptr inbounds %System.AppDomain addrspace(1)* %13, i32 0, i32 15
+  %15 = load i64 addrspace(1)* %14, align 8
+  %16 = bitcast %System.AppDomainHandle* %0 to i8*
+  call void @llvm.memset.p0i8.i64(i8* %16, i8 0, i64 8, i32 0, i1 false)
+  %17 = addrspacecast %System.AppDomainHandle* %0 to %System.AppDomainHandle addrspace(1)*
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (%System.AppDomainHandle addrspace(1)*, i64)*)(%System.AppDomainHandle addrspace(1)* %17, i64 %15)
+  %18 = load %System.AppDomainHandle* %0
+  ret %System.AppDomainHandle %18
+
+ThrowNullRef:                                     ; preds = %entry
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void ()*)() #1
+  unreachable
+}
+
+INFO:  jitting method IntPtr::IsNull using LLILCJit
+Successfully read IntPtr.IsNull
+
+define i8 @IntPtr.IsNull(%System.IntPtr addrspace(1)* %param0) {
+entry:
+  %this = alloca %System.IntPtr addrspace(1)*
+  store %System.IntPtr addrspace(1)* %param0, %System.IntPtr addrspace(1)** %this
+  %0 = load %System.IntPtr addrspace(1)** %this
+  %1 = getelementptr inbounds %System.IntPtr addrspace(1)* %0, i32 0, i32 0
+  %2 = load i16* addrspace(1)* %1, align 8
+  %3 = ptrtoint i16* %2 to i64
+  %4 = icmp eq i64 %3, 0
+  %5 = sext i1 %4 to i32
+  %6 = trunc i32 %5 to i8
+  ret i8 %6
+}
+
+INFO:  jitting method AppDomainHandle::.ctor using LLILCJit
+Successfully read AppDomainHandle..ctor
+
+define void @AppDomainHandle..ctor(%System.AppDomainHandle addrspace(1)* %param0, i64 %param1) {
+entry:
+  %this = alloca %System.AppDomainHandle addrspace(1)*
+  %arg1 = alloca i64
+  store %System.AppDomainHandle addrspace(1)* %param0, %System.AppDomainHandle addrspace(1)** %this
+  store i64 %param1, i64* %arg1
+  %0 = load %System.AppDomainHandle addrspace(1)** %this
+  %1 = load i64* %arg1
+  %2 = getelementptr inbounds %System.AppDomainHandle addrspace(1)* %0, i32 0, i32 0
+  store i64 %1, i64 addrspace(1)* %2
+  ret void
+}
+
 INFO:  jitting method AppDomain::InitializeCompatibilityFlags using LLILCJit
 Failed to read AppDomain.InitializeCompatibilityFlags[Call needs null check]
 INFO:  jitting method Dictionary`2::.ctor using LLILCJit
@@ -1615,7 +2177,7 @@ entry:
 INFO:  jitting method Dictionary`2::System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<TKey,TValue>>.GetEnumerator using LLILCJit
 Failed to read Dictionary`2.System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<TKey,TValue>>.GetEnumerator[Call HasTypeArg]
 INFO:  jitting method Enumerator::MoveNext using LLILCJit
-Failed to read Enumerator.MoveNext[genNullCheck]
+Failed to read Enumerator.MoveNext[loadElemA]
 INFO:  jitting method Enumerator::get_Current using LLILCJit
 Failed to read Enumerator.get_Current[loadNonPrimitiveObj]
 INFO:  jitting method OrdinalComparer::GetHashCode using LLILCJit
@@ -3636,7 +4198,7 @@ entry:
 INFO:  jitting method StreamWriter::Write using LLILCJit
 Failed to read StreamWriter.Write[Tail call]
 INFO:  jitting method String::CopyTo using LLILCJit
-Failed to read String.CopyTo[genNullCheck]
+Failed to read String.CopyTo[loadElemA]
 INFO:  jitting method WindowsConsoleStream::Write using LLILCJit
 Successfully read WindowsConsoleStream.Write
 
