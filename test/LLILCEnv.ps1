@@ -735,7 +735,7 @@ function Global:BuildTest([string]$Arch="x64", [string]$Build="Release")
 function Global:CheckFailure([string]$Arch="x64", [string]$Build="Release")
 {
   $CoreCLRTestAssets = CoreCLRTestAssets
-  $RunResult = "$CoreCLRTestAssets\coreclr\binaries\Logs\TestRunResults_Windows_NT_"
+  $RunResult = "$CoreCLRTestAssets\coreclr\binaries\Logs\TestRunResults_Windows_NT__"
   $RunResult  = $RunResult + "$Arch"
   $RunResult  = $RunResult + "__$Build.log"
   $RunResultsExists = Test-Path $RunResult
@@ -778,6 +778,7 @@ function Global:RunTest([string]$Arch="x64", [string]$Build="Release")
     return $True
   }
   else {
+    Write-Host "$NumDiff diffs and $NumFailures failures"
     return $False
   }
 }
