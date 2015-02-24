@@ -99,7 +99,7 @@ function ValidatePreConditions
 
   # Validate GnuWin32
 
-  IsOnPath -executable "wget.exe" -software "GnuWin32"
+  IsOnPath -executable "grep.exe" -software "GnuWin32"
 
   # Validate Diff Tool
   
@@ -195,6 +195,12 @@ function Global:CoreCLRTestAssets
 {
   $LLILCTestResult = LLILCTestResult
   return "$LLILCTestResult\CoreCLRTestAssets"
+}
+
+function Global:CoreCLRTestTargetBinaries([string]$Arch="x64", [string]$Build="Release")
+{
+  $CoreCLRTestAssets = CoreCLRTestAssets
+  return "$CoreCLRTestAssets\coreclr\binaries\tests\Windows_NT.$Arch.$Build"
 }
 
 function Global:DefaultLLVMBuild
@@ -367,7 +373,7 @@ function Global:DownloadNuGet
   if (!$NuGetExists) {
     pushd .
     cd $CoreCLRRuntime
-    wget http://nuget.org/NuGet.exe -OutFile NuGet.exe
+    Invoke-WebRequest http://nuget.org/NuGet.exe -OutFile NuGet.exe
     popd
   }
 }
@@ -692,9 +698,9 @@ function Global:ApplyFilter([string]$File)
 
 function Global:ExcludeTest([string]$Arch="x64", [string]$Build="Release")
 {
-  $CoreCLRTestAssets = CoreCLRTestAssets
+  $CoreCLRTestTargetBinaries = CoreCLRTestTargetBinaries -Arch $Arch -Build $Build
   pushd .
-  cd $CoreCLRTestAssets\coreclr\binaries\tests\$Arch\$Build\JIT\CodeGenBringUpTests
+  cd $CoreCLRTestTargetBinaries\JIT\CodeGenBringUpTests
   del DblRem*
   del FpRem*
   del div2*
@@ -777,7 +783,7 @@ function Global:RunTest([string]$Arch="x64", [string]$Build="Release")
 function Global:ReBaseAll([string]$Arch="x64", [string]$Build="Release")
 {
   $LLILCTest = LLILCTest
-  $CoreCLRTestAssets = CoreCLRTestAssets
+  $CoreCLRTestTargetBinaries = CoreCLRTestTargetBinaries -Arch $Arch -Build $Build
 
   $BaseLineExists = Test-Path $LLILCTest\BaseLine
   if ($BaseLineExists) {
@@ -785,7 +791,7 @@ function Global:ReBaseAll([string]$Arch="x64", [string]$Build="Release")
   }
   New-Item -itemtype directory $LLILCTest\BaseLine | Out-Null
 
-  Copy-Item -recurse "$CoreCLRTestAssets\coreclr\binaries\tests\$Arch\$Build\Reports\*" -Destination $LLILCTest\BaseLine
+  Copy-Item -recurse "$CoreCLRTestTargetBinaries\Reports\*" -Destination $LLILCTest\BaseLine
   Get-ChildItem -recurse -path $LLILCTest\BaseLine | Where {$_.FullName -match "output.txt"} | Remove-Item -force
   Get-ChildItem -recurse -path $LLILCTest\BaseLine | Where {$_.FullName -match "error.txt"} | ApplyFilterAll
 }
@@ -800,7 +806,7 @@ function Global:CheckDiff([bool]$Create = $false, [bool]$UseDiffTool = $True, [s
 {
   $LLILCTest = LLILCTest
   $LLILCTestResult = LLILCTestResult
-  $CoreCLRTestAssets = CoreCLRTestAssets
+  $CoreCLRTestTargetBinaries = CoreCLRTestTargetBinaries -Arch $Arch -Build $Build
 
   Write-Output ("Checking diff...")
   $DiffExists = Test-Path $LLILCTestResult\Diff
@@ -815,7 +821,7 @@ function Global:CheckDiff([bool]$Create = $false, [bool]$UseDiffTool = $True, [s
 
     $TotalCount = 0;
     $DiffCount = 0;
-    Get-ChildItem -recurse -path $CoreCLRTestAssets\coreclr\binaries\tests\$Arch\$Build\Reports | Where {$_.FullName -match "error.txt"} | `
+    Get-ChildItem -recurse -path $CoreCLRTestTargetBinaries\Reports | Where {$_.FullName -match "error.txt"} | `
     Foreach-Object {
       $TotalCount = $TotalCount + 1
       $RunFile = $_.FullName
@@ -856,7 +862,7 @@ function Global:CheckDiff([bool]$Create = $false, [bool]$UseDiffTool = $True, [s
       else {
         $TotalCount = 0;
         $DiffCount = 0;
-        Get-ChildItem -recurse -path $CoreCLRTestAssets\coreclr\binaries\tests\$Arch\$Build\Reports | Where {$_.FullName -match "error.txt"} | `
+        Get-ChildItem -recurse -path $CoreCLRTestTargetBinaries\Reports | Where {$_.FullName -match "error.txt"} | `
         Foreach-Object {
           $TotalCount = $TotalCount + 1;
         }
@@ -887,7 +893,7 @@ function Global:LLILCHelp
   Write-Output("CheckEnv          - List the LLILC work environment. Example: CheckEnv")
   Write-Output("CopyJIT           - Copy LLILC JIT dll into CoreCLR Runtime. Example: CopyJIT -Build Debug")
   Write-Output("LLILCHelp         - List and explain available commands. Example: LLILCHelp")
-  Write-Output("ReBaseAll         - Re-create the base line for all regression test cases. Example: -Arch x64 -Build Release")
+  Write-Output("ReBaseAll         - Re-create the base line for all regression test cases. Example: ReBaseAll -Arch x64 -Build Release")
   Write-Output("RunTest           - Run LLILC enabled CoreCLR regression tests. Example: RunTest -Arch x64 -Build Release")
 }
 
