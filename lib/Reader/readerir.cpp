@@ -1750,9 +1750,14 @@ FlowGraphNode *GenIR::fgSplitBlock(FlowGraphNode *Block, IRNode *Node) {
         // do nothing
       } else {
         BranchInst *BranchInstruction = dyn_cast<BranchInst>(TermInst);
-        ASSERT(BranchInstruction != NULL);
-        if (BranchInstruction->isConditional()) {
-          BranchInstruction->setSuccessor(1, NewBlock);
+        if (BranchInstruction != NULL) {
+          if (BranchInstruction->isConditional()) {
+            BranchInstruction->setSuccessor(1, NewBlock);
+          }
+        } else {
+          SwitchInst *SwitchInstruction = cast<SwitchInst>(TermInst);
+          // Since cases are not added yet, the successor index is 0.
+          SwitchInstruction->setSuccessor(0, NewBlock);
         }
       }
     } else {
@@ -1776,6 +1781,24 @@ void GenIR::fgDeleteNodesFromBlock(FlowGraphNode *Node) {
   // successor edges as well, but is a difference compared to legacy jits.
   BasicBlock *Block = (BasicBlock *)Node;
   Block->getInstList().clear();
+}
+
+IRNode *GenIR::fgMakeSwitch(IRNode *DefaultLabel, IRNode *Insert) {
+  LLVMBuilder->SetInsertPoint((BasicBlock *)Insert);
+
+  // Create switch with null condition because it is invoked during 
+  // flow-graph build. The subsequent pass of Reader will set
+  // this operanad properly.
+  return (IRNode *)LLVMBuilder->CreateSwitch(loadNull(nullptr),
+    (BasicBlock *)DefaultLabel);
+}
+
+IRNode *GenIR::fgAddCaseToCaseList(IRNode *SwitchNode, IRNode *LabelNode,
+                                   unsigned Element) {
+  ConstantInt *Case = ConstantInt::get(*JitContext->LLVMContext,
+    APInt(32, (uint64_t)Element, false));
+  ((SwitchInst *)SwitchNode)->addCase(Case, (BasicBlock *)LabelNode);
+  return SwitchNode;
 }
 
 // The legacy jit implementation inserts a sentinel for throw (followed by an
@@ -1973,7 +1996,7 @@ IRNode *GenIR::loadConstantI4(int32_t Constant, IRNode **NewIR) {
                                     APInt(NumBits, Constant, IsSigned));
 }
 
-IRNode *GenIR::loadConstantI8(__int64 Constant, IRNode **NewIR) {
+IRNode *GenIR::loadConstantI8(int64_t Constant, IRNode **NewIR) {
   uint32_t NumBits = 64;
   bool IsSigned = true;
 
@@ -2628,6 +2651,34 @@ void GenIR::storeField(CORINFO_RESOLVED_TOKEN *FieldToken, IRNode *ValueToStore,
              NewIR);
     return;
   }
+}
+
+void GenIR::storePrimitiveType(IRNode *Value, IRNode *Addr,
+                               CorInfoType CorInfoType,
+                               ReaderAlignType Alignment, bool IsVolatile,
+                               IRNode **NewIR) {
+  ASSERTNR(isPrimitiveType(CorInfoType));
+
+  // Get type of the result.
+  Type *AddressTy = Addr->getType();
+  ASSERT(AddressTy->isPointerTy());
+  PointerType *Ty = cast<PointerType>(AddressTy);
+  Type *ReferentTy = Ty->getPointerElementType();
+  IRNode *TypedAddr = Addr;
+
+  // We need to cast the address when types are mismatched.
+  Type *ExpectedTy = Value->getType();
+  if (ReferentTy != ExpectedTy) {
+    Type *PtrToExpectedTy = getUnmanagedPointerType(ExpectedTy);
+    TypedAddr =
+      (IRNode *)LLVMBuilder->CreatePointerCast(Addr, PtrToExpectedTy);
+  }
+
+  uint32_t Align = (Alignment == Reader_AlignNatural)
+    ? TargetPointerSizeInBits / 8
+    : Alignment;
+  StoreInst *StoreInst = LLVMBuilder->CreateStore(Value, TypedAddr, IsVolatile);
+  StoreInst->setAlignment(Align);
 }
 
 // Helper used by StorePrimitive and StoreField.
@@ -3438,6 +3489,17 @@ void GenIR::dup(IRNode *Opr, IRNode **Result1, IRNode **Result2,
                 IRNode **NewIR) {
   *Result1 = Opr;
   *Result2 = Opr;
+}
+
+void GenIR::switchOpcode(IRNode *Opr, IRNode **NewIR) {
+   // We split the block right after the switch during the flow-graph build.
+   // The terminator is switch instruction itself.
+   // Now condition operand is updated.
+   BasicBlock *CurrBlock = LLVMBuilder->GetInsertBlock();
+   TerminatorInst *TermInst = CurrBlock->getTerminator();
+   SwitchInst *SwitchInstruction = cast<SwitchInst>(TermInst);
+
+   SwitchInstruction->setCondition(Opr);
 }
 
 void GenIR::throwOpcode(IRNode *Arg1, IRNode **NewIR) {

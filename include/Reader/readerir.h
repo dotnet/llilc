@@ -293,7 +293,7 @@ public:
   IRNode *loadArgAddress(uint32_t ArgOrdinal, IRNode **NewIR) override;
   IRNode *loadLocalAddress(uint32_t LocOrdinal, IRNode **NewIR) override;
   IRNode *loadConstantI4(int32_t Constant, IRNode **NewIR) override;
-  IRNode *loadConstantI8(__int64 Constant, IRNode **NewIR) override;
+  IRNode *loadConstantI8(int64_t Constant, IRNode **NewIR) override;
   IRNode *loadConstantI(size_t Constant, IRNode **NewIR) override;
   IRNode *loadConstantR4(float Value, IRNode **NewIR) override;
   IRNode *loadConstantR8(double Value, IRNode **NewIR) override;
@@ -409,9 +409,8 @@ public:
 
   void storePrimitiveType(IRNode *Value, IRNode *Addr, CorInfoType CorInfoType,
                           ReaderAlignType Alignment, bool IsVolatile,
-                          IRNode **NewIR) override {
-    throw NotYetImplementedException("storePrimitiveType");
-  };
+                          IRNode **NewIR) override;
+
   void storeLocal(uint32_t LocOrdinal, IRNode *Arg1,
                   ReaderAlignType Alignment, bool IsVolatile,
                   IRNode **NewIR) override;
@@ -439,9 +438,8 @@ public:
   bool memoryBarrier(IRNode **NewIR) override {
     throw NotYetImplementedException("memoryBarrier");
   };
-  void switchOpcode(IRNode *Opr, IRNode **NewIR) override {
-    throw NotYetImplementedException("switchOpcode");
-  };
+  void switchOpcode(IRNode *Opr, IRNode **NewIR) override;
+
   void throwOpcode(IRNode *Arg1, IRNode **NewIR) override;
   IRNode *unaryOp(ReaderBaseNS::UnaryOpcode Opcode, IRNode *Arg1,
                   IRNode **NewIR) override;
@@ -602,14 +600,12 @@ public:
     throw NotYetImplementedException("fgRevertRecursiveBranch");
   };
 
-  IRNode *fgMakeSwitch(IRNode *DefaultLabel, IRNode *Insert) override {
-    throw NotYetImplementedException("fgMakeSwitch");
-  };
+  IRNode *fgMakeSwitch(IRNode *DefaultLabel, IRNode *Insert) override;
+
   IRNode *fgMakeThrow(IRNode *Insert) override;
   IRNode *fgAddCaseToCaseList(IRNode *SwitchNode, IRNode *LabelNode,
-                              unsigned Element) override {
-    throw NotYetImplementedException("fgAddCaseToCaseList");
-  };
+                              unsigned Element) override;
+
   void insertEHAnnotationNode(IRNode *InsertionPointNode,
                               IRNode *InsertNode) override {
     throw NotYetImplementedException("insertEHAnnotationNode");

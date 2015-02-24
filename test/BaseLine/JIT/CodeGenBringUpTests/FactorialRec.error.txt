@@ -55,7 +55,7 @@ Failed to read String.Substring[Tail call]
 INFO:  jitting method String::InternalSubString using LLILCJit
 Failed to read String.InternalSubString[genNullCheck]
 INFO:  jitting method Buffer::Memmove using LLILCJit
-Failed to read Buffer.Memmove[fgMakeSwitch]
+Failed to read Buffer.Memmove[Tail call]
 INFO:  jitting method String::Concat using LLILCJit
 Successfully read String.Concat
 
@@ -155,7 +155,7 @@ Failed to read AppDomainSetup..ctor[Call needs null check]
 INFO:  jitting method List`1::.cctor using LLILCJit
 Failed to read List`1..cctor[callRuntimeHandleHelper]
 INFO:  jitting method String::Compare using LLILCJit
-Failed to read String.Compare[fgMakeSwitch]
+Failed to read String.Compare[Call needs null check]
 INFO:  jitting method String::CompareOrdinalIgnoreCaseHelper using LLILCJit
 Failed to read String.CompareOrdinalIgnoreCaseHelper[genNullCheck]
 INFO:  jitting method List`1::Add using LLILCJit
@@ -171,7 +171,7 @@ Failed to read Dictionary`2..ctor[Call HasTypeArg]
 INFO:  jitting method EqualityComparer`1::get_Default using LLILCJit
 Failed to read EqualityComparer`1.get_Default[Call HasTypeArg]
 INFO:  jitting method EqualityComparer`1::CreateComparer using LLILCJit
-Failed to read EqualityComparer`1.CreateComparer[fgMakeSwitch]
+Failed to read EqualityComparer`1.CreateComparer[conditionalDerefAddress]
 INFO:  jitting method RuntimeType::IsAssignableFrom using LLILCJit
 Failed to read RuntimeType.IsAssignableFrom[Tail call]
 INFO:  jitting method RuntimeType::get_UnderlyingSystemType using LLILCJit
@@ -792,11 +792,31 @@ entry:
 INFO:  jitting method Path::HasIllegalCharacters using LLILCJit
 Failed to read Path.HasIllegalCharacters[Call needs null check]
 INFO:  jitting method PathHelper::Append using LLILCJit
-Failed to read PathHelper.Append[storePrimitiveType]
+Failed to read PathHelper.Append[Call needs null check]
 INFO:  jitting method PathHelper::OrdinalStartsWith using LLILCJit
 Failed to read PathHelper.OrdinalStartsWith[Tail call]
 INFO:  jitting method PathHelper::NullTerminate using LLILCJit
-Failed to read PathHelper.NullTerminate[storePrimitiveType]
+Successfully read PathHelper.NullTerminate
+
+define void @PathHelper.NullTerminate(%System.IO.PathHelper addrspace(1)* %param0) {
+entry:
+  %this = alloca %System.IO.PathHelper addrspace(1)*
+  store %System.IO.PathHelper addrspace(1)* %param0, %System.IO.PathHelper addrspace(1)** %this
+  %0 = load %System.IO.PathHelper addrspace(1)** %this
+  %1 = getelementptr inbounds %System.IO.PathHelper addrspace(1)* %0, i32 0, i32 1
+  %2 = load i16* addrspace(1)* %1, align 8
+  %3 = load %System.IO.PathHelper addrspace(1)** %this
+  %4 = getelementptr inbounds %System.IO.PathHelper addrspace(1)* %3, i32 0, i32 3
+  %5 = load i32 addrspace(1)* %4, align 8
+  %6 = sext i32 %5 to i64
+  %7 = mul i64 %6, 2
+  %8 = bitcast i16* %2 to i8*
+  %9 = getelementptr inbounds i8* %8, i64 %7
+  %10 = bitcast i8* %9 to i32*
+  store i32 0, i32* %10, align 8
+  ret void
+}
+
 INFO:  jitting method PathHelper::GetFullPathName using LLILCJit
 Failed to read PathHelper.GetFullPathName[entryLabel]
 INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
@@ -932,7 +952,7 @@ entry:
 INFO:  jitting method String::wstrcpy using LLILCJit
 Failed to read String.wstrcpy[Tail call]
 INFO:  jitting method String::Equals using LLILCJit
-Failed to read String.Equals[fgMakeSwitch]
+Failed to read String.Equals[Call needs null check]
 INFO:  jitting method StringBuilder::Append using LLILCJit
 Failed to read StringBuilder.Append[storeElem]
 INFO:  jitting method StringBuilder::AppendHelper using LLILCJit
@@ -1392,7 +1412,7 @@ entry:
 }
 
 INFO:  jitting method StringBuilder::Remove using LLILCJit
-Failed to read StringBuilder.Remove[storePrimitiveType]
+Failed to read StringBuilder.Remove[Tail call]
 INFO:  jitting method StringBuilder::ThreadSafeCopy using LLILCJit
 Failed to read StringBuilder.ThreadSafeCopy[loadElemA]
 INFO:  jitting method Buffer::_Memmove using LLILCJit
@@ -2120,7 +2140,7 @@ entry:
 }
 
 INFO:  jitting method Encoding::GetEncoding using LLILCJit
-Failed to read Encoding.GetEncoding[fgMakeSwitch]
+Failed to read Encoding.GetEncoding[convertToHelperArgumentType]
 INFO:  jitting method EncodingProvider::GetEncodingFromProvider using LLILCJit
 Failed to read EncodingProvider.GetEncodingFromProvider[loadElem]
 INFO:  jitting method EncodingProvider::.cctor using LLILCJit
@@ -2132,7 +2152,51 @@ Failed to read Hashtable..ctor[Volatile store]
 INFO:  jitting method Hashtable::get_Item using LLILCJit
 Failed to read Hashtable.get_Item[loadElemA]
 INFO:  jitting method Hashtable::InitHash using LLILCJit
-Failed to read Hashtable.InitHash[storePrimitiveType]
+Successfully read Hashtable.InitHash
+
+define i32 @Hashtable.InitHash(%System.Collections.Hashtable addrspace(1)* %param0, %System.Object addrspace(1)* %param1, i32 %param2, i32 addrspace(1)* %param3, i32 addrspace(1)* %param4) {
+entry:
+  %this = alloca %System.Collections.Hashtable addrspace(1)*
+  %arg1 = alloca %System.Object addrspace(1)*
+  %arg2 = alloca i32
+  %arg3 = alloca i32 addrspace(1)*
+  %arg4 = alloca i32 addrspace(1)*
+  %loc0 = alloca i32
+  store %System.Collections.Hashtable addrspace(1)* %param0, %System.Collections.Hashtable addrspace(1)** %this
+  store %System.Object addrspace(1)* %param1, %System.Object addrspace(1)** %arg1
+  store i32 %param2, i32* %arg2
+  store i32 addrspace(1)* %param3, i32 addrspace(1)** %arg3
+  store i32 addrspace(1)* %param4, i32 addrspace(1)** %arg4
+  %0 = load %System.Collections.Hashtable addrspace(1)** %this
+  %1 = load %System.Object addrspace(1)** %arg1
+  %2 = bitcast %System.Collections.Hashtable addrspace(1)* %0 to i64 addrspace(1)*
+  %3 = load i64 addrspace(1)* %2
+  %4 = add i64 %3, 72
+  %5 = inttoptr i64 %4 to i64*
+  %6 = load i64* %5
+  %7 = add i64 %6, 40
+  %8 = inttoptr i64 %7 to i64*
+  %9 = load i64* %8
+  %10 = inttoptr i64 %9 to i32 (%System.Collections.Hashtable addrspace(1)*, %System.Object addrspace(1)*)*
+  %11 = call i32 %10(%System.Collections.Hashtable addrspace(1)* %0, %System.Object addrspace(1)* %1)
+  %12 = and i32 %11, 2147483647
+  store i32 %12, i32* %loc0
+  %13 = load i32 addrspace(1)** %arg3
+  %14 = load i32* %loc0
+  store i32 %14, i32 addrspace(1)* %13, align 8
+  %15 = load i32 addrspace(1)** %arg4
+  %16 = load i32 addrspace(1)** %arg3
+  %17 = load i32 addrspace(1)* %16, align 8
+  %18 = mul i32 %17, 101
+  %19 = load i32* %arg2
+  %20 = sub i32 %19, 1
+  %21 = urem i32 %18, %20
+  %22 = add i32 1, %21
+  store i32 %22, i32 addrspace(1)* %15, align 8
+  %23 = load i32* %loc0
+  ret i32 %23
+}
+
 INFO:  jitting method Hashtable::GetHash using LLILCJit
 Failed to read Hashtable.GetHash[Tail call]
 INFO:  jitting method Int32::GetHashCode using LLILCJit

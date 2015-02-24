@@ -55,7 +55,7 @@ Failed to read String.Substring[Tail call]
 INFO:  jitting method String::InternalSubString using LLILCJit
 Failed to read String.InternalSubString[genNullCheck]
 INFO:  jitting method Buffer::Memmove using LLILCJit
-Failed to read Buffer.Memmove[fgMakeSwitch]
+Failed to read Buffer.Memmove[Tail call]
 INFO:  jitting method String::Concat using LLILCJit
 Successfully read String.Concat
 
@@ -155,7 +155,7 @@ Failed to read AppDomainSetup..ctor[Call needs null check]
 INFO:  jitting method List`1::.cctor using LLILCJit
 Failed to read List`1..cctor[callRuntimeHandleHelper]
 INFO:  jitting method String::Compare using LLILCJit
-Failed to read String.Compare[fgMakeSwitch]
+Failed to read String.Compare[Call needs null check]
 INFO:  jitting method String::CompareOrdinalIgnoreCaseHelper using LLILCJit
 Failed to read String.CompareOrdinalIgnoreCaseHelper[genNullCheck]
 INFO:  jitting method List`1::Add using LLILCJit
@@ -171,7 +171,7 @@ Failed to read Dictionary`2..ctor[Call HasTypeArg]
 INFO:  jitting method EqualityComparer`1::get_Default using LLILCJit
 Failed to read EqualityComparer`1.get_Default[Call HasTypeArg]
 INFO:  jitting method EqualityComparer`1::CreateComparer using LLILCJit
-Failed to read EqualityComparer`1.CreateComparer[fgMakeSwitch]
+Failed to read EqualityComparer`1.CreateComparer[conditionalDerefAddress]
 INFO:  jitting method RuntimeType::IsAssignableFrom using LLILCJit
 Failed to read RuntimeType.IsAssignableFrom[Tail call]
 INFO:  jitting method RuntimeType::get_UnderlyingSystemType using LLILCJit
@@ -792,11 +792,31 @@ entry:
 INFO:  jitting method Path::HasIllegalCharacters using LLILCJit
 Failed to read Path.HasIllegalCharacters[Call needs null check]
 INFO:  jitting method PathHelper::Append using LLILCJit
-Failed to read PathHelper.Append[storePrimitiveType]
+Failed to read PathHelper.Append[Call needs null check]
 INFO:  jitting method PathHelper::OrdinalStartsWith using LLILCJit
 Failed to read PathHelper.OrdinalStartsWith[Tail call]
 INFO:  jitting method PathHelper::NullTerminate using LLILCJit
-Failed to read PathHelper.NullTerminate[storePrimitiveType]
+Successfully read PathHelper.NullTerminate
+
+define void @PathHelper.NullTerminate(%System.IO.PathHelper addrspace(1)* %param0) {
+entry:
+  %this = alloca %System.IO.PathHelper addrspace(1)*
+  store %System.IO.PathHelper addrspace(1)* %param0, %System.IO.PathHelper addrspace(1)** %this
+  %0 = load %System.IO.PathHelper addrspace(1)** %this
+  %1 = getelementptr inbounds %System.IO.PathHelper addrspace(1)* %0, i32 0, i32 1
+  %2 = load i16* addrspace(1)* %1, align 8
+  %3 = load %System.IO.PathHelper addrspace(1)** %this
+  %4 = getelementptr inbounds %System.IO.PathHelper addrspace(1)* %3, i32 0, i32 3
+  %5 = load i32 addrspace(1)* %4, align 8
+  %6 = sext i32 %5 to i64
+  %7 = mul i64 %6, 2
+  %8 = bitcast i16* %2 to i8*
+  %9 = getelementptr inbounds i8* %8, i64 %7
+  %10 = bitcast i8* %9 to i32*
+  store i32 0, i32* %10, align 8
+  ret void
+}
+
 INFO:  jitting method PathHelper::GetFullPathName using LLILCJit
 Failed to read PathHelper.GetFullPathName[entryLabel]
 INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
@@ -932,7 +952,7 @@ entry:
 INFO:  jitting method String::wstrcpy using LLILCJit
 Failed to read String.wstrcpy[Tail call]
 INFO:  jitting method String::Equals using LLILCJit
-Failed to read String.Equals[fgMakeSwitch]
+Failed to read String.Equals[Call needs null check]
 INFO:  jitting method StringBuilder::Append using LLILCJit
 Failed to read StringBuilder.Append[storeElem]
 INFO:  jitting method StringBuilder::AppendHelper using LLILCJit
@@ -1392,7 +1412,7 @@ entry:
 }
 
 INFO:  jitting method StringBuilder::Remove using LLILCJit
-Failed to read StringBuilder.Remove[storePrimitiveType]
+Failed to read StringBuilder.Remove[Tail call]
 INFO:  jitting method StringBuilder::ThreadSafeCopy using LLILCJit
 Failed to read StringBuilder.ThreadSafeCopy[loadElemA]
 INFO:  jitting method Buffer::_Memmove using LLILCJit
@@ -1862,5 +1882,18 @@ entry:
 }
 
 INFO:  jitting method BringUpTest::NotRMW using LLILCJit
-Failed to read BringUpTest.NotRMW[storePrimitiveType]
+Successfully read BringUpTest.NotRMW
+
+define void @BringUpTest.NotRMW(i32 addrspace(1)* %param0) {
+entry:
+  %arg0 = alloca i32 addrspace(1)*
+  store i32 addrspace(1)* %param0, i32 addrspace(1)** %arg0
+  %0 = load i32 addrspace(1)** %arg0
+  %1 = load i32 addrspace(1)** %arg0
+  %2 = load i32 addrspace(1)* %1, align 8
+  %3 = xor i32 %2, -1
+  store i32 %3, i32 addrspace(1)* %0, align 8
+  ret void
+}
+
 

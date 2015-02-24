@@ -3268,8 +3268,7 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
 
       // Create the block to hold the switch node.
       fgNodeSetEndMSILOffset(Block, NextOffset);
-      Block = fgSplitBlock(Block, NextOffset,
-                           findBlockSplitPointAfterNode(BranchNode));
+      Block = fgSplitBlock(Block, NextOffset, NULL);
 
       // Set up labels for each case.
       for (uint32_t I = 0; (uint32_t)I < NumCases; I++) {
@@ -3293,10 +3292,8 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
       // throw/rethrow splits a block
       BlockNode = fgNodeGetStartIRNode(Block);
       fgMakeThrow(BlockNode);
-      /* TODO: figure out how we're going to communicate this information.
-           irNodeBranchSetMSILOffset(BranchNode, CurrentOffset);
-           irNodeSetRegion(BranchNode, fgNodeGetRegion(Block));
-           */
+      irNodeBranchSetMSILOffset(BranchNode, CurrentOffset);
+      irNodeSetRegion(BranchNode, fgNodeGetRegion(Block));
 
       fgNodeSetEndMSILOffset(Block, NextOffset);
       Block = fgSplitBlock(Block, NextOffset, NULL);
