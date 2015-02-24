@@ -778,7 +778,6 @@ function Global:RunTest([string]$Arch="x64", [string]$Build="Release")
     return $True
   }
   else {
-    Write-Host "$NumDiff diffs and $NumFailures failures"
     return $False
   }
 }
@@ -873,16 +872,16 @@ function Global:CheckDiff([bool]$Create = $false, [bool]$UseDiffTool = $True, [s
         return 0
       }
       else {
-        $TotalCount = 0;
-        $DiffCount = 0;
+        $TotalCount = 0
+        $DiffCount = 0
         Get-ChildItem -recurse -path $CoreCLRTestTargetBinaries\Reports | Where {$_.FullName -match "error.txt"} | `
         Foreach-Object {
-          $TotalCount = $TotalCount + 1;
+          $TotalCount = $TotalCount + 1
         }
 
         Get-ChildItem -recurse -path $LLILCTestResult\Diff\Run | Where {$_.FullName -match "error.txt"} | `
         Foreach-Object {
-          $DiffCount = $DiffCount + 1;
+          $DiffCount = $DiffCount + 1
         }
         Write-Host ("$DiffCount out of $TotalCount have diff.")
         return $DiffCount
