@@ -1469,6 +1469,7 @@ uint32_t GenIR::stackSize(CorInfoType CorType) {
   case CorInfoType::CORINFO_TYPE_NATIVEINT:
   case CorInfoType::CORINFO_TYPE_NATIVEUINT:
   case CorInfoType::CORINFO_TYPE_PTR:
+  case CorInfoType::CORINFO_TYPE_BYREF:
     return TargetPointerSizeInBits;
 
   default:
@@ -1504,6 +1505,7 @@ uint32_t GenIR::size(CorInfoType CorType) {
   case CorInfoType::CORINFO_TYPE_NATIVEINT:
   case CorInfoType::CORINFO_TYPE_NATIVEUINT:
   case CorInfoType::CORINFO_TYPE_PTR:
+  case CorInfoType::CORINFO_TYPE_BYREF:
     return TargetPointerSizeInBits;
 
   default:
@@ -1526,6 +1528,7 @@ bool GenIR::isSigned(CorInfoType CorType) {
   case CorInfoType::CORINFO_TYPE_ULONG:
   case CorInfoType::CORINFO_TYPE_NATIVEUINT:
   case CorInfoType::CORINFO_TYPE_PTR:
+  case CorInfoType::CORINFO_TYPE_BYREF:
     return false;
 
   case CorInfoType::CORINFO_TYPE_BYTE:
@@ -1611,7 +1614,9 @@ IRNode *GenIR::convertFromStackType(IRNode *Node, CorInfoType CorType,
     // A convert is needed if we're changing size
     // or implicitly converting int to ptr.
     const bool NeedsTruncation = (Size > DesiredSize);
-    const bool NeedsReinterpret = (CorType == CorInfoType::CORINFO_TYPE_PTR);
+    const bool NeedsReinterpret =
+        ((CorType == CorInfoType::CORINFO_TYPE_PTR) ||
+         (CorType == CorInfoType::CORINFO_TYPE_BYREF));
 
     if (NeedsTruncation) {
       // Hopefully we don't need both....
