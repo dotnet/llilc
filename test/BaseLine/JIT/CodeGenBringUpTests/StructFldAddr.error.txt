@@ -349,7 +349,7 @@ Failed to read CultureInfo.InitUserDefaultCulture[Tail call]
 INFO:  jitting method CultureInfo::GetDefaultLocaleName using LLILCJit
 Failed to read CultureInfo.GetDefaultLocaleName[Return refany or value class]
 INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
-Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[publish secret param]
+Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[Struct parameter]
 INFO:  jitting method CultureInfo::GetCultureByName using LLILCJit
 Successfully read CultureInfo.GetCultureByName
 
@@ -417,7 +417,7 @@ Failed to read CultureInfo.InitUserDefaultUICulture[Tail call]
 INFO:  jitting method CultureInfo::GetUserDefaultUILanguage using LLILCJit
 Failed to read CultureInfo.GetUserDefaultUILanguage[Return refany or value class]
 INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
-Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[publish secret param]
+Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[Struct parameter]
 INFO:  jitting method CultureInfo::get_UserDefaultCulture using LLILCJit
 Failed to read CultureInfo.get_UserDefaultCulture[Helper performs volatile operation]
 INFO:  jitting method CultureInfo::get_Name using LLILCJit
@@ -1955,11 +1955,11 @@ entry:
 }
 
 INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
-Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[publish secret param]
+Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[Struct parameter]
 INFO:  jitting method AppDomain::SetupDomainSecurity using LLILCJit
 Failed to read AppDomain.SetupDomainSecurity[Return refany or value class]
 INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
-Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[publish secret param]
+Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[Struct parameter]
 INFO:  jitting method AppDomain::RunInitializer using LLILCJit
 Failed to read AppDomain.RunInitializer[Call needs null check]
 INFO:  jitting method PermissionSet::.ctor using LLILCJit
@@ -1967,5 +1967,5 @@ Failed to read PermissionSet..ctor[Tail call]
 INFO:  jitting method BringUpTest::Main using LLILCJit
 Failed to read BringUpTest.Main[AddressOfValue]
 INFO:  jitting method BringUpTest::StructFldAddr using LLILCJit
-Failed to read BringUpTest.StructFldAddr[genNullCheck]
+Failed to read BringUpTest.StructFldAddr[Struct parameter]
 

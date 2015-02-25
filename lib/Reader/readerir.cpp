@@ -380,6 +380,12 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   int32_t I;
   for (CurrentArg = Args++, I = 0; CurrentArg != Function->arg_end();
        CurrentArg = Args++, I++) {
+    if (CurrentArg->getType()->isStructTy()) {
+      // LLVM doesn't use the same calling convention as other .Net jits
+      // for structs, and we want to be able to select jits per-method
+      // so we need them to interoperate.
+      throw NotYetImplementedException("Struct parameter");
+    }
     LLVMBuilder->CreateStore(CurrentArg, Arguments[I]);
   }
 
