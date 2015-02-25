@@ -607,7 +607,7 @@ function Global:Build([string]$Build="Debug")
   $TempBat = Join-Path $Env:TEMP "buildllilc.bat"
   $File = "$Env:VS120COMNTOOLS\..\..\VC\vcvarsall.bat"
   
-  ("call ""$File"" x86", "devenv /Build Debug  /Project LLILCReader $LLVMBuild\LLVM.sln", "devenv /Build Debug  /Project llilcjit $LLVMBuild\LLVM.sln") | Out-File -Encoding ascii $TempBat
+  ("call ""$File"" x86", "devenv /Build $Build /Project llilcjit $LLVMBuild\LLVM.sln") | Out-File -Encoding ascii $TempBat
 
   cmd /c $TempBat
   Remove-Item -force $TempBat | Out-Null
