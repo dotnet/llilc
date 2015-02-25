@@ -125,19 +125,44 @@ private:
   llvm::pred_iterator PredIteratorEnd;
 };
 
+/// \brief A list of successor edges of a given flow graph node.
+///
+/// This is used for iterating over the successors of a flow graph node.
+/// After creating the successor edge list the getSink method is used
+/// to get the first successor (if any). As long as the result of getSink()
+/// is non-null, the moveNext() method may be used to advance to the next
+/// successor edge. When getSink() returns null there are no more 
+/// successor edges (or successors). 
+/// \invariant The current edge iterator either points to a real edge or else
+/// equals the end iterator meaning the list has been exhausted.
 class FlowGraphSuccessorEdgeList : public FlowGraphEdgeList {
 public:
+  /// Construct a flow graph edge list for iterating over the successors
+  /// of the \p Fg node.
+  /// \param Fg The node whose successors are desired.
+  /// \pre \p Fg != NULL.
+  /// \post **this** is a successor edge list representing the successors
+  /// of \p Fg.
   FlowGraphSuccessorEdgeList(FlowGraphNode *Fg)
       : FlowGraphEdgeList(), SuccIterator(Fg->getTerminator()),
         SuccIteratorEnd(Fg->getTerminator(), true) {}
 
+  /// Move the current location in the flow graph edge list to the next edge.
+  /// \pre The current edge has not reached the end of the edge list.
+  /// \post The current edge has been advanced to the next, or has possibly
+  /// reached the end iterator (meaning no more successors). 
   void moveNext() override { SuccIterator++; }
 
+  /// \return The sink of the current edge which will be one of the successors
+  /// of the \p Fg node, unless the list has been exhausted in which case
+  /// return NULL.
   FlowGraphNode *getSink() override {
     return (SuccIterator == SuccIteratorEnd) ? NULL
                                              : (FlowGraphNode *)*SuccIterator;
   }
 
+  /// \return The source of the current edge which will be \p Fg node.
+  /// \pre The current edge has not reached the end of the edge list.
   FlowGraphNode *getSource() override {
     return (FlowGraphNode *)SuccIterator.getSource();
   }
