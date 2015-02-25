@@ -543,17 +543,17 @@ function Global:CopyJIT([string]$Build="Debug")
 #
 # -------------------------------------------------------------------------
 
-function Global:ConfigureLLVM([string]$Arch="x64")
+function Global:ConfigureLLVM([string]$Arch="x64", [string]$Build="Debug")
 {
   $LLVMBuild = LLVMBuild
 
   pushd .
   cd $LLVMBuild
   if ($Arch -eq "x64") {
-    cmake -G "Visual Studio 12 2013 Win64" $Env:LLVMSOURCE -DLLVM_TARGETS_TO_BUILD:STRING=X86
+    cmake -G "Visual Studio 12 2013 Win64" $Env:LLVMSOURCE -DLLVM_TARGETS_TO_BUILD:STRING=X86 -DCMAKE_BUILD_TYPE:STRING=$Build
   }
   else {
-    cmake -G "Visual Studio 12" $Env:LLVMSOURCE -DLLVM_TARGETS_TO_BUILD:STRING=X86
+    cmake -G "Visual Studio 12" $Env:LLVMSOURCE -DLLVM_TARGETS_TO_BUILD:STRING=X86 -DCMAKE_BUILD_TYPE:STRING=$Build
   }
   popd
 }
@@ -591,7 +591,7 @@ function Global:BuildLLVM([string]$Arch="x64", [string]$Build="Debug", [bool]$Pa
 
 function Global:BuildAll([string]$Arch="x64", [string]$Build="Debug", [bool]$Parallel=$True)
 {
-  ConfigureLLVM -Arch $Arch
+  ConfigureLLVM -Arch $Arch -Build $Build
   BuildLLVM -Arch $Arch -Build $Build -Parallel $Parallel
 }
 
