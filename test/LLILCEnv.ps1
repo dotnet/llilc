@@ -564,7 +564,7 @@ function Global:ConfigureLLVM([string]$Arch="x64")
 #
 # -------------------------------------------------------------------------
 
-function Global:BuildLLVM([string]$Arch="x64", [string]$Build="Debug", [bool]$Parallel=$False)
+function Global:BuildLLVM([string]$Arch="x64", [string]$Build="Debug", [bool]$Parallel=$True)
 {
   $LLVMBuild = LLVMBuild
   $TempBat = Join-Path $Env:TEMP "buildllvm.bat"
@@ -589,7 +589,7 @@ function Global:BuildLLVM([string]$Arch="x64", [string]$Build="Debug", [bool]$Pa
 #
 # -------------------------------------------------------------------------
 
-function Global:BuildAll([string]$Arch="x64", [string]$Build="Debug", [bool]$Parallel=$False)
+function Global:BuildAll([string]$Arch="x64", [string]$Build="Debug", [bool]$Parallel=$True)
 {
   ConfigureLLVM -Arch $Arch
   BuildLLVM -Arch $Arch -Build $Build -Parallel $Parallel
@@ -915,7 +915,7 @@ function Global:llilc([string]$Command="")
 
   if ($ListAll -Or ($Command -eq "BuildAll")) {
     Write-Output("BuildAll          - Configure and Build LLVM including LLILC JIT.")
-    Write-Output("                    Example: BuildLLVM -Arch x64 -Build Debug -Parallel `$False")
+    Write-Output("                    Example: BuildLLVM -Arch x64 -Build Debug -Parallel `$True")
   }
 
   if ($ListAll -Or ($Command -eq "BuildTest")) {
