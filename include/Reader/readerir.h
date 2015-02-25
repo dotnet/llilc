@@ -516,6 +516,7 @@ public:
 
   // Used to maintain operand stack.
   void maintainOperandStack(IRNode **Opr1, IRNode **Opr2,
+                            FlowGraphNode *CurrentBlock,
                             IRNode **NewIR) override;
   void assignToSuccessorStackNode(FlowGraphNode *, IRNode *Dst, IRNode *Src,
                                   IRNode **NewIR,
@@ -742,9 +743,8 @@ public:
     throw NotYetImplementedException("convertToHelperArgumentType");
   };
 
-  IRNode *genNullCheck(IRNode *Node, IRNode **NewIR) override {
-    throw NotYetImplementedException("genNullCheck");
-  };
+  IRNode *genNullCheck(IRNode *Node, IRNode **NewIR) override;
+
   void
   createSym(uint32_t Num, bool IsAuto, CorInfoType CorType,
             CORINFO_CLASS_HANDLE Class, bool IsPinned,

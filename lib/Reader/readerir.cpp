@@ -1469,6 +1469,7 @@ uint32_t GenIR::stackSize(CorInfoType CorType) {
   case CorInfoType::CORINFO_TYPE_NATIVEINT:
   case CorInfoType::CORINFO_TYPE_NATIVEUINT:
   case CorInfoType::CORINFO_TYPE_PTR:
+  case CorInfoType::CORINFO_TYPE_BYREF:
     return TargetPointerSizeInBits;
 
   default:
@@ -1504,6 +1505,7 @@ uint32_t GenIR::size(CorInfoType CorType) {
   case CorInfoType::CORINFO_TYPE_NATIVEINT:
   case CorInfoType::CORINFO_TYPE_NATIVEUINT:
   case CorInfoType::CORINFO_TYPE_PTR:
+  case CorInfoType::CORINFO_TYPE_BYREF:
     return TargetPointerSizeInBits;
 
   default:
@@ -1526,6 +1528,7 @@ bool GenIR::isSigned(CorInfoType CorType) {
   case CorInfoType::CORINFO_TYPE_ULONG:
   case CorInfoType::CORINFO_TYPE_NATIVEUINT:
   case CorInfoType::CORINFO_TYPE_PTR:
+  case CorInfoType::CORINFO_TYPE_BYREF:
     return false;
 
   case CorInfoType::CORINFO_TYPE_BYTE:
@@ -1611,7 +1614,9 @@ IRNode *GenIR::convertFromStackType(IRNode *Node, CorInfoType CorType,
     // A convert is needed if we're changing size
     // or implicitly converting int to ptr.
     const bool NeedsTruncation = (Size > DesiredSize);
-    const bool NeedsReinterpret = (CorType == CorInfoType::CORINFO_TYPE_PTR);
+    const bool NeedsReinterpret =
+        ((CorType == CorInfoType::CORINFO_TYPE_PTR) ||
+         (CorType == CorInfoType::CORINFO_TYPE_BYREF));
 
     if (NeedsTruncation) {
       // Hopefully we don't need both....
@@ -3566,6 +3571,68 @@ void GenIR::throwOpcode(IRNode *Arg1, IRNode **NewIR) {
   ThrowCall->setDoesNotReturn();
 }
 
+IRNode *GenIR::genNullCheck(IRNode *Node, IRNode **NewIR) {
+  BasicBlock *CheckBlock = LLVMBuilder->GetInsertBlock();
+  BasicBlock::iterator InsertPoint = LLVMBuilder->GetInsertPoint();
+  Instruction *NextInstruction =
+      (InsertPoint == CheckBlock->end() ? nullptr : (Instruction *)InsertPoint);
+
+  // Create the throw block so we can reference it later.
+  // Note: we could generate much smaller IR by reusing the same throw block for
+  // all null checks, but at the cost of not being able to tell in a debugger
+  // what was null.  The current strategy is to favor debuggability.
+  // TODO: Find a way to annotate the throw blocks as cold so they get laid out
+  // out-of-line.
+  BasicBlock *ThrowBlock =
+      BasicBlock::Create(*JitContext->LLVMContext, "ThrowNullRef", Function);
+
+  // Split the block.  This creates a goto connecting the blocks that we'll
+  // replace with the conditional branch.
+  // Note that we split at offset NextInstrOffset rather than CurrInstrOffset.
+  // We're already generating the IR for the instr at CurrInstrOffset, and using
+  // NextInstrOffset here ensures that we won't redundantly try to add this
+  // instruction again when processing moves to the new NonNullBlock.
+  BasicBlock *NonNullBlock = ReaderBase::fgSplitBlock(
+      (FlowGraphNode *)CheckBlock, NextInstrOffset, (IRNode *)NextInstruction);
+  TerminatorInst *Goto = CheckBlock->getTerminator();
+
+  // Insert the compare against null.
+  LLVMBuilder->SetInsertPoint(Goto);
+  Value *Compare = LLVMBuilder->CreateIsNotNull(Node, "NullCheck");
+
+  // Swap the conditional branch in place of the goto.
+  BranchInst *Branch =
+      LLVMBuilder->CreateCondBr(Compare, NonNullBlock, ThrowBlock);
+  Goto->eraseFromParent();
+
+  // FIll in the throw block.
+  LLVMBuilder->SetInsertPoint(ThrowBlock);
+  // TODO: Use throw_null_ref helper once that's available from CoreCLR.  For
+  // now, use throw_div_zero since it has the right signature and we don't
+  // expect exceptions to work dynamically anyway.
+  CallInst *ThrowCall =
+      (CallInst *)callHelper(CORINFO_HELP_THROWDIVZERO, nullptr, NewIR);
+  ThrowCall->setDoesNotReturn();
+  LLVMBuilder->CreateUnreachable();
+
+  // Give the throw block equal start and end offsets so subsequent processing
+  // won't try to translate MSIL into it.
+  fgNodeSetStartMSILOffset((FlowGraphNode *)ThrowBlock, CurrInstrOffset);
+  fgNodeSetEndMSILOffset((FlowGraphNode *)ThrowBlock, CurrInstrOffset);
+
+  // Null out the throw block operand stack.
+  fgNodeSetOperandStack((FlowGraphNode *)ThrowBlock, nullptr);
+
+  // Move the insert point back to the first instruction in the non-null path.
+  if (NextInstruction == nullptr) {
+    LLVMBuilder->SetInsertPoint(NonNullBlock);
+  } else {
+    LLVMBuilder->SetInsertPoint(NonNullBlock->getFirstInsertionPt());
+  }
+
+  return Node;
+};
+
 void GenIR::leave(uint32_t TargetOffset, bool IsNonLocal,
                   bool EndsWithNonLocalGoto, IRNode **NewIR) {
   // TODO: handle exiting through nested finallies
@@ -4171,22 +4238,21 @@ void GenIR::removeStackInterferenceForLocalStore(uint32_t Opcode,
   return;
 }
 
-void GenIR::maintainOperandStack(IRNode **Opr1, IRNode **Opr2, IRNode **NewIR) {
+void GenIR::maintainOperandStack(IRNode **Opr1, IRNode **Opr2,
+                                 FlowGraphNode *CurrentBlock, IRNode **NewIR) {
 
   if (ReaderOperandStack->depth() == 0) {
     return;
   }
 
-  BasicBlock *CurrentBlock = LLVMBuilder->GetInsertBlock();
-  FlowGraphEdgeList *SuccessorList =
-      fgNodeGetSuccessorListActual((FlowGraphNode *)CurrentBlock);
+  FlowGraphEdgeList *SuccessorList = fgNodeGetSuccessorListActual(CurrentBlock);
 
-  if (SuccessorList == NULL) {
+  if (SuccessorList == nullptr) {
     clearStack(NewIR);
     return;
   }
 
-  while (SuccessorList != NULL) {
+  while (SuccessorList != nullptr) {
     FlowGraphNode *SuccessorBlock = fgEdgeListGetSink(SuccessorList);
 
     FlowGraphEdgeList *SuccessorPredecessorList =
@@ -4195,15 +4261,23 @@ void GenIR::maintainOperandStack(IRNode **Opr1, IRNode **Opr2, IRNode **NewIR) {
     FlowGraphEdgeList *SuccessorPredecessorListNext =
         fgEdgeListGetNextPredecessorActual(SuccessorPredecessorList);
 
-    if (SuccessorPredecessorListNext == NULL) {
+    if (SuccessorPredecessorListNext == nullptr) {
       // The current node is the only predecessor of this Successor. We need to
       // create a stack for the Successor and copy the items from the current
       // stack.
-      fgNodeSetOperandStack(SuccessorBlock, ReaderOperandStack->copy());
+      if ((fgNodeGetStartMSILOffset(SuccessorBlock) ==
+           fgNodeGetEndMSILOffset(SuccessorBlock)) &&
+          (fgNodeGetSuccessorListActual(SuccessorBlock) == nullptr)) {
+        // There is no MSIL for this block and it has no successors, so no need
+        // to propagate the stack.  This is a common case for implicit exception
+        // throw blocks.
+      } else {
+        fgNodeSetOperandStack(SuccessorBlock, ReaderOperandStack->copy());
+      }
     } else {
       ReaderStack *SuccessorStack = fgNodeGetOperandStack(SuccessorBlock);
       bool CreatePHIs = false;
-      if (SuccessorStack == NULL) {
+      if (SuccessorStack == nullptr) {
         // We need to create a new stack for the Successor and populate it
         // with PHI instructions corresponding to the values on the current
         // stack.
@@ -4218,14 +4292,14 @@ void GenIR::maintainOperandStack(IRNode **Opr1, IRNode **Opr2, IRNode **NewIR) {
       ReaderStackIterator *Iterator;
       IRNode *Current = ReaderOperandStack->getReverseIterator(&Iterator);
       Instruction *CurrentInst = SuccessorBlock->begin();
-      PHINode *Phi = NULL;
-      while (Current != NULL) {
+      PHINode *Phi = nullptr;
+      while (Current != nullptr) {
         Value *CurrentValue = (Value *)Current;
         if (CreatePHIs) {
           // The Successor has at least 2 predecessors so we use 2 as the
           // hint for the number of PHI sources.
           TerminatorInst *TermInst = SuccessorBlock->getTerminator();
-          if (TermInst != NULL) {
+          if (TermInst != nullptr) {
             Phi = PHINode::Create(CurrentValue->getType(), 2, "", TermInst);
           } else {
             Phi =
@@ -4234,13 +4308,13 @@ void GenIR::maintainOperandStack(IRNode **Opr1, IRNode **Opr2, IRNode **NewIR) {
         } else {
           // PHI instructions should have been inserted already
           Phi = dyn_cast<PHINode>(CurrentInst);
-          ASSERT(Phi != NULL);
+          ASSERT(Phi != nullptr);
           CurrentInst = CurrentInst->getNextNode();
         }
         if (Phi->getType() != CurrentValue->getType()) {
           throw NotYetImplementedException("Phi type mismatch");
         }
-        Phi->addIncoming(CurrentValue, CurrentBlock);
+        Phi->addIncoming(CurrentValue, (BasicBlock *)CurrentBlock);
         SuccessorStack->push((IRNode *)Phi, NewIR);
         Current = ReaderOperandStack->reverseIteratorGetNext(&Iterator);
       }
@@ -4249,7 +4323,7 @@ void GenIR::maintainOperandStack(IRNode **Opr1, IRNode **Opr2, IRNode **NewIR) {
       // stack.
       if (!CreatePHIs) {
         Phi = dyn_cast<PHINode>(CurrentInst);
-        ASSERT(Phi == NULL);
+        ASSERT(Phi == nullptr);
       }
     }
     SuccessorList = fgEdgeListGetNextSuccessorActual(SuccessorList);
