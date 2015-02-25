@@ -7,7 +7,7 @@ if( CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
   set(WITH_LLVM "" CACHE PATH "Path to the directory where LLVM was built or installed.")
 
   # Probe for LLVM. First with CMake (unless the user has specified an LLVM install), then manually.
-  if( NOT WITH_LLVM STREQUAL "" )
+  if( WITH_LLVM STREQUAL "" )
     find_package(LLVM QUIET CONFIG)
   endif()
 
