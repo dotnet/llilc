@@ -1703,8 +1703,8 @@ public:
   virtual void storeObj(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
                         IRNode *Arg2, ReaderAlignType Alignment,
                         bool IsVolatile, bool IsField, IRNode **NewIR);
-  virtual void storeStaticField(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                                IRNode *Arg1, bool IsVolatile,
+  virtual void storeStaticField(CORINFO_RESOLVED_TOKEN *FieldToken,
+                                IRNode *ValueToStore, bool IsVolatile,
                                 IRNode **NewIR) = 0;
   virtual IRNode *stringGetChar(IRNode *Arg1, IRNode *Arg2, IRNode **NewIR) = 0;
   virtual bool sqrt(IRNode *Arg1, IRNode **RetVal, IRNode **NewIR) = 0;

@@ -189,7 +189,7 @@ entry:
 INFO:  jitting method GenericEqualityComparer`1::.ctor using LLILCJit
 Failed to read GenericEqualityComparer`1..ctor[Tail call]
 INFO:  jitting method HashHelpers::.cctor using LLILCJit
-Failed to read HashHelpers..cctor[storeStaticField]
+Failed to read HashHelpers..cctor[convertHandle]
 INFO:  jitting method String::UseRandomizedHashing using LLILCJit
 Failed to read String.UseRandomizedHashing[Tail call]
 INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
@@ -224,7 +224,39 @@ entry:
 }
 
 INFO:  jitting method StringComparer::.cctor using LLILCJit
-Failed to read StringComparer..cctor[storeStaticField]
+Successfully read StringComparer..cctor
+
+define void @StringComparer..cctor() {
+entry:
+  %0 = call %System.Globalization.CultureInfo addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.Globalization.CultureInfo addrspace(1)* ()*)()
+  %1 = call %System.CultureAwareComparer addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.CultureAwareComparer addrspace(1)* (i64)*)(i64 NORMALIZED_ADDRESS)
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (%System.CultureAwareComparer addrspace(1)*, %System.Globalization.CultureInfo addrspace(1)*, i8)*)(%System.CultureAwareComparer addrspace(1)* %1, %System.Globalization.CultureInfo addrspace(1)* %0, i8 0)
+  %2 = bitcast %System.CultureAwareComparer addrspace(1)* %1 to %System.StringComparer addrspace(1)*
+  %3 = call i8 addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to i8 addrspace(1)* (i64, i64)*)(i64 NORMALIZED_ADDRESS, i64 88)
+  %4 = getelementptr inbounds i8 addrspace(1)* %3, i64 56
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (i8 addrspace(1)*, %System.StringComparer addrspace(1)*)*)(i8 addrspace(1)* %4, %System.StringComparer addrspace(1)* %2)
+  %5 = call %System.Globalization.CultureInfo addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.Globalization.CultureInfo addrspace(1)* ()*)()
+  %6 = call %System.CultureAwareComparer addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.CultureAwareComparer addrspace(1)* (i64)*)(i64 NORMALIZED_ADDRESS)
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (%System.CultureAwareComparer addrspace(1)*, %System.Globalization.CultureInfo addrspace(1)*, i8)*)(%System.CultureAwareComparer addrspace(1)* %6, %System.Globalization.CultureInfo addrspace(1)* %5, i8 1)
+  %7 = bitcast %System.CultureAwareComparer addrspace(1)* %6 to %System.StringComparer addrspace(1)*
+  %8 = call i8 addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to i8 addrspace(1)* (i64, i64)*)(i64 NORMALIZED_ADDRESS, i64 88)
+  %9 = getelementptr inbounds i8 addrspace(1)* %8, i64 64
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (i8 addrspace(1)*, %System.StringComparer addrspace(1)*)*)(i8 addrspace(1)* %9, %System.StringComparer addrspace(1)* %7)
+  %10 = call %System.OrdinalComparer addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.OrdinalComparer addrspace(1)* (i64)*)(i64 NORMALIZED_ADDRESS)
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (%System.OrdinalComparer addrspace(1)*, i8)*)(%System.OrdinalComparer addrspace(1)* %10, i8 0)
+  %11 = bitcast %System.OrdinalComparer addrspace(1)* %10 to %System.StringComparer addrspace(1)*
+  %12 = call i8 addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to i8 addrspace(1)* (i64, i64)*)(i64 NORMALIZED_ADDRESS, i64 88)
+  %13 = getelementptr inbounds i8 addrspace(1)* %12, i64 72
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (i8 addrspace(1)*, %System.StringComparer addrspace(1)*)*)(i8 addrspace(1)* %13, %System.StringComparer addrspace(1)* %11)
+  %14 = call %System.OrdinalComparer addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.OrdinalComparer addrspace(1)* (i64)*)(i64 NORMALIZED_ADDRESS)
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (%System.OrdinalComparer addrspace(1)*, i8)*)(%System.OrdinalComparer addrspace(1)* %14, i8 1)
+  %15 = bitcast %System.OrdinalComparer addrspace(1)* %14 to %System.StringComparer addrspace(1)*
+  %16 = call i8 addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to i8 addrspace(1)* (i64, i64)*)(i64 NORMALIZED_ADDRESS, i64 88)
+  %17 = getelementptr inbounds i8 addrspace(1)* %16, i64 80
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (i8 addrspace(1)*, %System.StringComparer addrspace(1)*)*)(i8 addrspace(1)* %17, %System.StringComparer addrspace(1)* %15)
+  ret void
+}
+
 INFO:  jitting method CultureInfo::get_InvariantCulture using LLILCJit
 Successfully read CultureInfo.get_InvariantCulture
 
@@ -238,9 +270,22 @@ entry:
 }
 
 INFO:  jitting method CultureInfo::.cctor using LLILCJit
-Failed to read CultureInfo..cctor[storeStaticField]
+Successfully read CultureInfo..cctor
+
+define void @CultureInfo..cctor() {
+entry:
+  %0 = call i8 inttoptr (i64 NORMALIZED_ADDRESS to i8 ()*)()
+  %1 = zext i8 %0 to i32
+  %2 = trunc i32 %1 to i8
+  %3 = call i8 addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to i8 addrspace(1)* (i64, i64)*)(i64 NORMALIZED_ADDRESS, i64 979)
+  %4 = getelementptr inbounds i8 addrspace(1)* %3, i64 2201
+  %5 = addrspacecast i8 addrspace(1)* %4 to i8*
+  store i8 %2, i8* %5
+  ret void
+}
+
 INFO:  jitting method CultureInfo::Init using LLILCJit
-Failed to read CultureInfo.Init[storeStaticField]
+Failed to read CultureInfo.Init[Helper performs volatile operation]
 INFO:  jitting method CultureInfo::.ctor using LLILCJit
 Failed to read CultureInfo..ctor[Call needs null check]
 INFO:  jitting method CultureData::GetCultureData using LLILCJit
@@ -374,7 +419,7 @@ Failed to read CultureInfo.GetUserDefaultUILanguage[Return refany or value class
 INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
 Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[publish secret param]
 INFO:  jitting method CultureInfo::get_UserDefaultCulture using LLILCJit
-Failed to read CultureInfo.get_UserDefaultCulture[storeStaticField]
+Failed to read CultureInfo.get_UserDefaultCulture[Helper performs volatile operation]
 INFO:  jitting method CultureInfo::get_Name using LLILCJit
 Failed to read CultureInfo.get_Name[Call needs null check]
 INFO:  jitting method String::EqualsHelper using LLILCJit
@@ -633,7 +678,7 @@ entry:
 INFO:  jitting method AppDomainSetup::get_TargetFrameworkName using LLILCJit
 Failed to read AppDomainSetup.get_TargetFrameworkName[Call needs null check]
 INFO:  jitting method Path::.cctor using LLILCJit
-Failed to read Path..cctor[storeStaticField]
+Failed to read Path..cctor[convertHandle]
 INFO:  jitting method String::SplitInternal using LLILCJit
 Failed to read String.SplitInternal[Tail call]
 INFO:  jitting method String::MakeSeparatorList using LLILCJit
@@ -1576,7 +1621,7 @@ Failed to read Enumerator.get_Current[loadNonPrimitiveObj]
 INFO:  jitting method OrdinalComparer::GetHashCode using LLILCJit
 Failed to read OrdinalComparer.GetHashCode[Tail call]
 INFO:  jitting method TextInfo::get_Invariant using LLILCJit
-Failed to read TextInfo.get_Invariant[storeStaticField]
+Failed to read TextInfo.get_Invariant[Helper performs volatile operation]
 INFO:  jitting method TextInfo::.ctor using LLILCJit
 Failed to read TextInfo..ctor[Call needs null check]
 INFO:  jitting method TextInfo::GetCaseInsensitiveHashCode using LLILCJit
@@ -1594,7 +1639,65 @@ entry:
 }
 
 INFO:  jitting method CompatibilitySwitches::InitializeSwitches using LLILCJit
-Failed to read CompatibilitySwitches.InitializeSwitches[storeStaticField]
+Successfully read CompatibilitySwitches.InitializeSwitches
+
+define void @CompatibilitySwitches.InitializeSwitches() {
+entry:
+  %0 = load %System.String addrspace(1)** inttoptr (i64 NORMALIZED_ADDRESS to %System.String addrspace(1)**), align 8
+  %1 = call i8 inttoptr (i64 NORMALIZED_ADDRESS to i8 (%System.String addrspace(1)*)*)(%System.String addrspace(1)* %0)
+  %2 = zext i8 %1 to i32
+  %3 = trunc i32 %2 to i8
+  %4 = call i8 addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to i8 addrspace(1)* (i64, i64)*)(i64 NORMALIZED_ADDRESS, i64 154)
+  %5 = getelementptr inbounds i8 addrspace(1)* %4, i64 1989
+  %6 = addrspacecast i8 addrspace(1)* %5 to i8*
+  store i8 %3, i8* %6
+  %7 = load %System.String addrspace(1)** inttoptr (i64 NORMALIZED_ADDRESS to %System.String addrspace(1)**), align 8
+  %8 = call i8 inttoptr (i64 NORMALIZED_ADDRESS to i8 (%System.String addrspace(1)*)*)(%System.String addrspace(1)* %7)
+  %9 = zext i8 %8 to i32
+  %10 = trunc i32 %9 to i8
+  %11 = call i8 addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to i8 addrspace(1)* (i64, i64)*)(i64 NORMALIZED_ADDRESS, i64 154)
+  %12 = getelementptr inbounds i8 addrspace(1)* %11, i64 1990
+  %13 = addrspacecast i8 addrspace(1)* %12 to i8*
+  store i8 %10, i8* %13
+  %14 = load %System.String addrspace(1)** inttoptr (i64 NORMALIZED_ADDRESS to %System.String addrspace(1)**), align 8
+  %15 = call i8 inttoptr (i64 NORMALIZED_ADDRESS to i8 (%System.String addrspace(1)*)*)(%System.String addrspace(1)* %14)
+  %16 = zext i8 %15 to i32
+  %17 = trunc i32 %16 to i8
+  %18 = call i8 addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to i8 addrspace(1)* (i64, i64)*)(i64 NORMALIZED_ADDRESS, i64 154)
+  %19 = getelementptr inbounds i8 addrspace(1)* %18, i64 1988
+  %20 = addrspacecast i8 addrspace(1)* %19 to i8*
+  store i8 %17, i8* %20
+  %21 = call i8 addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to i8 addrspace(1)* (i64, i64)*)(i64 NORMALIZED_ADDRESS, i64 154)
+  %22 = getelementptr inbounds i8 addrspace(1)* %21, i64 1988
+  %23 = addrspacecast i8 addrspace(1)* %22 to i8*
+  %24 = load i8* %23
+  %25 = zext i8 %24 to i32
+  %26 = icmp ne i32 %25, 0
+  br i1 %26, label %31, label %27
+
+; <label>:27                                      ; preds = %entry
+  %28 = load %System.String addrspace(1)** inttoptr (i64 NORMALIZED_ADDRESS to %System.String addrspace(1)**), align 8
+  %29 = call i8 inttoptr (i64 NORMALIZED_ADDRESS to i8 (%System.String addrspace(1)*)*)(%System.String addrspace(1)* %28)
+  %30 = zext i8 %29 to i32
+  br label %32
+
+; <label>:31                                      ; preds = %entry
+  br label %32
+
+; <label>:32                                      ; preds = %27, %31
+  %33 = phi i32 [ %30, %27 ], [ 1, %31 ]
+  %34 = trunc i32 %33 to i8
+  %35 = call i8 addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to i8 addrspace(1)* (i64, i64)*)(i64 NORMALIZED_ADDRESS, i64 154)
+  %36 = getelementptr inbounds i8 addrspace(1)* %35, i64 1987
+  %37 = addrspacecast i8 addrspace(1)* %36 to i8*
+  store i8 %34, i8* %37
+  %38 = call i8 addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to i8 addrspace(1)* (i64, i64)*)(i64 NORMALIZED_ADDRESS, i64 154)
+  %39 = getelementptr inbounds i8 addrspace(1)* %38, i64 1986
+  %40 = addrspacecast i8 addrspace(1)* %39 to i8*
+  store i8 1, i8* %40
+  ret void
+}
+
 INFO:  jitting method CompatibilitySwitches::IsCompatibilitySwitchSet using LLILCJit
 Failed to read CompatibilitySwitches.IsCompatibilitySwitchSet[Call needs null check]
 INFO:  jitting method AppDomain::IsCompatibilitySwitchSet using LLILCJit
@@ -1984,7 +2087,33 @@ entry:
 INFO:  jitting method Thread::get_CurrentCulture using LLILCJit
 Failed to read Thread.get_CurrentCulture[Tail call]
 INFO:  jitting method AppDomain::get_Flags using LLILCJit
-Failed to read AppDomain.get_Flags[storeStaticField]
+Successfully read AppDomain.get_Flags
+
+define i32 @AppDomain.get_Flags() {
+entry:
+  %0 = call i8 addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to i8 addrspace(1)* (i64, i64)*)(i64 NORMALIZED_ADDRESS, i64 123)
+  %1 = getelementptr inbounds i8 addrspace(1)* %0, i64 1980
+  %2 = addrspacecast i8 addrspace(1)* %1 to i32*
+  %3 = load i32* %2
+  %4 = icmp ne i32 %3, 0
+  br i1 %4, label %10, label %5
+
+; <label>:5                                       ; preds = %entry
+  %6 = call i32 inttoptr (i64 NORMALIZED_ADDRESS to i32 ()*)()
+  %7 = call i8 addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to i8 addrspace(1)* (i64, i64)*)(i64 NORMALIZED_ADDRESS, i64 123)
+  %8 = getelementptr inbounds i8 addrspace(1)* %7, i64 1980
+  %9 = addrspacecast i8 addrspace(1)* %8 to i32*
+  store i32 %6, i32* %9
+  br label %10
+
+; <label>:10                                      ; preds = %entry, %5
+  %11 = call i8 addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to i8 addrspace(1)* (i64, i64)*)(i64 NORMALIZED_ADDRESS, i64 123)
+  %12 = getelementptr inbounds i8 addrspace(1)* %11, i64 1980
+  %13 = addrspacecast i8 addrspace(1)* %12 to i32*
+  %14 = load i32* %13
+  ret i32 %14
+}
+
 INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
 Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[publish secret param]
 INFO:  jitting method Thread::GetCurrentCultureNoAppX using LLILCJit
@@ -2617,7 +2746,16 @@ Failed to read Console.WriteLine[Tail call]
 INFO:  jitting method Console::get_Out using LLILCJit
 Failed to read Console.get_Out[Call HasTypeArg]
 INFO:  jitting method Console::.cctor using LLILCJit
-Failed to read Console..cctor[storeStaticField]
+Successfully read Console..cctor
+
+define void @Console..cctor() {
+entry:
+  %0 = call %System.Object addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.Object addrspace(1)* (i64)*)(i64 NORMALIZED_ADDRESS)
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (%System.Object addrspace(1)*)*)(%System.Object addrspace(1)* %0)
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (i64, %System.Object addrspace(1)*)*)(i64 NORMALIZED_ADDRESS, %System.Object addrspace(1)* %0)
+  ret void
+}
+
 INFO:  jitting method Console::EnsureInitialized using LLILCJit
 Failed to read Console.EnsureInitialized[Call HasTypeArg]
 INFO:  jitting method Console::<get_Out>b__2 using LLILCJit
@@ -2700,7 +2838,21 @@ entry:
 }
 
 INFO:  jitting method Interop::.cctor using LLILCJit
-Failed to read Interop..cctor[storeStaticField]
+Successfully read Interop..cctor
+
+define void @Interop..cctor() {
+entry:
+  %0 = alloca i64
+  %1 = bitcast i64* %0 to i8*
+  call void @llvm.memset.p0i8.i64(i8* %1, i8 0, i64 0, i32 0, i1 false)
+  %2 = addrspacecast i64* %0 to i64 addrspace(1)*
+  %3 = bitcast i64 addrspace(1)* %2 to %System.IntPtr addrspace(1)*
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (%System.IntPtr addrspace(1)*, i32)*)(%System.IntPtr addrspace(1)* %3, i32 -1)
+  %4 = load i64* %0
+  store i64 %4, i64* inttoptr (i64 NORMALIZED_ADDRESS to i64*)
+  ret void
+}
+
 INFO:  jitting method IntPtr::.ctor using LLILCJit
 Successfully read IntPtr..ctor
 
@@ -2811,7 +2963,19 @@ Failed to read mincore.GetFileType[Tail call]
 INFO:  jitting method Console::CreateOutputWriter using LLILCJit
 Failed to read Console.CreateOutputWriter[Tail call]
 INFO:  jitting method Stream::.cctor using LLILCJit
-Failed to read Stream..cctor[storeStaticField]
+Successfully read Stream..cctor
+
+define void @Stream..cctor() {
+entry:
+  %0 = call %"System.IO.Stream+NullStream" addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %"System.IO.Stream+NullStream" addrspace(1)* (i64)*)(i64 NORMALIZED_ADDRESS)
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (%"System.IO.Stream+NullStream" addrspace(1)*)*)(%"System.IO.Stream+NullStream" addrspace(1)* %0)
+  %1 = bitcast %"System.IO.Stream+NullStream" addrspace(1)* %0 to %System.IO.Stream addrspace(1)*
+  %2 = call i8 addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to i8 addrspace(1)* (i64, i64)*)(i64 NORMALIZED_ADDRESS, i64 1377)
+  %3 = getelementptr inbounds i8 addrspace(1)* %2, i64 2680
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (i8 addrspace(1)*, %System.IO.Stream addrspace(1)*)*)(i8 addrspace(1)* %3, %System.IO.Stream addrspace(1)* %1)
+  ret void
+}
+
 INFO:  jitting method NullStream::.ctor using LLILCJit
 Failed to read NullStream..ctor[Tail call]
 INFO:  jitting method mincore::GetConsoleOutputCP using LLILCJit
@@ -2844,7 +3008,18 @@ Failed to read Encoding.GetEncoding[convertToHelperArgumentType]
 INFO:  jitting method EncodingProvider::GetEncodingFromProvider using LLILCJit
 Failed to read EncodingProvider.GetEncodingFromProvider[loadElem]
 INFO:  jitting method EncodingProvider::.cctor using LLILCJit
-Failed to read EncodingProvider..cctor[storeStaticField]
+Successfully read EncodingProvider..cctor
+
+define void @EncodingProvider..cctor() {
+entry:
+  %0 = call %System.Object addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.Object addrspace(1)* (i64)*)(i64 NORMALIZED_ADDRESS)
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (%System.Object addrspace(1)*)*)(%System.Object addrspace(1)* %0)
+  %1 = call i8 addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to i8 addrspace(1)* (i64, i64)*)(i64 NORMALIZED_ADDRESS, i64 1059)
+  %2 = getelementptr inbounds i8 addrspace(1)* %1, i64 2384
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (i8 addrspace(1)*, %System.Object addrspace(1)*)*)(i8 addrspace(1)* %2, %System.Object addrspace(1)* %0)
+  ret void
+}
+
 INFO:  jitting method Encoding::get_InternalSyncObject using LLILCJit
 Failed to read Encoding.get_InternalSyncObject[Call HasTypeArg]
 INFO:  jitting method Hashtable::.ctor using LLILCJit
@@ -2913,7 +3088,7 @@ entry:
 }
 
 INFO:  jitting method Encoding::get_UTF8 using LLILCJit
-Failed to read Encoding.get_UTF8[storeStaticField]
+Failed to read Encoding.get_UTF8[Helper performs volatile operation]
 INFO:  jitting method UTF8Encoding::SetDefaultFallbacks using LLILCJit
 Successfully read UTF8Encoding.SetDefaultFallbacks
 
@@ -3365,7 +3540,17 @@ Failed to read StreamWriter.Flush[Tail call]
 INFO:  jitting method ConsoleEncoding::GetPreamble using LLILCJit
 Failed to read ConsoleEncoding.GetPreamble[Tail call]
 INFO:  jitting method EmptyArray`1::.cctor using LLILCJit
-Failed to read EmptyArray`1..cctor[storeStaticField]
+Successfully read EmptyArray`1..cctor
+
+define void @"EmptyArray`1..cctor"() {
+entry:
+  %0 = call %"System.Byte[]" addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %"System.Byte[]" addrspace(1)* (i64, i64)*)(i64 NORMALIZED_ADDRESS, i64 0)
+  %1 = call i8 addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to i8 addrspace(1)* (i64, i64)*)(i64 NORMALIZED_ADDRESS, i64 14)
+  %2 = getelementptr inbounds i8 addrspace(1)* %1, i64 0
+  call void inttoptr (i64 NORMALIZED_ADDRESS to void (i8 addrspace(1)*, %"System.Byte[]" addrspace(1)*)*)(i8 addrspace(1)* %2, %"System.Byte[]" addrspace(1)* %0)
+  ret void
+}
+
 INFO:  jitting method EncoderNLS::GetBytes using LLILCJit
 Failed to read EncoderNLS.GetBytes[loadElemA]
 INFO:  jitting method EncoderNLS::GetBytes using LLILCJit
