@@ -838,8 +838,8 @@ INFO:  jitting method Path::HasIllegalCharacters using LLILCJit
 Failed to read Path.HasIllegalCharacters[Call needs null check]
 INFO:  jitting method PathHelper::Append using LLILCJit
 Failed to read PathHelper.Append[Call needs null check]
-INFO:  jitting method PathHelper::OrdinalStartsWith using LLILCJit
-Failed to read PathHelper.OrdinalStartsWith[Tail call]
+INFO:  jitting method PathHelper::TryExpandShortFileName using LLILCJit
+Failed to read PathHelper.TryExpandShortFileName[entryLabel]
 INFO:  jitting method PathHelper::NullTerminate using LLILCJit
 Successfully read PathHelper.NullTerminate
 
@@ -862,6 +862,10 @@ entry:
   ret void
 }
 
+INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
+Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[publish secret param]
+INFO:  jitting method PathHelper::OrdinalStartsWith using LLILCJit
+Failed to read PathHelper.OrdinalStartsWith[Tail call]
 INFO:  jitting method PathHelper::GetFullPathName using LLILCJit
 Failed to read PathHelper.GetFullPathName[entryLabel]
 INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
