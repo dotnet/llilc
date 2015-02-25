@@ -26,243 +26,519 @@ namespace ReaderBaseNS {
 
 #include "openum.h"
 
+/// \brief Describes the set of unary opcodes.
+///
+/// The operations indicated by these opcodes expect a single argument and
+/// produce a single result.
 enum UnaryOpcode {
-  Neg = 0,
-  Not,
+  Neg = 0, ///< Produces the two's copmlement of its argument.
+  Not,     ///< Produces the one's complement of its argument.
 
   LastUnaryOpcode
 };
 
+/// \brief Describes the set of binary opcodes.
+///
+/// The operations indicated by these opcodes expect two arguments and produce a
+/// single result.
 enum BinaryOpcode {
-  Add = 0,
-  AddOvf,
-  AddOvfUn,
-  And,
-  Div,
-  DivUn,
-  Mul,
-  MulOvf,
-  MulOvfUn,
-  Or,
-  Rem,
-  RemUn,
-  Sub,
-  SubOvf,
-  SubOvfUn,
-  Xor,
+  Add = 0,  ///< Produces the sum of its arguments.
+
+  AddOvf,   ///< Produces the sum of its arugments and throws an exception if
+            ///< the result is out of range.
+
+  AddOvfUn, ///< Produces the sum of its arguments (treating both as unsigned
+            ///< integers) and throws an exception if the result is out of
+            ///< range. 
+
+  And,      ///< Produces the bitwise and of its arguments.
+
+  Div,      ///< Produces the quotient of its first argument divided by its
+            ///< second argument.
+
+  DivUn,    ///< Produces the quotient of its first argument divided by its
+            ///< second argument, treating both arguments as unsigned integers.
+
+  Mul,      ///< Produces the product of its arguments.
+
+  MulOvf,   ///< Produces the product of its arguments and throws an exception
+            ///< if the result is out of range.
+
+  MulOvfUn, ///< Priduces the product of its arguments (treating both as
+            ///< unsigned integers) and throws an exception if the result is
+            ///< out of range.
+
+  Or,       ///< Produces the bitwise or of its arguments.
+
+  Rem,      ///< Produces the quotient of its first argument divided by its
+            ///< second argument.
+
+  RemUn,    ///< Produces the quotient of its first argument divided by its
+            ///< second argument, treating both arguments as unsigned integers.
+
+  Sub,      ///< Produces the difference of its arguments.
+
+  SubOvf,   ///< Produces the difference of its arguments and throws an
+            ///< exception if the result is out of range.
+
+  SubOvfUn, ///< Produces the difference of its arguments (treating both as
+            ///< unsigned integers) and throws an exception if the result is
+            ///< out of range.
+
+  Xor,      ///< Produces the bitwise exclusive-or of its arguments.
 
   LastBinaryOpcode
 };
 
+/// \brief Describes the set of boolean branch opcodes.
+///
+/// The operations indicated by these opcodes transfer control to a target
+/// offset depending on the value of a single boolean argument.
 enum BoolBranchOpcode {
-  BrFalse = 0,
-  BrFalseS,
-  BrTrue,
-  BrTrueS,
+  BrFalse = 0, ///< Branches to the target offset if its argument is false. The
+               ///< target offset falls within the range [-2^31, 2^31).
+
+  BrFalseS,    ///< As BrFalse, but the target offset falls within the range
+               ///< [-2^7, 2^7).
+
+  BrTrue,      ///< Branches to the target offset it its argument is true. The
+               ///< target offset falls withing the range [-2^31, 2^31).
+
+  BrTrueS,     ///< As BrTrue, but the target offset falls within the range
+               ///< [-2^7, 2^7).
 
   LastBoolBranchOpcode
 };
 
+/// \brief Describes the set of call opcodes.
+///
+/// The operations indicated by these opcodes are (possibly terminal) calls to a
+/// specified method, passing any arguments accepted by the method and
+/// optionally producing a single result from the method.
 enum CallOpcode {
-  Jmp = 0,
-  Call,
-  CallVirt,
-  Calli,
-  Tail,
-  NewObj, // Call code is used to process NewObj...
+  Jmp = 0,  ///< Exits the current method and jumps to the method described
+            ///< by its argument.
+
+  Call,     ///< Calls the method described by its argument.
+
+  CallVirt, ///< Calls the late-bound method described by its argument.
+
+  Calli,    ///< Calls through its method pointer argument using an indicated
+            ///< method signature.
+
+  Tail,     ///< Tail calls the method described by its argument.
+
+  // Call code is used to process NewObj
+  NewObj,   ///< Calls the constructor indicated by its argument using the
+            ///< indicated storage.
 
   LastCallOpcode
 };
 
+/// \brief Describes the set of opcodes that compare two values.
+///
+/// The operations indicated by these opcodes expect two arguments and produce a
+/// single result.
 enum CmpOpcode {
-  Ceq = 0,
-  Cgt,
-  CgtUn,
-  Clt,
-  CltUn,
+  Ceq = 0, ///< Produces true if its first argument is equal to its second
+           ///< argument and false otherwise.
+
+  Cgt,     ///< Produces true if its first argument is greater than its second
+           ///< argument and false otherwise.
+
+  CgtUn,   ///< Produces true if its first argument is greater than its second
+           ///< argument (treating both arguments as unsigned integers) and
+           ///< false otherwise.
+
+  Clt,     ///< Produces true if its first argument is less than its second
+           ///< argument and false otherwise.
+
+  CltUn,   ///< Produces true if its first argument is less than its second
+           ///< argument (treating both arguments as unsigned integers) and
+           ///< false otherwise.
 
   LastCmpOpcode
 };
 
+/// \brief Describes the set of conditional branch opcodes.
+///
+/// The operations indicated by these opcodes transfer control to a target
+/// offset depending on the result of comparing two arguments. If an opcode
+/// carries an "S" suffix, its target offset falls within the range [-2^7, 2^7);
+/// otherwise, its target offset falls within the range [-2^31, 2^31).
 enum CondBranchOpcode {
-  Beq = 0,
-  BeqS,
-  Bge,
-  BgeS,
-  BgeUn,
-  BgeUnS,
-  Bgt,
-  BgtS,
-  BgtUn,
-  BgtUnS,
-  Ble,
-  BleS,
-  BleUn,
-  BleUnS,
-  Blt,
-  BltS,
-  BltUn,
-  BltUnS,
-  BneUn,
-  BneUnS,
+  Beq = 0, ///< Branches to the target offset if its arguments are equal.
+
+  BeqS,    ///< As Beq, but with a short target offset.
+
+  Bge,     ///< Branches to the target offset if its first argument is greater
+           ///< than or equal to its second argument.
+
+  BgeS,    ///< As Bge, but with a short target offset.
+
+  BgeUn,   ///< Branches to the target offset if its first argument is greater
+           ///< than or equal to its second argment, treating both arguments as
+           ///< unsigned integers.
+
+  BgeUnS,  ///< As BgeUn, but with a short target offset.
+
+  Bgt,     ///< Branches to the target offset if its first argument is greater
+           ///< than its second argument.
+
+  BgtS,    ///< As Bgt, but with a short target offset.
+
+  BgtUn,   ///< Branches to the target offset if its first argument is greater
+           ///< than its second argment, treating both arguments as unsigned
+           ///< integers.
+
+  BgtUnS,  ///< As BgtUn, but with a short target offset.
+
+  Ble,     ///< Branches to the target offset if its first argument is less than
+           ///< or equal to its second argument.
+
+  BleS,    ///< As Ble, but with a short target offset.
+
+  BleUn,   ///< Branches to the target offset if its first argument is less than
+           ///< or equal to its second argment, treating both arguments as
+           ///< unsigned integers.
+
+  BleUnS,  ///< As BleUn, but with a short target offset.
+
+  Blt,     ///< Branches to the target offset if its first argument is less than
+           ///< its second argument.
+
+  BltS,    ///< As Blt, but with a short target offset.
+
+  BltUn,   ///< Branches to the target offset if its first argument is less than
+           ///< its second argment, treating both arguments as unsigned
+           ///< integers.
+
+  BltUnS,  ///< As BltUn, but with a short target offset.
+
+  BneUn,   ///< Branches to the target offset if its arguments are not equal,
+           ///< treating both arguments as unsigned integers.
+
+  BneUnS,  ///< As BneUn, but with a short target offset.
 
   LastCondBranchOpcode
 };
 
+/// \brief Describes the set of numeric conversion opcodes. 
+///
+/// The operations described by these opcodes expect a single numeric operand
+/// and produce the result of converting the argument to a specified numeric
+/// type.
 enum ConvOpcode {
-  ConvI1 = 0,
-  ConvI2,
-  ConvI4,
-  ConvI8,
-  ConvR4,
-  ConvR8,
-  ConvU1,
-  ConvU2,
-  ConvU4,
-  ConvU8,
-  ConvI,
-  ConvU,
+  ConvI1 = 0, ///< Produces its argument converted to a 1-byte signed integer.
 
-  ConvOvfI1,
-  ConvOvfI2,
-  ConvOvfI4,
-  ConvOnvI8,
-  ConvOvfU1,
-  ConvOvfU2,
-  ConvOvfU4,
-  ConvOvfU8,
-  ConvOvfI,
-  ConvOvfU,
+  ConvI2,     ///< Produces its argument converted to a 2-byte signed integer.
 
-  ConvOvfI1Un,
-  ConvOvfI2Un,
-  ConvOvfI4Un,
-  ConvOvfI8Un,
-  ConvOvfU1Un,
-  ConvOvfU2Un,
-  ConvOvfU4Un,
-  ConvOvfU8Un,
-  ConvOvfIUn,
-  ConvOvfUUn,
-  ConvRUn,
+  ConvI4,     ///< Produces its argument converted to a 4-byte signed integer.
+
+  ConvI8,     ///< Produces its argument converted to an 8-byte signed integer.
+
+  ConvR4,     ///< Produces its argument converted to a 4-byte IEC 60559:1989
+              ///< floating-point number.
+
+  ConvR8,     ///< Produces its argument converted to an 8-byte IEC 60559:1989
+              ///< floating-point number.
+
+  ConvU1,     ///< Produces its argument converted to a 1-byte unsigned integer.
+
+  ConvU2,     ///< Produces its argument converted to a 2-byte unsigned integer.
+
+  ConvU4,     ///< Produces its argument converted to a 4-byte unsigned integer.
+
+  ConvU8,     ///< Produces its argument converted to an 8-byte unsigned
+              ///< integer.
+
+  ConvI,      ///< Produces its argument converted to a natively sized signed
+              ///< integer.
+
+  ConvU,      ///< Produces its argument converted to a natively sized unsigned
+              ///< integer.
+
+
+  ConvOvfI1, ///< As ConvI1, but throws an exception if the result is out of
+             ///< range.
+
+  ConvOvfI2, ///< As ConvI2, but throws an exception if the result is out of
+             ///< range.
+
+  ConvOvfI4, ///< As ConvI4, but throws an exception if the result is out of
+             ///< range.
+
+  ConvOnvI8, ///< As ConvI8, but throws an exception if the result is out of
+             ///< range.
+
+  ConvOvfU1, ///< As ConvU1, but throws an exception if the result is out of
+             ///< range.
+
+  ConvOvfU2, ///< As ConvU2, but throws an exception if the result is out of
+             ///< range.
+
+  ConvOvfU4, ///< As ConvU4, but throws an exception if the result is out of
+             ///< range.
+
+  ConvOvfU8, ///< As ConvU8, but throws an exception if the result is out of
+             ///< range.
+
+  ConvOvfI, ///< As ConvI, but throws an exception if the result is out of
+            ///< range.
+
+  ConvOvfU, ///< As ConvU, but throws an exception if the result is out of
+            ///< range.
+
+
+  ConvOvfI1Un, ///< As ConvOvfI1, but treats its input as an unsigned integer.
+
+  ConvOvfI2Un, ///< As ConvOvfI2, but treats its input as an unsigned integer.
+
+  ConvOvfI4Un, ///< As ConvOvfI4, but treats its input as an unsigned integer.
+
+  ConvOvfI8Un, ///< As ConvOvfI8, but treats its input as an unsigned integer.
+
+  ConvOvfU1Un, ///< As ConvOvfU1, but treats its input as an unsigned integer.
+
+  ConvOvfU2Un, ///< As ConvOvfU2, but treats its input as an unsigned integer.
+
+  ConvOvfU4Un, ///< As ConvOvfU4, but treats its input as an unsigned integer.
+
+  ConvOvfU8Un, ///< As ConvOvfU8, but treats its input as an unsigned integer.
+
+  ConvOvfIUn,  ///< As ConvOvfI, but treats its input as an unsigned integer.
+
+  ConvOvfUUn,  ///< As ConvOvfIU, but treats its input as an unsigned integer.
+
+  ConvRUn,     ///< Converts its argument to a floating-point number in the
+               ///< runtime's internal representation, treating its input as an
+               ///< unsigned integer.
 
   LastConvOpcode
 };
 
+/// \brief Describes the set of opcodes related to exception handling.
 enum ExceptOpcode {
-  EndFilter,
-  Throw,
+  EndFilter, ///< Indicates the end of a filter clause.
+
+  Throw,     ///< Throws the exception given as an argument.
 
   LastExceptOpcode
 };
 
+/// \brief Describes the set of element load opcodes.
+///
+/// The operations indicated by these opcodes expect two arguments, an array and
+/// an index, and produce the element of the given array at the given index.
 enum LdElemOpcode {
-  LdelemI1 = 0,
-  LdelemU1,
-  LdelemI2,
-  LdelemU2,
-  LdelemI4,
-  LdelemU4,
-  LdelemI8,
-  LdelemI,
-  LdelemR4,
-  LdelemR8,
-  LdelemRef,
-  Ldelem, // (M2 Generics)
+  LdelemI1 = 0, ///< Produces the 1-byte signed integer at the given index of
+                ///< the given array.
+
+  LdelemU1,     ///< Produces the 1-byte unsigned integer at the given index of
+                ///< the given array.
+
+  LdelemI2,     ///< Produces the 2-byte signed integer at the given index of
+                ///< the given array.
+
+  LdelemU2,     ///< Produces the 2-byte unsigned integer at the given index of
+                ///< the given array.
+
+  LdelemI4,     ///< Produces the 4-byte signed integer at the given index of
+                ///< the given array.
+
+  LdelemU4,     ///< Produces the 4-byte unsigned integer at the given index of
+                ///< the given array.
+
+  LdelemI8,     ///< Produces the 8-byte signed integer at the given index of
+                ///< the given array.
+
+  LdelemI,      ///< Produces the 8-byte unsigned integer at the given index of
+                ///< the given array.
+
+  LdelemR4,     ///< Produces the 4-byte IEC 60559:1989 floating-point number at
+                ///< the given index of the given array.
+
+  LdelemR8,     ///< Produces the 8-byte IEC 60559:1989 floating-point number at
+                ///< the given index of the given array.
+
+  LdelemRef,    ///< Produces the object reference at the given index of the
+                ///< given array.
+
+  Ldelem,       ///< Produces the value of the indicated type at the given
+                ///< index of the given array.
 
   LastLdelemOpcode
 };
 
+/// \brief Describes the set of indirect load opcodes.
+///
+/// The operations indicated by these opcodes expect a single address argument
+/// and produces the value stored at the argument.
 enum LdIndirOpcode {
-  LdindI1 = 0,
-  LdindU1,
-  LdindI2,
-  LdindU2,
-  LdindI4,
-  LdindU4,
-  LdindI8,
-  LdindI,
-  LdindR4,
-  LdindR8,
-  LdindRef,
+  LdindI1 = 0, ///< Produces the 1-byte signed integer stored at the given
+               ///< address.
+
+  LdindU1,     ///< Produces the 1-byte unsigned integer stored at the given
+               ///< address.
+
+  LdindI2,     ///< Produces the 2-byte signed integer stored at the given
+               ///< address.
+
+  LdindU2,     ///< Produces the 2-byte unsigned integer stored at the given
+               ///< address.
+
+  LdindI4,     ///< Produces the 4-byte signed integer stored at the given
+               ///< address.
+
+  LdindU4,     ///< Produces the 4-byte unsigned integer stored at the given
+               ///< address.
+
+  LdindI8,     ///< Produces the 8-byte signed integer stored at the given
+               ///< address.
+
+  LdindI,      ///< Produces the natively sized signed integer stored at the
+               ///< given address.
+
+  LdindR4,     ///< Produces the 4-byte IEC 60559:1989 floating-point number 
+               ///< stored at the given address.
+
+  LdindR8,     ///< Produces the 8-byte IEC 60559:1989 floating-point number 
+               ///< stored at the given address.
+
+  LdindRef,    ///< Produces the object reference stored at the given address.
 
   LastLdindOpcode
 };
 
+/// \brief Describes the set of element store opcodes.
+///
+/// The operations indicated by these opcodes expect three arguments, an array,
+/// an index, and a value, and store the value at the given index of the given
+/// array.
 enum StElemOpcode {
-  StelemI = 0,
-  StelemI1,
-  StelemI2,
-  StelemI4,
-  StelemI8,
-  StelemR4,
-  StelemR8,
-  StelemRef,
-  Stelem,
+  StelemI = 0, ///< Stores the given 1-byte integer at the given index of the
+               ///< given array.
+
+  StelemI1,    ///< Stores the given 1-byte integer at the given index of the
+               ///< given array.
+
+  StelemI2,    ///< Stores the given 2-byte integer at the given index of the
+               ///< given array.
+
+  StelemI4,    ///< Stores the given 4-byte integer at the given index of the
+               ///< given array.
+
+  StelemI8,    ///< Stores the given 8-byte integer at the given index of the
+               ///< given array.
+
+  StelemR4,    ///< Stores the given 4-byte IEC 60559:1989 floating-point number
+               ///< at the given index of the given array.
+
+  StelemR8,    ///< Stores the given 8-byte IEC 60559:1989 floating-point number
+               ///< at the given index of the given array.
+
+  StelemRef,   ///< Stores the given object reference at the given index of the
+               ///< given array.
+
+  Stelem,      ///< Stores the given value of the indicated type at the given
+               ///< index of the given array.
 
   LastStelemOpcode
 };
 
+/// \brief Describes the set of shift opcodes.
+///
+/// The operations indicated by these opcodes expect two arguments, a value and
+/// a shift amount, and produce the result of shifting the value by the shift 
+/// amount in a particular direction.
 enum ShiftOpcode {
-  Shl = 0,
-  Shr,
-  ShrUn,
+  Shl = 0, ///< Produces the result of shifting the given value leftwards by the
+           ///< given shift amount.
+
+  Shr,     ///< Produces the result of an arithmetic shift right of the given
+           ///< value by the given shift amount.
+
+  ShrUn,   ///< Produces the result of a logical shift right of the given value
+           ///< by the given shift amount.
 
   LastShiftOpcode
 };
 
+/// \brief Describes the set of indirect store opcodes.
+///
+/// The operations indicated by these opcodes expect two arguments, an address
+/// and a value, and store the value at the given address.
 enum StIndirOpcode {
-  StindI1 = 0,
-  StindI2,
-  StindI4,
-  StindI8,
-  StindI,
-  StindR4,
-  StindR8,
-  StindRef,
+  StindI1 = 0, ///< Store the given 1-byte integer at the given address.
+
+  StindI2,     ///< Store the given 2-byte integer at the given address.
+
+  StindI4,     ///< Store the given 4-byte integer at the given address.
+
+  StindI8,     ///< Store the given 8-byte integer at the given address.
+
+  StindI,      ///< Store the given natively sized integer at the given address.
+
+  StindR4,     ///< Store the given 4-byte IEC 60559:1989 floating-point number
+               ///< at the given address.
+
+  StindR8,     ///< Store the given 8-byte IEC 60559:1989 floating-point number
+               ///< at the given address.
+
+  StindRef,    ///< Store the given object reference at the given address.
 
   LastStindOpcode
 };
 
-// Taken from rgn.h, eventually needs to go into its own file.
+/// \brief Describes the set of region kinds.
 typedef enum {
-  RGN_Unknown = 0,
-  RGN_None,
-  RGN_Root,
-  RGN_Try,
-  RGN_Except, // C++ except (SEH)
-  RGN_Fault,
-  RGN_Finally,
-  RGN_Filter,
-  RGN_Dtor,
-  RGN_Catch,   // C++ catch
-  RGN_MExcept, // managed (CLR) except
-  RGN_MCatch,  // managed (CLR) catch
+  RGN_Unknown = 0, ///< Indicates that the region is of unknown kind.
+  RGN_None,        ///< Indicates that the region has no kind.
+  RGN_Root,        ///< Indicates the root of a region tree.
+  RGN_Try,         ///< Indicates a try region.
+  RGN_Except,      ///< Indicates an SEH except region.
+  RGN_Fault,       ///< Indicates a fault region.
+  RGN_Finally,     ///< Indicates a finally region.
+  RGN_Filter,      ///< Indicates a filter region.
+  RGN_Dtor,        ///< Indicates a destructor region.
+  RGN_Catch,       ///< Indicates a C++ catch region.
+  RGN_MExcept,     ///< Indicates a managed except region.
+  RGN_MCatch,      ///< Indicates a managed catch region.
 
   // New region types used in common reader
-  RGN_ClauseNone,
-  RGN_ClauseFilter,
-  RGN_ClauseFinally,
-  RGN_ClauseError,
-  RGN_ClauseFault,
+  RGN_ClauseNone,    ///< Indicates that the region has no clauses.
+  RGN_ClauseFilter,  ///< Indicates a filter clause region.
+  RGN_ClauseFinally, ///< Indicates a finally clause region.
+  RGN_ClauseError,   ///< Indicates an error clause region.
+  RGN_ClauseFault,   ///< Indicates a fault clause region.
 } RegionKind;
 
-// Taken from rgn.h, eventually needs to go into its own file.
+/// \brief Describes the set of try region kinds.
 typedef enum {
-  TRY_None = 0,
-  TRY_Fin,
-  TRY_Fault,      // try/fault
-  TRY_MCatch,     // the try has only catch handlers
-  TRY_MCatchXcpt, // the try has both catch and except handlers
-  TRY_MXcpt,      // the try has only except handlers
-  // for native compiler code, not used in current JIT
-  TRY_Xcpt,  // native SEH except
-  TRY_CCatch // native C++ catch
+  TRY_None = 0,   ///< Indicates that the try region has no handlers.
+
+  TRY_Fin,        ///< Indicates that the try region is a finally clause.
+
+  TRY_Fault,      ///< Indicates that the try region is a fault handler.
+
+  TRY_MCatch,     ///< Indicates that the try region has only catch handlers.
+
+  TRY_MCatchXcpt, ///< Indicates that the try region has both catch and except.
+                  ///< handlers
+
+  TRY_MXcpt,      ///< Indicates that the try region has only except handlers.
+
+  TRY_Xcpt,       ///< Indicates that the try region has native SEH exception
+                  ///< handlers. Not used in the current JIT.
+
+  TRY_CCatch      ///< Indicates that the try region has native C++ catch
+                  ///< handlers. Not used in the current JIT.
 } TryKind;
 }
 
-// Used to map read opcodes to function-specific opcode enumerations.
-// Uses the same ordering as openum.h.
+/// \brief Used to map MSIL opcodes to function-specific opcode enumerations.
+///
+/// Uses the same ordering as enum opcode_t from openum.h.
 SELECTANY const char
     OpcodeRemap[ReaderBaseNS::CEE_MACRO_END - ReaderBaseNS::CEE_NOP] = {
         -1,                     // CEE_NOP,
