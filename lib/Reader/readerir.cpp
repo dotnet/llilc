@@ -2967,10 +2967,6 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
     throw NotYetImplementedException("Tail call");
   }
 
-  if (CallTargetInfo->needsNullCheck()) {
-    throw NotYetImplementedException("Call needs null check");
-  }
-
   if (SigInfo->hasTypeArg()) {
     throw NotYetImplementedException("Call HasTypeArg");
   }
@@ -2992,12 +2988,18 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
       throw NotYetImplementedException("Call has value type args");
     }
 
-    if ((I == 0) && CallTargetInfo->isNewObj()) {
-      // Memory and a representative node for the 'this' pointer for newobj
-      // has not been created yet. Pass a null value of the right type for now;
-      // it will be replaced by the real value in canonNewObjCall.
-      ASSERT(ArgNode == NULL);
-      ArgNode = (IRNode *)Constant::getNullValue(ArgType);
+    if (I == 0) {
+      if (CallTargetInfo->isNewObj()) {
+        // Memory and a representative node for the 'this' pointer for newobj
+        // has not been created yet. Pass a null value of the right type for now;
+        // it will be replaced by the real value in canonNewObjCall.
+        ASSERT(ArgNode == NULL);
+        ArgNode = (IRNode *)Constant::getNullValue(ArgType);
+      } else if (CallTargetInfo->needsNullCheck()) {
+        // Insert this Ptr null check if required
+        ASSERT(SigInfo->hasThis());
+        ArgNode = genNullCheck(ArgNode, NewIR);
+      }
     }
     IRNode *Arg = convertFromStackType(ArgNode, CorType, ArgType);
     Arguments.push_back(Arg);
