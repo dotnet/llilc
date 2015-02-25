@@ -933,11 +933,11 @@ function Global:RunTest
   }
 
   # Protect old value and set the new value for DUMPLLVMIR
-  $DumpExists = Test-Path Env:\DUMPLLVMIR
+  $DumpExists = Test-Path Env:\COMPLus_DUMPLLVMIR
   if ($DumpExists) {
-    $OldDump = $Env:DUMPLLVMIR
+    $OldDump = $Env:COMPlus_DUMPLLVMIR
   } 
-  $Env:DUMPLLVMIR = $Dump
+  $Env:COMPlus_DUMPLLVMIR = $Dump
 
   # The set of test cases that are currently ignored
   $Env:SkipTestAssemblies = "Common;Exceptions;GC;Loader;managed;packages;Regressions;runtime;Tests;TestWrappers_x64_release;Threading" 
@@ -950,7 +950,7 @@ function Global:RunTest
 
   # Restore old value for DUMPLLVMIR
   if ($DumpExists) {
-    $Env:DUMPLLVMIR = $OldDump;
+    $Env:COMPlus_DUMPLLVMIR = $OldDump;
   } 
 
   # Restore the old jit

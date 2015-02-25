@@ -15,6 +15,7 @@
 
 #include "jitpch.h"
 #include "LLILCJit.h"
+#include "options.h"
 #include "readerir.h"
 #include "abi.h"
 #include "EEMemoryManager.h"
@@ -132,7 +133,7 @@ void LLILCJitContext::outputDebugMethodName() {
 }
 
 LLILCJitContext::LLILCJitContext(LLILCJitPerThreadState *PerThreadState)
-    : State(PerThreadState), HasLoadedBitCode(false) {
+    : State(PerThreadState), HasLoadedBitCode(false), Options(this) {
   this->Next = State->JitContext;
   State->JitContext = this;
 }
@@ -182,6 +183,11 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
   Context.CurrentModule->setTargetTriple(LLVM_DEFAULT_TARGET_TRIPLE);
   Context.TheABIInfo = ABIInfo::get(*Context.CurrentModule);
 
+  // Initialize per invocation JIT options. This should be done after the
+  // rest of the Context is filled out as it has dependencies on Flags and
+  // MethodInfo
+  Context.Options.initialize();
+
   EngineBuilder Builder(std::move(M));
   std::string ErrStr;
   Builder.setErrorStr(&ErrStr);
@@ -194,7 +200,7 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
   // Statepoint GC does not support FastIsel yet.
   Options.EnableFastISel = false;
 
-  if ((Flags & CORJIT_FLG_DEBUG_CODE) == 0) {
+  if (Context.Options.OptLevel != OptLevel::DEBUG_CODE) {
     Builder.setOptLevel(CodeGenOpt::Level::Default);
   } else {
     Builder.setOptLevel(CodeGenOpt::Level::None);
@@ -214,7 +220,7 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
 
   // Now jit the method.
   CorJitResult Result = CORJIT_INTERNALERROR;
-  if (dumpLevel() == VERBOSE) {
+  if (Context.Options.DumpLevel == VERBOSE) {
     Context.outputDebugMethodName();
   }
   bool HasMethod = this->readMethod(&Context);
@@ -322,7 +328,7 @@ bool LLILCJit::readMethod(LLILCJitContext *JitContext) {
     return true;
   }
 
-  LLVMDumpLevel DumpLevel = dumpLevel();
+  LLVMDumpLevel DumpLevel = JitContext->Options.DumpLevel;
 
   LLILCJitPerThreadState *PerThreadState = State.get();
   GenIR Reader(JitContext, &PerThreadState->ClassTypeMap,
