@@ -84,12 +84,23 @@ if .%TIDY%==.No (
     goto format
 )
 
-set INC=-I%LLILCLIB%\Jit -I%LLILCLIB%\MSILReader -I%LLILCINC% -I%LLVMINC% -I%CLRINC% -I%LLILCINC%\Driver -I%LLILCINC%\Jit -I%LLILCINC%\Reader -I%LLILCINC%\Pal -I%LLILCINC%\Pal\Rt -I%LLVMBUILD%\tools\LLILC\lib\Reader -I%LLVMBUILD%\tools\LLILC\include -I%LLVMBUILD%\include 
-set DEF=-D_DEBUG -D_CRT_SECURE_NO_DEPRECATE -D_CRT_SECURE_NO_WARNINGS -D_CRT_NONSTDC_NO_DEPRECATE -D_CRT_NONSTDC_NO_WARNINGS -D_SCL_SECURE_NO_DEPRECATE -D_SCL_SECURE_NO_WARNINGS -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS-D__STDC_LIMIT_MACROS -D_GNU_SOURCE -DLLILCJit_EXPORTS -D_WINDLL -D_MBCS 
+setlocal EnableDelayedExpansion
+set INC=
+set TEMPINC=%INCLUDE%
+:loop
+    for /f "tokens=1* delims=;" %%i in ("%TEMPINC%") do (
+      set INC=!INC! -isystem "%%i"
+      set TEMPINC=%%j
+    )
+    if defined TEMPINC goto loop
+
+set FLAGS=-target x86_64-pc-win32-msvc -fms-extensions -fms-compatibility -fmsc-version=1800
+set INC=%INC% -I%LLILCLIB%\Jit -I%LLILCLIB%\MSILReader -I%LLILCINC% -I%LLVMINC% -I%CLRINC% -I%LLILCINC%\Driver -I%LLILCINC%\Jit -I%LLILCINC%\Reader -I%LLILCINC%\Pal -I%LLVMBUILD%\tools\LLILC\lib\Reader -I%LLVMBUILD%\tools\LLILC\include -I%LLVMBUILD%\include 
+set DEF=-D_DEBUG -D_CRT_SECURE_NO_DEPRECATE -D_CRT_SECURE_NO_WARNINGS -D_CRT_NONSTDC_NO_DEPRECATE -D_CRT_NONSTDC_NO_WARNINGS -D_SCL_SECURE_NO_DEPRECATE -D_SCL_SECURE_NO_WARNINGS -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS-D__STDC_LIMIT_MACROS -D_GNU_SOURCE -DLLILCJit_EXPORTS -D_WINDLL -D_MBCS -DNOMINMAX
 
 pushd %LLILCSOURCE%
 for /f %%f in ('dir /s /b *.c *.cpp') do (
-   clang-tidy %TIDYFIX% -checks=%TIDYCHECKS% -header-filter="LLILC.*(Reader)|(Jit)|(Pal)" %%f -- %DEF% %INC%
+   clang-tidy %TIDYFIX% -checks=%TIDYCHECKS% -header-filter="LLILC.*(Reader)|(Jit)|(Pal)" %%f -- %FLAGS% %DEF% %INC%
    if ERRORLEVEL 1 set RETURN=1
 )
 popd
