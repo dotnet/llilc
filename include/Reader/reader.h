@@ -602,40 +602,6 @@ struct VerificationBranchInfo {
   VerificationBranchInfo *Next;
 };
 
-/// \brief Parses a single MSIL opcode from the given buffer.
-///
-/// \param[in]      ILCursor      The buffer from which to parse an opcode.
-/// \param[out]     OperandCursor When this method returns, the address of the
-///                               returned opcode's operand (optional).
-/// \param[in, out] Increment     When this method returns, contains the sum of
-///                               its referent and the number of bytes read.
-/// \param[in]      Reader        The ReaderBase instance responsible for
-///                               handling parse errors, if any occur.
-///
-/// \returns The parsed MSIL opcode.
-ReaderBaseNS::OPCODE parseMSILOpcode(uint8_t *ILCursor, uint8_t **OperandCursor,
-                                     uint32_t *Increment, ReaderBase *Reader);
-
-/// \brief Parses a single MSIL opcode from the given buffer, reading at most
-///        (ILInputSize - CurrentOffset) bytes from the input.
-///
-/// \param[in]      ILInput       The buffer from which to parse an opcode.
-/// \param          CurrentOffset The current offset into the input buffer.
-/// \param          ILInputSize   The total size of the input buffer in bytes.
-/// \param[out]     Operand       When this method returns, the address of the
-///                               returned opcode's operand (optional).
-/// \param[in, out] NextOffset    When this method returns, contains the sum of
-///                               its referent and the number of bytes read.
-/// \param[in]      Reader        The #ReaderBase instance responsible for
-///                               handling parse errors, if any occur.
-/// \param          ReportError   Indicates whether or not to report
-///                               out-of-bounds errors through #Reader.
-ReaderBaseNS::OPCODE
-parseMSILOpcodeSafely(uint8_t *ILInput, uint32_t CurrentOffset,
-                      uint32_t ILInputSize, uint8_t **Operand,
-                      uint32_t *NextOffset, ReaderBase *Reader,
-                      bool ReportError);
-
 ReaderBaseNS::CallOpcode remapCallOpcode(ReaderBaseNS::OPCODE Opcode);
 
 struct ReadBytesForFlowGraphNodeHelperParam {

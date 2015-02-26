@@ -275,17 +275,23 @@ uint32_t getMSILInstrLength(ReaderBaseNS::OPCODE Opcode, uint8_t *Operand) {
   return Length;
 }
 
-// Currently implemented with bytecode verification. This would be
-// unnecessary if an earlier pass performed this (surely the fg build?)
-ReaderBaseNS::OPCODE parseMSILOpcode(uint8_t *ILCursor,
-                                     uint8_t **OperandCursor,
-                                     uint32_t *Increment,
-                                     ReaderBase *Reader) {
-  uint32_t BytesRead = 0;
-  uint8_t Index;
-  uint8_t *Operand;
-  ReaderBaseNS::OPCODE Opcode = ReaderBaseNS::CEE_ILLEGAL;
-
+/// \brief Parses a single MSIL opcode from the given buffer, reading at most
+///        (ILInputSize - CurrentOffset) bytes from the input.
+///
+/// \param[in]      ILInput     The buffer from which to parse an opcode.
+/// \param          ILOffset    The current offset into the input buffer.
+/// \param          ILSize      The total size of the input buffer in bytes.
+/// \param[in]      Reader      The #ReaderBase instance responsible for
+///                             handling parse errors, if any occur.
+/// \param[out]     Opcode      When this method returns, the parsed opcode.
+/// \param[out]     Operand     When this method returns, the address of the
+///                             returned opcode's operand.
+/// \param          ReportError Indicates whether or not to report parse errors.
+/// 
+/// \returns The offset into the input buffer of the next MSIL opcode.
+uint32_t parseILOpcode(uint8_t *ILInput, uint32_t ILOffset, uint32_t ILSize,
+                       ReaderBase *Reader, ReaderBaseNS::OPCODE *Opcode,
+                       uint8_t **Operand, bool ReportErrors = true) {
   // Illegal opcodes are currently marked as CEE_ILLEGAL. These should
   // cause verification errors.
 
@@ -463,93 +469,84 @@ ReaderBaseNS::OPCODE parseMSILOpcode(uint8_t *ILCursor,
       ReaderBaseNS::CEE_ILLEGAL, // ReaderBaseNS::CEE_UNUSED54
   };
 
-  Index = *(ILCursor + BytesRead);
-  BytesRead++;
+  uint32_t ILCursor = ILOffset;
+  uint32_t OperandOffset = 0;
+  uint8_t ByteCode = 0;
+  ReaderBaseNS::OPCODE TheOpcode = ReaderBaseNS::CEE_ILLEGAL;
 
-  // If this is a prefix bytecode, then use a secondary array to map
-  // from bytecode to opcode.
-  if (Index == 0xFE) {
-    Index = *(ILCursor + BytesRead);
-    BytesRead++;
-    if (Index <= 32) {
-      Opcode = PrefixedByteCodes[Index];
-    } else {
-      // VERIFY: Bytecode error
-      if (!Reader)
-        ReaderBase::fatal(CORJIT_BADCODE);
-      else
-        Reader->verGlobalError(MVER_E_UNKNOWN_OPCODE);
-    }
-  } else {
-    // Use the primary array to map from bytecode to opcode.
-    Opcode = ByteCodes[Index];
-  }
+  *Opcode = ReportErrors ? ReaderBaseNS::CEE_ILLEGAL : ReaderBaseNS::CEE_NOP;
+  *Operand = ReportErrors ? nullptr : &ILInput[ILCursor];
 
-  // VERIFY: Ensure that opcode isn't CEE_ILLEGAL.
-  if (Opcode == ReaderBaseNS::CEE_ILLEGAL) {
-    if (!Reader)
-      ReaderBase::fatal(CORJIT_BADCODE);
-    else
-      Reader->verGlobalError(MVER_E_UNKNOWN_OPCODE);
-  }
-
-  Operand = ILCursor + BytesRead;
-
-  BytesRead += getMSILInstrLength(Opcode, Operand);
-
-  if (OperandCursor != NULL) {
-    *OperandCursor = Operand; // set operand pointer
-  }
-  *Increment += BytesRead; // set the increment
-
-  return Opcode;
-}
-
-ReaderBaseNS::OPCODE
-parseMSILOpcodeSafely(uint8_t *ILInput, uint32_t CurrentOffset,
-                      uint32_t ILInputSize, uint8_t **Operand,
-                      uint32_t *NextOffset,
-                      ReaderBase *Reader, // for reporting errors
-                      bool ReportError) {
   // We need to make sure that we're not going to parse outside the buffer.
   // Note that only the opcode itself is parsed, so we can check whether
-  // any operands would exceed the buffer by checking NextOffset after
-  // we parse. This leaves two cases:
-  // 1) prefix opcode = 0xFE then actual op (no symbolic name?)
+  // any operands would exceed the buffer by checking BytesRemaining after
+  // the opcode has been parsed.
+  //
+  // This leaves two cases:
+  // 1) 2-byte opcode = 0xFE then actual op (no symbolic name?)
   // 2) switch opcode = CEE_SWITCH then 4-byte length field
-  uint8_t RawOp = *(ILInput + CurrentOffset);
 
-  if (((CurrentOffset == (ILInputSize - 1)) && (RawOp == 0xFE)) ||
-      ((CurrentOffset >= (ILInputSize - 4)) &&
-       (RawOp == ReaderBaseNS::CEE_SWITCH))) {
-    // The opcode itself crosses the bounds of the IL buffer.
-    // Don't parse it.
-    if (ReportError) {
-      if (!Reader)
-        ReaderBase::fatal(CORJIT_BADCODE);
-      else
-        Reader->verGlobalError(
-            MVER_E_METHOD_END); //"MSIL opcode crosses IL buffer boundary"
-    }
-    return ReaderBaseNS::CEE_NOP;
+  // We must have at least one byte.
+  if (ILCursor >= ILSize) {
+    goto underflow;
   }
 
-  ReaderBaseNS::OPCODE Opcode =
-      parseMSILOpcode(ILInput + CurrentOffset, Operand, NextOffset, Reader);
-
-  // If the operand field is pointing off into space, die before we use it
-  if ((*NextOffset) > ILInputSize) {
-    if (ReportError) {
-      if (!Reader)
-        ReaderBase::fatal(CORJIT_BADCODE);
-      else
-        Reader->verGlobalError(
-            MVER_E_METHOD_END); //"MSIL opcode crosses IL buffer boundary"
+  ByteCode = ILInput[ILCursor++];
+  if (ByteCode == 0xFE) {
+    // This is case (1): a 2-byte opcode. Make sure we have at least one byte
+    // remaining.
+    if (ILCursor == ILSize) {
+      goto underflow;
     }
-    return ReaderBaseNS::CEE_NOP;
+
+    ByteCode = ILInput[ILCursor++];
+    if (ByteCode <= sizeof(PrefixedByteCodes) / sizeof(PrefixedByteCodes[0])) {
+      TheOpcode = PrefixedByteCodes[ByteCode];
+    } else {
+      TheOpcode = ReaderBaseNS::CEE_ILLEGAL;
+    }
+  } else {
+    TheOpcode = ByteCodes[ByteCode];
   }
 
-  return Opcode;
+  // Ensure that the opcode isn't CEE_ILLEGAL.
+  if (TheOpcode == ReaderBaseNS::CEE_ILLEGAL) {
+    if (ReportErrors) {
+      if (Reader == nullptr) {
+        ReaderBase::fatal(CORJIT_BADCODE);
+      } else {
+        Reader->verGlobalError(MVER_E_UNKNOWN_OPCODE);
+      }
+    }
+    return ILSize;
+  }
+
+  // This is case (2): a switch opcode. Make sure we have at least four bytes
+  // remaining s.t. getMSILInstrLength can read the number of switch cases.
+  if (TheOpcode == ReaderBaseNS::CEE_SWITCH &&
+      (ILSize - ILCursor) < 4) {
+    goto underflow;
+  }
+
+  OperandOffset = ILCursor;
+  ILCursor += getMSILInstrLength(TheOpcode, &ILInput[OperandOffset]);
+  if (ILCursor > ILSize) {
+    goto underflow;
+  }
+
+  *Opcode = TheOpcode;
+  *Operand = &ILInput[OperandOffset];
+  return ILCursor;
+
+underflow:
+  if (ReportErrors) {
+    if (Reader == nullptr) {
+      ReaderBase::fatal(CORJIT_BADCODE);
+    } else {
+      Reader->verGlobalError(MVER_E_METHOD_END);
+    }
+  }
+  return ILSize;
 }
 
 #if !defined(NODEBUG) || defined(CC_PEVERIFY)
@@ -567,7 +564,7 @@ void ReaderBase::printMSIL(uint8_t *Buf, uint32_t StartOffset,
                            uint32_t EndOffset) {
   uint8_t *Operand;
   ReaderBaseNS::OPCODE Opcode;
-  uint32_t Offset = 0;
+  uint32_t Offset = StartOffset;
   uint64_t OperandSize;
   uint32_t NumBytes;
 
@@ -578,13 +575,12 @@ void ReaderBase::printMSIL(uint8_t *Buf, uint32_t StartOffset,
 
   while (Offset < NumBytes) {
     dbPrint("0x%-4x: ", StartOffset + Offset);
-    Opcode =
-        parseMSILOpcode(Buf + StartOffset + Offset, &Operand, &Offset, this);
+    Offset = parseILOpcode(Buf, Offset, NumBytes, this, &Opcode, &Operand);
     dbPrint("%-10s ", OpcodeName[Opcode]);
 
     switch (Opcode) {
     default:
-      OperandSize = (Buf + StartOffset + Offset) - Operand;
+      OperandSize = (Buf + Offset) - Operand;
       switch (OperandSize) {
       case 0:
         break;
@@ -3135,9 +3131,8 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
   // Keep going through the buffer of bytecodes until we get to the end.
   while (CurrentOffset < ILInputSize) {
     uint8_t *Operand;
-
-    Opcode = parseMSILOpcodeSafely(ILInput, CurrentOffset, ILInputSize,
-                                   &Operand, &NextOffset, this, true);
+    NextOffset = parseILOpcode(ILInput, CurrentOffset, ILInputSize, this,
+                               &Opcode, &Operand);
 
     // If we're doing verification, build up a bit vector of legal
     // branch targets.  note : the instruction following a prefix is
@@ -6628,19 +6623,17 @@ bool ReaderBase::isUnmarkedTailCall(uint8_t *ILInput, uint32_t ILInputSize,
 // NOTE: Other necessary checks are performed later
 bool ReaderBase::isUnmarkedTailCallHelper(uint8_t *ILInput,
                                           uint32_t ILInputSize,
-                                          uint32_t NextOffset,
+                                          uint32_t Offset,
                                           mdToken Token) {
   // Get the next instruction (if any)
-  uint8_t *DummyOperand;
-  uint32_t DummyNextOffset = NextOffset;
+  uint8_t *UnusedOperand;
   uint32_t NumPops = 0;
   ReaderBaseNS::OPCODE Opcode;
 
   do {
-    Opcode =
-        parseMSILOpcodeSafely(ILInput, DummyNextOffset, ILInputSize,
-                              &DummyOperand, &DummyNextOffset, this, false);
-  } while (DummyNextOffset < ILInputSize &&
+    Offset = parseILOpcode(ILInput, Offset, ILInputSize, this, &Opcode,
+                           &UnusedOperand, false);
+  } while (Offset < ILInputSize &&
            ((Opcode == ReaderBaseNS::CEE_NOP) ||
             ((Opcode == ReaderBaseNS::CEE_POP) && (++NumPops == 1))));
 
@@ -6726,19 +6719,18 @@ bool ReaderBase::checkExplicitTailCall(uint32_t ILOffset, bool AllowPop) {
   // Get the next instruction (if any)
   const uint32_t ILInputSize = MethodInfo->ILCodeSize;
   uint8_t *ILInput = MethodInfo->ILCode;
-  uint8_t *DummyOperand;
-  uint32_t DummyNextOffset = ILOffset + SizeOfCEECall;
+  uint8_t *UnusedOperand;
+  uint32_t Offset = ILOffset = SizeOfCEECall;
   ReaderBaseNS::OPCODE Opcode;
 
   do {
-    Opcode =
-        parseMSILOpcodeSafely(ILInput, DummyNextOffset, ILInputSize,
-                              &DummyOperand, &DummyNextOffset, this, false);
+    Offset = parseILOpcode(ILInput, Offset, ILInputSize, this, &Opcode,
+                           &UnusedOperand, false);
     if (AllowPop && (Opcode == ReaderBaseNS::CEE_POP)) {
       AllowPop = false;
       Opcode = ReaderBaseNS::CEE_NOP;
     }
-  } while (DummyNextOffset < ILInputSize && (Opcode == ReaderBaseNS::CEE_NOP));
+  } while (Offset < ILInputSize && (Opcode == ReaderBaseNS::CEE_NOP));
 
   if (Opcode != ReaderBaseNS::CEE_RET) {
     BADCODE(MVER_E_TAIL_RET);
@@ -6758,8 +6750,12 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
   IRNode *Arg2;
   IRNode *Arg3;
   IRNode *ResultIR;
-  uint32_t CurrentOffset = Param->CurrentOffset, NextOffset;
+  uint8_t *ILInput = NULL;
+  uint32_t ILSize;
+  uint32_t CurrentOffset = Param->CurrentOffset;
+  uint32_t NextOffset;
   uint32_t TargetOffset;
+  uint8_t *Operand;
   mdToken Token;
   ReaderAlignType AlignmentPrefix = Reader_AlignUnknown;
   bool HasVolatilePrefix = false;
@@ -6768,8 +6764,6 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
   bool HasConstrainedPrefix = false;
   mdToken ConstraintTypeRef = mdTokenNil;
   mdToken LoadFtnToken = mdTokenNil;
-  uint8_t *Operand;
-  uint8_t *ILInput = NULL;
 
   VerificationState *&TheVerificationState = Param->VState;
 
@@ -6782,6 +6776,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
   HasTailCallPrefix = false;
 
   ILInput = MethodInfo->ILCode;
+  ILSize = MethodInfo->ILCodeSize;
   NextOffset = CurrentOffset;
   LastLoadToken = mdTokenNil;
 
@@ -6793,8 +6788,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
 #endif
 
     ReaderBaseNS::OPCODE PrevOp = Opcode;
-    Opcode =
-        parseMSILOpcode(ILInput + CurrentOffset, &Operand, &NextOffset, this);
+    NextOffset = parseILOpcode(ILInput, CurrentOffset, ILSize, this, &Opcode,
+                               &Operand);
     CurrInstrOffset = CurrentOffset;
     NextInstrOffset = NextOffset;
 
