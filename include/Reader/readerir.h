@@ -460,9 +460,8 @@ public:
                           IRNode **NewIR) override {
     throw NotYetImplementedException("interlockedCmpXchg");
   };
-  bool memoryBarrier(IRNode **NewIR) override {
-    throw NotYetImplementedException("memoryBarrier");
-  };
+  bool memoryBarrier(IRNode **NewIR) override;
+
   void switchOpcode(IRNode *Opr, IRNode **NewIR) override;
 
   void throwOpcode(IRNode *Arg1, IRNode **NewIR) override;

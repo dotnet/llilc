@@ -2867,12 +2867,9 @@ IRNode *GenIR::callHelperImpl(CorInfoHelpFunc HelperID, Type *ReturnType,
                               bool NoCtor, bool CanMoveUp) {
   ASSERT(HelperID != CORINFO_HELP_UNDEF);
 
-  if (IsVolatile) {
-    throw NotYetImplementedException("Helper performs volatile operation");
-  }
-
   // TODO: We can turn some of these helper calls into intrinsics.
-
+  // When doing so, make sure the intrinsics are not optimized
+  // for the volatile operations.
   IRNode *Address = getHelperCallAddress(HelperID, NewIR);
 
   // We can't get the signature of the helper from the CLR so we generate
@@ -2914,7 +2911,15 @@ IRNode *GenIR::callHelperImpl(CorInfoHelpFunc HelperID, Type *ReturnType,
 
   // This is an intermediate result. Callers must handle
   // transitioning to a valid stack type, if appropriate.
-  return (IRNode *)LLVMBuilder->CreateCall(Target, Arguments);
+  IRNode *Call = (IRNode *)LLVMBuilder->CreateCall(Target, Arguments);
+
+  if (IsVolatile && isNonVolatileWriteHelperCall(HelperID)) {
+    // TODO: this is only needed where CLRConfig::INTERNAL_JitLockWrite is set
+    // For now, conservatively we emit barrier regardless.
+    memoryBarrier(NewIR);
+  }
+
+  return Call;
 }
 
 IRNode *GenIR::getHelperCallAddress(CorInfoHelpFunc HelperId, IRNode **NewIR) {
@@ -3550,6 +3555,16 @@ void GenIR::dup(IRNode *Opr, IRNode **Result1, IRNode **Result2,
                 IRNode **NewIR) {
   *Result1 = Opr;
   *Result2 = Opr;
+}
+
+bool GenIR::memoryBarrier(IRNode **NewIR) {
+  // TODO: Here we emit mfence which is stronger than sfence
+  // that CLR needs.
+  // We could improve this further by using
+  // lock or byte ptr [rsp], 0
+  // which is faster than sfence.
+  LLVMBuilder->CreateFence(SequentiallyConsistent);
+  return true;
 }
 
 void GenIR::switchOpcode(IRNode *Opr, IRNode **NewIR) {
