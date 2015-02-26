@@ -98,13 +98,13 @@ enum BoolBranchOpcode {
   BrFalse = 0, ///< Branches to the target offset if its argument is false. The
                ///< target offset falls within the range [-2^31, 2^31).
 
-  BrFalseS,    ///< As BrFalse, but the target offset falls within the range
+  BrFalseS,    ///< As #BrFalse, but the target offset falls within the range
                ///< [-2^7, 2^7).
 
   BrTrue,      ///< Branches to the target offset it its argument is true. The
                ///< target offset falls withing the range [-2^31, 2^31).
 
-  BrTrueS,     ///< As BrTrue, but the target offset falls within the range
+  BrTrueS,     ///< As #BrTrue, but the target offset falls within the range
                ///< [-2^7, 2^7).
 
   LastBoolBranchOpcode
@@ -169,56 +169,56 @@ enum CmpOpcode {
 enum CondBranchOpcode {
   Beq = 0, ///< Branches to the target offset if its arguments are equal.
 
-  BeqS,    ///< As Beq, but with a short target offset.
+  BeqS,    ///< As #Beq, but with a short target offset.
 
   Bge,     ///< Branches to the target offset if its first argument is greater
            ///< than or equal to its second argument.
 
-  BgeS,    ///< As Bge, but with a short target offset.
+  BgeS,    ///< As #Bge, but with a short target offset.
 
   BgeUn,   ///< Branches to the target offset if its first argument is greater
            ///< than or equal to its second argment, treating both arguments as
            ///< unsigned integers.
 
-  BgeUnS,  ///< As BgeUn, but with a short target offset.
+  BgeUnS,  ///< As #BgeUn, but with a short target offset.
 
   Bgt,     ///< Branches to the target offset if its first argument is greater
            ///< than its second argument.
 
-  BgtS,    ///< As Bgt, but with a short target offset.
+  BgtS,    ///< As #Bgt, but with a short target offset.
 
   BgtUn,   ///< Branches to the target offset if its first argument is greater
            ///< than its second argment, treating both arguments as unsigned
            ///< integers.
 
-  BgtUnS,  ///< As BgtUn, but with a short target offset.
+  BgtUnS,  ///< As #BgtUn, but with a short target offset.
 
   Ble,     ///< Branches to the target offset if its first argument is less than
            ///< or equal to its second argument.
 
-  BleS,    ///< As Ble, but with a short target offset.
+  BleS,    ///< As #Ble, but with a short target offset.
 
   BleUn,   ///< Branches to the target offset if its first argument is less than
            ///< or equal to its second argment, treating both arguments as
            ///< unsigned integers.
 
-  BleUnS,  ///< As BleUn, but with a short target offset.
+  BleUnS,  ///< As #BleUn, but with a short target offset.
 
   Blt,     ///< Branches to the target offset if its first argument is less than
            ///< its second argument.
 
-  BltS,    ///< As Blt, but with a short target offset.
+  BltS,    ///< As #Blt, but with a short target offset.
 
   BltUn,   ///< Branches to the target offset if its first argument is less than
            ///< its second argment, treating both arguments as unsigned
            ///< integers.
 
-  BltUnS,  ///< As BltUn, but with a short target offset.
+  BltUnS,  ///< As #BltUn, but with a short target offset.
 
   BneUn,   ///< Branches to the target offset if its arguments are not equal,
            ///< treating both arguments as unsigned integers.
 
-  BneUnS,  ///< As BneUn, but with a short target offset.
+  BneUnS,  ///< As #BneUn, but with a short target offset.
 
   LastCondBranchOpcode
 };
@@ -259,56 +259,56 @@ enum ConvOpcode {
               ///< integer.
 
 
-  ConvOvfI1, ///< As ConvI1, but throws an exception if the result is out of
+  ConvOvfI1, ///< As #ConvI1, but throws an exception if the result is out of
              ///< range.
 
-  ConvOvfI2, ///< As ConvI2, but throws an exception if the result is out of
+  ConvOvfI2, ///< As #ConvI2, but throws an exception if the result is out of
              ///< range.
 
-  ConvOvfI4, ///< As ConvI4, but throws an exception if the result is out of
+  ConvOvfI4, ///< As #ConvI4, but throws an exception if the result is out of
              ///< range.
 
-  ConvOnvI8, ///< As ConvI8, but throws an exception if the result is out of
+  ConvOnvI8, ///< As #ConvI8, but throws an exception if the result is out of
              ///< range.
 
-  ConvOvfU1, ///< As ConvU1, but throws an exception if the result is out of
+  ConvOvfU1, ///< As #ConvU1, but throws an exception if the result is out of
              ///< range.
 
-  ConvOvfU2, ///< As ConvU2, but throws an exception if the result is out of
+  ConvOvfU2, ///< As #ConvU2, but throws an exception if the result is out of
              ///< range.
 
-  ConvOvfU4, ///< As ConvU4, but throws an exception if the result is out of
+  ConvOvfU4, ///< As #ConvU4, but throws an exception if the result is out of
              ///< range.
 
-  ConvOvfU8, ///< As ConvU8, but throws an exception if the result is out of
+  ConvOvfU8, ///< As #ConvU8, but throws an exception if the result is out of
              ///< range.
 
-  ConvOvfI, ///< As ConvI, but throws an exception if the result is out of
+  ConvOvfI, ///< As #ConvI, but throws an exception if the result is out of
             ///< range.
 
-  ConvOvfU, ///< As ConvU, but throws an exception if the result is out of
+  ConvOvfU, ///< As #ConvU, but throws an exception if the result is out of
             ///< range.
 
 
-  ConvOvfI1Un, ///< As ConvOvfI1, but treats its input as an unsigned integer.
+  ConvOvfI1Un, ///< As #ConvOvfI1, but treats its input as an unsigned integer.
 
-  ConvOvfI2Un, ///< As ConvOvfI2, but treats its input as an unsigned integer.
+  ConvOvfI2Un, ///< As #ConvOvfI2, but treats its input as an unsigned integer.
 
-  ConvOvfI4Un, ///< As ConvOvfI4, but treats its input as an unsigned integer.
+  ConvOvfI4Un, ///< As #ConvOvfI4, but treats its input as an unsigned integer.
 
-  ConvOvfI8Un, ///< As ConvOvfI8, but treats its input as an unsigned integer.
+  ConvOvfI8Un, ///< As #ConvOvfI8, but treats its input as an unsigned integer.
 
-  ConvOvfU1Un, ///< As ConvOvfU1, but treats its input as an unsigned integer.
+  ConvOvfU1Un, ///< As #ConvOvfU1, but treats its input as an unsigned integer.
 
-  ConvOvfU2Un, ///< As ConvOvfU2, but treats its input as an unsigned integer.
+  ConvOvfU2Un, ///< As #ConvOvfU2, but treats its input as an unsigned integer.
 
-  ConvOvfU4Un, ///< As ConvOvfU4, but treats its input as an unsigned integer.
+  ConvOvfU4Un, ///< As #ConvOvfU4, but treats its input as an unsigned integer.
 
-  ConvOvfU8Un, ///< As ConvOvfU8, but treats its input as an unsigned integer.
+  ConvOvfU8Un, ///< As #ConvOvfU8, but treats its input as an unsigned integer.
 
-  ConvOvfIUn,  ///< As ConvOvfI, but treats its input as an unsigned integer.
+  ConvOvfIUn,  ///< As #ConvOvfI, but treats its input as an unsigned integer.
 
-  ConvOvfUUn,  ///< As ConvOvfIU, but treats its input as an unsigned integer.
+  ConvOvfUUn,  ///< As #ConvOvfIU, but treats its input as an unsigned integer.
 
   ConvRUn,     ///< Converts its argument to a floating-point number in the
                ///< runtime's internal representation, treating its input as an
