@@ -419,16 +419,18 @@ function Global:GetCLRTestAssets
 {
   $CoreCLRTestAssets = CoreCLRTestAssets
   $CoreCLRTestAssetsExists = Test-Path $CoreCLRTestAssets
+  pushd .
   if (!$CoreCLRTestAssetsExists) {
-    pushd .
     New-Item $CoreCLRTestAssets -itemtype Directory  | Out-Null
     cd $CoreCLRTestAssets
     git clone git://github.com/dotnet/coreclr.git
-    popd
   }
   else {
-    Write-Host("CoreCLR Test Assets already downloaded.")
+    Write-Host("Updating CoreCLR Test Assets to latest...")
+    cd $CoreCLRTestAssets\coreclr
+    git pull
   }
+  popd
 }
 
 # -------------------------------------------------------------------------
