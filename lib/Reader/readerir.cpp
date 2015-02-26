@@ -42,6 +42,8 @@ GenStack::GenStack(uint32_t MaxStack, ReaderBase *Rdr) {
 }
 
 void GenStack::push(IRNode *NewVal, IRNode **NewIR) {
+  ASSERT(NewVal != NULL);
+  ASSERT(GenIR::isValidStackType(NewVal));
 
   // Note that in this client, due to inlining and jmp, MaxStack
   // is not a hard and fast value we can count on.  It is possible
@@ -58,11 +60,7 @@ void GenStack::push(IRNode *NewVal, IRNode **NewIR) {
     Max = NewSize - 1;
   }
 
-  IRNode *Result = NewVal;
-
-  ASSERT(GenIR::isValidStackType(Result));
-
-  Stack[++Top] = Result;
+  Stack[++Top] = NewVal;
 }
 
 IRNode *GenStack::pop() {
@@ -81,57 +79,55 @@ void GenStack::assertEmpty() { ASSERT(empty()); }
 
 uint32_t GenStack::depth() { return (uint32_t)(Top + 1); }
 
-IRNode *GenStack::getIterator(ReaderStackIterator **Iterator) {
-  *((size_t *)Iterator) = Top;
+IRNode *GenStack::getIterator(ReaderStackIterator& Iterator) {
+  Iterator = Top;
   if (empty())
     return NULL;
   else
-    return (IRNode *)Stack[Top];
+    return Stack[Top];
 }
 
-IRNode *GenStack::iteratorGetNext(ReaderStackIterator **Iterator) {
-  size_t *I = (size_t *)Iterator;
-  if (*I == 0)
+IRNode *GenStack::iteratorGetNext(ReaderStackIterator& Iterator) {
+  if (Iterator == 0)
     return NULL;
-  return Stack[--(*I)];
+  return Stack[--Iterator];
 }
 
-void GenStack::iteratorReplace(ReaderStackIterator **Iterator, IRNode *Node) {
-  Stack[*((size_t *)Iterator)] = Node;
+void GenStack::iteratorReplace(ReaderStackIterator& Iterator, IRNode *Node) {
+  Stack[Iterator] = Node;
 }
 
-IRNode *GenStack::getReverseIterator(ReaderStackIterator **Iterator) {
+IRNode *GenStack::getReverseIterator(ReaderStackIterator& Iterator) {
   return getReverseIteratorFromDepth(Iterator, depth());
 }
 
-IRNode *GenStack::getReverseIteratorFromDepth(ReaderStackIterator **Iterator,
-                                              uint32_t Depth) {
+IRNode *GenStack::getReverseIteratorFromDepth(ReaderStackIterator& Iterator,
+  uint32_t Depth) {
   size_t Idx = (size_t)(Top - Depth + 1);
   ASSERT(Idx >= 0);
-  *((size_t *)Iterator) = Idx;
+  Iterator = Idx;
   if (empty())
     return NULL;
   else
-    return (IRNode *)Stack[Idx];
+    return Stack[Idx];
 }
 
-IRNode *GenStack::reverseIteratorGetNext(ReaderStackIterator **Iterator) {
-  size_t *I = (size_t *)Iterator;
-  if (*I == Top)
+IRNode *GenStack::reverseIteratorGetNext(ReaderStackIterator& Iterator) {
+  if (Iterator == Top)
     return NULL;
-  return Stack[++(*I)];
+  return Stack[++Iterator];
 }
 
 #if !defined(NODEBUG)
 void GenStack::print() {
   dbgs() << "{GenStack dump, Top first, depth = " << depth() << '\n';
-  ReaderStackIterator *Iterator;
-  IRNode *N = getIterator(&Iterator);
+  ReaderStackIterator Iterator;
+  IRNode *N = getIterator(Iterator);
   int32_t I = 0;
   while (N) {
     dbgs() << "[" << I++ << "]: ";
     Reader->dbPrintIRNode(N);
-    N = iteratorGetNext(&Iterator);
+    N = iteratorGetNext(Iterator);
   }
   dbgs() << "}\n";
 }
@@ -141,7 +137,7 @@ ReaderStack *GenStack::copy() {
   GenStack *Copy;
 
   void *Buffer = Reader->getTempMemory(sizeof(GenStack));
-  Copy = new (Buffer) GenStack(Max + 1, Reader);
+  Copy = new (Buffer)GenStack(Max + 1, Reader);
   Copy->Top = Top;
   for (int32_t I = 0; I <= Top; I++)
     Copy->Stack[I] = Stack[I];
@@ -151,7 +147,7 @@ ReaderStack *GenStack::copy() {
 ReaderStack *GenIR::createStack(uint32_t MaxStack, ReaderBase *Reader) {
   void *Buffer = Reader->getTempMemory(sizeof(GenStack));
   // extra 16 should reduce frequency of reallocation when inlining / jmp
-  return new (Buffer) GenStack(MaxStack + 16, Reader);
+  return new (Buffer)GenStack(MaxStack + 16, Reader);
 }
 
 #pragma endregion
@@ -308,6 +304,7 @@ void rgnSetCatchClassToken(EHRegion *CatchRegion, mdToken Token) { return; }
 //===----------------------------------------------------------------------===//
 
 // Get memory that will be freed at end of reader
+
 void *GenIR::getTempMemory(size_t NumBytes) { return calloc(1, NumBytes); }
 
 // Get memory that will persist after the reader
@@ -4309,8 +4306,8 @@ void GenIR::maintainOperandStack(IRNode **Opr1, IRNode **Opr2,
         CreatePHIs = true;
       }
 
-      ReaderStackIterator *Iterator;
-      IRNode *Current = ReaderOperandStack->getReverseIterator(&Iterator);
+      ReaderStackIterator Iterator;
+      IRNode *Current = ReaderOperandStack->getReverseIterator(Iterator);
       Instruction *CurrentInst = SuccessorBlock->begin();
       PHINode *Phi = nullptr;
       while (Current != nullptr) {
@@ -4336,7 +4333,7 @@ void GenIR::maintainOperandStack(IRNode **Opr1, IRNode **Opr2,
         }
         Phi->addIncoming(CurrentValue, (BasicBlock *)CurrentBlock);
         SuccessorStack->push((IRNode *)Phi, NewIR);
-        Current = ReaderOperandStack->reverseIteratorGetNext(&Iterator);
+        Current = ReaderOperandStack->reverseIteratorGetNext(Iterator);
       }
 
       // The number if PHI instructions should match the number of values on the

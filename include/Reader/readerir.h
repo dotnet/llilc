@@ -184,13 +184,13 @@ public:
   uint32_t depth() override;
 
   // For iteration
-  IRNode *getIterator(ReaderStackIterator **) override;
-  IRNode *iteratorGetNext(ReaderStackIterator **) override;
-  void iteratorReplace(ReaderStackIterator **, IRNode *) override;
-  IRNode *getReverseIterator(ReaderStackIterator **) override;
-  IRNode *getReverseIteratorFromDepth(ReaderStackIterator **,
-                                      uint32_t Depth) override;
-  IRNode *reverseIteratorGetNext(ReaderStackIterator **) override;
+  IRNode *getIterator(ReaderStackIterator& Iterator) override;
+  IRNode *iteratorGetNext(ReaderStackIterator& Iterator) override;
+  void iteratorReplace(ReaderStackIterator& Iterator, IRNode *) override;
+  IRNode *getReverseIterator(ReaderStackIterator& Iterator) override;
+  IRNode *getReverseIteratorFromDepth(ReaderStackIterator& Iterator,
+    uint32_t Depth) override;
+  IRNode *reverseIteratorGetNext(ReaderStackIterator& Iterator) override;
 
 #if !defined(NODEBUG)
   void print() override;
@@ -522,8 +522,6 @@ public:
                                   bool *IsMultiByteAssign) override {
     throw NotYetImplementedException("assignToSuccessorStackNode");
   };
-  //    ReaderStackNode* CopyStackList(ReaderStackNode* stack) =
-  //    0;
   bool typesCompatible(IRNode *Src1, IRNode *Src2) override {
     throw NotYetImplementedException("typesCompatible");
   };
