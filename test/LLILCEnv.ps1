@@ -101,10 +101,6 @@ function ValidatePreConditions
 
   IsOnPath -executable "grep.exe" -software "GnuWin32"
 
-  # Validate Diff Tool
-  
-  IsOnPath -executable "sgdm.exe" -software "DiffMerge"
-
   # Validate LLVM
 
   $LLVMSourceExists = Test-Path Env:\LLVMSOURCE
@@ -819,6 +815,13 @@ function Global:CheckDiff([bool]$Create = $false, [bool]$UseDiffTool = $True, [s
   $CoreCLRTestTargetBinaries = CoreCLRTestTargetBinaries -Arch $Arch -Build $Build
 
   Write-Host ("Checking diff...")
+
+  if ($UseDiffTool) {
+    # Validate Diff Tool
+  
+    IsOnPath -executable "sgdm.exe" -software "DiffMerge"
+  }
+
   $DiffExists = Test-Path $LLILCTestResult\Diff
   if ($Create) {
     if ($DiffExists) {
