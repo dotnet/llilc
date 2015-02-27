@@ -3343,6 +3343,8 @@ IRNode *GenIR::convert(Type *Ty, Value *Node, bool SourceIsSigned) {
     Result = LLVMBuilder->CreateIntCast(Node, Ty, SourceIsSigned);
   } else if (SourceTy->isFloatingPointTy() && Ty->isFloatingPointTy()) {
     Result = LLVMBuilder->CreateFPCast(Node, Ty);
+  } else if (SourceTy->isPointerTy() && Ty->isIntegerTy()) {
+    Result = LLVMBuilder->CreatePtrToInt(Node, Ty);
   } else {
     ASSERT(UNREACHED);
   }
