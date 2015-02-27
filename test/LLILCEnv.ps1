@@ -330,7 +330,7 @@ function SetVCVars
 #
 # -------------------------------------------------------------------------
 
-function IsOnPath([string]$executable, [string]$software)
+function Global:IsOnPath([string]$executable, [string]$software)
 {
   if (-Not (Get-Command $executable -ErrorAction SilentlyContinue)) {
     throw  "!!! $executable not on path. Check the installation of $software."
@@ -376,6 +376,20 @@ function Global:DownloadNuGet
 
 # -------------------------------------------------------------------------
 #
+# Clear NuGet Cache
+# 
+# -------------------------------------------------------------------------
+
+function Global:ClearNuGetCache
+{
+  $NuGetCacheExists = Test-Path $Env:LOCALAPPDATA\NuGet\Cache
+  if ($NuGetCacheExists) {
+    Remove-Item $Env:LOCALAPPDATA\NuGet\Cache\*
+  }
+}
+
+# -------------------------------------------------------------------------
+#
 # Perform a CoreCLR package Nuget.
 # 
 # -------------------------------------------------------------------------
@@ -396,6 +410,8 @@ function Global:NuGetCLR
 
   Write-OutPut("Downloading NuGet.exe...")
   DownloadNuGet
+  Write-OutPut("Clear NuGet Cache...")
+  ClearNuGetCache
   copy $LLILCSource\utils\NuGet.config $CoreCLRRuntime
   copy $LLILCSource\utils\packages.config $CoreCLRRuntime
   pushd .
