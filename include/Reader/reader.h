@@ -2147,57 +2147,6 @@ public:
 #undef CHECK_VALID
 };
 
-// --------------------------------------------------------------
-// Functions for reading typed values from the bytecode.
-// --------------------------------------------------------------
-
-#ifdef BIGENDIAN
-// For big endian machines, flip the bits around.
-#define IL_LOADTYPE(ILCursor__, Type)                                          \
-  {                                                                            \
-    Type RetVal;                                                               \
-    for (uint32_t I = 0; I < sizeof(Type); ++I)                                \
-      ((uint8_t *)&RetVal)[I] =                                                \
-          ((uint8_t *)(ILCursor__))[sizeof(Type) - I - 1];                     \
-    return RetVal;                                                             \
-  }
-#else
-#define IL_LOADTYPE(ILCursor__, Type)                                          \
-  {                                                                            \
-    Type RetVal = *(UNALIGNED Type *)ILCursor__;                               \
-    return RetVal;                                                             \
-  }
-#endif
-
-inline int8_t readInt8(uint8_t *ILCursor) { IL_LOADTYPE(ILCursor, int8_t); }
-
-inline uint8_t readUInt8(uint8_t *ILCursor) { IL_LOADTYPE(ILCursor, uint8_t); }
-
-inline int16_t readInt16(uint8_t *ILCursor) { IL_LOADTYPE(ILCursor, int16_t); }
-
-inline uint16_t readUInt16(uint8_t *ILCursor) {
-  IL_LOADTYPE(ILCursor, uint16_t);
-}
-
-inline int32_t readInt32(uint8_t *ILCursor) { IL_LOADTYPE(ILCursor, int32_t); }
-
-inline uint32_t readUInt32(uint8_t *ILCursor) {
-  IL_LOADTYPE(ILCursor, uint32_t);
-}
-
-inline int64_t readInt64(uint8_t *ILCursor) { IL_LOADTYPE(ILCursor, int64_t); }
-
-inline mdToken readToken(uint8_t *ILCursor) { IL_LOADTYPE(ILCursor, mdToken); }
-
-inline float readF32(uint8_t *ILCursor) { IL_LOADTYPE(ILCursor, float); }
-
-inline double readF64(uint8_t *ILCursor) { IL_LOADTYPE(ILCursor, double); }
-
-inline void *readPtr(uint8_t *ILCursor) {
-  typedef void *PtrType;
-  IL_LOADTYPE(ILCursor, PtrType);
-}
-
 class NotYetImplementedException {
 private:
   const char *TheReason;

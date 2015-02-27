@@ -35,11 +35,6 @@ extern int _cdecl dbPrint(const char *Form, ...);
 //   private functions and data used by common reader.
 // --------------------------------------------------------------
 
-#define MSIL_READ_8_BYTES 8
-#define MSIL_READ_4_BYTES 4
-#define MSIL_READ_2_BYTES 2
-#define MSIL_READ_1_BYTE 1
-
 #define BADCODE(Message) (ReaderBase::verGlobalError(Message))
 
 // Max elements per entry in FlowGraphNodeListArray.
@@ -93,23 +88,60 @@ ReaderBaseNS::CallOpcode remapCallOpcode(ReaderBaseNS::OPCODE Op) {
   return CallOp;
 }
 
-// readNumberOfSwitchCases
-//
-// This higher level read method will read the number of switch cases from an
-// operand and then increment the buffer to the first case.
+/// \brief Reads a value of type #Type from the given buffer.
+///
+/// \param[in]  ILCursor The buffer to read from.
+/// \param[out] Value    When this function returns, the decoded value.
+///
+/// \returns The number of bytes read from the buffer.
+template<typename Type>
+size_t readValue(const uint8_t *ILCursor, Type *Value) {
+  // MSIL contains little-endian values; swap the bytes around when compiled
+  // for big-endian platforms.
+#if defined(BIGENDIAN)
+  for (uint32_t I = 0; I < sizeof(Type); ++I)
+    ((uint8_t *)Value)[I] = ILCursor[sizeof(Type) - I - 1];
+#else
+  *Value = *(UNALIGNED const Type *)ILCursor;
+#endif
+  return sizeof(Type);
+}
+
+/// \brief Reads a value of type #Type from the given buffer.
+///
+/// \param[in]  ILCursor The buffer to read from.
+///
+/// \returns The decoded value.
+template<typename Type>
+Type readValue(const uint8_t *ILCursor) {
+  Type Value;
+  readValue(ILCursor, &Value);
+  return Value;
+}
+
+/// This higher level read method will read the number of switch cases from an
+/// operand and then increment the buffer to the first case.
+///
+/// \param[in, out] The buffer to read from. After this function returns,
+///                 holds the address of the first switch case.
+///
+/// \returns The decoded number of switch cases.
 static inline uint32_t readNumberOfSwitchCases(uint8_t **ILCursor) {
-  uint32_t Val = readUInt32(*ILCursor);
-  (*ILCursor) += MSIL_READ_4_BYTES;
+  uint32_t Val;
+  *ILCursor += readValue(*ILCursor, &Val);
   return Val;
 }
 
-// ReadSwitchCase
-//
-// This higher level read method will read a switch case from an operand
-//  and then increment the buffer to the next case
+/// This higher level read method will read a switch case from an operand
+/// and then increment the buffer to the next case.
+///
+/// \param[in, out] The buffer to read from. After this function returns,
+///                 holds the address of the next switch case.
+///
+/// \returns The decoded switch case.
 static inline int readSwitchCase(uint8_t **ILCursor) {
-  __int32 Val = readInt32(*ILCursor);
-  (*ILCursor) += MSIL_READ_4_BYTES;
+  int32_t Val;
+  *ILCursor += readValue(*ILCursor, &Val);
   return Val;
 }
 
@@ -268,7 +300,7 @@ uint32_t getMSILInstrLength(ReaderBaseNS::OPCODE Opcode, uint8_t *Operand) {
     // Length of a switch is the 4 bytes + 4 bytes * the value of the first 4
     // bytes
     uint32_t NumCases = readNumberOfSwitchCases(&Operand);
-    Length = MSIL_READ_4_BYTES + (NumCases * MSIL_READ_4_BYTES);
+    Length = sizeof(uint32_t) + (NumCases * sizeof(uint32_t));
   } else {
     Length = OperandSizeMap[Opcode - ReaderBaseNS::CEE_NOP];
   }
@@ -585,23 +617,23 @@ void ReaderBase::printMSIL(uint8_t *Buf, uint32_t StartOffset,
       case 0:
         break;
       case 1:
-        dbPrint("0x%x", readInt8(Operand));
+        dbPrint("0x%x", readValue<int8_t>(Operand));
         break;
       case 2:
-        dbPrint("0x%x", readInt16(Operand));
+        dbPrint("0x%x", readValue<int16_t>(Operand));
         break;
       case 4:
         if (Opcode == ReaderBaseNS::CEE_LDC_R4) {
-          dbPrint("%f", readF32(Operand));
+          dbPrint("%f", readValue<float>(Operand));
         } else {
-          dbPrint("0x%x", readInt32(Operand));
+          dbPrint("0x%x", readValue<int32_t>(Operand));
         }
         break;
       case 8:
         if (Opcode == ReaderBaseNS::CEE_LDC_R8) {
-          dbPrint("%f", readF64(Operand));
+          dbPrint("%f", readValue<double>(Operand));
         } else {
-          dbPrint("0x%I64x", readInt64(Operand));
+          dbPrint("0x%I64x", readValue<int64_t>(Operand));
         }
         break;
       }
@@ -2946,7 +2978,7 @@ void ReaderBase::getMSILInstrStackDelta(ReaderBaseNS::OPCODE Opcode,
     bool HasThis, ReturnsVoid;
     mdToken Token;
 
-    Token = readToken(Operand);
+    Token = readValue<mdToken>(Operand);
 
     if (verIsCallToken(Token) &&
         // if calli - verifier is going to reject this anyway and the
@@ -3187,9 +3219,9 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
       }
 
       if (IsShortInstr) {
-        BranchOffset = readInt8(Operand);
+        BranchOffset = readValue<int8_t>(Operand);
       } else {
-        BranchOffset = readInt32(Operand);
+        BranchOffset = readValue<int32_t>(Operand);
       }
 
       // Make the label node
@@ -3361,7 +3393,7 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
       // the jmp instruction in the main reader loop.
       {
         bool IsRecursiveTail = false;
-        mdToken Token = readToken(Operand);
+        mdToken Token = readValue<mdToken>(Operand);
         if (JitInfo->isValidToken(getCurrentModuleHandle(), Token)) {
           IsRecursiveTail = fgOptRecurse(Token);
         }
@@ -3397,7 +3429,7 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
       // recursive tail call left nothing on the stack should not be a
       // problem.
       {
-        mdToken Token = readToken(Operand);
+        mdToken Token = readValue<mdToken>(Operand);
 
         bool IsExplicitTailCall = IsTailCall;
         bool IsRecursiveTailCall = false;
@@ -3455,7 +3487,7 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
       break;
 
     case ReaderBaseNS::CEE_CONSTRAINED:
-      TokenConstrained = readToken(Operand);
+      TokenConstrained = readValue<mdToken>(Operand);
       PreviousWasPrefix = true;
       break;
     case ReaderBaseNS::CEE_TAILCALL:
@@ -6856,7 +6888,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       break;
 
     case ReaderBaseNS::CEE_BOX:
-      Token = readToken(Operand);
+      Token = readValue<mdToken>(Operand);
       resolveToken(Token, CORINFO_TOKENKIND_Box, &ResolvedToken);
       verifyBox(TheVerificationState, &ResolvedToken);
       BREAK_ON_VERIFY_ONLY;
@@ -6880,7 +6912,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
     case ReaderBaseNS::CEE_BLT:
     case ReaderBaseNS::CEE_BLT_UN:
     case ReaderBaseNS::CEE_BNE_UN:
-      TargetOffset = NextOffset + readInt32(Operand);
+      TargetOffset = NextOffset + readValue<int32_t>(Operand);
       goto GEN_COND_BRANCH;
 
     case ReaderBaseNS::CEE_BEQ_S:
@@ -6893,7 +6925,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
     case ReaderBaseNS::CEE_BLT_S:
     case ReaderBaseNS::CEE_BLT_UN_S:
     case ReaderBaseNS::CEE_BNE_UN_S:
-      TargetOffset = NextOffset + readInt8(Operand);
+      TargetOffset = NextOffset + readValue<int8_t>(Operand);
       goto GEN_COND_BRANCH;
 
     GEN_COND_BRANCH:
@@ -6918,12 +6950,12 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
 
     case ReaderBaseNS::CEE_BRTRUE:
     case ReaderBaseNS::CEE_BRFALSE:
-      TargetOffset = NextOffset + readInt32(Operand);
+      TargetOffset = NextOffset + readValue<int32_t>(Operand);
       goto GEN_BOOL_BRANCH;
 
     case ReaderBaseNS::CEE_BRTRUE_S:
     case ReaderBaseNS::CEE_BRFALSE_S:
-      TargetOffset = NextOffset + readInt8(Operand);
+      TargetOffset = NextOffset + readValue<int8_t>(Operand);
       goto GEN_BOOL_BRANCH;
 
     GEN_BOOL_BRANCH:
@@ -6942,11 +6974,11 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       break;
 
     case ReaderBaseNS::CEE_BR:
-      TargetOffset = NextOffset + readInt32(Operand);
+      TargetOffset = NextOffset + readValue<int32_t>(Operand);
       goto GEN_BRANCH;
 
     case ReaderBaseNS::CEE_BR_S:
-      TargetOffset = NextOffset + readInt8(Operand);
+      TargetOffset = NextOffset + readValue<int8_t>(Operand);
       goto GEN_BRANCH;
 
     GEN_BRANCH:
@@ -6975,7 +7007,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
     case ReaderBaseNS::CEE_CALLI:
     case ReaderBaseNS::CEE_CALLVIRT: {
       bool IsUnmarkedTailCall = false;
-      Token = readToken(Operand);
+      Token = readValue<mdToken>(Operand);
 
       verifyCall(TheVerificationState, Opcode, HasTailCallPrefix,
                  HasReadOnlyPrefix, HasConstrainedPrefix, ThisPtrModified,
@@ -7013,7 +7045,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
     } break;
 
     case ReaderBaseNS::CEE_CASTCLASS:
-      Token = readToken(Operand);
+      Token = readValue<mdToken>(Operand);
       resolveToken(Token, CORINFO_TOKENKIND_Casting, &ResolvedToken);
       verifyCastClass(TheVerificationState, &ResolvedToken);
       BREAK_ON_VERIFY_ONLY;
@@ -7026,7 +7058,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       break;
 
     case ReaderBaseNS::CEE_ISINST:
-      Token = readToken(Operand);
+      Token = readValue<mdToken>(Operand);
       resolveToken(Token, CORINFO_TOKENKIND_Casting, &ResolvedToken);
       verifyIsInst(TheVerificationState, &ResolvedToken);
       BREAK_ON_VERIFY_ONLY;
@@ -7120,7 +7152,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       break;
 
     case ReaderBaseNS::CEE_CPOBJ:
-      Token = readToken(Operand);
+      Token = readValue<mdToken>(Operand);
       resolveToken(Token, CORINFO_TOKENKIND_Class, &ResolvedToken);
       verifyCpObj(TheVerificationState, &ResolvedToken);
       BREAK_ON_VERIFY_ONLY;
@@ -7179,7 +7211,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       break;
 
     case ReaderBaseNS::CEE_INITOBJ:
-      Token = readToken(Operand);
+      Token = readValue<mdToken>(Operand);
       resolveToken(Token, CORINFO_TOKENKIND_Class, &ResolvedToken);
       verifyInitObj(TheVerificationState, &ResolvedToken);
       BREAK_ON_VERIFY_ONLY;
@@ -7219,7 +7251,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       Param->HasFallThrough = false;
       BREAK_ON_VERIFY_ONLY;
 
-      Token = readToken(Operand);
+      Token = readValue<mdToken>(Operand);
       resolveToken(Token, CORINFO_TOKENKIND_Method, &ResolvedToken);
 
       // The stack must be empty when jmp is reached. If it is not
@@ -7262,10 +7294,10 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
     } break;
 
     case ReaderBaseNS::CEE_LDARG:
-      MappedValue = readUInt16(Operand);
+      MappedValue = readValue<uint16_t>(Operand);
       goto LOAD_ARG;
     case ReaderBaseNS::CEE_LDARG_S:
-      MappedValue = readUInt8(Operand);
+      MappedValue = readValue<uint8_t>(Operand);
       goto LOAD_ARG;
     case ReaderBaseNS::CEE_LDARG_0:
     case ReaderBaseNS::CEE_LDARG_1:
@@ -7279,10 +7311,10 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       break;
 
     case ReaderBaseNS::CEE_LDLOC:
-      MappedValue = readUInt16(Operand);
+      MappedValue = readValue<uint16_t>(Operand);
       goto LOAD_LOCAL;
     case ReaderBaseNS::CEE_LDLOC_S:
-      MappedValue = readUInt8(Operand);
+      MappedValue = readValue<uint8_t>(Operand);
       goto LOAD_LOCAL;
     case ReaderBaseNS::CEE_LDLOC_0:
     case ReaderBaseNS::CEE_LDLOC_1:
@@ -7298,7 +7330,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
     case ReaderBaseNS::CEE_LDARGA: {
       uint16_t ArgNumber;
 
-      ArgNumber = readUInt16(Operand);
+      ArgNumber = readValue<uint16_t>(Operand);
       verifyLdarg(TheVerificationState, ArgNumber, Opcode);
       verifyLoadAddr(TheVerificationState);
       BREAK_ON_VERIFY_ONLY;
@@ -7310,7 +7342,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
     case ReaderBaseNS::CEE_LDARGA_S: {
       uint8_t ArgNumber;
 
-      ArgNumber = readUInt8(Operand);
+      ArgNumber = readValue<uint8_t>(Operand);
       verifyLdarg(TheVerificationState, ArgNumber, Opcode);
       verifyLoadAddr(TheVerificationState);
       BREAK_ON_VERIFY_ONLY;
@@ -7322,7 +7354,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
     case ReaderBaseNS::CEE_LDLOCA: {
       uint16_t ArgNumber;
 
-      ArgNumber = readUInt16(Operand);
+      ArgNumber = readValue<uint16_t>(Operand);
       verifyLdloc(TheVerificationState, ArgNumber, Opcode);
       verifyLoadAddr(TheVerificationState);
       BREAK_ON_VERIFY_ONLY;
@@ -7334,7 +7366,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
     case ReaderBaseNS::CEE_LDLOCA_S: {
       uint8_t ArgNumber;
 
-      ArgNumber = readUInt8(Operand);
+      ArgNumber = readValue<uint8_t>(Operand);
       verifyLdloc(TheVerificationState, ArgNumber, Opcode);
       verifyLoadAddr(TheVerificationState);
       BREAK_ON_VERIFY_ONLY;
@@ -7347,29 +7379,29 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       verifyLoadConstant(TheVerificationState, Opcode);
       BREAK_ON_VERIFY_ONLY;
 
-      ResultIR = loadConstantI8(readInt64(Operand), NewIR);
+      ResultIR = loadConstantI8(readValue<int64_t>(Operand), NewIR);
       ReaderOperandStack->push(ResultIR, NewIR);
       break;
     case ReaderBaseNS::CEE_LDC_R4:
       verifyLoadConstant(TheVerificationState, Opcode);
       BREAK_ON_VERIFY_ONLY;
 
-      ResultIR = loadConstantR4(readF32(Operand), NewIR);
+      ResultIR = loadConstantR4(readValue<float>(Operand), NewIR);
       ReaderOperandStack->push(ResultIR, NewIR);
       break;
     case ReaderBaseNS::CEE_LDC_R8:
       verifyLoadConstant(TheVerificationState, Opcode);
       BREAK_ON_VERIFY_ONLY;
 
-      ResultIR = loadConstantR8(readF64(Operand), NewIR);
+      ResultIR = loadConstantR8(readValue<double>(Operand), NewIR);
       ReaderOperandStack->push(ResultIR, NewIR);
       break;
 
     case ReaderBaseNS::CEE_LDC_I4:
-      MappedValue = readInt32(Operand);
+      MappedValue = readValue<int32_t>(Operand);
       goto LOAD_CONSTANT;
     case ReaderBaseNS::CEE_LDC_I4_S:
-      MappedValue = readInt8(Operand);
+      MappedValue = readValue<int8_t>(Operand);
       goto LOAD_CONSTANT;
     case ReaderBaseNS::CEE_LDC_I4_0:
     case ReaderBaseNS::CEE_LDC_I4_1:
@@ -7390,7 +7422,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       break;
 
     case ReaderBaseNS::CEE_LDELEM:
-      Token = readToken(Operand);
+      Token = readValue<mdToken>(Operand);
       resolveToken(Token, CORINFO_TOKENKIND_Class, &ResolvedToken);
       goto LOAD_ELEMENT;
     case ReaderBaseNS::CEE_LDELEM_I1:
@@ -7417,7 +7449,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       break;
 
     case ReaderBaseNS::CEE_LDELEMA:
-      Token = readToken(Operand);
+      Token = readValue<mdToken>(Operand);
       resolveToken(Token, CORINFO_TOKENKIND_Class, &ResolvedToken);
       verifyLoadElemA(TheVerificationState, HasReadOnlyPrefix, &ResolvedToken);
       BREAK_ON_VERIFY_ONLY;
@@ -7430,7 +7462,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       break;
 
     case ReaderBaseNS::CEE_LDFLD:
-      Token = readToken(Operand);
+      Token = readValue<mdToken>(Operand);
       resolveToken(Token, CORINFO_TOKENKIND_Field, &ResolvedToken);
       verifyFieldAccess(TheVerificationState, Opcode, &ResolvedToken);
       BREAK_ON_VERIFY_ONLY;
@@ -7442,7 +7474,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       break;
 
     case ReaderBaseNS::CEE_LDFTN: {
-      LoadFtnToken = readToken(Operand);
+      LoadFtnToken = readValue<mdToken>(Operand);
       resolveToken(LoadFtnToken, CORINFO_TOKENKIND_Method, &ResolvedToken);
 
       CORINFO_CALL_INFO CallInfo;
@@ -7500,7 +7532,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       break;
 
     case ReaderBaseNS::CEE_LDSTR:
-      Token = readToken(Operand);
+      Token = readValue<mdToken>(Operand);
       verifyLoadStr(TheVerificationState, Token);
       BREAK_ON_VERIFY_ONLY;
 
@@ -7509,7 +7541,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       break;
 
     case ReaderBaseNS::CEE_LDSFLD:
-      Token = readToken(Operand);
+      Token = readValue<mdToken>(Operand);
       resolveToken(Token, CORINFO_TOKENKIND_Field, &ResolvedToken);
       verifyFieldAccess(TheVerificationState, Opcode, &ResolvedToken);
       BREAK_ON_VERIFY_ONLY;
@@ -7519,7 +7551,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       break;
 
     case ReaderBaseNS::CEE_LDSFLDA:
-      Token = readToken(Operand);
+      Token = readValue<mdToken>(Operand);
       resolveToken(Token, CORINFO_TOKENKIND_Field, &ResolvedToken);
       verifyFieldAccess(TheVerificationState, Opcode, &ResolvedToken);
       BREAK_ON_VERIFY_ONLY;
@@ -7529,7 +7561,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       break;
 
     case ReaderBaseNS::CEE_LDFLDA:
-      Token = readToken(Operand);
+      Token = readValue<mdToken>(Operand);
       resolveToken(Token, CORINFO_TOKENKIND_Field, &ResolvedToken);
       verifyFieldAccess(TheVerificationState, Opcode, &ResolvedToken);
       BREAK_ON_VERIFY_ONLY;
@@ -7540,7 +7572,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       break;
 
     case ReaderBaseNS::CEE_LDOBJ:
-      Token = readToken(Operand);
+      Token = readValue<mdToken>(Operand);
       resolveToken(Token, CORINFO_TOKENKIND_Class, &ResolvedToken);
       verifyLoadObj(TheVerificationState, &ResolvedToken);
       BREAK_ON_VERIFY_ONLY;
@@ -7553,7 +7585,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       break;
 
     case ReaderBaseNS::CEE_LDTOKEN:
-      Token = readToken(Operand);
+      Token = readValue<mdToken>(Operand);
       resolveToken(Token, CORINFO_TOKENKIND_Ldtoken, &ResolvedToken);
       verifyLoadToken(TheVerificationState, &ResolvedToken);
       LastLoadToken = Token;
@@ -7564,7 +7596,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       break;
 
     case ReaderBaseNS::CEE_LDVIRTFTN: {
-      LoadFtnToken = readToken(Operand);
+      LoadFtnToken = readValue<mdToken>(Operand);
       resolveToken(LoadFtnToken, CORINFO_TOKENKIND_Method, &ResolvedToken);
 
       CORINFO_CALL_INFO CallInfo;
@@ -7584,11 +7616,11 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
     } break;
 
     case ReaderBaseNS::CEE_LEAVE:
-      TargetOffset = NextOffset + readInt32(Operand);
+      TargetOffset = NextOffset + readValue<int32_t>(Operand);
       goto GEN_LEAVE;
 
     case ReaderBaseNS::CEE_LEAVE_S:
-      TargetOffset = NextOffset + readInt8(Operand);
+      TargetOffset = NextOffset + readValue<int8_t>(Operand);
       goto GEN_LEAVE;
 
     GEN_LEAVE:
@@ -7638,7 +7670,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       break;
 
     case ReaderBaseNS::CEE_MKREFANY:
-      Token = readToken(Operand);
+      Token = readValue<mdToken>(Operand);
       resolveToken(Token, CORINFO_TOKENKIND_Class, &ResolvedToken);
       verifyMkRefAny(TheVerificationState, &ResolvedToken);
       BREAK_ON_VERIFY_ONLY;
@@ -7661,7 +7693,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       break;
 
     case ReaderBaseNS::CEE_NEWARR:
-      Token = readToken(Operand);
+      Token = readValue<mdToken>(Operand);
       resolveToken(Token, CORINFO_TOKENKIND_Newarr, &ResolvedToken);
       verifyNewArr(TheVerificationState, &ResolvedToken);
       BREAK_ON_VERIFY_ONLY;
@@ -7675,7 +7707,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       break;
 
     case ReaderBaseNS::CEE_NEWOBJ:
-      Token = readToken(Operand);
+      Token = readValue<mdToken>(Operand);
       resolveToken(Token, CORINFO_TOKENKIND_Method, &ResolvedToken);
       verifyNewObj(TheVerificationState, Opcode, HasTailCallPrefix,
                    &ResolvedToken, ILInput + CurrentOffset);
@@ -7716,7 +7748,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       break;
 
     case ReaderBaseNS::CEE_REFANYVAL:
-      Token = readToken(Operand);
+      Token = readValue<mdToken>(Operand);
       resolveToken(Token, CORINFO_TOKENKIND_Class, &ResolvedToken);
       verifyRefAnyVal(TheVerificationState, &ResolvedToken);
       BREAK_ON_VERIFY_ONLY;
@@ -7792,7 +7824,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       break;
 
     case ReaderBaseNS::CEE_SIZEOF:
-      Token = readToken(Operand);
+      Token = readValue<mdToken>(Operand);
       resolveToken(Token, CORINFO_TOKENKIND_Class, &ResolvedToken);
       verifySizeOf(TheVerificationState, &ResolvedToken);
       BREAK_ON_VERIFY_ONLY;
@@ -7804,7 +7836,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
     case ReaderBaseNS::CEE_STARG: {
       uint16_t ArgNumber;
 
-      ArgNumber = readUInt16(Operand);
+      ArgNumber = readValue<uint16_t>(Operand);
       verifyStarg(TheVerificationState, ArgNumber);
       BREAK_ON_VERIFY_ONLY;
 
@@ -7817,7 +7849,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
     case ReaderBaseNS::CEE_STARG_S: {
       uint8_t ArgNumber;
 
-      ArgNumber = readUInt8(Operand);
+      ArgNumber = readValue<uint8_t>(Operand);
       verifyStarg(TheVerificationState, ArgNumber);
       BREAK_ON_VERIFY_ONLY;
 
@@ -7828,7 +7860,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
     } break;
 
     case ReaderBaseNS::CEE_STELEM:
-      Token = readToken(Operand);
+      Token = readValue<mdToken>(Operand);
       resolveToken(Token, CORINFO_TOKENKIND_Class, &ResolvedToken);
       goto STORE_ELEMENT;
     case ReaderBaseNS::CEE_STELEM_I:
@@ -7854,7 +7886,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       break;
 
     case ReaderBaseNS::CEE_STFLD:
-      Token = readToken(Operand);
+      Token = readValue<mdToken>(Operand);
       resolveToken(Token, CORINFO_TOKENKIND_Field, &ResolvedToken);
       verifyFieldAccess(TheVerificationState, Opcode, &ResolvedToken);
       BREAK_ON_VERIFY_ONLY;
@@ -7867,10 +7899,10 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       break;
 
     case ReaderBaseNS::CEE_STLOC:
-      MappedValue = readUInt16(Operand);
+      MappedValue = readValue<uint16_t>(Operand);
       goto STORE_LOC;
     case ReaderBaseNS::CEE_STLOC_S:
-      MappedValue = readUInt8(Operand);
+      MappedValue = readValue<uint8_t>(Operand);
       goto STORE_LOC;
     case ReaderBaseNS::CEE_STLOC_0:
     case ReaderBaseNS::CEE_STLOC_1:
@@ -7904,7 +7936,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       break;
 
     case ReaderBaseNS::CEE_STOBJ:
-      Token = readToken(Operand);
+      Token = readValue<mdToken>(Operand);
       resolveToken(Token, CORINFO_TOKENKIND_Class, &ResolvedToken);
       verifyStoreObj(TheVerificationState, &ResolvedToken);
       BREAK_ON_VERIFY_ONLY;
@@ -7917,7 +7949,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       break;
 
     case ReaderBaseNS::CEE_STSFLD:
-      Token = readToken(Operand);
+      Token = readValue<mdToken>(Operand);
       resolveToken(Token, CORINFO_TOKENKIND_Field, &ResolvedToken);
       verifyFieldAccess(TheVerificationState, Opcode, &ResolvedToken);
       BREAK_ON_VERIFY_ONLY;
@@ -7973,7 +8005,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
 
     case ReaderBaseNS::CEE_CONSTRAINED:
       HasConstrainedPrefix = true;
-      ConstraintTypeRef = readToken(Operand);
+      ConstraintTypeRef = readValue<mdToken>(Operand);
       verifyConstrained(TheVerificationState, ConstraintTypeRef);
 
       BREAK_ON_VERIFY_ONLY;
@@ -8003,14 +8035,14 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
 
     case ReaderBaseNS::CEE_UNALIGNED:
       // this must be 1,2 or 4 (verified)
-      AlignmentPrefix = (ReaderAlignType)readUInt8(Operand);
+      AlignmentPrefix = (ReaderAlignType)readValue<uint8_t>(Operand);
       verifyUnaligned(TheVerificationState, AlignmentPrefix);
       BREAK_ON_VERIFY_ONLY;
 
       break;
 
     case ReaderBaseNS::CEE_UNBOX:
-      Token = readToken(Operand);
+      Token = readValue<mdToken>(Operand);
       resolveToken(Token, CORINFO_TOKENKIND_Class, &ResolvedToken);
       verifyUnbox(TheVerificationState, &ResolvedToken);
       BREAK_ON_VERIFY_ONLY;
@@ -8024,7 +8056,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       break;
 
     case ReaderBaseNS::CEE_UNBOX_ANY:
-      Token = readToken(Operand);
+      Token = readValue<mdToken>(Operand);
       resolveToken(Token, CORINFO_TOKENKIND_Class, &ResolvedToken);
       verifyUnboxAny(TheVerificationState, &ResolvedToken);
       BREAK_ON_VERIFY_ONLY;
