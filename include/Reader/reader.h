@@ -436,6 +436,7 @@ public:
   bool isCallVirt() { return IsCallVirt; }
   bool needsNullCheck() { return NeedsNullCheck; }
   bool usesMethodDesc() { return UsesMethodDesc; }
+  bool isOptimizedDelegateCtor() { return IsOptimizedDelegateCtor; }
   bool isReadOnlyCall() { return IsReadonlyCall; }
 
   mdToken getLoadFtnToken() { return LoadFtnToken; }

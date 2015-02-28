@@ -3011,8 +3011,9 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
   }
 
   // We may need to fix the type on the TargetNode.
-  const bool FixFunctionType =
-      CallTargetInfo->isCallVirt() || CallTargetInfo->isCallI();
+  const bool FixFunctionType = CallTargetInfo->isCallVirt() ||
+                               CallTargetInfo->isCallI() ||
+                               CallTargetInfo->isOptimizedDelegateCtor();
   if (FixFunctionType) {
     CORINFO_CLASS_HANDLE ThisClass = nullptr;
     if (SigInfo->hasThis()) {
