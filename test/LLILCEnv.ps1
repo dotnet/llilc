@@ -370,6 +370,12 @@ function Global:DownloadNuGet
     pushd .
     cd $CoreCLRRuntime
     Invoke-WebRequest http://nuget.org/NuGet.exe -OutFile NuGet.exe
+    $NuGetExists = Test-Path $CoreCLRRuntime\Nuget.exe
+
+    if (!$NuGetExists) {
+      throw "!!! NuGet failed to successfully download."
+    }
+
     popd
   }
 }
