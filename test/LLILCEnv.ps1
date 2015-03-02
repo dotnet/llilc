@@ -441,7 +441,10 @@ function Global:GetCLRTestAssets
   if (!$CoreCLRTestAssetsExists) {
     New-Item $CoreCLRTestAssets -itemtype Directory  | Out-Null
     cd $CoreCLRTestAssets
-    git clone git://github.com/dotnet/coreclr.git
+    git clone https://github.com/dotnet/coreclr.git
+    # set push url to bogus value to avoid inadvertent pushes
+    cd $CoreCLRTestAssets\coreclr
+    git remote set-url --push origin do_not_push
   }
   else {
     Write-Host("Updating CoreCLR Test Assets to latest...")
