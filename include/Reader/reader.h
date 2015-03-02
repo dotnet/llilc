@@ -2148,12 +2148,23 @@ public:
 #undef CHECK_VALID
 };
 
+/// \brief The exception that is thrown when a particular operation is not yet
+///        supported by a sublass of ReaderBase.
 class NotYetImplementedException {
 private:
-  const char *TheReason;
+  const char *TheReason; ///< The message that explains the reason for this
+                         ///< exception.
 
 public:
+  /// \brief Initializes a new instance of the NotYetImplementedException class
+  ///        with a specified error message.
+  ///
+  /// \param Reason The message that explains the reason for this exception.
   NotYetImplementedException(const char *Reason = "") : TheReason(Reason) {}
+
+  /// \brief Returns the message that explains the reason for this exception.
+  ///
+  /// \returns The message that explains the reason for this exception.
   const char *reason() { return TheReason; }
 };
 
