@@ -58,6 +58,10 @@ def parseArgs(argv):
     print err
     return 3
 
+  if args:
+    print "Unrecognized argument(s): " + " ".join(args)
+    return usage()
+
   for opt, arg in opts:
     if opt in ("--fix"):
       global formatFix
@@ -151,7 +155,7 @@ def runFormat():
   if not doFormat:
     return 0
 
-  subprocess.call("git diff " + base + "-U0 2>nul | clang-format-diff.py -p1 "
+  subprocess.call("git diff " + base + " -U0 2>nul | clang-format-diff.py -p1 "
       + formatFix, shell=True)
   return 0
 
