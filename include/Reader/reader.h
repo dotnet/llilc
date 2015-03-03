@@ -618,8 +618,6 @@ struct ReadBytesForFlowGraphNodeHelperParam {
   bool VerifiedEndBlock;
 };
 
-class LoadTracker;
-
 static const int32_t SizeOfCEECall = 5;
 
 class ReaderBase {
@@ -678,8 +676,6 @@ private:
   FgData **BlockArray;
 
 protected:
-  // how we track the pushes/pops to/from the stack across a basic block
-  LoadTracker *LoadTracking;
   uint32_t CurrentBranchDepth;
 
   // Verification Info
@@ -2020,132 +2016,6 @@ private:
 
   // Deferred NYI map for Leave instructions (temporary)
   std::map<uint32_t, const char *> NyiLeaveMap;
-};
-
-// this is a helper class for tracking what is loaded onto the stack so
-// when we come across calls, we can tell whether we are passing "this"
-// in as the first parameter
-class LoadTracker {
-#define CHECK_VALID(Cond)                                                      \
-  if (!(this->IsValidProgram = (this->IsValidProgram && (Cond))))              \
-    return;
-
-private:
-  enum LTNodeType { LT_Other, LT_This, LT_Constant, LT_Address, LT_Retval };
-
-  struct LTNode {
-    LTNodeType Type : 4;
-    uint32_t CandidateILOffset : 28;
-  };
-
-  LTNode *Stack;
-  uint32_t Top;
-  uint32_t MaxStack;
-  bool IsValidProgram;
-
-public:
-  void init(ReaderBase *Reader, uint32_t MaxStack) {
-    this->Stack = (LTNode *)Reader->getProcMemory(sizeof(LTNode) * MaxStack);
-    this->MaxStack = MaxStack;
-    this->Top = 0;
-    this->IsValidProgram = 1;
-  }
-
-  void reset() {
-    this->Top = 0;
-    this->IsValidProgram = 1;
-  }
-
-  void loadThis() {
-    CHECK_VALID(this->Top < this->MaxStack);
-    this->Stack[this->Top].Type = LT_This;
-    this->Stack[this->Top++].CandidateILOffset = 0;
-  }
-
-  void loadOther(uint32_t Count) {
-    CHECK_VALID(this->Top + Count <= this->MaxStack);
-    for (uint32_t I = this->Top; I < (this->Top + Count); I++) {
-      this->Stack[I].Type = LT_Other;
-      this->Stack[I].CandidateILOffset = 0;
-    }
-    this->Top += Count;
-  }
-
-  void loadOther() { this->loadOther(1); }
-
-  void loadConstant() {
-    CHECK_VALID(this->Top < this->MaxStack);
-    this->Stack[this->Top].Type = LT_Constant;
-    this->Stack[this->Top++].CandidateILOffset = 0;
-  }
-
-  void loadAddress() {
-    CHECK_VALID(this->Top < this->MaxStack);
-    this->Stack[this->Top].Type = LT_Address;
-    this->Stack[this->Top++].CandidateILOffset = 0;
-  }
-
-  void loadRetVal(uint32_t CandMSILOffset) {
-    CHECK_VALID(this->Top < this->MaxStack);
-    this->Stack[this->Top].Type = LT_Retval;
-    this->Stack[this->Top++].CandidateILOffset = CandMSILOffset;
-  }
-
-  void unload(uint32_t N) {
-    CHECK_VALID(true);
-    if (this->Top <= N)
-      this->Top = 0;
-    else
-      this->Top -= N;
-  }
-
-  void unload() { this->unload(1); }
-
-  bool checkFirstParamIsThis(uint32_t NumArgs) {
-    return this->IsValidProgram && (this->Top >= NumArgs) &&
-           (this->Stack[this->Top - NumArgs].Type == LT_This);
-  }
-
-  uint32_t numConstantParams(uint32_t NumArgs) {
-    uint32_t RetVal = 0;
-    if (this->IsValidProgram) {
-      // if by scanning we find any constant arguments return true
-      // (this could be changed to a percentage?)
-      for (uint32_t I = 0; I < NumArgs && I < this->Top; I++) {
-        if (this->Stack[this->Top - I - 1].Type == LT_Constant)
-          RetVal++;
-      }
-    }
-    return RetVal;
-  }
-
-  uint32_t numAddressParams(uint32_t NumArgs) {
-    uint32_t RetVal = 0;
-    if (this->IsValidProgram) {
-      // if by scanning we find any constant arguments return true
-      // (this could be changed to a percentage?)
-      for (uint32_t I = 0; I < NumArgs && I < this->Top; I++) {
-        if (this->Stack[this->Top - I - 1].Type == LT_Address)
-          RetVal++;
-      }
-    }
-    return RetVal;
-  }
-
-  uint32_t offsetIsRetVal(uint32_t Offset) {
-    return this->IsValidProgram && (this->Top >= Offset) &&
-           (this->Stack[this->Top - Offset].Type == LT_Retval);
-  }
-
-  uint32_t offsetGetMSILOffset(uint32_t Offset) {
-    return this->Stack[this->Top - Offset].CandidateILOffset;
-  }
-
-#if !defined(NODEBUG)
-  void prState();
-#endif
-
-#undef CHECK_VALID
 };
 
 /// \brief The exception that is thrown when a particular operation is not yet
