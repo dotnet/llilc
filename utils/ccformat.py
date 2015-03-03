@@ -6,6 +6,9 @@ import os
 import subprocess
 import platform
 
+def expandPath(path):
+    return os.path.abspath(os.path.expanduser(path))
+
 def runTidy(args):
   if args.llilc_source == None:
     print >> sys.stderr, "Please specify --llilc-source or set the " \
@@ -25,57 +28,77 @@ def runTidy(args):
     for item in tempincList:
       inc = inc + "-issytem " + item
 
-  clang_args = ""
-  if args.compile_commands == None:
+  clangArgs = ""
+  if args.compile_commands is None:
     # TODO: platform checks and defines
 
-    if args.llvm_source == None:
+    if args.llvm_source is None:
       print >> sys.stderr, "Please specify --llvm-source or set the " \
                            "LLVM_SOURCE environment variable."
       return 1
 
-    if args.llvm_build == None:
+    if args.llvm_build is None:
       print >> sys.stderr, "Please specify --llvm-build or set the " \
                            "LLVM_BUILD environment variable."
       return 1
 
-    llilcLib = os.path.join(args.llilc_source, "lib")
-    llilcInc = os.path.join(args.llilc_source, "include")
-    clrInc = os.path.join(llilcInc, "clr")
-    llvmInc = os.path.join(args.llvm_source, "include")
+    llilcSrc = expandPath(args.llilc_source)
+    llilcBuild = expandPath(args.llilc_build)
+    llilcLib = os.path.join(llilcSrc, "lib")
+    llilcInc = os.path.join(llilcSrc, "include")
 
-    flags = "-target x86_64-pc-win32-msvc -fms-extensions -fms-compatibility \
-        -fmsc-version=1800"
-    inc = inc + " -I" + os.path.join(llilcLib, "Jit") \
-        + " -I" + os.path.join(llilcLib, "MSILReader") \
-        + " -I" + llilcInc + " -I" + llvmInc + " -I" + clrInc \
-        + " -I" + os.path.join(llilcInc, "Driver") \
-        + " -I" + os.path.join(llilcInc, "Jit") \
-        + " -I" + os.path.join(llilcInc, "Reader") \
-        + " -I" + os.path.join(llilcInc, "Pal") \
-        + " -I" + os.path.join(args.llvm_build, "tools", "LLILC", "lib", "Reader") \
-        + " -I" + os.path.join(args.llvm_build, "tools", "LLILC", "include") \
-        + " -I" + os.path.join(args.llvm_build, "include")
-    setDef = "-D_DEBUG -D_CRT_SECURE_NO_DEPRECATE -D_CRT_SECURE_NO_WARNINGS " \
-        + "-D_CRT_NONSTDC_NO_DEPRECATE -D_CRT_NONSTDC_NO_WARNINGS " \
-        + "-D_SCL_SECURE_NO_DEPRECATE -D_SCL_SECURE_NO_WARNINGS " \
-        + "-D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS " \
-        + "-D__STDC_LIMIT_MACROS -D_GNU_SOURCE -DLLILCJit_EXPORTS -D_WINDLL " \
-        + "-D_MBCS -DNOMINMAX"
-    clang_args = "-- " + flags + " " + inc + " " + setDef
+    flags = [
+        "-target x86_64-pc-win32-msvc",
+        "-fms-extensions",
+        "-fms-compatibility",
+        "-fmsc-version=1800"
+    ]
+    includes = [
+        os.path.join(llilcLib, "Jit"),
+        os.path.join(llilcLib, "Reader"),
+        llilcInc,
+        os.path.join(expandPath(args.llvm_source), "include"),
+        os.path.join(llilcInc, "clr"),
+        os.path.join(llilcInc, "Driver"),
+        os.path.join(llilcInc, "Jit"),
+        os.path.join(llilcInc, "Reader"),
+        os.path.join(llilcInc, "Pal"),
+        os.path.join(llilcBuild, "lib", "Reader"),
+        os.path.join(llilcBuild, "include"),
+        os.path.join(expandPath(args.llvm_build), "include")
+    ]
+    defines = [
+        "_DEBUG",
+        "_CRT_SECURE_NO_DEPRECATE",
+        "_CRT_SECURE_NO_WARNINGS",
+        "_CRT_NONSTDC_NO_DEPRECATE",
+        "_CRT_NONSTDC_NO_WARNINGS",
+        "_SCL_SECURE_NO_DEPRECATE",
+        "_SCL_SECURE_NO_WARNINGS",
+        "__STDC_CONSTANT_MACROS",
+        "__STDC_FORMAT_MACROS",
+        "__STDC_LIMIT_MACROS",
+        "_GNU_SOURCE",
+        "LLILCJit_EXPORTS",
+        "_WINDLL",
+        "_MBCS",
+        "NOMINMAX"
+    ]
+
+    clangArgs = " ".join(["--"] + flags + ["-I" + i for i in includes] \
+                         + ["-D" + d for d in defines])
   else:
-    clang_args = "-p " + args.compile_commands
+    clangArgs = " ".join(["-p", expandPath(args.compile_commands)])
 
   returncode = 0
-  for dirname,subdir,files in os.walk(args.llilc_source):
+  for dirname,subdir,files in os.walk(llilcSrc):
     for filename in files:
       if filename.endswith(".c") or filename.endswith(".cpp"):
         filepath = os.path.join(dirname, filename)
-        errorlevel = subprocess.call(args.clang_tidy_binary + " " + tidyFix
-            + " -checks=" + args.checks
-            + " -header-filter=\"" + args.llilc_source
-            + ".*(Reader)|(Jit)|(Pal)\" " + filepath
-            + " " + clang_args, shell=True)
+        errorlevel = subprocess.call(" ".join([args.clang_tidy, tidyFix,
+            "-checks=" + args.checks,
+            "-header-filter=\"" + llilcSrc + ".*(Reader)|(Jit)|(Pal)\"",
+            filepath, clangArgs]), shell=True)
         if errorlevel == 1:
           returncode = 1
   
@@ -83,15 +106,17 @@ def runTidy(args):
 
 def runFormat(args):
   formatFix = "-i" if args.fix else ""
-  subprocess.call("git diff " + args.base + "-U0 2>nul | "
-      + args.clang_format_diff + " -p1 " + formatFix, shell=True)
+  subprocess.call(" ".join(["git", "diff", args.base, "-U0", "2>" + os.devnull,
+      "|", args.clang_format_diff, "-p1", formatFix]), shell=True)
   return 0
 
 def main(argv):
+  llvmBuild = os.environ.get("LLVMBUILD")
   parser = argparse.ArgumentParser(description=
                    "Report and optionally fix formatting errors in the LLILC "
-                   "sources.")
-  parser.add_argument("--clang-tidy-binary", metavar="PATH",
+                   "sources.",
+                   formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+  parser.add_argument("--clang-tidy", metavar="PATH",
             default="clang-tidy", help="path to clang-tidy binary")
   parser.add_argument("--clang-format-diff", metavar="PATH",
             default="clang-format-diff.py",
@@ -99,16 +124,23 @@ def main(argv):
   parser.add_argument("--compile-commands", metavar="PATH",
             help="path to a directory containing a JSON compile commands " \
                  "database used to determine clang-tidy options")
+  parser.add_argument("--llvm-build", metavar="PATH",
+            default=llvmBuild,
+            help="path to LLVM builds. If not specified, defaults to the " \
+                  "value of the LLVMBUILD environment variable. Only used " \
+                  "when a compile commands database has not been specified.")
   parser.add_argument("--llvm-source", metavar="PATH",
             default=os.environ.get("LLVMSOURCE"),
-            help="path to LLVM sources (only necessary when a compile " \
-                 "commands database has not been specified)")
-  parser.add_argument("--llvm-build", metavar="PATH",
-            default=os.environ.get("LLVMBUILD"),
-            help="path to LLVM build (only necessary when a compile commands " \
-                 "database has not beenspecified)")
+            help="path to LLVM sources. If not specified, defaults to the " \
+                  "value of the LLVMSOURCE environment variable. Only used " \
+                  "when a compile commands database has not been specified.")
+  parser.add_argument("--llilc-build", metavar="PATH",
+            default=None if llvmBuild is None else \
+                os.path.join(llvmBuild, "tools", "llilc"), \
+            help="path to LLILC build. Only used when a compile commands " \
+                 "database has not been specified.")
   parser.add_argument("--llilc-source", metavar="PATH",
-            default=os.path.join(os.path.dirname(__file__), ".."),
+            default=os.path.dirname(os.path.dirname(expandPath(__file__))),
             help="path to LLILC sources")
   parser.add_argument("--fix", action="store_true", default=False,
             help="fix failures when possible")
