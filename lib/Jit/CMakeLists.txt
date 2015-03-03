@@ -1,7 +1,9 @@
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include/clr
-                    ${CMAKE_CURRENT_SOURCE_DIR}/../../include/Pal
-                    ${CMAKE_CURRENT_SOURCE_DIR}/../../include/Jit
-                    ${CMAKE_CURRENT_SOURCE_DIR}/../../include/Reader)
+get_filename_component(LLILC_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR}/../../include ABSOLUTE)
+
+include_directories(${LLILC_INCLUDES}/clr
+                    ${LLILC_INCLUDES}/Pal
+                    ${LLILC_INCLUDES}/Jit
+                    ${LLILC_INCLUDES}/Reader)
 
 set(LLVM_LINK_COMPONENTS
   Analysis
