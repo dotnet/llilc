@@ -724,8 +724,6 @@ function Global:ExcludeTest([string]$Arch="x64", [string]$Build="Release")
   $CoreCLRTestTargetBinaries = CoreCLRTestTargetBinaries -Arch $Arch -Build $Build
   pushd .
   cd $CoreCLRTestTargetBinaries\JIT\CodeGenBringUpTests
-  del DblRem*
-  del FpRem*
   del div2*
   del localloc*
   popd
