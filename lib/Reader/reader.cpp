@@ -5896,7 +5896,7 @@ void ReaderBase::handleNonEmptyStack(FlowGraphNode *Fg, IRNode **NewIR,
                                      bool *FmbAssign) {
   FlowGraphEdgeList *SuccessorList;
   FlowGraphNode *SuccessorBlock;
-  ReaderStackIterator *Iterator;
+  ReaderStackIterator Iterator;
   IRNode *CurrentNode;
 
 #ifndef NODEBUG
@@ -5935,19 +5935,19 @@ void ReaderBase::handleNonEmptyStack(FlowGraphNode *Fg, IRNode **NewIR,
   // unpopulated) then we must construct an operand stack using the
   // CurrentNoderent reader stack.
   if (SuccessorStack == NULL) {
-    ReaderStackIterator *TargetIterator;
+    ReaderStackIterator TargetIterator;
 
     // 2. Create stack typed stack of tmpvars.
     SuccessorStack = ReaderOperandStack->copy();
 
     // Push new elements onto temp stack.
-    CurrentNode = ReaderOperandStack->getIterator(&Iterator);
-    SuccessorStack->getIterator(&TargetIterator);
+    CurrentNode = ReaderOperandStack->getIterator(Iterator);
+    SuccessorStack->getIterator(TargetIterator);
     while (CurrentNode != NULL) {
-      SuccessorStack->iteratorReplace(&TargetIterator,
+      SuccessorStack->iteratorReplace(TargetIterator,
                                       makeStackTypeNode(CurrentNode));
-      CurrentNode = ReaderOperandStack->iteratorGetNext(&Iterator);
-      SuccessorStack->iteratorGetNext(&TargetIterator);
+      CurrentNode = ReaderOperandStack->iteratorGetNext(Iterator);
+      SuccessorStack->iteratorGetNext(TargetIterator);
     }
 
     // Copy operand stack onto all edges in the CurrentNoderent web.
@@ -6065,15 +6065,15 @@ void ReaderBase::handleNonEmptyStack(FlowGraphNode *Fg, IRNode **NewIR,
 
   // Assign CurrentNoderent stack elements to tmpvars on successor operand
   // stack.
-  ReaderStackIterator *TargetIterator;
+  ReaderStackIterator TargetIterator;
   IRNode *Target;
 
-  CurrentNode = ReaderOperandStack->getIterator(&Iterator);
-  Target = SuccessorStack->getIterator(&TargetIterator);
+  CurrentNode = ReaderOperandStack->getIterator(Iterator);
+  Target = SuccessorStack->getIterator(TargetIterator);
   while ((CurrentNode != NULL) && (Target != NULL)) {
     assignToSuccessorStackNode(Fg, Target, CurrentNode, NewIR, FmbAssign);
-    CurrentNode = ReaderOperandStack->iteratorGetNext(&Iterator);
-    Target = SuccessorStack->iteratorGetNext(&TargetIterator);
+    CurrentNode = ReaderOperandStack->iteratorGetNext(Iterator);
+    Target = SuccessorStack->iteratorGetNext(TargetIterator);
   }
 
 #if !defined(CC_PEVERIFY)
