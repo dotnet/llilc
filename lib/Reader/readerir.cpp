@@ -1272,7 +1272,7 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
 
     // Verify that the LLVM type contains the same information
     // as the GC field info from the runtime.
-    GCLayoutStruct *RuntimeGCInfo = getClassGCLayout(ClassHandle);
+    GCLayout *RuntimeGCInfo = getClassGCLayout(ClassHandle);
     const StructLayout *MainStructLayout =
         DataLayout->getStructLayout(StructTy);
     const uint32_t PointerSize = DataLayout->getPointerSize();
@@ -1282,7 +1282,7 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
          GCOffset += PointerSize) {
       const bool ExpectGCPointer =
           (RuntimeGCInfo != NULL) &&
-          (RuntimeGCInfo->GCLayout[GCOffset / PointerSize] !=
+          (RuntimeGCInfo->GCPointers[GCOffset / PointerSize] !=
            CorInfoGCType::TYPE_GC_NONE);
       const uint32_t FieldIndex =
           MainStructLayout->getElementContainingOffset(GCOffset);
@@ -2963,7 +2963,7 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
   CORINFO_SIG_INFO *SigInfo = CallTargetInfo->getSigInfo();
 
   unsigned HiddenMBParamSize = 0;
-  GCLayoutStruct *GCLayout;
+  GCLayout *GCInfo = nullptr;
 
   if (CallTargetInfo->isTailCall()) {
     throw NotYetImplementedException("Tail call");
@@ -2975,7 +2975,7 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
 
   // Ask GenIR to create return value.
   if (!CallTargetInfo->isNewObj()) {
-    ReturnNode = makeCallReturnNode(SigInfo, &HiddenMBParamSize, &GCLayout);
+    ReturnNode = makeCallReturnNode(SigInfo, &HiddenMBParamSize, &GCInfo);
   }
 
   std::vector<Value *> Arguments;
@@ -3352,7 +3352,7 @@ IRNode *GenIR::convert(Type *Ty, Value *Node, bool SourceIsSigned) {
 
 IRNode *GenIR::makeCallReturnNode(CORINFO_SIG_INFO *Sig,
                                   unsigned *HiddenMBParamSize,
-                                  GCLayoutStruct **GcLayout) {
+                                  GCLayout **GcInfo) {
   if ((Sig->retType == CORINFO_TYPE_REFANY) ||
       (Sig->retType == CORINFO_TYPE_VALUECLASS)) {
     throw NotYetImplementedException("Return refany or value class");

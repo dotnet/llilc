@@ -187,109 +187,128 @@ extern bool HaveEnvConfigJitName;
 
 } // extern "C"
 
-struct JITFilterParams {
-  CorJitResult *ErrorCode;
-};
-
-struct JITFilterCommonParams {
-  EXCEPTION_POINTERS ExceptionPointers;
-};
+#ifdef CC_PEVERIFY
+extern HRESULT VerLastError;
+#endif
 
 // Forward declarations for client defined structures
 class GenIR;  // Compiler dependent IR production
 class IRNode; // Your compiler intermediate representation
 class ReaderStack;
-
 class FlowGraphNode;
 class FlowGraphEdgeList;
 class BranchList;
 class ReaderBitVector;
 struct EHRegion;
-
-struct RuntimeFilterParams : JITFilterCommonParams {
-  GenIR *This;
-};
-
-typedef struct {
-  uint32_t NumGcPtrs;
-  uint8_t GCLayout[0];
-} GCLayoutStruct;
-
-#define GCLS_NUMGCPTRS(X) ((X)->NumGcPtrs)
-#define GCLS_GCLAYOUT(X) ((X)->GCLayout)
-
-#define GCLAYOUT_BASE_PTR 1
-#define GCLAYOUT_INTERIOR_PTR 2
-
-#ifdef CC_PEVERIFY
-extern HRESULT VerLastError;
-#endif
-
-// Structure used to pass argument information from rdrCall
-// to GenCall.
-struct CallArgTriple {
-  IRNode *ArgNode;
-  CorInfoType ArgType;
-  CORINFO_CLASS_HANDLE ArgClass;
-};
-
-struct FlowGraphNodeList {
-  FlowGraphNode *Block;
-  FlowGraphNodeList *Next;
-};
-
-struct FlowGraphNodeWorkList {
-  FlowGraphNode *Block;
-  FlowGraphNodeWorkList *Next;
-  FlowGraphNode *Parent;
-};
-
 class VerifyWorkList;
 class VerificationState;
+class FlowGraphNodeOffsetList;
 
-typedef enum {
-  Reader_AlignNatural = (uint8_t)~0, // Default natural alignment
-  Reader_AlignUnknown = 0,
-  Reader_Align1 = 1,
-  Reader_Align2 = 2,
-  Reader_Align4 = 4,
-  Reader_Align8 = 8,
-} ReaderAlignType;
+/// \brief Exception information for the Jit's exception filter
+///
+/// The jit may need to examine propagating exceptions via a filter to 
+/// determine if the jit needs to take any special actions. This struct
+/// provides some extra context for the jit to consider when filtering.
+struct RuntimeFilterParams {
+  EXCEPTION_POINTERS ExceptionPointers; ///< Exception context information
+  GenIR *This;                          ///< Additional data
+};
 
-// Used to denote a special symbol when creating syms
-typedef enum {
-  Reader_NotSpecialSymbol = 0,
-  Reader_ThisPtr,
-  Reader_UnmodifiedThisPtr,
-  Reader_VarArgsToken,
-  Reader_InstParam,
-  Reader_SecurityObject,
-  Reader_GenericsContext
-} ReaderSpecialSymbolType;
+/// \brief GC information for value classes
+///
+/// This structure describes which fields in a value class are gc pointers.
+/// The jit needs to know this information so it can report gc pointer fields
+/// for stack-allocated value classes in the GC info. However, we also encode
+/// this information in LLVM type and our intention is to use those types to
+/// drive the GC info reporting.
+///
+/// The value class is logically viewed as an array of pointer-sized elements
+/// (note GC fields are guaranteed by the EE to be suitably aligned so that
+/// this view is sensible). \p GCLayout[i] is nonzero if there is a gc pointer
+/// at the corresponding offset.
+///
+/// By convention we only create these structures when the value class
+/// actually has GC pointers, so \p NumGCPtrs should be nonzero.
+struct GCLayout {
+  uint32_t NumGCPointers;    ///< Total number of gc pointers to report
+  uint8_t GCPointers[0];     ///< Array indicating location of the gc pointers
+};
 
-// Types of pointers.
-typedef enum {
+/// \brief Structure used to pass argument information from rdrCall to GenCall.
+///
+/// ReaderBase (which implements \p rdrCall) doesn't know how the derived 
+/// Reader (which implements \p GenCall) will represent type information, so it
+/// uses \p ArgType and \p ArgClass to describe the type of the argument, and
+/// \p ArgNode to describe its value.
+struct CallArgTriple {
+  IRNode *ArgNode;                ///< Opaque pointer to IR for argument value
+  CorInfoType ArgType;            ///< Low-level type of the argument
+  CORINFO_CLASS_HANDLE ArgClass;  ///< Extra type info for pointers and similar
+};
+
+/// Structure representing a linked list of flow graph nodes
+struct FlowGraphNodeList {
+  FlowGraphNode *Block;         ///< Head node in the list
+  FlowGraphNodeList *Next;      ///< Pointer to next list cell
+};
+
+/// Structure representing a linked list of flow graph nodes and
+/// for each node, a related node.
+struct FlowGraphNodeWorkList {
+  FlowGraphNode *Block;         ///< Head node in the list
+  FlowGraphNodeWorkList *Next;  ///< Pointer to next list cell
+  FlowGraphNode *Parent;        ///< Related node
+};
+
+/// \brief Enum describing pointer alignment.
+enum ReaderAlignType {
+  Reader_AlignNatural = (uint8_t)~0, ///< Default natural alignment
+  Reader_AlignUnknown = 0,           ///< Unknown alignment         
+  Reader_Align1 = 1,                 ///< Byte alignment
+  Reader_Align2 = 2,                 ///< Word alignment
+  Reader_Align4 = 4,                 ///< DWord alignment
+  Reader_Align8 = 8                  ///< QWord alignment
+};
+
+/// \brief Special symbol types
+///
+/// These are used to describe locals or parameters that have special
+/// meaning during code generation.
+enum ReaderSpecialSymbolType {
+  Reader_NotSpecialSymbol = 0,       ///< Nothing special
+  Reader_ThisPtr,                    ///< Current this pointer for method
+  Reader_UnmodifiedThisPtr,          ///< This pointer param passed to method
+  Reader_VarArgsToken,               ///< Special param for varargs support
+  Reader_InstParam,                  ///< Special param for shared generics
+  Reader_SecurityObject,             ///< Local used for security checking
+  Reader_GenericsContext             ///< Local holding shared generics context
+};
+
+/// \brief Types of pointers
+///
+/// The reader sometimes needs to create new temporaries or locals to hold
+/// particular types of pointers. This enum is used to describe the kind of
+/// pointer desired.
+enum ReaderPtrType {
   Reader_PtrNotGc = 0,
   Reader_PtrGcBase,
   Reader_PtrGcInterior
-} ReaderPtrType;
-
-typedef enum {
-  Reader_LocalVerificationException,
-  Reader_GlobalVerificationException,
-} ReaderExceptionType;
-
-typedef enum {
-  MonitorTryFinallyRegion = 0,
-  SecurityCalloutTryFinallyRegion
-} TryFinallyRegionType;
-
-class ReaderException {
-public:
-  ReaderExceptionType Type;
 };
 
-class FlowGraphNodeOffsetList;
+/// \brief Exception types for verification
+///
+/// When reading MSIL, different kinds of exceptions can be thrown, and this
+/// enum decribes the possibilities.
+enum ReaderExceptionType {
+  Reader_LocalVerificationException,   ///< Verifier local check failed
+  Reader_GlobalVerificationException,  ///< Verifier global check failed
+};
+
+/// Common base class for reader exceptions
+class ReaderException {
+public:
+  ReaderExceptionType Type;            ///< Type of the exception
+};
 
 // The TryRegion graph allows us to build a region tree that captures the
 // lexical information from the EIT before we begin reading the MSIL opcodes.
@@ -1437,7 +1456,7 @@ public:
   int32_t appendClassName(char16_t **Buffer, int32_t *BufferLen,
                           CORINFO_CLASS_HANDLE Class, bool IncludeNamespace,
                           bool FullInst, bool IncludeAssembly);
-  GCLayoutStruct *getClassGCLayout(CORINFO_CLASS_HANDLE Class);
+  GCLayout *getClassGCLayout(CORINFO_CLASS_HANDLE Class);
   uint32_t getClassAttribs(CORINFO_CLASS_HANDLE Class);
   uint32_t getClassSize(CORINFO_CLASS_HANDLE Class);
   CorInfoType getClassType(CORINFO_CLASS_HANDLE Class);
@@ -2030,7 +2049,7 @@ public:
   virtual IRNode *makeStackTypeNode(IRNode *Node) = 0;
   virtual IRNode *makeCallReturnNode(CORINFO_SIG_INFO *Sig,
                                      uint32_t *HiddenMBParamSize,
-                                     GCLayoutStruct **GCLayout) = 0;
+                                     GCLayout **GCInfo) = 0;
 
   virtual IRNode *makeDirectCallTargetNode(CORINFO_METHOD_HANDLE Method,
                                            void *CodeAddress) = 0;

@@ -821,7 +821,7 @@ int ReaderBase::appendClassName(char16_t **Buffer, int32_t *BufferLen,
   return Return;
 }
 
-GCLayoutStruct *ReaderBase::getClassGCLayout(CORINFO_CLASS_HANDLE Class) {
+GCLayout *ReaderBase::getClassGCLayout(CORINFO_CLASS_HANDLE Class) {
   // The actual size of the byte array the runtime is expecting (gcLayoutSize)
   // is one byte for every sizeof(void*) slot in the valueclass.
   // Note that we round this computation up.
@@ -833,23 +833,23 @@ GCLayoutStruct *ReaderBase::getClassGCLayout(CORINFO_CLASS_HANDLE Class) {
   // Our internal data strcutures prepend the number of GC pointers
   // before the struct.  Therefore we add the size of the
   // GCLAYOUT_STRUCT to our computed size above.
-  GCLayoutStruct *GCLayout =
-      (GCLayoutStruct *)getProcMemory(GcLayoutSize + sizeof(GCLayoutStruct));
-  uint32_t NumGCvars =
-      JitInfo->getClassGClayout(Class, GCLS_GCLAYOUT(GCLayout));
+  GCLayout *GCLayoutInfo =
+      (GCLayout *)getProcMemory(GcLayoutSize + sizeof(GCLayout));
+  uint32_t NumGCVars =
+      JitInfo->getClassGClayout(Class, GCLayoutInfo->GCPointers);
 
-  if (NumGCvars > 0) {
+  if (NumGCVars > 0) {
     // We cache away the number of GC vars.
-    GCLS_NUMGCPTRS(GCLayout) = NumGCvars;
+    GCLayoutInfo->NumGCPointers = NumGCVars;
   } else {
     // If we had no GC pointers, then we won't bother returning the
     // GCLayout.  It is our convention that if you have a GCLayout,
     // then you have pointers.  This allows us to do only one check
     // when we want to know if a MB has GC pointers.
-    GCLayout = NULL;
+    GCLayoutInfo = NULL;
   }
 
-  return GCLayout;
+  return GCLayoutInfo;
 }
 
 uint32_t

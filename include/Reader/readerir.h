@@ -773,7 +773,7 @@ public:
   };
 
   IRNode *makeCallReturnNode(CORINFO_SIG_INFO *Sig, unsigned *HiddenMBParamSize,
-                             GCLayoutStruct **GcLayout) override;
+                             GCLayout **GcInfo) override;
 
   IRNode *makeDirectCallTargetNode(CORINFO_METHOD_HANDLE Method,
                                    void *CodeAddr) override;
