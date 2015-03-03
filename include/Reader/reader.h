@@ -24,6 +24,7 @@
 #include <cstdio>
 #include <cassert>
 #include <map>
+#include <vector>
 
 #include "global.h"
 #include "Pal/LLILCPal.h"
@@ -337,89 +338,88 @@ typedef size_t ReaderStackIterator;
 /// The operand stack is represented by a stack of pointers to the 
 /// IRNodes for the operands. 
 ///
-/// ReaderStack is an abstract class with no C++ declared state and all
-/// abstract methods. However we can describe the effects of the methods
-/// in terms of the stack that the implementing class will provide.
-/// 
 /// For convenience in the method descriptions below, we use
 /// stack[k] to denote the stack element that is k elements from the top,
 /// so that stack[0] is the top element. 
 
 class ReaderStack {
+
+  /// Vector used to represent the stack of operands.
+  std::vector<IRNode*> Stack;
+
+  /// The MSIL Reader (used for utility purposes)
+  ReaderBase* Reader;
+
 public:
+
+  /// \brief Mutable iterator to elements of the stack from top to bottom.
+  ///
+  /// Iteration over the stack is in the reverse direction from 
+  /// the vector.
+  typedef std::vector<IRNode*>::reverse_iterator iterator;
+
+  /// \brief Mutable iterator to elements of the stack from bottom to top.
+  ///
+  /// Iteration over the stack is in the reverse direction from 
+  /// the vector.
+  typedef std::vector<IRNode*>::iterator reverse_iterator;
+
+
+  /// \brief Public constructor
+  ///
+  /// Construct operand stack.
+  /// \param Capacity The estimated maximum size the stack will have. But
+  /// the stack can grow beyond this size if necessary. This is just used
+  /// for setting the initial capacity.
+  /// \param Reader Pointer to the reason (for utility purposes).
+  ReaderStack(int Capacity, ReaderBase* Reader) : Reader(Reader) {
+    Stack.reserve(Capacity);
+  }
+
   /// \brief Pop the top element off the operand stack.
   /// \return The top element of the stack.
   /// \pre The stack is not empty
   /// \post The top element of the stack has been removed.
-  virtual IRNode *pop(void) = 0;
+  IRNode *pop(void);
 
   /// \brief Push \p NewVal onto the operand stack.
   /// \pre NewVal != NULL
-  virtual void push(IRNode *NewVal, IRNode **NewIR) = 0;
+  virtual void push(IRNode *NewVal, IRNode **NewIR);
 
   /// \brief Make the operand stack empty.
   /// \post The stack is empty.
-  virtual void clearStack(void) = 0;
+  virtual void clearStack(void);
 
   /// \brief Test whether the stack is empty.
   /// \return True if the stack is empty
-  virtual bool empty(void) = 0;
+  virtual bool empty(void);
 
   /// \brief If the stack is not empty, cause an assertion failure.
-  virtual void assertEmpty(void) = 0;
+  virtual void assertEmpty(void);
 
   /// \brief get the number of operands on the operand stack.
   /// \return The number of elements in the stack.
-  virtual uint32_t depth() = 0;
+  virtual uint32_t depth();
 
-  /// \brief Initialize iteration over stack from top to bottom.
-  ///
-  /// If the stack is non-empty, return value of top element of the stack
-  /// and set \a Iterator to index the top element.
-  /// \return (empty() ? NULL : stack[0])
-  virtual IRNode *getIterator(ReaderStackIterator& Iterator) = 0;
+  /// \brief Get begin iterator for iterating from top to bottom.
+  iterator fromTopBegin();
 
-  /// \brief Return the next stack value in top to bottom iteration and 
-  /// advance the iteration position, but returns NULL is the bottom
-  /// element has already been reached.
-  virtual IRNode *iteratorGetNext(ReaderStackIterator& Iterator) = 0;
+  /// \brief Get end iterator for iterating from top to bottom.
+  iterator fromTopEnd();
 
-  /// \brief Replace the stack location referenced by \a Iterator
-  /// with the \a NewValue.
-  virtual void iteratorReplace(ReaderStackIterator& Iterator, IRNode *NewValue) 
-    = 0;
+  /// \brief Get begin iterator for iterating from bottom to top.
+  reverse_iterator fromBottomBegin();
 
-  /// \brief Initialize iteration over stack from bottom to top.
-  ///
-  /// If the stack is non-empty, return value of bottom element of the stack
-  /// and set \a Iterator to index the bottom element. If the stack
-  /// is empty just return NULL>
-  virtual IRNode *getReverseIterator(ReaderStackIterator& Iterator) = 0;
-
-  /// \brief Initialize iteration over stack from bottom to top but only
-  /// iterating over the top \a Depth elements.
-  ///
-  /// If the stack is non-empty, return value of element (\a Depth - 1) from the 
-  /// top of the stack and set \a Iterator to index that element.
-  /// Besides starting an iteration this can also be used to randomly access
-  /// elements of the stack. For example calling this with \a Depth == 2
-  /// would return the element just below the top element on the stack.
-  virtual IRNode *getReverseIteratorFromDepth(ReaderStackIterator& Iterator,
-    uint32_t Depth) = 0;
-
-
-  /// \brief Return the next stack value in bottom to top iteration and 
-  /// advance the iteration position. But return NULL if the top has already
-  /// been reached.
-  virtual IRNode *reverseIteratorGetNext(ReaderStackIterator& Iterator) = 0;
+  /// \brief Get end iterator for iterating from bottom to top.
+  reverse_iterator fromBottomEnd();
 
 #if defined(_DEBUG)
   /// \brief Print the contents of the operand stack onto the debug output.
-  virtual void print() = 0;
+  virtual void print();
 #endif
 
   /// \brief Returns a copy of this operand stack.
-  virtual ReaderStack *copy() = 0;
+  virtual ReaderStack *copy();
 };
 
 #pragma endregion
