@@ -99,7 +99,7 @@ function ValidatePreConditions
 
   # Validate GnuWin32
 
-  IsOnPath -executable "grep.exe" -software "GnuWin32"
+  # IsOnPath -executable "grep.exe" -software "GnuWin32"
 
   # Validate LLVM
 
