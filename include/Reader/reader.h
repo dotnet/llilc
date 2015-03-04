@@ -812,7 +812,6 @@ public:
   // Call CreateSym for each param and auto. Also return function bytecode
   // start and length.
   void initParamsAndAutos(uint32_t NumParam, uint32_t NumAuto);
-  void handleNonEmptyStack(FlowGraphNode *Fg, IRNode **NewIR, bool *FmbAssign);
 
   // Needed by inlining so public
   FlowGraphNode *buildFlowGraph(FlowGraphNode **FgTail);
@@ -864,7 +863,7 @@ private:
                                              uint32_t BufferSize);
   void fgBuildPhase1(FlowGraphNode *Fg, uint8_t *Buffer, uint32_t BufferSize);
   void fgAttachGlobalVerifyData(FlowGraphNode *HeadBlock);
-  void fgAddArcs(FlowGraphNode *HeadBlock);
+  void fgFixRecursiveEdges(FlowGraphNode *HeadBlock);
   IRNode *fgAddCaseToCaseListHelper(IRNode *SwitchNode, IRNode *LabelNode,
                                     uint32_t Element);
   FlowGraphNodeWorkList *
