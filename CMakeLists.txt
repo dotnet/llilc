@@ -1,8 +1,15 @@
 # If we are not building as a part of LLVM, build LLILCJit as an
 # standalone project, using LLVM as an external library:
 if( CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
-  project(LLILC)
   cmake_minimum_required(VERSION 2.8.8)
+
+  project(LLILC)
+  if( APPLE )
+    set(MACOSX_RPATH ON)
+    if( POLICY CMP0042 )
+      cmake_policy(SET CMP0042 NEW)
+    endif()
+  endif()
 
   set(WITH_LLVM "" CACHE PATH "Path to the directory where LLVM was built or installed.")
 
@@ -91,26 +98,26 @@ endif()
 if( UNIX )
   set(WITH_CORECLR  "" CACHE PATH "Path to the directory where CoreCLR was built or installed.")
 
-  set(CORECLR_SO_SEARCH_PATHS "")
+  set(CORECLR_SEARCH_PATHS "")
 
   if( NOT WITH_CORECLR STREQUAL "" )
     get_filename_component(WITH_CORECLR_ABS "${WITH_CORECLR}" ABSOLUTE CACHE)
 
-    list(APPEND CORECLR_SO_SEARCH_PATHS "${WITH_CORECLR_ABS}")
+    list(APPEND CORECLR_SEARCH_PATHS "${WITH_CORECLR_ABS}")
   endif()
 
-  find_path(CORECLR_SO_PATH "libcoreclr.so"
-    HINTS ${CORECLR_SO_SEARCH_PATHS}
-    DOC "Path to libcoreclr.so"
+  find_library(CORECLR_PATH "coreclr"
+    HINTS ${CORECLR_SEARCH_PATHS}
+    DOC "Path to libcoreclr"
     NO_DEFAULT_PATH)
-  find_path(CORECLR_SO_PATH "libcoreclr.so"
-    DOC "Path to libcoreclr.so")
+  find_library(CORECLR_PATH "coreclr"
+    DOC "Path to libcoreclr")
 
-  if( EXISTS "${CORECLR_SO_PATH}" )
+  if( NOT ${CORECLR_PATH} STREQUAL CORECLR_PATH-NOTFOUND AND EXISTS "${CORECLR_PATH}" )
     get_filename_component(WITH_CORECLR_ABS "${CORECLR_SO_PATH}" DIRECTORY CACHE)
     link_directories("${WITH_CORECLR_ABS}")
   else()
-    message(FATAL_ERROR "Could not find libcoreclr.so. Please set WITH_CORECLR to a directory where CoreCLR was built or installed.")
+    message(FATAL_ERROR "Could not find libcoreclr. Please set WITH_CORECLR to a directory where CoreCLR was built or installed.")
   endif()
 endif()
 
