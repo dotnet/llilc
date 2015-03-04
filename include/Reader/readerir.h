@@ -353,7 +353,7 @@ public:
   IRNode *loadFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                            IRNode *Obj) override;
 
-  IRNode *loadLen(IRNode *Arg1) override;
+  IRNode *loadLen(IRNode *Array, bool ArrayMayBeNull = true) override;
 
   bool arrayAddress(CORINFO_SIG_INFO *Sig, IRNode **RetVal) override {
     throw NotYetImplementedException("arrayAddress");
@@ -397,11 +397,12 @@ public:
 
   IRNode *loadPrimitiveType(IRNode *Addr, CorInfoType CorInfoType,
                             ReaderAlignType Alignment, bool IsVolatile,
-                            bool IsInterfConst) override;
+                            bool IsInterfConst,
+                            bool AddressMayBeNull = true) override;
 
   IRNode *loadNonPrimitiveObj(IRNode *Addr, CORINFO_CLASS_HANDLE ClassHandle,
-                              ReaderAlignType Alignment,
-                              bool IsVolatile) override {
+                              ReaderAlignType Alignment, bool IsVolatile,
+                              bool AddressMayBeNull = true) override {
     throw NotYetImplementedException("loadNonPrimitiveObj");
   };
   IRNode *makeRefAny(CORINFO_RESOLVED_TOKEN *ResolvedToken,
@@ -434,7 +435,8 @@ public:
                   bool IsVolatile) override;
 
   void storePrimitiveType(IRNode *Value, IRNode *Addr, CorInfoType CorInfoType,
-                          ReaderAlignType Alignment, bool IsVolatile) override;
+                          ReaderAlignType Alignment, bool IsVolatile,
+                          bool AddressMayBeNull = true) override;
 
   void storeLocal(uint32_t LocOrdinal, IRNode *Arg1, ReaderAlignType Alignment,
                   bool IsVolatile) override;
@@ -735,7 +737,8 @@ public:
             CORINFO_CLASS_HANDLE Class, bool IsPinned,
             ReaderSpecialSymbolType SymType = Reader_NotSpecialSymbol) override;
 
-  IRNode *derefAddress(IRNode *Address, bool DstIsGCPtr, bool IsConst) override;
+  IRNode *derefAddress(IRNode *Address, bool DstIsGCPtr, bool IsConst,
+                       bool AddressMayBeNull = true) override;
 
   IRNode *conditionalDerefAddress(IRNode *Address) override {
     throw NotYetImplementedException("conditionalDerefAddress");
@@ -897,8 +900,18 @@ private:
   uint32_t argOrdinalToArgIndex(uint32_t ArgOrdinal);
   uint32_t argIndexToArgOrdinal(uint32_t ArgIndex);
 
-  void makeStore(llvm::Type *Ty, llvm::Value *Address,
-                 llvm::Value *ValueToStore, bool IsVolatile);
+  llvm::StoreInst *makeStore(llvm::Value *ValueToStore, llvm::Value *Address,
+                             bool IsVolatile, bool AddressMayBeNull = true);
+  llvm::StoreInst *makeStoreNonNull(llvm::Value *ValueToStore,
+                                    llvm::Value *Address, bool IsVolatile) {
+    return makeStore(ValueToStore, Address, IsVolatile, false);
+  }
+
+  llvm::LoadInst *makeLoad(llvm::Value *Address, bool IsVolatile,
+                           bool AddressMayBeNull = true);
+  llvm::LoadInst *makeLoadNonNull(llvm::Value *Address, bool IsVolatile) {
+    return makeLoad(Address, IsVolatile, false);
+  }
 
 private:
   LLILCJitContext *JitContext;
