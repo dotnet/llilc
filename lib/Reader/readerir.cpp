@@ -2611,17 +2611,21 @@ void GenIR::storePrimitiveType(IRNode *Value, IRNode *Addr,
   IRNode *TypedAddr = Addr;
 
   // We need to cast the address when types are mismatched.
-  Type *ExpectedTy = Value->getType();
+  Type *ExpectedTy = this->getType(CorInfoType, NULL);
   if (ReferentTy != ExpectedTy) {
     Type *PtrToExpectedTy = getUnmanagedPointerType(ExpectedTy);
     TypedAddr =
       (IRNode *)LLVMBuilder->CreatePointerCast(Addr, PtrToExpectedTy);
   }
 
+  // Convert the value as necessary.
+  IRNode *ValueToStore = convertFromStackType(Value, CorInfoType, ExpectedTy);
+
   uint32_t Align = (Alignment == Reader_AlignNatural)
     ? TargetPointerSizeInBits / 8
     : Alignment;
-  StoreInst *StoreInst = LLVMBuilder->CreateStore(Value, TypedAddr, IsVolatile);
+  StoreInst *StoreInst = LLVMBuilder->CreateStore(ValueToStore, TypedAddr, 
+                                                  IsVolatile);
   StoreInst->setAlignment(Align);
 }
 
@@ -2902,7 +2906,11 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
   GCLayout *GCInfo = nullptr;
 
   if (CallTargetInfo->isTailCall()) {
-    throw NotYetImplementedException("Tail call");
+    // If there's no explicit tail prefix, we can generate
+    // a normal call and all will be well.
+    if (!CallTargetInfo->isUnmarkedTailCall()) {
+      throw NotYetImplementedException("Tail call");
+    }
   }
 
   if (SigInfo->hasTypeArg()) {
