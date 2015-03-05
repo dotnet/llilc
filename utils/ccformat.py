@@ -106,9 +106,36 @@ def runTidy(args):
 
 def runFormat(args):
   formatFix = "-i" if args.fix else ""
-  subprocess.call(" ".join(["git", "diff", args.base, "-U0", "2>" + os.devnull,
-      "|", args.clang_format_diff, "-p1", formatFix]), shell=True)
-  return 0
+  returncode = 0
+  if args.formatall:
+    llilcSrc = expandPath(args.llilc_source)
+    for dirname,subdir,files in os.walk(llilcSrc):
+      if ".git" in dirname or "clr" in dirname:
+        continue
+      for filename in files:
+        if filename.endswith(".c") or filename.endswith(".cpp") or \
+          filename.endswith(".h"):
+          filepath=os.path.join(dirname, filename)
+          proc = subprocess.Popen(" ".join([args.clang_format, filepath, 
+              formatFix, "2>" + os.devnull]), shell=True, stdout=subprocess.PIPE)
+            
+          output,error = proc.communicate()
+          if output != "":
+            print filepath
+            returncode = -1
+  else:
+    proc = subprocess.Popen(" ".join(["git", "diff", args.base, "-U0", "2>" + 
+        os.devnull, "|", args.clang_format_diff, "-p1", formatFix]), 
+        shell=True, stdout=subprocess.PIPE)
+
+    output,error = proc.communicate()
+    if output != "":
+      print output
+      returncode = -1
+
+  if returncode == -1:
+    print "There were formatting errors. Rerun with --fix"
+  return returncode
 
 def main(argv):
   llvmBuild = os.environ.get("LLVMBUILD")
@@ -121,6 +148,8 @@ def main(argv):
   parser.add_argument("--clang-format-diff", metavar="PATH",
             default="clang-format-diff.py",
             help="path to clang-format-diff tool")
+  parser.add_argument("--clang-format", metavar="PATH",
+            default="clang-format", help="path to clang-format binary")
   parser.add_argument("--compile-commands", metavar="PATH",
             help="path to a directory containing a JSON compile commands " \
                  "database used to determine clang-tidy options")
@@ -152,6 +181,8 @@ def main(argv):
             help="clang-tidy checks to run")
   parser.add_argument("--base", metavar="BRANCH", default="origin",
             help="Base for obtaining diffs")
+  parser.add_argument("--formatall", action="store_true", default=False,
+            help="Run clang-format on all files")
   args = parser.parse_args(argv)
 
   returncode=0
@@ -161,7 +192,7 @@ def main(argv):
       return returncode
 
   if not args.noformat:
-    runFormat(args)
+    returncode = runFormat(args)
   
   return returncode
 
