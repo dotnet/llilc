@@ -2066,7 +2066,7 @@ void ReaderBase::setupBlockForEH(IRNode **NewIR) {
   }
 }
 
-void ReaderBase::fgAddArcs(FlowGraphNode *HeadBlock) {
+void ReaderBase::fgFixRecursiveEdges(FlowGraphNode *HeadBlock) {
   FlowGraphNode *Block, *FallThroughBlock;
   IRNode *BranchNode, *LabelNode;
   bool HasFallThrough;
@@ -2091,38 +2091,6 @@ void ReaderBase::fgAddArcs(FlowGraphNode *HeadBlock) {
       fgRevertRecursiveBranch(BranchNode);
     }
   }
-
-  // Process the blocks as normal, now that we have fixed any trouble
-  // that localloc would cause for the edges that we are about to insert.
-  for (Block = HeadBlock; Block != NULL;
-       Block = fgNodeGetNext((FlowGraphNode *)Block)) {
-
-    if (HasFallThrough) {
-      fgAddArc(NULL, FallThroughBlock, (FlowGraphNode *)Block);
-    }
-
-    LabelNode = fgNodeFindStartLabel(Block);
-
-    // Block starts with label.  Add arcs from branches to this label.
-    if (LabelNode) {
-      BranchList *BranchList;
-      for (BranchList = fgGetLabelBranchList(LabelNode); BranchList != NULL;
-           BranchList = branchListGetNext(BranchList)) {
-
-        BranchNode = branchListGetIRNode(BranchList);
-        fgAddArc(BranchNode, irNodeGetEnclosingBlock(BranchNode),
-                 (FlowGraphNode *)Block);
-      }
-    }
-
-    FallThroughBlock = NULL;
-
-    // Find whether block ends in a branch
-    HasFallThrough = fgBlockHasFallThrough(Block);
-    if (HasFallThrough) {
-      FallThroughBlock = Block;
-    }
-  }
 }
 
 // Builds flow graph from bytecode and initializes blocks for DFO traversal.
@@ -2133,8 +2101,8 @@ FlowGraphNode *ReaderBase::buildFlowGraph(FlowGraphNode **FgTail) {
   HeadBlock =
       fgBuildBasicBlocksFromBytes(MethodInfo->ILCode, MethodInfo->ILCodeSize);
 
-  // Add the arcs
-  fgAddArcs(HeadBlock);
+  // Fix recursive edges
+  fgFixRecursiveEdges(HeadBlock);
 
   // Return head FlowGraphNode.
   *FgTail = fgGetTailBlock();
@@ -3696,23 +3664,24 @@ void ReaderBase::verifyRecordBranchForVerification(IRNode *Branch,
   }
 }
 
-/////////////////////////////////////////////////////////////////////////
-// FUNCTION:  void buildBasicBlocksFromBytes(...) - PRIVATE
-//  RETURN VALUE: void
-//  ARGUMENTS: 3
-//      uint8_t *Buf: the buffer containing the byte codes in MSIL
-//      uint32_t count: the length of the buffer in bytes
-//      PCI ciptr: the compiler instance
-//  DESCRIPTION: This code reads through the bytes codes and builds
-//    the correct basic blocks. It operates in three phases
-//      PHASE 1: Read byte codes and create some basic blocks
-//          based on branches and switches. Create the branch
-//          IR for those byte codes. Populate the Branch Offset
-//          List with the information to generate the labels.
-//      PHASE 2: Complete the flow graph by correctly inserting
-//          all labels and spliting basic blocks based on those
-//          insertions.
-//      PHASE 3: Insert EH IR. This includes region start/end markers.
+/// \brief This code reads through the bytes codes and builds
+///        the correct basic blocks.
+///
+/// It operates in four phases
+/// - PHASE 1: Read byte codes and create some basic blocks
+///            based on branches and switches. Create the branch
+///            IR for those byte codes. Populate the NodeOffsetList
+///            with the information to adjust branch targets.
+/// - PHASE 2: Complete the flow graph by correctly adjusting branch
+///            targets and spliting basic blocks based on those
+///            targets.
+/// - PHASE 3: Verify branch targets.
+/// - PHASE 4: Insert EH IR. This includes region start/end markers.
+///
+/// \param      Buffer     The buffer containing the byte codes in MSIL.
+/// \param      BufferSize The length of the buffer in bytes.
+///
+/// \returns FlowGraphNode corresponding to the bytes.
 FlowGraphNode *
 ReaderBase::fgBuildBasicBlocksFromBytes(uint8_t *Buffer, uint32_t BufferSize) {
   FlowGraphNode *Block;
@@ -3730,8 +3699,8 @@ ReaderBase::fgBuildBasicBlocksFromBytes(uint8_t *Buffer, uint32_t BufferSize) {
   fgBuildPhase1(Block, Buffer, BufferSize);
 
   // PHASE 2:
-  // replace branch temporary branch targets that were gathered into
-  // labelOffsetList during phase 1 with real ones
+  // replace temporary branch targets that were gathered into
+  // NodeOffsetList during phase 1 with real ones
   fgReplaceBranchTargets();
 
   insertIBCAnnotations();
@@ -5860,238 +5829,6 @@ void ReaderBase::clearStack(IRNode **NewIR) {
   while (!ReaderOperandStack->empty()) {
     pop(ReaderOperandStack->pop(), NewIR);
   }
-}
-
-// Function: handleNonEmptyStack
-//
-// Function is called to propagate live operand stack elements across
-// block boundaries. After this function has run all successors S, all
-// the predecessors S' of S, and all successors of S' will be
-// populated with copies of the same operand stack.
-//
-// For this reason, it should not be possible for this function to
-// encounter a successor list that is partially populated.
-//
-// Copy operand stack onto all edges in the current web.
-//
-//  1. If a successor is unpopulated -> no successors are populated
-//     {
-//  2.   Construct propagatable operand stack from current reader stack
-//  3.   Push current block onto worklist.
-//  4.   While worklist is non-empty
-//       {
-//  5.     block = worklist.pop();
-//  6.     For each successor of block
-//         {
-//  7.       If operand stack is NULL
-//           {
-//  8.         push all predecessors onto worklist.
-//  9.         populate operand stack.
-//           }
-//         }
-//       }
-//     }
-// 10. Convert and assign reader stack operands to successor stack operands.
-void ReaderBase::handleNonEmptyStack(FlowGraphNode *Fg, IRNode **NewIR,
-                                     bool *FmbAssign) {
-  FlowGraphEdgeList *SuccessorList;
-  FlowGraphNode *SuccessorBlock;
-  ReaderStackIterator Iterator;
-  IRNode *CurrentNode;
-
-#ifndef NODEBUG
-  bool SawNonNull, SawNull;
-  SawNonNull = false;
-  SawNull = false;
-  SuccessorList = fgNodeGetSuccessorList(Fg);
-  SuccessorList = fgEdgeListGetNextSuccessorActual(SuccessorList);
-  while (SuccessorList != NULL) {
-    SuccessorBlock = fgEdgeListGetSink(SuccessorList);
-    if (fgNodeGetOperandStack(SuccessorBlock) != NULL) {
-      SawNonNull = true;
-    } else {
-      SawNull = true;
-    }
-    SuccessorList = fgEdgeListGetNextSuccessorActual(SuccessorList);
-  }
-
-  ASSERTNR(!(SawNonNull && SawNull));
-#endif // NODEBUG
-
-  // Obtain a successor list (that isn't an EH edge).
-  SuccessorList = fgNodeGetSuccessorListActual(Fg);
-
-  // If there were no non-eh successors then we are done.
-  if (SuccessorList == NULL) {
-    // UNREACHED?
-    clearStack(NewIR);
-    return;
-  }
-  SuccessorBlock = fgEdgeListGetSink(SuccessorList);
-
-  ReaderStack *SuccessorStack = fgNodeGetOperandStack(SuccessorBlock);
-
-  // 1. If successor is unpopulated (hence all successors are
-  // unpopulated) then we must construct an operand stack using the
-  // CurrentNoderent reader stack.
-  if (SuccessorStack == NULL) {
-    ReaderStackIterator TargetIterator;
-
-    // 2. Create stack typed stack of tmpvars.
-    SuccessorStack = ReaderOperandStack->copy();
-
-    // Push new elements onto temp stack.
-    CurrentNode = ReaderOperandStack->getIterator(Iterator);
-    SuccessorStack->getIterator(TargetIterator);
-    while (CurrentNode != NULL) {
-      SuccessorStack->iteratorReplace(TargetIterator,
-                                      makeStackTypeNode(CurrentNode));
-      CurrentNode = ReaderOperandStack->iteratorGetNext(Iterator);
-      SuccessorStack->iteratorGetNext(TargetIterator);
-    }
-
-    // Copy operand stack onto all edges in the CurrentNoderent web.
-
-    //  3.   Push CurrentNoderent block onto worklist.
-    //  4.   While worklist is non-empty
-    //  5.     block = worklist.pop();
-    //  6.     For each successor of block
-    //  7.       If operand stack is NULL
-    //  8.         push all predecessors onto worklist.
-    //  9.         populate operand stack.
-
-    //  3. Push CurrentNoderent block onto worklist
-    FlowGraphNodeList *WorkList, *NewBlockList, *DeadList;
-
-    DeadList = NULL;
-    WorkList = NULL;
-
-    NewBlockList =
-        (FlowGraphNodeList *)getTempMemory(sizeof(FlowGraphNodeList));
-    NewBlockList->Block = Fg;
-    NewBlockList->Next = WorkList;
-    WorkList = NewBlockList;
-
-    // 4. While worklist is non-empty
-    while (WorkList) {
-      FlowGraphNodeList *Temp;
-      FlowGraphNode *CurrentBlock;
-      FlowGraphEdgeList *SuccessorList;
-
-      // 5. block = worklist.pop()
-      CurrentBlock = WorkList->Block;
-
-      Temp = WorkList;
-
-      WorkList = WorkList->Next;
-
-      //    push dead node onto dead list
-      Temp->Next = DeadList;
-      DeadList = Temp;
-
-      // 6. For each (non-EH) successor of block
-      SuccessorList = fgNodeGetSuccessorListActual(CurrentBlock);
-      while (SuccessorList != NULL) {
-
-        SuccessorBlock = fgEdgeListGetSink(SuccessorList);
-
-        // 7. If operand stack is NULL
-        // If successor block has not been populated then
-        // push all of its predecessors onto the worklist,
-        // and populate its operand stack. If it has already
-        // been populated then its predecessors have already
-        // been put onto the worklist.
-        if (fgNodeGetOperandStack(SuccessorBlock) == NULL) {
-          FlowGraphEdgeList *PredecessorList;
-
-          // 8. Push all (non-EH) predecessors of SuccessorBlock onto worklist
-          PredecessorList = fgNodeGetPredecessorListActual(SuccessorBlock);
-          while (PredecessorList != NULL) {
-            FlowGraphNode *PredecessorBlock;
-
-            // Push onto worklist.
-            PredecessorBlock = fgEdgeListGetSource(PredecessorList);
-            if (PredecessorBlock != CurrentBlock) {
-              FlowGraphEdgeList *PredecessorSuccessorList;
-
-              PredecessorSuccessorList =
-                  fgNodeGetSuccessorListActual(PredecessorBlock);
-              if (PredecessorSuccessorList &&
-                  (fgNodeGetOperandStack(
-                       fgEdgeListGetSink(PredecessorSuccessorList)) == NULL)) {
-                // Attempt to re-use node from dead list
-                if (DeadList) {
-                  NewBlockList = DeadList;
-                  DeadList = DeadList->Next;
-                } else {
-                  NewBlockList = (FlowGraphNodeList *)getTempMemory(
-                      sizeof(FlowGraphNodeList));
-                }
-                NewBlockList->Block = PredecessorBlock;
-                NewBlockList->Next = WorkList;
-                WorkList = NewBlockList;
-              }
-            }
-            PredecessorList =
-                fgEdgeListGetNextPredecessorActual(PredecessorList);
-          }
-
-          // 9. Populate operand stack
-          fgNodeSetOperandStack(SuccessorBlock, SuccessorStack->copy());
-        }
-        SuccessorList = fgEdgeListGetNextSuccessorActual(SuccessorList);
-      }
-    } // end worklist iteration.
-  }
-
-#ifndef NODEBUG
-  // Ensure that all successors have operand stacks
-  SuccessorList = fgNodeGetSuccessorListActual(Fg);
-  while (SuccessorList != NULL) {
-    ReaderStack *Stack;
-
-    SuccessorBlock = fgEdgeListGetSink(SuccessorList);
-    Stack = fgNodeGetOperandStack(SuccessorBlock);
-    ASSERTMNR(Stack != NULL, "error, empty operand stack on successor.\n");
-    SuccessorList = fgEdgeListGetNextSuccessorActual(SuccessorList);
-  }
-#endif // !NODEBUG
-
-  // 10. Generate assignments from variables on CurrentNoderent operand stack
-  // to elements of the operand stack list. Note that until now we've
-  // always put copies of the operand stack onto the successor blocks.
-  // We've been saving the original to use as a source for nodes to
-  // assign to.
-
-  // Assign CurrentNoderent stack elements to tmpvars on successor operand
-  // stack.
-  ReaderStackIterator TargetIterator;
-  IRNode *Target;
-
-  CurrentNode = ReaderOperandStack->getIterator(Iterator);
-  Target = SuccessorStack->getIterator(TargetIterator);
-  while ((CurrentNode != NULL) && (Target != NULL)) {
-    assignToSuccessorStackNode(Fg, Target, CurrentNode, NewIR, FmbAssign);
-    CurrentNode = ReaderOperandStack->iteratorGetNext(Iterator);
-    Target = SuccessorStack->iteratorGetNext(TargetIterator);
-  }
-
-#if !defined(CC_PEVERIFY)
-  // Lets not tolerate mismatched stack heights in unverified code.
-  // They render the program unintelligible.
-  if (!VerificationNeeded) {
-    if ((CurrentNode != NULL) || (Target != NULL)) {
-      BADCODE(MVER_E_PATH_STACK_DEPTH);
-    }
-  }
-#endif
-
-  // OPTIMIZATION: The reader will re-use the reader stack in the
-  // event that there are no stack-carried temporaries; this call is
-  // to makes sure that the stack that gets used will indeed be empty
-  // if it gets re-used in this manner (It may be guaranteed anyway,
-  // but better safe than sorry).
-  ReaderOperandStack->clearStack();
 }
 
 void ReaderBase::initParamsAndAutos(uint32_t NumParam,
