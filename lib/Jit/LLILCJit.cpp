@@ -138,7 +138,6 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
   // Fill in context information from the CLR
   Context.JitInfo = JitInfo;
   Context.MethodInfo = MethodInfo;
-  Context.ILCursor = MethodInfo->ILCode;
   Context.Flags = Flags;
   JitInfo->getEEInfo(&Context.EEInfo);
 

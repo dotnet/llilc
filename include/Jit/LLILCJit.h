@@ -56,7 +56,7 @@ struct LLILCJitContext {
   /// values in the IR and these values can vary from run to run, so a bitcode
   /// file saved from a previous run may not work as expected.
   ///
-  /// \param MethodInfo  The EE info for the method being jitted.
+  /// \param MethodInfo  The CoreCLR method info for the method being jitted.
   std::unique_ptr<llvm::Module>
   getModuleForMethod(CORINFO_METHOD_INFO *MethodInfo);
 
@@ -64,9 +64,8 @@ struct LLILCJitContext {
   void outputDebugMethodName();
 
 public:
-  uint8_t *ILCursor;
 
-  /// \name EE information
+  /// \name CoreCLR EE information
   //@{
   ICorJitInfo *JitInfo;              ///< EE callback interface
   CORINFO_METHOD_INFO *MethodInfo;   ///< Description of method to jit
@@ -101,7 +100,7 @@ public:
 ///
 /// The Jit may be invoked concurrently on more than one thread. To avoid 
 /// synchronization overhead it maintains per-thread state, mainly to map from
-/// EE artifacts to LLVM data structures.
+/// CoreCLR EE artifacts to LLVM data structures.
 ///
 /// The per thread state also provides access to the current Jit context in 
 /// case it is ever needed.
@@ -137,9 +136,9 @@ public:
   std::map<CORINFO_FIELD_HANDLE, uint32_t> FieldIndexMap;
 };
 
-/// \brief The Jit interface to the EE.
+/// \brief The Jit interface to the CoreCLR EE.
 ///
-/// This class implements the Jit interface to the EE. The EE uses this
+/// This class implements the Jit interface to the CoreCLR EE. The EE uses this
 /// to direct the jit to jit methods. There is a single instance of this
 /// object in the process, created by the \p getJit() function exported from
 /// the jit library or DLL.
