@@ -780,6 +780,7 @@ function Global:RunTest([string]$Arch="x64", [string]$Build="Release")
   $CoreCLRTestAssets = CoreCLRTestAssets
   $CoreCLRRuntime = CoreCLRRuntime
   $CoreCLRVersion = CoreCLRVersion
+  $LLILCTest = LLILCTest
   
   # Workaround exception handling issue
   chcp 65001 | Out-Null
@@ -787,8 +788,7 @@ function Global:RunTest([string]$Arch="x64", [string]$Build="Release")
   $Env:SkipTestAssemblies = "Common;Exceptions;GC;Loader;managed;packages;Regressions;runtime;Tests;TestWrappers_x64_release;Threading" 
   pushd .
   cd $CoreCLRTestAssets\coreclr\tests
-
-  .\runtest $Arch $Build EnableAltJit LLILCJit $CoreCLRRuntime\$CoreCLRVersion\bin | Write-Host
+  .\runtest $Arch $Build TestEnv $LLILCTest\LLILCTestEnv.cmd $CoreCLRRuntime\$CoreCLRVersion\bin | Write-Host
   $NumDiff = CheckDiff -Create $True -UseDiffTool $False -Arch $Arch -Build $Build
   $NumFailures = CheckFailure -Arch $Arch -Build $Build
   popd
