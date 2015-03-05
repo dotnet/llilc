@@ -172,37 +172,53 @@ private:
   llvm::succ_iterator SuccIteratorEnd;
 };
 
+/// \brief A stack of IRNode pointers representing the MSIL operand stack.
+///
+/// The MSIL instruction set operates on a stack machine. Instructions
+/// with operands may take them from the stack (if not some kind of
+/// immediate) and the results of instruction are pushed on the operand stack.
+/// The MSIL operands are translated by the reader into IRNodes. 
+/// The operand stack is represented by a stack of pointers to the 
+/// IRNodes for the operands. 
+///
+/// This class completes the implementation of the ReaderStack base class.
 class GenStack : public ReaderStack {
+private:
+  /// Owner of the operand stack.
+  ReaderBase *Reader;
 public:
-  GenStack();
+  /// \brief Construct a GenStack with an initial capacity of \a MaxStack.
+  ///
+  /// \param MaxStack Suggested capacity for the stack. However the stack
+  /// is allowed to grow larger than MaxStack as needed (possibly due to
+  /// function inlining). 
+  /// \param Reader The ReaderBase that owns this operand stack. This is needed
+  /// so that storage can be allocated from the lifetime of the reader.
   GenStack(uint32_t MaxStack, ReaderBase *Reader);
-  IRNode *pop(void) override;
-  void push(IRNode *NewVal, IRNode **NewIR) override;
-  void clearStack(void) override;
-  bool empty(void) override;
-  void assertEmpty(void) override;
-  uint32_t depth() override;
+  
+  /// \brief Pop the top element off the operand stack.
+  ///
+  /// \return The top element of the stack.
+  /// \pre The stack is not empty
+  /// \post The top element of the stack has been removed.
+  IRNode *pop() override;
 
-  // For iteration
-  IRNode *getIterator(ReaderStackIterator& Iterator) override;
-  IRNode *iteratorGetNext(ReaderStackIterator& Iterator) override;
-  void iteratorReplace(ReaderStackIterator& Iterator, IRNode *) override;
-  IRNode *getReverseIterator(ReaderStackIterator& Iterator) override;
-  IRNode *getReverseIteratorFromDepth(ReaderStackIterator& Iterator,
-    uint32_t Depth) override;
-  IRNode *reverseIteratorGetNext(ReaderStackIterator& Iterator) override;
+  /// \brief Push \p NewVal onto the operand stack.
+  ///
+  /// \param NewVal The value to be pushed.
+  /// \pre NewVal != NULL
+  void push(IRNode *NewVal, IRNode **NewIR) override;
+
+  /// \brief If the stack is not empty, cause an assertion failure.
+  void assertEmpty() override;
 
 #if !defined(NODEBUG)
+  /// \brief Print the contents of the operand stack onto the debug output.
   void print() override;
 #endif
 
+  /// \brief Returns a copy of this operand stack.
   ReaderStack *copy() override;
-
-private:
-  int32_t Max;
-  int32_t Top;
-  IRNode **Stack;
-  ReaderBase *Reader;
 };
 
 class GenIR : public ReaderBase {
