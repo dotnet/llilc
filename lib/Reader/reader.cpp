@@ -24,6 +24,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "reader.h"
+#include "readerir.h"
+#include "LLILCJit.h"
 #include "newvstate.h"
 #include "imeta.h"
 #include <climits>
@@ -5896,8 +5898,6 @@ void ReaderBase::handleNonEmptyStack(FlowGraphNode *Fg, IRNode **NewIR,
                                      bool *FmbAssign) {
   FlowGraphEdgeList *SuccessorList;
   FlowGraphNode *SuccessorBlock;
-  ReaderStackIterator Iterator;
-  IRNode *CurrentNode;
 
 #ifndef NODEBUG
   bool SawNonNull, SawNull;
@@ -5930,24 +5930,20 @@ void ReaderBase::handleNonEmptyStack(FlowGraphNode *Fg, IRNode **NewIR,
   SuccessorBlock = fgEdgeListGetSink(SuccessorList);
 
   ReaderStack *SuccessorStack = fgNodeGetOperandStack(SuccessorBlock);
+  ReaderStack::iterator Iterator = ReaderOperandStack->fromTopBegin();
+  ReaderStack::iterator IteratorEnd = ReaderOperandStack->fromTopEnd();
 
   // 1. If successor is unpopulated (hence all successors are
   // unpopulated) then we must construct an operand stack using the
   // CurrentNoderent reader stack.
   if (SuccessorStack == NULL) {
-    ReaderStackIterator TargetIterator;
-
     // 2. Create stack typed stack of tmpvars.
     SuccessorStack = ReaderOperandStack->copy();
+    ReaderStack::iterator TargetIterator = SuccessorStack->fromTopBegin();
 
     // Push new elements onto temp stack.
-    CurrentNode = ReaderOperandStack->getIterator(Iterator);
-    SuccessorStack->getIterator(TargetIterator);
-    while (CurrentNode != NULL) {
-      SuccessorStack->iteratorReplace(TargetIterator,
-                                      makeStackTypeNode(CurrentNode));
-      CurrentNode = ReaderOperandStack->iteratorGetNext(Iterator);
-      SuccessorStack->iteratorGetNext(TargetIterator);
+    while (Iterator != IteratorEnd) {
+      *TargetIterator++ = *Iterator++;
     }
 
     // Copy operand stack onto all edges in the CurrentNoderent web.
@@ -6065,22 +6061,21 @@ void ReaderBase::handleNonEmptyStack(FlowGraphNode *Fg, IRNode **NewIR,
 
   // Assign CurrentNoderent stack elements to tmpvars on successor operand
   // stack.
-  ReaderStackIterator TargetIterator;
-  IRNode *Target;
-
-  CurrentNode = ReaderOperandStack->getIterator(Iterator);
-  Target = SuccessorStack->getIterator(TargetIterator);
-  while ((CurrentNode != NULL) && (Target != NULL)) {
+  ReaderStack::iterator TargetIterator = SuccessorStack->fromTopBegin();
+  ReaderStack::iterator TargetIteratorEnd = SuccessorStack->fromTopEnd();
+  Iterator = ReaderOperandStack->fromTopBegin();
+  IteratorEnd = ReaderOperandStack->fromTopEnd();
+  while ((Iterator != IteratorEnd) && (TargetIterator != TargetIteratorEnd)) {
+    IRNode *CurrentNode = *Iterator++;
+    IRNode *Target = *TargetIterator++;
     assignToSuccessorStackNode(Fg, Target, CurrentNode, NewIR, FmbAssign);
-    CurrentNode = ReaderOperandStack->iteratorGetNext(Iterator);
-    Target = SuccessorStack->iteratorGetNext(TargetIterator);
   }
 
 #if !defined(CC_PEVERIFY)
   // Lets not tolerate mismatched stack heights in unverified code.
   // They render the program unintelligible.
   if (!VerificationNeeded) {
-    if ((CurrentNode != NULL) || (Target != NULL)) {
+    if ((Iterator != IteratorEnd) || (TargetIterator != TargetIteratorEnd)) {
       BADCODE(MVER_E_PATH_STACK_DEPTH);
     }
   }
@@ -8955,3 +8950,6 @@ void ReaderBase::resolveToken(mdToken Token, CorInfoTokenKind TokenType,
   return resolveToken(Token, getCurrentContext(), getCurrentModuleHandle(),
                       TokenType, ResolvedToken);
 }
+
+
+

@@ -172,39 +172,6 @@ private:
   llvm::succ_iterator SuccIteratorEnd;
 };
 
-class GenStack : public ReaderStack {
-public:
-  GenStack();
-  GenStack(uint32_t MaxStack, ReaderBase *Reader);
-  IRNode *pop(void) override;
-  void push(IRNode *NewVal, IRNode **NewIR) override;
-  void clearStack(void) override;
-  bool empty(void) override;
-  void assertEmpty(void) override;
-  uint32_t depth() override;
-
-  // For iteration
-  IRNode *getIterator(ReaderStackIterator& Iterator) override;
-  IRNode *iteratorGetNext(ReaderStackIterator& Iterator) override;
-  void iteratorReplace(ReaderStackIterator& Iterator, IRNode *) override;
-  IRNode *getReverseIterator(ReaderStackIterator& Iterator) override;
-  IRNode *getReverseIteratorFromDepth(ReaderStackIterator& Iterator,
-    uint32_t Depth) override;
-  IRNode *reverseIteratorGetNext(ReaderStackIterator& Iterator) override;
-
-#if !defined(NODEBUG)
-  void print() override;
-#endif
-
-  ReaderStack *copy() override;
-
-private:
-  int32_t Max;
-  int32_t Top;
-  IRNode **Stack;
-  ReaderBase *Reader;
-};
-
 class GenIR : public ReaderBase {
 
 public:
