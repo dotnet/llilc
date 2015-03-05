@@ -206,7 +206,7 @@ class FlowGraphNodeOffsetList;
 
 /// \brief Exception information for the Jit's exception filter
 ///
-/// The jit may need to examine propagating exceptions via a filter to 
+/// The jit may need to examine propagating exceptions via a filter to
 /// determine if the jit needs to take any special actions. This struct
 /// provides some extra context for the jit to consider when filtering.
 struct RuntimeFilterParams {
@@ -230,40 +230,40 @@ struct RuntimeFilterParams {
 /// By convention we only create these structures when the value class
 /// actually has GC pointers, so \p NumGCPtrs should be nonzero.
 struct GCLayout {
-  uint32_t NumGCPointers;    ///< Total number of gc pointers to report
-  uint8_t GCPointers[0];     ///< Array indicating location of the gc pointers
+  uint32_t NumGCPointers; ///< Total number of gc pointers to report
+  uint8_t GCPointers[0];  ///< Array indicating location of the gc pointers
 };
 
 /// \brief Structure used to pass argument information from rdrCall to GenCall.
 ///
-/// ReaderBase (which implements \p rdrCall) doesn't know how the derived 
+/// ReaderBase (which implements \p rdrCall) doesn't know how the derived
 /// Reader (which implements \p GenCall) will represent type information, so it
 /// uses \p ArgType and \p ArgClass to describe the type of the argument, and
 /// \p ArgNode to describe its value.
 struct CallArgTriple {
-  IRNode *ArgNode;                ///< Opaque pointer to IR for argument value
-  CorInfoType ArgType;            ///< Low-level type of the argument
-  CORINFO_CLASS_HANDLE ArgClass;  ///< Extra type info for pointers and similar
+  IRNode *ArgNode;               ///< Opaque pointer to IR for argument value
+  CorInfoType ArgType;           ///< Low-level type of the argument
+  CORINFO_CLASS_HANDLE ArgClass; ///< Extra type info for pointers and similar
 };
 
 /// Structure representing a linked list of flow graph nodes
 struct FlowGraphNodeList {
-  FlowGraphNode *Block;         ///< Head node in the list
-  FlowGraphNodeList *Next;      ///< Pointer to next list cell
+  FlowGraphNode *Block;    ///< Head node in the list
+  FlowGraphNodeList *Next; ///< Pointer to next list cell
 };
 
 /// Structure representing a linked list of flow graph nodes and
 /// for each node, a related node.
 struct FlowGraphNodeWorkList {
-  FlowGraphNode *Block;         ///< Head node in the list
-  FlowGraphNodeWorkList *Next;  ///< Pointer to next list cell
-  FlowGraphNode *Parent;        ///< Related node
+  FlowGraphNode *Block;        ///< Head node in the list
+  FlowGraphNodeWorkList *Next; ///< Pointer to next list cell
+  FlowGraphNode *Parent;       ///< Related node
 };
 
 /// \brief Enum describing pointer alignment.
 enum ReaderAlignType {
   Reader_AlignNatural = (uint8_t)~0, ///< Default natural alignment
-  Reader_AlignUnknown = 0,           ///< Unknown alignment         
+  Reader_AlignUnknown = 0,           ///< Unknown alignment
   Reader_Align1 = 1,                 ///< Byte alignment
   Reader_Align2 = 2,                 ///< Word alignment
   Reader_Align4 = 4,                 ///< DWord alignment
@@ -275,13 +275,13 @@ enum ReaderAlignType {
 /// These are used to describe locals or parameters that have special
 /// meaning during code generation.
 enum ReaderSpecialSymbolType {
-  Reader_NotSpecialSymbol = 0,       ///< Nothing special
-  Reader_ThisPtr,                    ///< Current this pointer for method
-  Reader_UnmodifiedThisPtr,          ///< This pointer param passed to method
-  Reader_VarArgsToken,               ///< Special param for varargs support
-  Reader_InstParam,                  ///< Special param for shared generics
-  Reader_SecurityObject,             ///< Local used for security checking
-  Reader_GenericsContext             ///< Local holding shared generics context
+  Reader_NotSpecialSymbol = 0, ///< Nothing special
+  Reader_ThisPtr,              ///< Current this pointer for method
+  Reader_UnmodifiedThisPtr,    ///< This pointer param passed to method
+  Reader_VarArgsToken,         ///< Special param for varargs support
+  Reader_InstParam,            ///< Special param for shared generics
+  Reader_SecurityObject,       ///< Local used for security checking
+  Reader_GenericsContext       ///< Local holding shared generics context
 };
 
 /// \brief Types of pointers
@@ -300,14 +300,14 @@ enum ReaderPtrType {
 /// When reading MSIL, different kinds of exceptions can be thrown, and this
 /// enum decribes the possibilities.
 enum ReaderExceptionType {
-  Reader_LocalVerificationException,   ///< Verifier local check failed
-  Reader_GlobalVerificationException,  ///< Verifier global check failed
+  Reader_LocalVerificationException,  ///< Verifier local check failed
+  Reader_GlobalVerificationException, ///< Verifier global check failed
 };
 
 /// Common base class for reader exceptions
 class ReaderException {
 public:
-  ReaderExceptionType Type;            ///< Type of the exception
+  ReaderExceptionType Type; ///< Type of the exception
 };
 
 // The TryRegion graph allows us to build a region tree that captures the
@@ -322,10 +322,11 @@ class ReaderBase; // Forward declaration
 
 #pragma region Reader Operand Stack
 
-/// \brief An integral type used to index into the operand stack and to 
+/// \brief An integral type used to index into the operand stack and to
 /// iterate over the elements of the stack.
 ///
-/// It is just a logical index into underlying array used to represent the stack.
+/// It is just a logical index into underlying array used to represent the
+/// stack.
 typedef size_t ReaderStackIterator;
 
 /// \brief A stack of IRNode pointers representing the MSIL operand stack.
@@ -333,17 +334,17 @@ typedef size_t ReaderStackIterator;
 /// The MSIL instruction set operates on a stack machine. Instructions
 /// with operands may take them from the stack (if not some kind of
 /// immediate) and the results of instruction are pushed on the operand stack.
-/// The MSIL operands are translated by the reader into IRNodes. 
-/// The operand stack is represented by a stack of pointers to the 
-/// IRNodes for the operands. 
+/// The MSIL operands are translated by the reader into IRNodes.
+/// The operand stack is represented by a stack of pointers to the
+/// IRNodes for the operands.
 ///
 /// ReaderStack is an abstract class with no C++ declared state and all
 /// abstract methods. However we can describe the effects of the methods
 /// in terms of the stack that the implementing class will provide.
-/// 
+///
 /// For convenience in the method descriptions below, we use
 /// stack[k] to denote the stack element that is k elements from the top,
-/// so that stack[0] is the top element. 
+/// so that stack[0] is the top element.
 
 class ReaderStack {
 public:
@@ -377,41 +378,40 @@ public:
   /// If the stack is non-empty, return value of top element of the stack
   /// and set \a Iterator to index the top element.
   /// \return (empty() ? NULL : stack[0])
-  virtual IRNode *getIterator(ReaderStackIterator& Iterator) = 0;
+  virtual IRNode *getIterator(ReaderStackIterator &Iterator) = 0;
 
-  /// \brief Return the next stack value in top to bottom iteration and 
+  /// \brief Return the next stack value in top to bottom iteration and
   /// advance the iteration position, but returns NULL is the bottom
   /// element has already been reached.
-  virtual IRNode *iteratorGetNext(ReaderStackIterator& Iterator) = 0;
+  virtual IRNode *iteratorGetNext(ReaderStackIterator &Iterator) = 0;
 
   /// \brief Replace the stack location referenced by \a Iterator
   /// with the \a NewValue.
-  virtual void iteratorReplace(ReaderStackIterator& Iterator, IRNode *NewValue) 
-    = 0;
+  virtual void iteratorReplace(ReaderStackIterator &Iterator,
+                               IRNode *NewValue) = 0;
 
   /// \brief Initialize iteration over stack from bottom to top.
   ///
   /// If the stack is non-empty, return value of bottom element of the stack
   /// and set \a Iterator to index the bottom element. If the stack
   /// is empty just return NULL>
-  virtual IRNode *getReverseIterator(ReaderStackIterator& Iterator) = 0;
+  virtual IRNode *getReverseIterator(ReaderStackIterator &Iterator) = 0;
 
   /// \brief Initialize iteration over stack from bottom to top but only
   /// iterating over the top \a Depth elements.
   ///
-  /// If the stack is non-empty, return value of element (\a Depth - 1) from the 
+  /// If the stack is non-empty, return value of element (\a Depth - 1) from the
   /// top of the stack and set \a Iterator to index that element.
   /// Besides starting an iteration this can also be used to randomly access
   /// elements of the stack. For example calling this with \a Depth == 2
   /// would return the element just below the top element on the stack.
-  virtual IRNode *getReverseIteratorFromDepth(ReaderStackIterator& Iterator,
-    uint32_t Depth) = 0;
+  virtual IRNode *getReverseIteratorFromDepth(ReaderStackIterator &Iterator,
+                                              uint32_t Depth) = 0;
 
-
-  /// \brief Return the next stack value in bottom to top iteration and 
+  /// \brief Return the next stack value in bottom to top iteration and
   /// advance the iteration position. But return NULL if the top has already
   /// been reached.
-  virtual IRNode *reverseIteratorGetNext(ReaderStackIterator& Iterator) = 0;
+  virtual IRNode *reverseIteratorGetNext(ReaderStackIterator &Iterator) = 0;
 
 #if defined(_DEBUG)
   /// \brief Print the contents of the operand stack onto the debug output.

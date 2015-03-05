@@ -520,82 +520,73 @@ VOID PALAPI RaiseException(DWORD dwExceptionCode, DWORD dwExceptionFlags,
 
 #if defined(__cplusplus)
 
-class PAL_SEHException
-{
-    // We never want to create these directly, since technically this is an
-    // incomplete definition of the type.
-    PAL_SEHException() { }
+class PAL_SEHException {
+  // We never want to create these directly, since technically this is an
+  // incomplete definition of the type.
+  PAL_SEHException() {}
 
 public:
-    // Note that the following two are actually embedded in this heap-allocated
-    // instance - in contrast to Win32, where the exception record would usually
-    // be allocated on the stack.  This is needed because foreign cleanup
-    // handlers partially unwind the stack on the second pass.
-    EXCEPTION_POINTERS ExceptionPointers;
-    EXCEPTION_RECORD ExceptionRecord;
+  // Note that the following two are actually embedded in this heap-allocated
+  // instance - in contrast to Win32, where the exception record would usually
+  // be allocated on the stack.  This is needed because foreign cleanup
+  // handlers partially unwind the stack on the second pass.
+  EXCEPTION_POINTERS ExceptionPointers;
+  EXCEPTION_RECORD ExceptionRecord;
 };
 
 #endif // __cplusplus
 
 // Start of a try block for exceptions raised by RaiseException
 #define PAL_TRY(__ParamType, __ParamDef, __ParamRef)                           \
-{                                                                              \
+  {                                                                            \
     __ParamType __Param = __ParamRef;                                          \
-    auto __TryBlock = [](__ParamType __ParamDef)                               \
-    {
+  auto __TryBlock = [](__ParamType __ParamDef) {
 
-// Start of an exception handler. If an exception raised by the RaiseException 
-// occurs in the try block and the disposition is EXCEPTION_EXECUTE_HANDLER, 
-// the handler code is executed. If the disposition is EXCEPTION_CONTINUE_SEARCH,
+// Start of an exception handler. If an exception raised by the RaiseException
+// occurs in the try block and the disposition is EXCEPTION_EXECUTE_HANDLER,
+// the handler code is executed. If the disposition is
+// EXCEPTION_CONTINUE_SEARCH,
 // the exception is rethrown. The EXCEPTION_CONTINUE_EXECUTION disposition is
 // not supported.
 #define PAL_EXCEPT(DispositionExpression)                                      \
-    };                                                                         \
-    const bool __IsFinally = false;                                            \
-    auto __FinallyBlock = []() {};                                             \
-    try                                                                        \
-    {                                                                          \
-        __TryBlock(__Param);                                                   \
-    }                                                                          \
-    catch (PAL_SEHException *__Ex)                                             \
-    {                                                                          \
-        EXCEPTION_DISPOSITION __Disposition = DispositionExpression;           \
-        _ASSERTE(__Disposition != EXCEPTION_CONTINUE_EXECUTION);               \
-        if (__Disposition == EXCEPTION_CONTINUE_SEARCH)                        \
-        {                                                                      \
-            throw;                                                             \
-        }
+  }                                                                            \
+  ;                                                                            \
+  const bool __IsFinally = false;                                              \
+  auto __FinallyBlock = []() {};                                               \
+  try {                                                                        \
+    __TryBlock(__Param);                                                       \
+  } catch (PAL_SEHException * __Ex) {                                          \
+    EXCEPTION_DISPOSITION __Disposition = DispositionExpression;               \
+    _ASSERTE(__Disposition != EXCEPTION_CONTINUE_EXECUTION);                   \
+    if (__Disposition == EXCEPTION_CONTINUE_SEARCH) {                          \
+      throw;                                                                   \
+    }
 
 // Start of an exception handler. It works the same way as the PAL_EXCEPT except
 // that the disposition is obtained by calling the specified filter.
 #define PAL_EXCEPT_FILTER(Filter)                                              \
-    PAL_EXCEPT(Filter(&__Ex->ExceptionPointers, __Param))
+  PAL_EXCEPT(Filter(&__Ex->ExceptionPointers, __Param))
 
 // Start of a finally block. The finally block is executed both when the try
 // block finishes or when an exception is raised using the RaiseException in it.
 #define PAL_FINALLY                                                            \
-    };                                                                         \
-    const bool __IsFinally = true;                                             \
-    auto __FinallyBlock = [&]()                                                \
-    {
+  }                                                                            \
+  ;                                                                            \
+  const bool __IsFinally = true;                                               \
+  auto __FinallyBlock = [&]() {
 
-// End of an except or a finally block.
-#define PAL_ENDTRY                                                             \
-    };                                                                         \
-    if (__IsFinally)                                                           \
-    {                                                                          \
-        try                                                                    \
-        {                                                                      \
-            __TryBlock(__Param);                                               \
-        }                                                                      \
-        catch (...)                                                            \
-        {                                                                      \
-            __FinallyBlock();                                                  \
-            throw;                                                             \
-        }                                                                      \
-        __FinallyBlock();                                                      \
+// End of an except or a finally block. #define PAL_ENDTRY }                           \
+  ;                                                                            \
+  if (__IsFinally) {                                                           \
+    try {                                                                      \
+      __TryBlock(__Param);                                                     \
+    } catch (...) {                                                            \
+      __FinallyBlock();                                                        \
+      throw;                                                                   \
     }                                                                          \
-}
+    __FinallyBlock();                                                          \
+  }                                                                            \
+  }
 
 // COM
 typedef struct _GUID {

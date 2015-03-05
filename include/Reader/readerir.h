@@ -9,7 +9,8 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief Declares the GenIR class, which overrides ReaderBase to generate LLVM IR
+/// \brief Declares the GenIR class, which overrides ReaderBase to generate LLVM
+/// IR
 /// from MSIL bytecode.
 ///
 //===----------------------------------------------------------------------===//
@@ -39,7 +40,8 @@ public:
   /// in this basic block.
   uint32_t StartMSILOffset;
 
-  /// Byte offset that is just past the last MSIL instruction of the Basic Block.
+  /// Byte offset that is just past the last MSIL instruction of the Basic
+  /// Block.
   uint32_t EndMSILOffset;
 
   /// In algorithms traversing the flow graph, used to track which basic blocks
@@ -54,8 +56,8 @@ public:
 ///
 /// The MSIL reader expects to use a type called IRNode to represent the
 /// translation of the MSIL instructions. But the LLVM infrastructure uses
-/// the llvm::Value type as the base class of its IR representation. 
-/// To reconcile these we make IRNode a class that merely derives from 
+/// the llvm::Value type as the base class of its IR representation.
+/// To reconcile these we make IRNode a class that merely derives from
 /// llvm::Value.
 class IRNode : public llvm::Value {};
 
@@ -78,15 +80,14 @@ public:
   virtual FlowGraphNode *getSource() = 0;
 };
 
-
 /// \brief A list of predecessor edges of a given flow graph node.
 ///
 /// This is used for iterating over the predecessors of a flow graph node.
 /// After creating the predecessor edge list the getSource method is used
 /// to get the first predecessor (if any). As long as the result of getSource()
 /// is non-null, the moveNext() method may be used to advance to the next
-/// predecessor edge. When getSource() returns null there are no more 
-/// predecessor edges (or predecessors). 
+/// predecessor edge. When getSource() returns null there are no more
+/// predecessor edges (or predecessors).
 /// \invariant The current edge iterator either points to a real edge or else
 /// equals the end iterator meaning the list has been exhausted.
 class FlowGraphPredecessorEdgeList : public FlowGraphEdgeList {
@@ -103,7 +104,7 @@ public:
   /// Move the current location in the flow graph edge list to the next edge.
   /// \pre The current edge has not reached the end of the edge list.
   /// \post The current edge has been advanced to the next, or has possibly
-  /// reached the end iterator (meaning no more predecessors). 
+  /// reached the end iterator (meaning no more predecessors).
   void moveNext() override { PredIterator++; }
 
   /// \return The sink of the current edge which will be \p Fg node.
@@ -112,7 +113,8 @@ public:
     return (FlowGraphNode *)PredIterator.getUse().get();
   }
 
-  /// \return The source of the current edge which will be one of the predecessors
+  /// \return The source of the current edge which will be one of the
+  /// predecessors
   /// of the \p Fg node, unless the list has been exhausted in which case
   /// return NULL.
   FlowGraphNode *getSource() override {
@@ -131,8 +133,8 @@ private:
 /// After creating the successor edge list the getSink method is used
 /// to get the first successor (if any). As long as the result of getSink()
 /// is non-null, the moveNext() method may be used to advance to the next
-/// successor edge. When getSink() returns null there are no more 
-/// successor edges (or successors). 
+/// successor edge. When getSink() returns null there are no more
+/// successor edges (or successors).
 /// \invariant The current edge iterator either points to a real edge or else
 /// equals the end iterator meaning the list has been exhausted.
 class FlowGraphSuccessorEdgeList : public FlowGraphEdgeList {
@@ -150,7 +152,7 @@ public:
   /// Move the current location in the flow graph edge list to the next edge.
   /// \pre The current edge has not reached the end of the edge list.
   /// \post The current edge has been advanced to the next, or has possibly
-  /// reached the end iterator (meaning no more successors). 
+  /// reached the end iterator (meaning no more successors).
   void moveNext() override { SuccIterator++; }
 
   /// \return The sink of the current edge which will be one of the successors
@@ -184,13 +186,13 @@ public:
   uint32_t depth() override;
 
   // For iteration
-  IRNode *getIterator(ReaderStackIterator& Iterator) override;
-  IRNode *iteratorGetNext(ReaderStackIterator& Iterator) override;
-  void iteratorReplace(ReaderStackIterator& Iterator, IRNode *) override;
-  IRNode *getReverseIterator(ReaderStackIterator& Iterator) override;
-  IRNode *getReverseIteratorFromDepth(ReaderStackIterator& Iterator,
-    uint32_t Depth) override;
-  IRNode *reverseIteratorGetNext(ReaderStackIterator& Iterator) override;
+  IRNode *getIterator(ReaderStackIterator &Iterator) override;
+  IRNode *iteratorGetNext(ReaderStackIterator &Iterator) override;
+  void iteratorReplace(ReaderStackIterator &Iterator, IRNode *) override;
+  IRNode *getReverseIterator(ReaderStackIterator &Iterator) override;
+  IRNode *getReverseIteratorFromDepth(ReaderStackIterator &Iterator,
+                                      uint32_t Depth) override;
+  IRNode *reverseIteratorGetNext(ReaderStackIterator &Iterator) override;
 
 #if !defined(NODEBUG)
   void print() override;
@@ -234,9 +236,7 @@ public:
   // MSIL Routines - client defined routines that are invoked by the reader.
   //                 One will be called for each msil opcode.
 
-  uint32_t getPointerByteSize() override {
-    return TargetPointerSizeInBits / 8;
-  }
+  uint32_t getPointerByteSize() override { return TargetPointerSizeInBits / 8; }
 
   void opcodeDebugPrint(uint8_t *Buf, unsigned StartOffset,
                         unsigned EndOffset) override {
@@ -292,11 +292,9 @@ public:
 
   FlowGraphNode *fgNodeGetNext(FlowGraphNode *FgNode) override;
   uint32_t fgNodeGetStartMSILOffset(FlowGraphNode *Fg) override;
-  void fgNodeSetStartMSILOffset(FlowGraphNode *Fg,
-                                uint32_t Offset) override;
+  void fgNodeSetStartMSILOffset(FlowGraphNode *Fg, uint32_t Offset) override;
   uint32_t fgNodeGetEndMSILOffset(FlowGraphNode *Fg) override;
-  void fgNodeSetEndMSILOffset(FlowGraphNode *FgNode,
-                              uint32_t Offset) override;
+  void fgNodeSetEndMSILOffset(FlowGraphNode *FgNode, uint32_t Offset) override;
 
   bool fgNodeIsVisited(FlowGraphNode *FgNode) override;
   void fgNodeSetVisited(FlowGraphNode *FgNode, bool Visited) override;
@@ -311,8 +309,8 @@ public:
     throw NotYetImplementedException("jmp");
   };
 
-  void leave(uint32_t TargetOffset, bool IsNonLocal,
-             bool EndsWithNonLocalGoto, IRNode **NewIR) override;
+  void leave(uint32_t TargetOffset, bool IsNonLocal, bool EndsWithNonLocalGoto,
+             IRNode **NewIR) override;
   IRNode *loadArg(uint32_t ArgOrdinal, bool IsJmp, IRNode **NewIR) override;
   IRNode *loadLocal(uint32_t ArgOrdinal, IRNode **NewIR) override;
   IRNode *loadArgAddress(uint32_t ArgOrdinal, IRNode **NewIR) override;
@@ -419,9 +417,8 @@ public:
                 IRNode *ShiftOperand, IRNode **NewIR) override;
   IRNode *sizeofOpcode(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                        IRNode **NewIR) override;
-  void storeArg(uint32_t ArgOrdinal, IRNode *Arg1,
-                ReaderAlignType Alignment, bool IsVolatile,
-                IRNode **NewIR) override;
+  void storeArg(uint32_t ArgOrdinal, IRNode *Arg1, ReaderAlignType Alignment,
+                bool IsVolatile, IRNode **NewIR) override;
   void storeElem(ReaderBaseNS::StElemOpcode Opcode,
                  CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
                  IRNode *Arg2, IRNode *Arg3, IRNode **NewIR) override {
@@ -436,12 +433,11 @@ public:
                           ReaderAlignType Alignment, bool IsVolatile,
                           IRNode **NewIR) override;
 
-  void storeLocal(uint32_t LocOrdinal, IRNode *Arg1,
-                  ReaderAlignType Alignment, bool IsVolatile,
-                  IRNode **NewIR) override;
+  void storeLocal(uint32_t LocOrdinal, IRNode *Arg1, ReaderAlignType Alignment,
+                  bool IsVolatile, IRNode **NewIR) override;
   void storeStaticField(CORINFO_RESOLVED_TOKEN *FieldToken,
-                        IRNode *ValueToStore,
-                        bool IsVolatile, IRNode **NewIR) override;
+                        IRNode *ValueToStore, bool IsVolatile,
+                        IRNode **NewIR) override;
 
   IRNode *stringGetChar(IRNode *Arg1, IRNode *Arg2, IRNode **NewIR) override;
 
@@ -528,8 +524,7 @@ public:
 
   void removeStackInterference(IRNode **NewIR) override;
 
-  void removeStackInterferenceForLocalStore(uint32_t Opcode,
-                                            uint32_t Ordinal,
+  void removeStackInterferenceForLocalStore(uint32_t Opcode, uint32_t Ordinal,
                                             IRNode **NewIR) override;
 
   // Remove all IRNodes from block (for verification error processing.)
@@ -706,8 +701,7 @@ public:
 
   // Helper callback used by rdrCall to emit call code.
   IRNode *genCall(ReaderCallTargetData *CallTargetInfo, CallArgTriple *ArgArray,
-                  uint32_t NumArgs, IRNode **CallNode,
-                  IRNode **NewIR) override;
+                  uint32_t NumArgs, IRNode **CallNode, IRNode **NewIR) override;
 
   bool canMakeDirectCall(ReaderCallTargetData *CallTargetData) override;
 
@@ -841,8 +835,8 @@ private:
   llvm::FunctionType *getFunctionType(CORINFO_SIG_INFO &Sig,
                                       CORINFO_CLASS_HANDLE ThisClass);
 
-  llvm::Type *getClassType(CORINFO_CLASS_HANDLE ClassHandle,
-                           bool IsRefClass, bool GetRefClassFields);
+  llvm::Type *getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
+                           bool GetRefClassFields);
 
   /// Convert node to the desired type.
   /// May reinterpret, truncate, or extend as needed.

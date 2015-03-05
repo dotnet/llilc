@@ -9,7 +9,8 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief Common code for converting MSIL bytecode into some other representation.
+/// \brief Common code for converting MSIL bytecode into some other
+/// representation.
 ///
 /// The common reader's operation revolves around two central classes.
 /// ReaderBase:: the common reader class
@@ -94,10 +95,10 @@ ReaderBaseNS::CallOpcode remapCallOpcode(ReaderBaseNS::OPCODE Op) {
 /// \param[out] Value    When this function returns, the decoded value.
 ///
 /// \returns The number of bytes read from the buffer.
-template<typename Type>
+template <typename Type>
 size_t readValue(const uint8_t *ILCursor, Type *Value) {
-  // MSIL contains little-endian values; swap the bytes around when compiled
-  // for big-endian platforms.
+// MSIL contains little-endian values; swap the bytes around when compiled
+// for big-endian platforms.
 #if defined(BIGENDIAN)
   for (uint32_t I = 0; I < sizeof(Type); ++I)
     ((uint8_t *)Value)[I] = ILCursor[sizeof(Type) - I - 1];
@@ -112,8 +113,7 @@ size_t readValue(const uint8_t *ILCursor, Type *Value) {
 /// \param[in]  ILCursor The buffer to read from.
 ///
 /// \returns The decoded value.
-template<typename Type>
-Type readValue(const uint8_t *ILCursor) {
+template <typename Type> Type readValue(const uint8_t *ILCursor) {
   Type Value;
   readValue(ILCursor, &Value);
   return Value;
@@ -319,7 +319,7 @@ uint32_t getMSILInstrLength(ReaderBaseNS::OPCODE Opcode, uint8_t *Operand) {
 /// \param[out]     Operand     When this method returns, the address of the
 ///                             returned opcode's operand.
 /// \param          ReportError Indicates whether or not to report parse errors.
-/// 
+///
 /// \returns The offset into the input buffer of the next MSIL opcode.
 uint32_t parseILOpcode(uint8_t *ILInput, uint32_t ILOffset, uint32_t ILSize,
                        ReaderBase *Reader, ReaderBaseNS::OPCODE *Opcode,
@@ -329,90 +329,83 @@ uint32_t parseILOpcode(uint8_t *ILInput, uint32_t ILOffset, uint32_t ILSize,
 
   // Array which maps bytecode to WVM opcode.
   static const ReaderBaseNS::OPCODE ByteCodes[256] = {
-      ReaderBaseNS::CEE_NOP,            ReaderBaseNS::CEE_BREAK,
-      ReaderBaseNS::CEE_LDARG_0,        ReaderBaseNS::CEE_LDARG_1,
-      ReaderBaseNS::CEE_LDARG_2,        ReaderBaseNS::CEE_LDARG_3,
-      ReaderBaseNS::CEE_LDLOC_0,        ReaderBaseNS::CEE_LDLOC_1,
-      ReaderBaseNS::CEE_LDLOC_2,        ReaderBaseNS::CEE_LDLOC_3,
-      ReaderBaseNS::CEE_STLOC_0,        ReaderBaseNS::CEE_STLOC_1,
-      ReaderBaseNS::CEE_STLOC_2,        ReaderBaseNS::CEE_STLOC_3,
-      ReaderBaseNS::CEE_LDARG_S,        ReaderBaseNS::CEE_LDARGA_S,
-      ReaderBaseNS::CEE_STARG_S,        ReaderBaseNS::CEE_LDLOC_S,
-      ReaderBaseNS::CEE_LDLOCA_S,       ReaderBaseNS::CEE_STLOC_S,
-      ReaderBaseNS::CEE_LDNULL,         ReaderBaseNS::CEE_LDC_I4_M1,
-      ReaderBaseNS::CEE_LDC_I4_0,       ReaderBaseNS::CEE_LDC_I4_1,
-      ReaderBaseNS::CEE_LDC_I4_2,       ReaderBaseNS::CEE_LDC_I4_3,
-      ReaderBaseNS::CEE_LDC_I4_4,       ReaderBaseNS::CEE_LDC_I4_5,
-      ReaderBaseNS::CEE_LDC_I4_6,       ReaderBaseNS::CEE_LDC_I4_7,
-      ReaderBaseNS::CEE_LDC_I4_8,       ReaderBaseNS::CEE_LDC_I4_S,
-      ReaderBaseNS::CEE_LDC_I4,         ReaderBaseNS::CEE_LDC_I8,
-      ReaderBaseNS::CEE_LDC_R4,         ReaderBaseNS::CEE_LDC_R8,
+      ReaderBaseNS::CEE_NOP, ReaderBaseNS::CEE_BREAK, ReaderBaseNS::CEE_LDARG_0,
+      ReaderBaseNS::CEE_LDARG_1, ReaderBaseNS::CEE_LDARG_2,
+      ReaderBaseNS::CEE_LDARG_3, ReaderBaseNS::CEE_LDLOC_0,
+      ReaderBaseNS::CEE_LDLOC_1, ReaderBaseNS::CEE_LDLOC_2,
+      ReaderBaseNS::CEE_LDLOC_3, ReaderBaseNS::CEE_STLOC_0,
+      ReaderBaseNS::CEE_STLOC_1, ReaderBaseNS::CEE_STLOC_2,
+      ReaderBaseNS::CEE_STLOC_3, ReaderBaseNS::CEE_LDARG_S,
+      ReaderBaseNS::CEE_LDARGA_S, ReaderBaseNS::CEE_STARG_S,
+      ReaderBaseNS::CEE_LDLOC_S, ReaderBaseNS::CEE_LDLOCA_S,
+      ReaderBaseNS::CEE_STLOC_S, ReaderBaseNS::CEE_LDNULL,
+      ReaderBaseNS::CEE_LDC_I4_M1, ReaderBaseNS::CEE_LDC_I4_0,
+      ReaderBaseNS::CEE_LDC_I4_1, ReaderBaseNS::CEE_LDC_I4_2,
+      ReaderBaseNS::CEE_LDC_I4_3, ReaderBaseNS::CEE_LDC_I4_4,
+      ReaderBaseNS::CEE_LDC_I4_5, ReaderBaseNS::CEE_LDC_I4_6,
+      ReaderBaseNS::CEE_LDC_I4_7, ReaderBaseNS::CEE_LDC_I4_8,
+      ReaderBaseNS::CEE_LDC_I4_S, ReaderBaseNS::CEE_LDC_I4,
+      ReaderBaseNS::CEE_LDC_I8, ReaderBaseNS::CEE_LDC_R4,
+      ReaderBaseNS::CEE_LDC_R8,
       ReaderBaseNS::CEE_ILLEGAL, // ReaderBaseNS::CEE_UNUSED49,
-      ReaderBaseNS::CEE_DUP,            ReaderBaseNS::CEE_POP,
-      ReaderBaseNS::CEE_JMP,            ReaderBaseNS::CEE_CALL,
-      ReaderBaseNS::CEE_CALLI,          ReaderBaseNS::CEE_RET,
-      ReaderBaseNS::CEE_BR_S,           ReaderBaseNS::CEE_BRFALSE_S,
-      ReaderBaseNS::CEE_BRTRUE_S,       ReaderBaseNS::CEE_BEQ_S,
-      ReaderBaseNS::CEE_BGE_S,          ReaderBaseNS::CEE_BGT_S,
-      ReaderBaseNS::CEE_BLE_S,          ReaderBaseNS::CEE_BLT_S,
-      ReaderBaseNS::CEE_BNE_UN_S,       ReaderBaseNS::CEE_BGE_UN_S,
-      ReaderBaseNS::CEE_BGT_UN_S,       ReaderBaseNS::CEE_BLE_UN_S,
-      ReaderBaseNS::CEE_BLT_UN_S,       ReaderBaseNS::CEE_BR,
-      ReaderBaseNS::CEE_BRFALSE,        ReaderBaseNS::CEE_BRTRUE,
-      ReaderBaseNS::CEE_BEQ,            ReaderBaseNS::CEE_BGE,
-      ReaderBaseNS::CEE_BGT,            ReaderBaseNS::CEE_BLE,
-      ReaderBaseNS::CEE_BLT,            ReaderBaseNS::CEE_BNE_UN,
-      ReaderBaseNS::CEE_BGE_UN,         ReaderBaseNS::CEE_BGT_UN,
-      ReaderBaseNS::CEE_BLE_UN,         ReaderBaseNS::CEE_BLT_UN,
-      ReaderBaseNS::CEE_SWITCH,         ReaderBaseNS::CEE_LDIND_I1,
-      ReaderBaseNS::CEE_LDIND_U1,       ReaderBaseNS::CEE_LDIND_I2,
-      ReaderBaseNS::CEE_LDIND_U2,       ReaderBaseNS::CEE_LDIND_I4,
-      ReaderBaseNS::CEE_LDIND_U4,       ReaderBaseNS::CEE_LDIND_I8,
-      ReaderBaseNS::CEE_LDIND_I,        ReaderBaseNS::CEE_LDIND_R4,
-      ReaderBaseNS::CEE_LDIND_R8,       ReaderBaseNS::CEE_LDIND_REF,
-      ReaderBaseNS::CEE_STIND_REF,      ReaderBaseNS::CEE_STIND_I1,
-      ReaderBaseNS::CEE_STIND_I2,       ReaderBaseNS::CEE_STIND_I4,
-      ReaderBaseNS::CEE_STIND_I8,       ReaderBaseNS::CEE_STIND_R4,
-      ReaderBaseNS::CEE_STIND_R8,       ReaderBaseNS::CEE_ADD,
-      ReaderBaseNS::CEE_SUB,            ReaderBaseNS::CEE_MUL,
-      ReaderBaseNS::CEE_DIV,            ReaderBaseNS::CEE_DIV_UN,
-      ReaderBaseNS::CEE_REM,            ReaderBaseNS::CEE_REM_UN,
-      ReaderBaseNS::CEE_AND,            ReaderBaseNS::CEE_OR,
-      ReaderBaseNS::CEE_XOR,            ReaderBaseNS::CEE_SHL,
-      ReaderBaseNS::CEE_SHR,            ReaderBaseNS::CEE_SHR_UN,
-      ReaderBaseNS::CEE_NEG,            ReaderBaseNS::CEE_NOT,
-      ReaderBaseNS::CEE_CONV_I1,        ReaderBaseNS::CEE_CONV_I2,
-      ReaderBaseNS::CEE_CONV_I4,        ReaderBaseNS::CEE_CONV_I8,
-      ReaderBaseNS::CEE_CONV_R4,        ReaderBaseNS::CEE_CONV_R8,
-      ReaderBaseNS::CEE_CONV_U4,        ReaderBaseNS::CEE_CONV_U8,
-      ReaderBaseNS::CEE_CALLVIRT,       ReaderBaseNS::CEE_CPOBJ,
-      ReaderBaseNS::CEE_LDOBJ,          ReaderBaseNS::CEE_LDSTR,
-      ReaderBaseNS::CEE_NEWOBJ,         ReaderBaseNS::CEE_CASTCLASS,
-      ReaderBaseNS::CEE_ISINST,         ReaderBaseNS::CEE_CONV_R_UN,
+      ReaderBaseNS::CEE_DUP, ReaderBaseNS::CEE_POP, ReaderBaseNS::CEE_JMP,
+      ReaderBaseNS::CEE_CALL, ReaderBaseNS::CEE_CALLI, ReaderBaseNS::CEE_RET,
+      ReaderBaseNS::CEE_BR_S, ReaderBaseNS::CEE_BRFALSE_S,
+      ReaderBaseNS::CEE_BRTRUE_S, ReaderBaseNS::CEE_BEQ_S,
+      ReaderBaseNS::CEE_BGE_S, ReaderBaseNS::CEE_BGT_S, ReaderBaseNS::CEE_BLE_S,
+      ReaderBaseNS::CEE_BLT_S, ReaderBaseNS::CEE_BNE_UN_S,
+      ReaderBaseNS::CEE_BGE_UN_S, ReaderBaseNS::CEE_BGT_UN_S,
+      ReaderBaseNS::CEE_BLE_UN_S, ReaderBaseNS::CEE_BLT_UN_S,
+      ReaderBaseNS::CEE_BR, ReaderBaseNS::CEE_BRFALSE, ReaderBaseNS::CEE_BRTRUE,
+      ReaderBaseNS::CEE_BEQ, ReaderBaseNS::CEE_BGE, ReaderBaseNS::CEE_BGT,
+      ReaderBaseNS::CEE_BLE, ReaderBaseNS::CEE_BLT, ReaderBaseNS::CEE_BNE_UN,
+      ReaderBaseNS::CEE_BGE_UN, ReaderBaseNS::CEE_BGT_UN,
+      ReaderBaseNS::CEE_BLE_UN, ReaderBaseNS::CEE_BLT_UN,
+      ReaderBaseNS::CEE_SWITCH, ReaderBaseNS::CEE_LDIND_I1,
+      ReaderBaseNS::CEE_LDIND_U1, ReaderBaseNS::CEE_LDIND_I2,
+      ReaderBaseNS::CEE_LDIND_U2, ReaderBaseNS::CEE_LDIND_I4,
+      ReaderBaseNS::CEE_LDIND_U4, ReaderBaseNS::CEE_LDIND_I8,
+      ReaderBaseNS::CEE_LDIND_I, ReaderBaseNS::CEE_LDIND_R4,
+      ReaderBaseNS::CEE_LDIND_R8, ReaderBaseNS::CEE_LDIND_REF,
+      ReaderBaseNS::CEE_STIND_REF, ReaderBaseNS::CEE_STIND_I1,
+      ReaderBaseNS::CEE_STIND_I2, ReaderBaseNS::CEE_STIND_I4,
+      ReaderBaseNS::CEE_STIND_I8, ReaderBaseNS::CEE_STIND_R4,
+      ReaderBaseNS::CEE_STIND_R8, ReaderBaseNS::CEE_ADD, ReaderBaseNS::CEE_SUB,
+      ReaderBaseNS::CEE_MUL, ReaderBaseNS::CEE_DIV, ReaderBaseNS::CEE_DIV_UN,
+      ReaderBaseNS::CEE_REM, ReaderBaseNS::CEE_REM_UN, ReaderBaseNS::CEE_AND,
+      ReaderBaseNS::CEE_OR, ReaderBaseNS::CEE_XOR, ReaderBaseNS::CEE_SHL,
+      ReaderBaseNS::CEE_SHR, ReaderBaseNS::CEE_SHR_UN, ReaderBaseNS::CEE_NEG,
+      ReaderBaseNS::CEE_NOT, ReaderBaseNS::CEE_CONV_I1,
+      ReaderBaseNS::CEE_CONV_I2, ReaderBaseNS::CEE_CONV_I4,
+      ReaderBaseNS::CEE_CONV_I8, ReaderBaseNS::CEE_CONV_R4,
+      ReaderBaseNS::CEE_CONV_R8, ReaderBaseNS::CEE_CONV_U4,
+      ReaderBaseNS::CEE_CONV_U8, ReaderBaseNS::CEE_CALLVIRT,
+      ReaderBaseNS::CEE_CPOBJ, ReaderBaseNS::CEE_LDOBJ, ReaderBaseNS::CEE_LDSTR,
+      ReaderBaseNS::CEE_NEWOBJ, ReaderBaseNS::CEE_CASTCLASS,
+      ReaderBaseNS::CEE_ISINST, ReaderBaseNS::CEE_CONV_R_UN,
       ReaderBaseNS::CEE_ILLEGAL, // ReaderBaseNS::CEE_UNUSED58,
       ReaderBaseNS::CEE_ILLEGAL, // ReaderBaseNS::CEE_UNUSED1,
-      ReaderBaseNS::CEE_UNBOX,          ReaderBaseNS::CEE_THROW,
-      ReaderBaseNS::CEE_LDFLD,          ReaderBaseNS::CEE_LDFLDA,
-      ReaderBaseNS::CEE_STFLD,          ReaderBaseNS::CEE_LDSFLD,
-      ReaderBaseNS::CEE_LDSFLDA,        ReaderBaseNS::CEE_STSFLD,
-      ReaderBaseNS::CEE_STOBJ,          ReaderBaseNS::CEE_CONV_OVF_I1_UN,
-      ReaderBaseNS::CEE_CONV_OVF_I2_UN, ReaderBaseNS::CEE_CONV_OVF_I4_UN,
-      ReaderBaseNS::CEE_CONV_OVF_I8_UN, ReaderBaseNS::CEE_CONV_OVF_U1_UN,
-      ReaderBaseNS::CEE_CONV_OVF_U2_UN, ReaderBaseNS::CEE_CONV_OVF_U4_UN,
-      ReaderBaseNS::CEE_CONV_OVF_U8_UN, ReaderBaseNS::CEE_CONV_OVF_I_UN,
-      ReaderBaseNS::CEE_CONV_OVF_U_UN,  ReaderBaseNS::CEE_BOX,
-      ReaderBaseNS::CEE_NEWARR,         ReaderBaseNS::CEE_LDLEN,
-      ReaderBaseNS::CEE_LDELEMA,        ReaderBaseNS::CEE_LDELEM_I1,
-      ReaderBaseNS::CEE_LDELEM_U1,      ReaderBaseNS::CEE_LDELEM_I2,
-      ReaderBaseNS::CEE_LDELEM_U2,      ReaderBaseNS::CEE_LDELEM_I4,
-      ReaderBaseNS::CEE_LDELEM_U4,      ReaderBaseNS::CEE_LDELEM_I8,
-      ReaderBaseNS::CEE_LDELEM_I,       ReaderBaseNS::CEE_LDELEM_R4,
-      ReaderBaseNS::CEE_LDELEM_R8,      ReaderBaseNS::CEE_LDELEM_REF,
-      ReaderBaseNS::CEE_STELEM_I,       ReaderBaseNS::CEE_STELEM_I1,
-      ReaderBaseNS::CEE_STELEM_I2,      ReaderBaseNS::CEE_STELEM_I4,
-      ReaderBaseNS::CEE_STELEM_I8,      ReaderBaseNS::CEE_STELEM_R4,
-      ReaderBaseNS::CEE_STELEM_R8,      ReaderBaseNS::CEE_STELEM_REF,
-      ReaderBaseNS::CEE_LDELEM,         ReaderBaseNS::CEE_STELEM,
+      ReaderBaseNS::CEE_UNBOX, ReaderBaseNS::CEE_THROW, ReaderBaseNS::CEE_LDFLD,
+      ReaderBaseNS::CEE_LDFLDA, ReaderBaseNS::CEE_STFLD,
+      ReaderBaseNS::CEE_LDSFLD, ReaderBaseNS::CEE_LDSFLDA,
+      ReaderBaseNS::CEE_STSFLD, ReaderBaseNS::CEE_STOBJ,
+      ReaderBaseNS::CEE_CONV_OVF_I1_UN, ReaderBaseNS::CEE_CONV_OVF_I2_UN,
+      ReaderBaseNS::CEE_CONV_OVF_I4_UN, ReaderBaseNS::CEE_CONV_OVF_I8_UN,
+      ReaderBaseNS::CEE_CONV_OVF_U1_UN, ReaderBaseNS::CEE_CONV_OVF_U2_UN,
+      ReaderBaseNS::CEE_CONV_OVF_U4_UN, ReaderBaseNS::CEE_CONV_OVF_U8_UN,
+      ReaderBaseNS::CEE_CONV_OVF_I_UN, ReaderBaseNS::CEE_CONV_OVF_U_UN,
+      ReaderBaseNS::CEE_BOX, ReaderBaseNS::CEE_NEWARR, ReaderBaseNS::CEE_LDLEN,
+      ReaderBaseNS::CEE_LDELEMA, ReaderBaseNS::CEE_LDELEM_I1,
+      ReaderBaseNS::CEE_LDELEM_U1, ReaderBaseNS::CEE_LDELEM_I2,
+      ReaderBaseNS::CEE_LDELEM_U2, ReaderBaseNS::CEE_LDELEM_I4,
+      ReaderBaseNS::CEE_LDELEM_U4, ReaderBaseNS::CEE_LDELEM_I8,
+      ReaderBaseNS::CEE_LDELEM_I, ReaderBaseNS::CEE_LDELEM_R4,
+      ReaderBaseNS::CEE_LDELEM_R8, ReaderBaseNS::CEE_LDELEM_REF,
+      ReaderBaseNS::CEE_STELEM_I, ReaderBaseNS::CEE_STELEM_I1,
+      ReaderBaseNS::CEE_STELEM_I2, ReaderBaseNS::CEE_STELEM_I4,
+      ReaderBaseNS::CEE_STELEM_I8, ReaderBaseNS::CEE_STELEM_R4,
+      ReaderBaseNS::CEE_STELEM_R8, ReaderBaseNS::CEE_STELEM_REF,
+      ReaderBaseNS::CEE_LDELEM, ReaderBaseNS::CEE_STELEM,
       ReaderBaseNS::CEE_UNBOX_ANY,
       ReaderBaseNS::CEE_ILLEGAL, // ReaderBaseNS::CEE_UNUSED5,
       ReaderBaseNS::CEE_ILLEGAL, // ReaderBaseNS::CEE_UNUSED6,
@@ -427,10 +420,10 @@ uint32_t parseILOpcode(uint8_t *ILInput, uint32_t ILOffset, uint32_t ILSize,
       ReaderBaseNS::CEE_ILLEGAL, // ReaderBaseNS::CEE_UNUSED15,
       ReaderBaseNS::CEE_ILLEGAL, // ReaderBaseNS::CEE_UNUSED16,
       ReaderBaseNS::CEE_ILLEGAL, // ReaderBaseNS::CEE_UNUSED17,
-      ReaderBaseNS::CEE_CONV_OVF_I1,    ReaderBaseNS::CEE_CONV_OVF_U1,
-      ReaderBaseNS::CEE_CONV_OVF_I2,    ReaderBaseNS::CEE_CONV_OVF_U2,
-      ReaderBaseNS::CEE_CONV_OVF_I4,    ReaderBaseNS::CEE_CONV_OVF_U4,
-      ReaderBaseNS::CEE_CONV_OVF_I8,    ReaderBaseNS::CEE_CONV_OVF_U8,
+      ReaderBaseNS::CEE_CONV_OVF_I1, ReaderBaseNS::CEE_CONV_OVF_U1,
+      ReaderBaseNS::CEE_CONV_OVF_I2, ReaderBaseNS::CEE_CONV_OVF_U2,
+      ReaderBaseNS::CEE_CONV_OVF_I4, ReaderBaseNS::CEE_CONV_OVF_U4,
+      ReaderBaseNS::CEE_CONV_OVF_I8, ReaderBaseNS::CEE_CONV_OVF_U8,
       ReaderBaseNS::CEE_ILLEGAL, // ReaderBaseNS::CEE_UNUSED50,
       ReaderBaseNS::CEE_ILLEGAL, // ReaderBaseNS::CEE_UNUSED18,
       ReaderBaseNS::CEE_ILLEGAL, // ReaderBaseNS::CEE_UNUSED19,
@@ -438,7 +431,7 @@ uint32_t parseILOpcode(uint8_t *ILInput, uint32_t ILOffset, uint32_t ILSize,
       ReaderBaseNS::CEE_ILLEGAL, // ReaderBaseNS::CEE_UNUSED21,
       ReaderBaseNS::CEE_ILLEGAL, // ReaderBaseNS::CEE_UNUSED22,
       ReaderBaseNS::CEE_ILLEGAL, // ReaderBaseNS::CEE_UNUSED23,
-      ReaderBaseNS::CEE_REFANYVAL,      ReaderBaseNS::CEE_CKFINITE,
+      ReaderBaseNS::CEE_REFANYVAL, ReaderBaseNS::CEE_CKFINITE,
       ReaderBaseNS::CEE_ILLEGAL, // ReaderBaseNS::CEE_UNUSED24,
       ReaderBaseNS::CEE_ILLEGAL, // ReaderBaseNS::CEE_UNUSED25,
       ReaderBaseNS::CEE_MKREFANY,
@@ -451,30 +444,30 @@ uint32_t parseILOpcode(uint8_t *ILInput, uint32_t ILOffset, uint32_t ILSize,
       ReaderBaseNS::CEE_ILLEGAL, // ReaderBaseNS::CEE_UNUSED65,
       ReaderBaseNS::CEE_ILLEGAL, // ReaderBaseNS::CEE_UNUSED66,
       ReaderBaseNS::CEE_ILLEGAL, // ReaderBaseNS::CEE_UNUSED67,
-      ReaderBaseNS::CEE_LDTOKEN,        ReaderBaseNS::CEE_CONV_U2,
-      ReaderBaseNS::CEE_CONV_U1,        ReaderBaseNS::CEE_CONV_I,
-      ReaderBaseNS::CEE_CONV_OVF_I,     ReaderBaseNS::CEE_CONV_OVF_U,
-      ReaderBaseNS::CEE_ADD_OVF,        ReaderBaseNS::CEE_ADD_OVF_UN,
-      ReaderBaseNS::CEE_MUL_OVF,        ReaderBaseNS::CEE_MUL_OVF_UN,
-      ReaderBaseNS::CEE_SUB_OVF,        ReaderBaseNS::CEE_SUB_OVF_UN,
-      ReaderBaseNS::CEE_ENDFINALLY,     ReaderBaseNS::CEE_LEAVE,
-      ReaderBaseNS::CEE_LEAVE_S,        ReaderBaseNS::CEE_STIND_I,
-      ReaderBaseNS::CEE_CONV_U,         ReaderBaseNS::CEE_ILLEGAL,
-      ReaderBaseNS::CEE_ILLEGAL,        ReaderBaseNS::CEE_ILLEGAL,
-      ReaderBaseNS::CEE_ILLEGAL,        ReaderBaseNS::CEE_ILLEGAL,
-      ReaderBaseNS::CEE_ILLEGAL,        ReaderBaseNS::CEE_ILLEGAL,
-      ReaderBaseNS::CEE_ILLEGAL,        ReaderBaseNS::CEE_ILLEGAL,
-      ReaderBaseNS::CEE_ILLEGAL,        ReaderBaseNS::CEE_ILLEGAL,
-      ReaderBaseNS::CEE_ILLEGAL,        ReaderBaseNS::CEE_ILLEGAL,
-      ReaderBaseNS::CEE_ILLEGAL,        ReaderBaseNS::CEE_ILLEGAL,
-      ReaderBaseNS::CEE_ILLEGAL,        ReaderBaseNS::CEE_ILLEGAL,
-      ReaderBaseNS::CEE_ILLEGAL,        ReaderBaseNS::CEE_ILLEGAL,
-      ReaderBaseNS::CEE_ILLEGAL,        ReaderBaseNS::CEE_ILLEGAL,
-      ReaderBaseNS::CEE_ILLEGAL,        ReaderBaseNS::CEE_ILLEGAL,
-      ReaderBaseNS::CEE_ILLEGAL,        ReaderBaseNS::CEE_ILLEGAL,
-      ReaderBaseNS::CEE_ILLEGAL,        ReaderBaseNS::CEE_ILLEGAL,
-      ReaderBaseNS::CEE_ILLEGAL,        ReaderBaseNS::CEE_ILLEGAL,
-      ReaderBaseNS::CEE_ILLEGAL,        ReaderBaseNS::CEE_ILLEGAL};
+      ReaderBaseNS::CEE_LDTOKEN, ReaderBaseNS::CEE_CONV_U2,
+      ReaderBaseNS::CEE_CONV_U1, ReaderBaseNS::CEE_CONV_I,
+      ReaderBaseNS::CEE_CONV_OVF_I, ReaderBaseNS::CEE_CONV_OVF_U,
+      ReaderBaseNS::CEE_ADD_OVF, ReaderBaseNS::CEE_ADD_OVF_UN,
+      ReaderBaseNS::CEE_MUL_OVF, ReaderBaseNS::CEE_MUL_OVF_UN,
+      ReaderBaseNS::CEE_SUB_OVF, ReaderBaseNS::CEE_SUB_OVF_UN,
+      ReaderBaseNS::CEE_ENDFINALLY, ReaderBaseNS::CEE_LEAVE,
+      ReaderBaseNS::CEE_LEAVE_S, ReaderBaseNS::CEE_STIND_I,
+      ReaderBaseNS::CEE_CONV_U, ReaderBaseNS::CEE_ILLEGAL,
+      ReaderBaseNS::CEE_ILLEGAL, ReaderBaseNS::CEE_ILLEGAL,
+      ReaderBaseNS::CEE_ILLEGAL, ReaderBaseNS::CEE_ILLEGAL,
+      ReaderBaseNS::CEE_ILLEGAL, ReaderBaseNS::CEE_ILLEGAL,
+      ReaderBaseNS::CEE_ILLEGAL, ReaderBaseNS::CEE_ILLEGAL,
+      ReaderBaseNS::CEE_ILLEGAL, ReaderBaseNS::CEE_ILLEGAL,
+      ReaderBaseNS::CEE_ILLEGAL, ReaderBaseNS::CEE_ILLEGAL,
+      ReaderBaseNS::CEE_ILLEGAL, ReaderBaseNS::CEE_ILLEGAL,
+      ReaderBaseNS::CEE_ILLEGAL, ReaderBaseNS::CEE_ILLEGAL,
+      ReaderBaseNS::CEE_ILLEGAL, ReaderBaseNS::CEE_ILLEGAL,
+      ReaderBaseNS::CEE_ILLEGAL, ReaderBaseNS::CEE_ILLEGAL,
+      ReaderBaseNS::CEE_ILLEGAL, ReaderBaseNS::CEE_ILLEGAL,
+      ReaderBaseNS::CEE_ILLEGAL, ReaderBaseNS::CEE_ILLEGAL,
+      ReaderBaseNS::CEE_ILLEGAL, ReaderBaseNS::CEE_ILLEGAL,
+      ReaderBaseNS::CEE_ILLEGAL, ReaderBaseNS::CEE_ILLEGAL,
+      ReaderBaseNS::CEE_ILLEGAL, ReaderBaseNS::CEE_ILLEGAL};
 
   // Array which maps prefixed bytecode to WVM opcode.
   static const ReaderBaseNS::OPCODE PrefixedByteCodes[33] = {
@@ -555,8 +548,7 @@ uint32_t parseILOpcode(uint8_t *ILInput, uint32_t ILOffset, uint32_t ILSize,
 
   // This is case (2): a switch opcode. Make sure we have at least four bytes
   // remaining s.t. getMSILInstrLength can read the number of switch cases.
-  if (TheOpcode == ReaderBaseNS::CEE_SWITCH &&
-      (ILSize - ILCursor) < 4) {
+  if (TheOpcode == ReaderBaseNS::CEE_SWITCH && (ILSize - ILCursor) < 4) {
     goto underflow;
   }
 
@@ -740,8 +732,7 @@ uint32_t ReaderBase::getCurrentMethodHash(void) {
   return JitInfo->getMethodHash(getCurrentMethodHandle());
 }
 
-uint32_t
-ReaderBase::getCurrentMethodAttribs(void) {
+uint32_t ReaderBase::getCurrentMethodAttribs(void) {
   return JitInfo->getMethodAttribs(getCurrentMethodHandle());
 }
 
@@ -813,10 +804,9 @@ int ReaderBase::appendClassName(char16_t **Buffer, int32_t *BufferLen,
                                 bool IncludeNamespace, bool FullInst,
                                 bool IncludeAssembly) {
   int IntBufferLen = *BufferLen, Return;
-  Return = JitInfo->appendClassName((WCHAR **)Buffer, &IntBufferLen, Class,
-                                    IncludeNamespace ? TRUE : FALSE,
-                                    FullInst ? TRUE : FALSE,
-                                    IncludeAssembly ? TRUE : FALSE);
+  Return = JitInfo->appendClassName(
+      (WCHAR **)Buffer, &IntBufferLen, Class, IncludeNamespace ? TRUE : FALSE,
+      FullInst ? TRUE : FALSE, IncludeAssembly ? TRUE : FALSE);
   *BufferLen = IntBufferLen;
   return Return;
 }
@@ -827,8 +817,7 @@ GCLayout *ReaderBase::getClassGCLayout(CORINFO_CLASS_HANDLE Class) {
   // Note that we round this computation up.
   const uint32_t PointerSize = getPointerByteSize();
   const uint32_t ClassSize = JitInfo->getClassSize(Class);
-  const uint32_t GcLayoutSize =
-      ((ClassSize + PointerSize - 1) / PointerSize);
+  const uint32_t GcLayoutSize = ((ClassSize + PointerSize - 1) / PointerSize);
 
   // Our internal data strcutures prepend the number of GC pointers
   // before the struct.  Therefore we add the size of the
@@ -852,8 +841,7 @@ GCLayout *ReaderBase::getClassGCLayout(CORINFO_CLASS_HANDLE Class) {
   return GCLayoutInfo;
 }
 
-uint32_t
-ReaderBase::getClassAttribs(CORINFO_CLASS_HANDLE Class) {
+uint32_t ReaderBase::getClassAttribs(CORINFO_CLASS_HANDLE Class) {
   return JitInfo->getClassAttribs(Class);
 }
 
@@ -861,8 +849,7 @@ uint32_t ReaderBase::getClassSize(CORINFO_CLASS_HANDLE Class) {
   return JitInfo->getClassSize(Class);
 }
 
-uint32_t
-ReaderBase::getClassAlignmentRequirement(CORINFO_CLASS_HANDLE Class) {
+uint32_t ReaderBase::getClassAlignmentRequirement(CORINFO_CLASS_HANDLE Class) {
   // Class must be value (a non-primitive value class, a multibyte)
   ASSERTNR(Class && (getClassAttribs(Class) & CORINFO_FLG_VALUECLASS));
 
@@ -921,8 +908,8 @@ void ReaderBase::getClassType(CORINFO_CLASS_HANDLE Class, uint32_t ClassAttribs,
   }
 }
 
-bool
-ReaderBase::canInlineTypeCheckWithObjectVTable(CORINFO_CLASS_HANDLE Class) {
+bool ReaderBase::canInlineTypeCheckWithObjectVTable(
+    CORINFO_CLASS_HANDLE Class) {
   return JitInfo->canInlineTypeCheckWithObjectVTable(Class);
 }
 
@@ -999,8 +986,7 @@ void ReaderBase::getFieldInfo(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                         FieldInfo);
 }
 CorInfoType ReaderBase::getFieldInfo(CORINFO_CLASS_HANDLE Class,
-                                     uint32_t Ordinal,
-                                     uint32_t *FieldOffset,
+                                     uint32_t Ordinal, uint32_t *FieldOffset,
                                      CORINFO_CLASS_HANDLE *FieldClass) {
   CORINFO_FIELD_HANDLE Field;
 
@@ -1128,8 +1114,7 @@ const char *ReaderBase::getMethodName(CORINFO_METHOD_HANDLE Method,
 }
 
 // Find the attribs of the method handle
-uint32_t
-ReaderBase::getMethodAttribs(CORINFO_METHOD_HANDLE Method) {
+uint32_t ReaderBase::getMethodAttribs(CORINFO_METHOD_HANDLE Method) {
   return JitInfo->getMethodAttribs(Method);
 }
 
@@ -1186,8 +1171,8 @@ void ReaderBase::getMethodInfo(CORINFO_METHOD_HANDLE Method,
   JitInfo->getMethodInfo(Method, Info);
 }
 
-void
-ReaderBase::methodMustBeLoadedBeforeCodeIsRun(CORINFO_METHOD_HANDLE Method) {
+void ReaderBase::methodMustBeLoadedBeforeCodeIsRun(
+    CORINFO_METHOD_HANDLE Method) {
   JitInfo->methodMustBeLoadedBeforeCodeIsRun(Method);
 }
 
@@ -1363,10 +1348,9 @@ void ReaderBase::handleMemberAccess(CorInfoIsAccessAllowedResult AccessAllowed,
   handleMemberAccessWorker(AccessAllowed, AccessHelper, NewIR);
 }
 
-void
-ReaderBase::handleMemberAccessWorker(CorInfoIsAccessAllowedResult AccessAllowed,
-                                     const CORINFO_HELPER_DESC &AccessHelper,
-                                     IRNode **NewIR) {
+void ReaderBase::handleMemberAccessWorker(
+    CorInfoIsAccessAllowedResult AccessAllowed,
+    const CORINFO_HELPER_DESC &AccessHelper, IRNode **NewIR) {
   switch (AccessAllowed) {
   case CORINFO_ACCESS_ALLOWED:
     ASSERTNR(!"don't call this for allowed");
@@ -1560,7 +1544,8 @@ static int rgnRangeIsEnclosedInRegion(uint32_t StartOffset, uint32_t EndOffset,
     that contains [StartOffset..EndOffset)
 
 --*/
-EHRegion *rgnFindLowestEnclosingRegion(EHRegion *RegionTree, uint32_t StartOffset,
+EHRegion *rgnFindLowestEnclosingRegion(EHRegion *RegionTree,
+                                       uint32_t StartOffset,
                                        uint32_t EndOffset) {
   EHRegion *TryChild;
   EHRegion *RetVal = NULL;
@@ -2129,7 +2114,7 @@ FlowGraphNode *ReaderBase::buildFlowGraph(FlowGraphNode **FgTail) {
 //  pointer to the new entry is then returned.
 //
 FlowGraphNodeOffsetList *ReaderBase::fgAddNodeMSILOffset(
-    FlowGraphNode **Node,     // A pointer to FlowGraphNode* node
+    FlowGraphNode **Node, // A pointer to FlowGraphNode* node
     uint32_t TargetOffset // The MSIL offset of the node
     ) {
   FlowGraphNodeOffsetList *Element, *PreviousElement, *NewElement;
@@ -2408,8 +2393,7 @@ bool ReaderBase::fgLeaveIsNonLocal(FlowGraphNode *Fg, uint32_t LeaveOffset,
        (LeaveTarget >= rgnGetEndMSILOffset(CurrentRegion)))) {
     if (LeaveOffset == rgnGetEndMSILOffset(CurrentRegion)) {
       // We need to confirm whether this leave is going to the canonical place!
-      uint32_t CanonicalOffset =
-          fgGetRegionCanonicalExitOffset(CurrentRegion);
+      uint32_t CanonicalOffset = fgGetRegionCanonicalExitOffset(CurrentRegion);
       if (LeaveTarget == CanonicalOffset) {
         // Though this was an explicit goto which is to a nonlocal location,
         // it is canonical and correct... therefore it doesn't need any
@@ -2433,8 +2417,7 @@ bool ReaderBase::fgLeaveIsNonLocal(FlowGraphNode *Fg, uint32_t LeaveOffset,
 // Actual flow graph manipulation is performed by FgSplitBlock,
 // which is not common.
 FlowGraphNode *ReaderBase::fgSplitBlock(FlowGraphNode *Block,
-                                        uint32_t CurrentOffset,
-                                        IRNode *Node) {
+                                        uint32_t CurrentOffset, IRNode *Node) {
   FlowGraphNode *NewBlock;
   uint32_t OldEndOffset;
 
@@ -2571,7 +2554,7 @@ void ReaderBase::fgReplaceBranchTargets(void) {
 // patched up to match the region info of the inserted node.
 void ReaderBase::fgInsertBeginRegionExceptionNode(
     uint32_t Offset, // This is the offset where you want Node to be
-    IRNode *Node         // This is our actual EH end node (OPTRY, etc.)
+    IRNode *Node     // This is our actual EH end node (OPTRY, etc.)
     ) {
   FlowGraphNode *Block;
 
@@ -2642,7 +2625,7 @@ void ReaderBase::fgInsertBeginRegionExceptionNode(
 // and modifies the flow graph if necesary.
 void ReaderBase::fgInsertEndRegionExceptionNode(
     uint32_t Offset, // This is the offset where you want Node to be
-    IRNode *Node         // This is our actual EH End node
+    IRNode *Node     // This is our actual EH End node
     ) {
   FlowGraphNode *Block;
 
@@ -2684,8 +2667,8 @@ void ReaderBase::fgInsertEndRegionExceptionNode(
   }
 }
 
-void
-ReaderBase::fgEnsureEnclosingRegionBeginsWithLabel(IRNode *HandlerStartNode) {
+void ReaderBase::fgEnsureEnclosingRegionBeginsWithLabel(
+    IRNode *HandlerStartNode) {
   EHRegion *HandlerRegion, *TryRegion;
   IRNode *HandlerLabelNode, *ExceptNode;
 
@@ -2893,8 +2876,8 @@ EHRegion *ReaderBase::fgGetRegionFromMSILOffset(uint32_t Offset) {
 
     Region = rgnListGetRgn(RegionList);
 
-    if (Offset >= (StartOffset = rgnGetStartMSILOffset(Region)) &&
-        Offset < (EndOffset = rgnGetEndMSILOffset(Region))) {
+    if (Offset >= (StartOffset = rgnGetStartMSILOffset(Region)) &&Offset <
+        (EndOffset = rgnGetEndMSILOffset(Region))) {
       uint32_t RegionSize;
 
       RegionSize = EndOffset - StartOffset;
@@ -3104,10 +3087,8 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
     // last instruction (asycronous flow can target this)
     LegalTargetOffsets->allocateBitVector(ILInputSize + 1, this);
 
-    GvStackPush =
-        (uint16_t *)getTempMemory(ILInputSize * sizeof(uint16_t));
-    GvStackPop =
-        (uint16_t *)getTempMemory(ILInputSize * sizeof(uint16_t));
+    GvStackPush = (uint16_t *)getTempMemory(ILInputSize * sizeof(uint16_t));
+    GvStackPop = (uint16_t *)getTempMemory(ILInputSize * sizeof(uint16_t));
     StackOffset = 0;
   }
 
@@ -3200,8 +3181,8 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
       // a protected region. If it's outside of a region
       // it acts like a branch.
       if ((Opcode == ReaderBaseNS::CEE_LEAVE ||
-          Opcode == ReaderBaseNS::CEE_LEAVE_S) 
-          && (EhRegionTree != nullptr)) {
+           Opcode == ReaderBaseNS::CEE_LEAVE_S) &&
+          (EhRegionTree != nullptr)) {
         const char *FailReason = nullptr;
         TargetOffset = updateLeaveOffset(EhRegionTree, CurrentOffset,
                                          TargetOffset, &FailReason);
@@ -3341,8 +3322,8 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
 
       // Make/insert end finally
       BlockNode = fgNodeGetStartIRNode(Block);
-      BranchNode = fgMakeEndFinallyHelper(BlockNode, CurrentOffset,
-                                                     IsLexicalEnd);
+      BranchNode =
+          fgMakeEndFinallyHelper(BlockNode, CurrentOffset, IsLexicalEnd);
 
       // And split the block
       fgNodeSetEndMSILOffset(Block, NextOffset);
@@ -3682,8 +3663,8 @@ void ReaderBase::verifyRecordBranchForVerification(IRNode *Branch,
 /// \param      BufferSize The length of the buffer in bytes.
 ///
 /// \returns FlowGraphNode corresponding to the bytes.
-FlowGraphNode *
-ReaderBase::fgBuildBasicBlocksFromBytes(uint8_t *Buffer, uint32_t BufferSize) {
+FlowGraphNode *ReaderBase::fgBuildBasicBlocksFromBytes(uint8_t *Buffer,
+                                                       uint32_t BufferSize) {
   FlowGraphNode *Block;
 
   // Initialize head block to root region.
@@ -4523,11 +4504,10 @@ void ReaderBase::rdrCallWriteBarrierHelper(
 // This is a variant of rdrCallWriteBarrierHelper where we are
 // returning a struct with gc pointers by value through a hidden
 // parameter.
-void
-ReaderBase::rdrCallWriteBarrierHelperForReturnValue(IRNode *Arg1, // addrDst
-                                                    IRNode *Arg2, // addrSrc
-                                                    IRNode **NewIR,
-                                                    mdToken Token) {
+void ReaderBase::rdrCallWriteBarrierHelperForReturnValue(
+    IRNode *Arg1, // addrDst
+    IRNode *Arg2, // addrSrc
+    IRNode **NewIR, mdToken Token) {
   IRNode *Arg3;
   bool IsIndirect;
 
@@ -4700,13 +4680,13 @@ ReaderBase::rdrGetStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
         // to infer type for the call instruction.
         // Ideally, we should pass the type, which needs refactoring.
         // So, SharedStaticsBaseNode now becomes the defined instruction.
-        SharedStaticsBaseNode = rdrCallGetStaticBase(Class,
-           ResolvedToken->token, HelperId, NoCtor, CanMoveUp,
-           SharedStaticsBaseNode, NewIR);
+        SharedStaticsBaseNode =
+            rdrCallGetStaticBase(Class, ResolvedToken->token, HelperId, NoCtor,
+                                 CanMoveUp, SharedStaticsBaseNode, NewIR);
 
         // Record (def) instruction that holds shared statics base
         domInfoRecordSharedStaticBaseDefine(CurrentFgNode, HelperId, Class,
-           SharedStaticsBaseNode);
+                                            SharedStaticsBaseNode);
       }
     }
 
@@ -5086,7 +5066,7 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
 #ifndef CC_PEVERIFY
     // An intrinsic! Ask if client would like to expand it.
     if ((Data->getMethodAttribs() & CORINFO_FLG_INTRINSIC)
-            // if we're going to have to mess around with Args don't bother
+        // if we're going to have to mess around with Args don't bother
         &&
         (!Data->hasThis() ||
          Data->getCallInfo()->thisTransform == CORINFO_NO_THIS_TRANSFORM)) {
@@ -5551,9 +5531,10 @@ void ReaderBase::rdrMakeCallTargetNode(ReaderCallTargetData *CallTargetData,
   CallTargetData->CallTargetNode = Target;
 }
 
-IRNode *ReaderBase::rdrMakeLdFtnTargetNode(
-    CORINFO_RESOLVED_TOKEN *ResolvedToken, CORINFO_CALL_INFO *CallInfo,
-    IRNode **NewIR) {
+IRNode *
+ReaderBase::rdrMakeLdFtnTargetNode(CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                                   CORINFO_CALL_INFO *CallInfo,
+                                   IRNode **NewIR) {
   bool Unused = false;
 
   switch (CallInfo->kind) {
@@ -5574,22 +5555,18 @@ IRNode *ReaderBase::rdrMakeLdFtnTargetNode(
 
 IRNode *ReaderBase::rdrGetDirectCallTarget(ReaderCallTargetData *CallTargetData,
                                            IRNode **NewIR) {
-  return rdrGetDirectCallTarget(CallTargetData->getMethodHandle(),
-                                CallTargetData->getMethodToken(),
-                                CallTargetData->NeedsNullCheck,
-                                canMakeDirectCall(CallTargetData),
-                                CallTargetData->UsesMethodDesc, NewIR);
+  return rdrGetDirectCallTarget(
+      CallTargetData->getMethodHandle(), CallTargetData->getMethodToken(),
+      CallTargetData->NeedsNullCheck, canMakeDirectCall(CallTargetData),
+      CallTargetData->UsesMethodDesc, NewIR);
 }
 
 // Generate the target for a direct call. "Direct call" can either be
 // true direct calls if the runtime allows, or they can be indirect
 // calls through the method descriptor.
-IRNode *ReaderBase::rdrGetDirectCallTarget(CORINFO_METHOD_HANDLE Method,
-                                           mdToken MethodToken,
-                                           bool NeedsNullCheck,
-                                           bool CanMakeDirectCall,
-                                           bool &UsesMethodDesc,
-                                           IRNode **NewIR) {
+IRNode *ReaderBase::rdrGetDirectCallTarget(
+    CORINFO_METHOD_HANDLE Method, mdToken MethodToken, bool NeedsNullCheck,
+    bool CanMakeDirectCall, bool &UsesMethodDesc, IRNode **NewIR) {
   CORINFO_CONST_LOOKUP AddressInfo;
   getFunctionEntryPoint(Method, &AddressInfo, NeedsNullCheck
                                                   ? CORINFO_ACCESS_NONNULL
@@ -5600,9 +5577,8 @@ IRNode *ReaderBase::rdrGetDirectCallTarget(CORINFO_METHOD_HANDLE Method,
     TargetNode = makeDirectCallTargetNode(Method, AddressInfo.addr);
   } else {
     bool IsIndirect = AddressInfo.accessType != IAT_VALUE;
-    TargetNode =
-        handleToIRNode(MethodToken, AddressInfo.addr, 0, IsIndirect,
-                       IsIndirect, true, IsIndirect, NewIR);
+    TargetNode = handleToIRNode(MethodToken, AddressInfo.addr, 0, IsIndirect,
+                                IsIndirect, true, IsIndirect, NewIR);
 
     // TODO: call to same constant dominates this load then the load is
     // invariant
@@ -5632,8 +5608,7 @@ IRNode *ReaderBase::rdrGetCodePointerLookupCallTarget(
   CORINFO_CALL_INFO *CallInfo = CallTargetData->getCallInfo();
 
   return rdrGetCodePointerLookupCallTarget(CallTargetData->getCallInfo(),
-                                           CallTargetData->IsIndirect,
-                                           NewIR);
+                                           CallTargetData->IsIndirect, NewIR);
 }
 
 IRNode *ReaderBase::rdrGetCodePointerLookupCallTarget(
@@ -5783,8 +5758,8 @@ ReaderBase::rdrGetDelegateInvokeTarget(ReaderCallTargetData *CallTargetData,
   return derefAddress(AddressNode, false, true, NewIR);
 }
 
-bool
-ReaderBase::rdrCallIsDelegateConstruct(ReaderCallTargetData *CallTargetData) {
+bool ReaderBase::rdrCallIsDelegateConstruct(
+    ReaderCallTargetData *CallTargetData) {
   if (CallTargetData->isNewObj()) {
     uint32_t ClassAttribs = CallTargetData->getClassAttribs();
     uint32_t MethodAttribs = CallTargetData->getMethodAttribs();
@@ -5800,10 +5775,10 @@ ReaderBase::rdrCallIsDelegateConstruct(ReaderCallTargetData *CallTargetData) {
 
 #ifdef FEATURE_CORECLR
 
-void
-ReaderBase::rdrInsertCalloutForDelegate(CORINFO_CLASS_HANDLE DelegateType,
-                                        CORINFO_METHOD_HANDLE CalleeMethod,
-                                        mdToken MethodToken, IRNode **NewIR) {
+void ReaderBase::rdrInsertCalloutForDelegate(CORINFO_CLASS_HANDLE DelegateType,
+                                             CORINFO_METHOD_HANDLE CalleeMethod,
+                                             mdToken MethodToken,
+                                             IRNode **NewIR) {
   if (!JitInfo->isDelegateCreationAllowed(DelegateType, CalleeMethod)) {
     IRNode *Arg1, *Arg2;
     bool IsIndirect;
@@ -5831,8 +5806,7 @@ void ReaderBase::clearStack(IRNode **NewIR) {
   }
 }
 
-void ReaderBase::initParamsAndAutos(uint32_t NumParam,
-                                    uint32_t NumAuto) {
+void ReaderBase::initParamsAndAutos(uint32_t NumParam, uint32_t NumAuto) {
   // Init verification maps
   if (VerificationNeeded) {
     NumVerifyParams = NumParam;
@@ -6228,8 +6202,8 @@ void *ReaderBase::domInfoGetInfoFromDominator(
     if (!(RequireSameRegion &&
           fgNodeGetRegion(Fg) != fgNodeGetRegion(FgCurrent))) {
       // if we get an operand back then we have succeeded,
-      if ((FgData = domInfoGetBlockData(FgCurrent, false)) &&
-          (RetVal = (FgData->*Pmfn)(Key1, Key2, Key3)))
+      if ((FgData = domInfoGetBlockData(FgCurrent, false)) &&(
+              RetVal = (FgData->*Pmfn)(Key1, Key2, Key3)))
         break;
     }
     FgCurrent = fgNodeGetIDom(FgCurrent);
@@ -6291,9 +6265,8 @@ void ReaderBase::domInfoRecordSharedStaticBaseDefine(
 
 // Returns whether particular class has already been initialized
 // by current block, or any of its dominators.
-bool
-ReaderBase::domInfoDominatorHasClassInit(FlowGraphNode *Fg,
-                                         CORINFO_CLASS_HANDLE ClassHandle) {
+bool ReaderBase::domInfoDominatorHasClassInit(
+    FlowGraphNode *Fg, CORINFO_CLASS_HANDLE ClassHandle) {
   if (generateDebugCode())
     return false;
 
@@ -6391,8 +6364,7 @@ bool ReaderBase::isUnmarkedTailCall(uint8_t *ILInput, uint32_t ILInputSize,
 //
 // NOTE: Other necessary checks are performed later
 bool ReaderBase::isUnmarkedTailCallHelper(uint8_t *ILInput,
-                                          uint32_t ILInputSize,
-                                          uint32_t Offset,
+                                          uint32_t ILInputSize, uint32_t Offset,
                                           mdToken Token) {
   // Get the next instruction (if any)
   uint8_t *UnusedOperand;
@@ -6557,8 +6529,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
 #endif
 
     ReaderBaseNS::OPCODE PrevOp = Opcode;
-    NextOffset = parseILOpcode(ILInput, CurrentOffset, ILSize, this, &Opcode,
-                               &Operand);
+    NextOffset =
+        parseILOpcode(ILInput, CurrentOffset, ILSize, this, &Opcode, &Operand);
     CurrInstrOffset = CurrentOffset;
     NextInstrOffset = NextOffset;
 
@@ -8102,7 +8074,7 @@ void ReaderBase::msilToIR(void) {
 
   // Set up the initial stack
   ReaderOperandStack = createStack(
-      std::min(MethodInfo->maxStack, std::min(100u, MethodInfo->ILCodeSize)), 
+      std::min(MethodInfo->maxStack, std::min(100u, MethodInfo->ILCodeSize)),
       this);
   ASSERTNR(ReaderOperandStack);
   fgNodeSetOperandStack(FgHead, ReaderOperandStack);
@@ -8327,8 +8299,7 @@ void ReaderCallTargetData::resetReader(ReaderBase *Reader) {
   ASSERTNR(!IsOptimizedDelegateCtor);
 }
 
-uint32_t
-ReaderCallTargetData::getClassAttribs() {
+uint32_t ReaderCallTargetData::getClassAttribs() {
   if (!AreClassAttribsValid) {
     TargetClassAttribs = Reader->getClassAttribs(getClassHandle());
     AreClassAttribsValid = true;
@@ -8556,9 +8527,9 @@ void ReaderCallTargetData::setOptimizedDelegateCtor(
 void ReaderCallTargetData::init(
     ReaderBase *Reader, mdToken TargetToken, mdToken ConstraintToken,
     mdToken LoadFtnToken, bool IsTailCall, bool IsUnmarkedTailCall,
-    bool IsReadonlyCall, ReaderBaseNS::CallOpcode Opcode,
-    uint32_t MsilOffset, CORINFO_CONTEXT_HANDLE Context,
-    CORINFO_MODULE_HANDLE Scope, CORINFO_METHOD_HANDLE Caller) {
+    bool IsReadonlyCall, ReaderBaseNS::CallOpcode Opcode, uint32_t MsilOffset,
+    CORINFO_CONTEXT_HANDLE Context, CORINFO_MODULE_HANDLE Scope,
+    CORINFO_METHOD_HANDLE Caller) {
   this->Reader = Reader;
 
   this->LoadFtnToken = LoadFtnToken;

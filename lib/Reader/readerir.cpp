@@ -79,7 +79,7 @@ void GenStack::assertEmpty() { ASSERT(empty()); }
 
 uint32_t GenStack::depth() { return (uint32_t)(Top + 1); }
 
-IRNode *GenStack::getIterator(ReaderStackIterator& Iterator) {
+IRNode *GenStack::getIterator(ReaderStackIterator &Iterator) {
   Iterator = Top;
   if (empty())
     return NULL;
@@ -87,22 +87,22 @@ IRNode *GenStack::getIterator(ReaderStackIterator& Iterator) {
     return Stack[Top];
 }
 
-IRNode *GenStack::iteratorGetNext(ReaderStackIterator& Iterator) {
+IRNode *GenStack::iteratorGetNext(ReaderStackIterator &Iterator) {
   if (Iterator == 0)
     return NULL;
   return Stack[--Iterator];
 }
 
-void GenStack::iteratorReplace(ReaderStackIterator& Iterator, IRNode *Node) {
+void GenStack::iteratorReplace(ReaderStackIterator &Iterator, IRNode *Node) {
   Stack[Iterator] = Node;
 }
 
-IRNode *GenStack::getReverseIterator(ReaderStackIterator& Iterator) {
+IRNode *GenStack::getReverseIterator(ReaderStackIterator &Iterator) {
   return getReverseIteratorFromDepth(Iterator, depth());
 }
 
-IRNode *GenStack::getReverseIteratorFromDepth(ReaderStackIterator& Iterator,
-  uint32_t Depth) {
+IRNode *GenStack::getReverseIteratorFromDepth(ReaderStackIterator &Iterator,
+                                              uint32_t Depth) {
   size_t Idx = (size_t)(Top - Depth + 1);
   ASSERT(Idx >= 0);
   Iterator = Idx;
@@ -112,7 +112,7 @@ IRNode *GenStack::getReverseIteratorFromDepth(ReaderStackIterator& Iterator,
     return Stack[Idx];
 }
 
-IRNode *GenStack::reverseIteratorGetNext(ReaderStackIterator& Iterator) {
+IRNode *GenStack::reverseIteratorGetNext(ReaderStackIterator &Iterator) {
   if (Iterator == Top)
     return NULL;
   return Stack[++Iterator];
@@ -137,7 +137,7 @@ ReaderStack *GenStack::copy() {
   GenStack *Copy;
 
   void *Buffer = Reader->getTempMemory(sizeof(GenStack));
-  Copy = new (Buffer)GenStack(Max + 1, Reader);
+  Copy = new (Buffer) GenStack(Max + 1, Reader);
   Copy->Top = Top;
   for (int32_t I = 0; I <= Top; I++)
     Copy->Stack[I] = Stack[I];
@@ -147,7 +147,7 @@ ReaderStack *GenStack::copy() {
 ReaderStack *GenIR::createStack(uint32_t MaxStack, ReaderBase *Reader) {
   void *Buffer = Reader->getTempMemory(sizeof(GenStack));
   // extra 16 should reduce frequency of reallocation when inlining / jmp
-  return new (Buffer)GenStack(MaxStack + 16, Reader);
+  return new (Buffer) GenStack(MaxStack + 16, Reader);
 }
 
 #pragma endregion
@@ -396,12 +396,11 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   }
 
   // TODO: support for JustMyCode hook
-  if ((JitFlags & CORJIT_FLG_DEBUG_CODE) &&
-      !(JitFlags & CORJIT_FLG_IL_STUB)) { 
+  if ((JitFlags & CORJIT_FLG_DEBUG_CODE) && !(JitFlags & CORJIT_FLG_IL_STUB)) {
 
     bool IsIndirect = false;
-    void * DebugHandle = 
-      getJustMyCodeHandle(getCurrentMethodHandle(), &IsIndirect);
+    void *DebugHandle =
+        getJustMyCodeHandle(getCurrentMethodHandle(), &IsIndirect);
 
     if (DebugHandle != nullptr) {
       throw NotYetImplementedException("just my code hook");
@@ -416,10 +415,10 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
 
   // TODO: Insert class initialization check if necessary
   CorInfoInitClassResult InitResult =
-    initClass(NULL, getCurrentMethodHandle(), getCurrentContext());
+      initClass(NULL, getCurrentMethodHandle(), getCurrentContext());
   const bool InitClass = InitResult & CORINFO_INITCLASS_USE_HELPER;
   if (InitClass) {
-     throw NotYetImplementedException("init class");
+    throw NotYetImplementedException("init class");
   }
 }
 
@@ -743,8 +742,8 @@ void GenIR::verifyStaticAlignment(void *FieldAddress, CorInfoType CorType,
     break;
   }
 
-  // TODO: the commented out parts depend on debug code
-  // which we haven't ported.
+// TODO: the commented out parts depend on debug code
+// which we haven't ported.
 #if defined(_DEBUG)
   if (AlignmentError /*&& ifdb(DB_UNALIGNEDSTATICASSERT)*/) {
     /*dbgs() << format
@@ -1751,7 +1750,7 @@ FlowGraphNode *GenIR::fgSplitBlock(FlowGraphNode *Block, IRNode *Node) {
   BasicBlock *NewBlock;
   if (Inst == NULL) {
     NewBlock = BasicBlock::Create(*JitContext->LLVMContext, "", Function,
-      TheBasicBlock->getNextNode());
+                                  TheBasicBlock->getNextNode());
     TerminatorInst *TermInst = TheBasicBlock->getTerminator();
     if (TermInst != NULL) {
       if (isa<UnreachableInst>(TermInst)) {
@@ -1794,17 +1793,17 @@ void GenIR::fgDeleteNodesFromBlock(FlowGraphNode *Node) {
 IRNode *GenIR::fgMakeSwitch(IRNode *DefaultLabel, IRNode *Insert) {
   LLVMBuilder->SetInsertPoint((BasicBlock *)Insert);
 
-  // Create switch with null condition because it is invoked during 
+  // Create switch with null condition because it is invoked during
   // flow-graph build. The subsequent pass of Reader will set
   // this operanad properly.
   return (IRNode *)LLVMBuilder->CreateSwitch(loadNull(nullptr),
-    (BasicBlock *)DefaultLabel);
+                                             (BasicBlock *)DefaultLabel);
 }
 
 IRNode *GenIR::fgAddCaseToCaseList(IRNode *SwitchNode, IRNode *LabelNode,
                                    unsigned Element) {
   ConstantInt *Case = ConstantInt::get(*JitContext->LLVMContext,
-    APInt(32, (uint64_t)Element, false));
+                                       APInt(32, (uint64_t)Element, false));
   ((SwitchInst *)SwitchNode)->addCase(Case, (BasicBlock *)LabelNode);
   return SwitchNode;
 }
@@ -2678,13 +2677,12 @@ void GenIR::storePrimitiveType(IRNode *Value, IRNode *Addr,
   Type *ExpectedTy = Value->getType();
   if (ReferentTy != ExpectedTy) {
     Type *PtrToExpectedTy = getUnmanagedPointerType(ExpectedTy);
-    TypedAddr =
-      (IRNode *)LLVMBuilder->CreatePointerCast(Addr, PtrToExpectedTy);
+    TypedAddr = (IRNode *)LLVMBuilder->CreatePointerCast(Addr, PtrToExpectedTy);
   }
 
   uint32_t Align = (Alignment == Reader_AlignNatural)
-    ? TargetPointerSizeInBits / 8
-    : Alignment;
+                       ? TargetPointerSizeInBits / 8
+                       : Alignment;
   StoreInst *StoreInst = LLVMBuilder->CreateStore(Value, TypedAddr, IsVolatile);
   StoreInst->setAlignment(Align);
 }
@@ -2702,8 +2700,8 @@ void GenIR::makeStore(Type *Ty, Value *Address, Value *ValueToStore,
 }
 
 void GenIR::storeStaticField(CORINFO_RESOLVED_TOKEN *FieldToken,
-                             IRNode *ValueToStore,
-                             bool IsVolatile, IRNode **NewIR) {
+                             IRNode *ValueToStore, bool IsVolatile,
+                             IRNode **NewIR) {
   // Gather information about the field
   CORINFO_FIELD_HANDLE FieldHandle = FieldToken->hField;
   CORINFO_FIELD_INFO FieldInfo;
@@ -2723,13 +2721,12 @@ void GenIR::storeStaticField(CORINFO_RESOLVED_TOKEN *FieldToken,
 
   // If the runtime asks us to use a helper for the store, do so.
   const bool NeedsWriteBarrier =
-    JitContext->JitInfo->isWriteBarrierHelperRequired(FieldHandle);
+      JitContext->JitInfo->isWriteBarrierHelperRequired(FieldHandle);
   if (NeedsWriteBarrier) {
     // Statics are always on the heap, so we can use an unchecked write barrier
-    rdrCallWriteBarrierHelper((IRNode*)Address, ValueToStore,
+    rdrCallWriteBarrierHelper((IRNode *)Address, ValueToStore,
                               Reader_AlignNatural, IsVolatile, NewIR,
-                              FieldToken, !IsStructTy,
-                              false, true, true);
+                              FieldToken, !IsStructTy, false, true, true);
     return;
   }
 
@@ -2993,7 +2990,8 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
     if (I == 0) {
       if (CallTargetInfo->isNewObj()) {
         // Memory and a representative node for the 'this' pointer for newobj
-        // has not been created yet. Pass a null value of the right type for now;
+        // has not been created yet. Pass a null value of the right type for
+        // now;
         // it will be replaced by the real value in canonNewObjCall.
         ASSERT(ArgNode == NULL);
         ArgNode = (IRNode *)Constant::getNullValue(ArgType);
@@ -3568,14 +3566,14 @@ bool GenIR::memoryBarrier(IRNode **NewIR) {
 }
 
 void GenIR::switchOpcode(IRNode *Opr, IRNode **NewIR) {
-   // We split the block right after the switch during the flow-graph build.
-   // The terminator is switch instruction itself.
-   // Now condition operand is updated.
-   BasicBlock *CurrBlock = LLVMBuilder->GetInsertBlock();
-   TerminatorInst *TermInst = CurrBlock->getTerminator();
-   SwitchInst *SwitchInstruction = cast<SwitchInst>(TermInst);
+  // We split the block right after the switch during the flow-graph build.
+  // The terminator is switch instruction itself.
+  // Now condition operand is updated.
+  BasicBlock *CurrBlock = LLVMBuilder->GetInsertBlock();
+  TerminatorInst *TermInst = CurrBlock->getTerminator();
+  SwitchInst *SwitchInstruction = cast<SwitchInst>(TermInst);
 
-   SwitchInstruction->setCondition(Opr);
+  SwitchInstruction->setCondition(Opr);
 }
 
 void GenIR::throwOpcode(IRNode *Arg1, IRNode **NewIR) {
@@ -3783,14 +3781,14 @@ IRNode *GenIR::loadVirtFunc(IRNode *Arg1, CORINFO_RESOLVED_TOKEN *ResolvedToken,
   IRNode *TypeToken = genericTokenToNode(ResolvedToken, NewIR, true);
   IRNode *MethodToken = genericTokenToNode(ResolvedToken, NewIR);
 
-  Type *Ty = Type::getIntNTy(*this->JitContext->LLVMContext,
-                             TargetPointerSizeInBits);
-  IRNode *CodeAddress = callHelperImpl(CORINFO_HELP_VIRTUAL_FUNC_PTR, Ty,
-                                       NewIR, Arg1, TypeToken, MethodToken);
+  Type *Ty =
+      Type::getIntNTy(*this->JitContext->LLVMContext, TargetPointerSizeInBits);
+  IRNode *CodeAddress = callHelperImpl(CORINFO_HELP_VIRTUAL_FUNC_PTR, Ty, NewIR,
+                                       Arg1, TypeToken, MethodToken);
 
   FunctionType *FunctionType = getFunctionType(CallInfo->hMethod);
-  return (IRNode *)LLVMBuilder->CreateIntToPtr(CodeAddress,
-      getUnmanagedPointerType(FunctionType));
+  return (IRNode *)LLVMBuilder->CreateIntToPtr(
+      CodeAddress, getUnmanagedPointerType(FunctionType));
 }
 
 IRNode *GenIR::loadPrimitiveType(IRNode *Addr, CorInfoType CorInfoType,
