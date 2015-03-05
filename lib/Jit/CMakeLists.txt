@@ -60,6 +60,6 @@ add_dependencies(llilcjit LLILCReader)
 
 target_link_libraries(
   llilcjit
-  PRIVATE
+  ${cmake_2_8_12_PRIVATE}
   ${LLILCJIT_LINK_LIBRARIES}
   )
