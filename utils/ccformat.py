@@ -5,6 +5,9 @@ import argparse
 import os
 import subprocess
 import platform
+import StringIO
+import string
+import difflib
 
 def expandPath(path):
     return os.path.abspath(os.path.expanduser(path))
@@ -121,16 +124,33 @@ def runFormat(args):
             
           output,error = proc.communicate()
           if output != "":
-            print filepath
-            returncode = -1
+            if not args.fix:
+              with open(filepath) as f:
+                code = f.read().splitlines()
+              formatted_code = StringIO.StringIO(output).read().splitlines()
+              diff = difflib.unified_diff(code, formatted_code,
+                                          filepath, filepath,
+                                          '(before formatting)', '(after formatting)')
+              diff_string = string.join(diff, '')
+              if len(diff_string) > 0:
+                print(filepath)
+                returncode = -1
   else:
-    proc = subprocess.Popen(" ".join(["git", "diff", args.base, "-U0", "2>" + 
-        os.devnull, "|", args.clang_format_diff, "-p1", formatFix]), 
-        shell=True, stdout=subprocess.PIPE)
+    noindex = ""
+    base = "" if args.noindex else args.base
+    if args.noindex:
+      noindex = "--no-index"
+      if args.left == "" or args.right == "":
+        print("User must specify paths to repositories to be diffed with --no-index")
+        print("usage: ccformat.py --no-index --left <path to left> --right <path to right>")
+        return -2
+
+    proc = subprocess.Popen(" ".join(["git", "diff", base, "-U0", noindex,
+        args.left, args.right, "2>" + os.devnull, "|", args.clang_format_diff, 
+        "-p1", formatFix]), shell=True, stdout=subprocess.PIPE)
 
     output,error = proc.communicate()
     if output != "":
-      print output
       returncode = -1
 
   if returncode == -1:
@@ -184,6 +204,12 @@ def main(argv):
             help="Base for obtaining diffs")
   parser.add_argument("--formatall", action="store_true", default=False,
             help="Run clang-format on all files")
+  parser.add_argument("--noindex", action="store_true", default=False,
+            help="Run git diff with --no-index to compare two paths")
+  parser.add_argument("--left", default="", 
+      help="Path to compare against, used with --noindex")
+  parser.add_argument("--right", default="", 
+      help="Path to be compared, used with --noindex")
   args = parser.parse_args(argv)
 
   returncode=0
@@ -198,4 +224,5 @@ def main(argv):
   return returncode
 
 if __name__ == "__main__":
-  main(sys.argv[1:])
+  returncode = main(sys.argv[1:])
+  sys.exit(returncode)
