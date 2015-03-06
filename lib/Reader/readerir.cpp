@@ -2604,7 +2604,7 @@ void GenIR::storePrimitiveType(IRNode *Value, IRNode *Addr,
   ASSERTNR(isPrimitiveType(CorInfoType));
 
   uint32_t Align;
-  IRNode *TypedAddr = getPrimitiveAddress(Addr, CorInfoType, Alignment, Align);
+  IRNode *TypedAddr = getPrimitiveAddress(Addr, CorInfoType, Alignment, &Align);
   Type *ExpectedTy =
       cast<PointerType>(TypedAddr->getType())->getPointerElementType();
   IRNode *ValueToStore = convertFromStackType(Value, CorInfoType, ExpectedTy);
@@ -3722,18 +3722,17 @@ IRNode *GenIR::loadVirtFunc(IRNode *Arg1, CORINFO_RESOLVED_TOKEN *ResolvedToken,
 }
 
 IRNode *GenIR::getPrimitiveAddress(IRNode *Addr, CorInfoType CorInfoType,
-                                   ReaderAlignType Alignment, uint32_t &Align) {
+                                   ReaderAlignType Alignment, uint32_t *Align) {
   ASSERTNR(isPrimitiveType(CorInfoType) || CorInfoType == CORINFO_TYPE_REFANY);
 
   // Get type of the result.
   Type *AddressTy = Addr->getType();
-  PointerType *PointerTy = dyn_cast<PointerType>(AddressTy);
   IRNode *TypedAddr = Addr;
 
   // For the 'REFANY' case, verify the address carries
   // reasonable typing. Address producer must ensure this.
   if (CorInfoType == CORINFO_TYPE_REFANY) {
-    ASSERT(PointerTy != nullptr);
+    PointerType *PointerTy = cast<PointerType>(AddressTy);
     Type *ReferentTy = PointerTy->getPointerElementType();
 
     // The result of the load is an object reference,
@@ -3741,7 +3740,8 @@ IRNode *GenIR::getPrimitiveAddress(IRNode *Addr, CorInfoType CorInfoType,
     if (!ReferentTy->isPointerTy()) {
       // If we hit this we should fix the address producer, not
       // coerce the type here.
-      throw NotYetImplementedException("unexpected type in load primitive");
+      throw
+          NotYetImplementedException("unexpected type in load/store primitive");
     }
     PointerType *ReferentPtrTy = cast<PointerType>(ReferentTy);
     ASSERT(isManagedPointerType(ReferentPtrTy));
@@ -3751,6 +3751,7 @@ IRNode *GenIR::getPrimitiveAddress(IRNode *Addr, CorInfoType CorInfoType,
   } else {
     // For the true primitve case we may need to cast the address.
     Type *ExpectedTy = this->getType(CorInfoType, nullptr);
+    PointerType *PointerTy = dyn_cast<PointerType>(AddressTy);
     if (PointerTy != nullptr) {
       Type *ReferentTy = PointerTy->getPointerElementType();
       if (ReferentTy != ExpectedTy) {
@@ -3768,7 +3769,7 @@ IRNode *GenIR::getPrimitiveAddress(IRNode *Addr, CorInfoType CorInfoType,
     }
   }
 
-  Align = (Alignment == Reader_AlignNatural) ? TargetPointerSizeInBits / 8
+  *Align = (Alignment == Reader_AlignNatural) ? TargetPointerSizeInBits / 8
      : Alignment;
   return TypedAddr;
 }
@@ -3777,7 +3778,7 @@ IRNode *GenIR::loadPrimitiveType(IRNode *Addr, CorInfoType CorInfoType,
                                  ReaderAlignType Alignment, bool IsVolatile,
                                  bool IsInterfReadOnly, IRNode **NewIR) {
   uint32_t Align;
-  IRNode *TypedAddr = getPrimitiveAddress(Addr, CorInfoType, Alignment, Align);
+  IRNode *TypedAddr = getPrimitiveAddress(Addr, CorInfoType, Alignment, &Align);
   LoadInst *LoadInst = LLVMBuilder->CreateLoad(TypedAddr, IsVolatile);
   LoadInst->setAlignment(Align);
 
