@@ -881,6 +881,9 @@ private:
                              CORINFO_FIELD_INFO *FieldInfo,
                              IRNode **NewIR) override;
 
+  IRNode *getPrimitiveAddress(IRNode *Addr, CorInfoType CorInfoType,
+                              ReaderAlignType Alignment, uint32_t &Align);
+
   void classifyCmpType(llvm::Type *Ty, uint32_t &Size, bool &IsPointer,
                        bool &IsFloat);
 
