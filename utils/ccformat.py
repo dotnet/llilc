@@ -17,16 +17,14 @@ def runTidy(args):
 
   tidyFix = "-fix" if args.fix else ""
 
-  inc = ""
-  tempinc = ""
+  osInc = ""
+  osIncList = []
 
   if os.environ.get('INCLUDE') != None:
-    tempinc = os.environ['INCLUDE']
+    osInc = os.environ['INCLUDE']
 
-  if tempinc != "":
-    tempincList = tempinc.split(';')
-    for item in tempincList:
-      inc = inc + "-issytem " + item
+  if osInc != "":
+    osIncList = osInc.split(';')
 
   clangArgs = ""
   if args.compile_commands is None:
@@ -85,7 +83,9 @@ def runTidy(args):
         "NOMINMAX"
     ]
 
-    clangArgs = " ".join(["--"] + flags + ["-I" + i for i in includes] \
+    clangArgs = " ".join(["--"] + flags 
+                         + ["-I" + i for i in includes] \
+                         + ["-isystem" + i for i in osIncList] \
                          + ["-D" + d for d in defines])
   else:
     clangArgs = " ".join(["-p", expandPath(args.compile_commands)])
@@ -148,7 +148,8 @@ def main(argv):
             help="Don\'t run clang-tidy")
   parser.add_argument("--noformat", action="store_true", default=False,
             help="Don\'t run clang-format-diff")
-  parser.add_argument("--checks", default="llvm*,misc*,microsoft*",
+  parser.add_argument("--checks", default="llvm*,misc*,microsoft*,"\
+                      "-llvm-header-guard,-llvm-include-order",
             help="clang-tidy checks to run")
   parser.add_argument("--base", metavar="BRANCH", default="origin",
             help="Base for obtaining diffs")
