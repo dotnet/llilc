@@ -359,7 +359,7 @@ public:
   ///
   /// \param NewVal The value to be pushed.
   /// \pre NewVal != NULL
-  virtual void push(IRNode *NewVal, IRNode **NewIR) = 0;
+  virtual void push(IRNode *NewVal) = 0;
 
   /// \brief Make the operand stack empty.
   ///
@@ -485,11 +485,11 @@ public:
   bool getMethodHandleNodeRequiresRuntimeLookup();
   bool getCallTargetNodeRequiresRuntimeLookup();
 
-  IRNode *getMethodHandleNode(IRNode **NewIR);
-  IRNode *getClassHandleNode(IRNode **NewIR);
-  IRNode *getTypeContextNode(IRNode **NewIR);
+  IRNode *getMethodHandleNode();
+  IRNode *getClassHandleNode();
+  IRNode *getTypeContextNode();
 
-  IRNode *applyThisTransform(IRNode *ThisIR, IRNode **NewIR);
+  IRNode *applyThisTransform(IRNode *ThisIR);
 
   bool hasThis() { return HasThisPtr; }
   bool isJmp() { return IsJmp; }
@@ -678,7 +678,6 @@ struct ReadBytesForFlowGraphNodeHelperParam {
   ReaderException *Excep;
   FlowGraphNode *Fg;
   bool IsVerifyOnly;
-  IRNode **NewIR; // Used in a trace pr post process
   uint32_t CurrentOffset;
   bool LocalFault;
   bool HasFallThrough;
@@ -830,7 +829,7 @@ public:
   void initVerifyInfo(void);
 
 private:
-  void setupBlockForEH(IRNode **NewIR);
+  void setupBlockForEH();
 
   bool isOffsetInstrStart(uint32_t Offset);
 
@@ -1006,7 +1005,7 @@ public:
                           void *Param);
 
 protected:
-  void clearStack(IRNode **NewIR);
+  void clearStack();
 
   // Client defined function to initialize verification state.
   void verifyNeedsVerification();
@@ -1207,8 +1206,7 @@ public:
   // ///////////////////////////////////////////////////////////////////////////
 
   IRNode *rdrCall(ReaderCallTargetData *CallTargetData,
-                  ReaderBaseNS::CallOpcode Opcode, IRNode **CallNode,
-                  IRNode **NewIR);
+                  ReaderBaseNS::CallOpcode Opcode, IRNode **CallNode);
 
   void makeReaderCallTargetDataForNewObj(ReaderCallTargetData *CallTargetData,
                                          mdToken TargetToken,
@@ -1262,33 +1260,29 @@ public:
 
 private:
   void rdrMakeCallTargetNode(ReaderCallTargetData *CallTargetData,
-                             IRNode **ThisPointer, IRNode **NewIR);
+                             IRNode **ThisPointer);
 
   IRNode *rdrMakeLdFtnTargetNode(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                                 CORINFO_CALL_INFO *CallInfo, IRNode **NewIR);
+                                 CORINFO_CALL_INFO *CallInfo);
 
-  IRNode *rdrGetDirectCallTarget(ReaderCallTargetData *CallTargetData,
-                                 IRNode **NewIR);
+  IRNode *rdrGetDirectCallTarget(ReaderCallTargetData *CallTargetData);
 
   IRNode *rdrGetDirectCallTarget(CORINFO_METHOD_HANDLE Method,
                                  mdToken MethodToken, bool NeedsNullCheck,
-                                 bool CanMakeDirectCall, bool &UsesMethodDesc,
-                                 IRNode **NewIR);
+                                 bool CanMakeDirectCall, bool &UsesMethodDesc);
   IRNode *
-  rdrGetCodePointerLookupCallTarget(ReaderCallTargetData *CallTargetData,
-                                    IRNode **NewIR);
+  rdrGetCodePointerLookupCallTarget(ReaderCallTargetData *CallTargetData);
 
   IRNode *rdrGetCodePointerLookupCallTarget(CORINFO_CALL_INFO *CallInfo,
-                                            bool &IsIndirect, IRNode **NewIR);
+                                            bool &IsIndirect);
 
   IRNode *rdrGetIndirectVirtualCallTarget(ReaderCallTargetData *CallTargetData,
-                                          IRNode **ThisPointer, IRNode **NewIR);
+                                          IRNode **ThisPointer);
 
-  IRNode *rdrGetVirtualStubCallTarget(ReaderCallTargetData *CallTargetData,
-                                      IRNode **NewIR);
+  IRNode *rdrGetVirtualStubCallTarget(ReaderCallTargetData *CallTargetData);
 
   IRNode *rdrGetVirtualTableCallTarget(ReaderCallTargetData *CallTargetData,
-                                       IRNode **ThisPointer, IRNode **NewIR);
+                                       IRNode **ThisPointer);
 
   // Delegate invoke and delegate construct optimizations
   bool rdrCallIsDelegateInvoke(ReaderCallTargetData *CallTargetData);
@@ -1296,10 +1290,10 @@ private:
 #ifdef FEATURE_CORECLR
   void rdrInsertCalloutForDelegate(CORINFO_CLASS_HANDLE DelegateType,
                                    CORINFO_METHOD_HANDLE CalleeMethod,
-                                   mdToken MethodToken, IRNode **NewIR);
+                                   mdToken MethodToken);
 #endif // FEATURE_CORECLR
   IRNode *rdrGetDelegateInvokeTarget(ReaderCallTargetData *CallTargetData,
-                                     IRNode **ThisPtr, IRNode **NewIR);
+                                     IRNode **ThisPtr);
 
 public:
   void
@@ -1307,25 +1301,23 @@ public:
                      CorInfoHelpFunc HelperId, bool IsLoad,
                      IRNode *Dst, // dst node if this is a load, otherwise NULL
                      IRNode *Obj, IRNode *Value, ReaderAlignType Alignment,
-                     bool IsVolatile, IRNode **NewIR);
+                     bool IsVolatile);
   void rdrCallWriteBarrierHelper(IRNode *Arg1, IRNode *Arg2,
                                  ReaderAlignType Alignment, bool IsVolatile,
-                                 IRNode **NewIR,
+
                                  CORINFO_RESOLVED_TOKEN *ResolvedToken,
                                  bool IsNonValueClass, bool IsValueIsPointer,
                                  bool IsFieldToken, bool IsUnchecked);
   void rdrCallWriteBarrierHelperForReturnValue(IRNode *Arg1, IRNode *Arg2,
-                                               IRNode **NewIR, mdToken Token);
+                                               mdToken Token);
   IRNode *rdrGetFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                              CORINFO_FIELD_INFO *FieldInfo, IRNode *Obj,
-                             bool BaseIsGCObj, bool MustNullCheck,
-                             IRNode **NewIR);
+                             bool BaseIsGCObj, bool MustNullCheck);
   IRNode *rdrGetStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                                   CORINFO_FIELD_INFO *FieldInfo,
-                                   IRNode **NewIR);
+                                   CORINFO_FIELD_INFO *FieldInfo);
   IRNode *rdrCallGetStaticBase(CORINFO_CLASS_HANDLE Class, mdToken ClassToken,
                                CorInfoHelpFunc HelperId, bool NoCtor,
-                               bool CanMoveUp, IRNode *Dst, IRNode **NewIR);
+                               bool CanMoveUp, IRNode *Dst);
 
 public:
   // //////////////////////////////////////////////////////////////////////////
@@ -1506,13 +1498,11 @@ public:
   bool isPrimitiveType(CORINFO_CLASS_HANDLE Handle);
   static bool isPrimitiveType(CorInfoType CorType);
 
-  void handleClassAccess(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode **NewIR);
+  void handleClassAccess(CORINFO_RESOLVED_TOKEN *ResolvedToken);
   void handleMemberAccess(CorInfoIsAccessAllowedResult AccessAllowed,
-                          const CORINFO_HELPER_DESC &AccessHelper,
-                          IRNode **NewIR);
+                          const CORINFO_HELPER_DESC &AccessHelper);
   void handleMemberAccessWorker(CorInfoIsAccessAllowedResult AccessAllowed,
-                                const CORINFO_HELPER_DESC &AccessHelper,
-                                IRNode **NewIR);
+                                const CORINFO_HELPER_DESC &AccessHelper);
   void
   handleMemberAccessForVerification(CorInfoIsAccessAllowedResult AccessAllowed,
                                     const CORINFO_HELPER_DESC &AccessHelper,
@@ -1522,8 +1512,7 @@ public:
                                     const char *HResult
 #endif // CC_PEVERIFY
                                     );
-  void insertHelperCall(const CORINFO_HELPER_DESC &HelperCallDesc,
-                        IRNode **NewIR);
+  void insertHelperCall(const CORINFO_HELPER_DESC &HelperCallDesc);
   bool canTailCall(CORINFO_METHOD_HANDLE DeclaredTarget,
                    CORINFO_METHOD_HANDLE ExactTarget, bool IsTailPrefix);
   CorInfoInline canInline(CORINFO_METHOD_HANDLE Caller,
@@ -1559,7 +1548,7 @@ public:
                                  CORINFO_SIG_INFO *Sig);
 
   // Get a node that can be passed to the sync method helpers.
-  IRNode *rdrGetCritSect(IRNode **NewIR);
+  IRNode *rdrGetCritSect();
 
   //
   // Support for filtering runtime-thrown exceptions
@@ -1587,50 +1576,46 @@ public:
   // Used for testing, client can force verification.
   virtual bool verForceVerification(void) = 0;
 
-  virtual bool abs(IRNode *Arg1, IRNode **RetVal, IRNode **NewIR) = 0;
+  virtual bool abs(IRNode *Arg1, IRNode **RetVal) = 0;
 
-  virtual IRNode *argList(IRNode **NewIR) = 0;
-  virtual IRNode *instParam(IRNode **NewIR) = 0;
-  virtual IRNode *secretParam(IRNode **NewIR) = 0;
-  virtual IRNode *thisObj(IRNode **NewIR) = 0;
-  virtual void boolBranch(ReaderBaseNS::BoolBranchOpcode Opcode, IRNode *Arg1,
-                          IRNode **NewIR) = 0;
+  virtual IRNode *argList() = 0;
+  virtual IRNode *instParam() = 0;
+  virtual IRNode *secretParam() = 0;
+  virtual IRNode *thisObj() = 0;
+  virtual void boolBranch(ReaderBaseNS::BoolBranchOpcode Opcode,
+                          IRNode *Arg1) = 0;
   virtual IRNode *box(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
-                      IRNode **NewIR, uint32_t *NextOffset = NULL,
+                      uint32_t *NextOffset = NULL,
                       VerificationState *VState = NULL);
   virtual IRNode *binaryOp(ReaderBaseNS::BinaryOpcode Opcode, IRNode *Arg1,
-                           IRNode *Arg2, IRNode **NewIR) = 0;
-  virtual void branch(IRNode **NewIR) = 0;
-  virtual void breakOpcode(IRNode **NewIR);
+                           IRNode *Arg2) = 0;
+  virtual void branch() = 0;
+  virtual void breakOpcode();
   virtual IRNode *call(ReaderBaseNS::CallOpcode Opcode, mdToken Token,
                        mdToken ConstraintTypeRef, mdToken LoadFtnToken,
                        bool IsReadOnlyPrefix, bool IsTailCallPrefix,
                        bool IsUnmarkedTailCall, uint32_t CurrentOffset,
-                       bool *IsRecursiveTailCall, IRNode **NewIR) = 0;
+                       bool *IsRecursiveTailCall) = 0;
   virtual IRNode *castClass(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                            IRNode *ObjRefNode, IRNode **NewIR);
+                            IRNode *ObjRefNode);
   virtual IRNode *isInst(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                         IRNode *ObjRefNode, IRNode **NewIR);
+                         IRNode *ObjRefNode);
   virtual IRNode *castOp(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                         IRNode *ObjRefNode, IRNode **NewIR,
-                         CorInfoHelpFunc HelperId) = 0;
+                         IRNode *ObjRefNode, CorInfoHelpFunc HelperId) = 0;
 
-  virtual IRNode *ckFinite(IRNode *Arg1, IRNode **NewIR) = 0;
+  virtual IRNode *ckFinite(IRNode *Arg1) = 0;
   virtual IRNode *cmp(ReaderBaseNS::CmpOpcode Opcode, IRNode *Arg1,
-                      IRNode *Arg2, IRNode **NewIR) = 0;
+                      IRNode *Arg2) = 0;
   virtual void condBranch(ReaderBaseNS::CondBranchOpcode Opcode, IRNode *Arg1,
-                          IRNode *Arg2, IRNode **NewIR) = 0;
-  virtual IRNode *conv(ReaderBaseNS::ConvOpcode Opcode, IRNode *Arg1,
-                       IRNode **NewIR) = 0;
+                          IRNode *Arg2) = 0;
+  virtual IRNode *conv(ReaderBaseNS::ConvOpcode Opcode, IRNode *Arg1) = 0;
   virtual void cpBlk(IRNode *ByteCount, IRNode *SourceAddress,
                      IRNode *DestinationAddress, ReaderAlignType Alignment,
-                     bool IsVolatile, IRNode **NewIR);
+                     bool IsVolatile);
   virtual void cpObj(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
-                     IRNode *Arg2, ReaderAlignType Alignment, bool IsVolatile,
-                     IRNode **NewIR);
-  virtual void dup(IRNode *Opr, IRNode **Result1, IRNode **Result2,
-                   IRNode **NewIR) = 0;
-  virtual void endFilter(IRNode *Arg1, IRNode **NewIR) = 0;
+                     IRNode *Arg2, ReaderAlignType Alignment, bool IsVolatile);
+  virtual void dup(IRNode *Opr, IRNode **Result1, IRNode **Result2) = 0;
+  virtual void endFilter(IRNode *Arg1) = 0;
 
   virtual FlowGraphNode *fgNodeGetNext(FlowGraphNode *FgNode) = 0;
   virtual uint32_t fgNodeGetStartMSILOffset(FlowGraphNode *Fg) = 0;
@@ -1644,156 +1629,138 @@ public:
   virtual void fgNodeSetOperandStack(FlowGraphNode *Fg, ReaderStack *Stack) = 0;
   virtual ReaderStack *fgNodeGetOperandStack(FlowGraphNode *Fg) = 0;
 
-  virtual IRNode *getStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                                        IRNode **NewIR) = 0;
+  virtual IRNode *
+  getStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken) = 0;
   virtual void initBlk(IRNode *NumBytes, IRNode *ValuePerByte,
                        IRNode *DestinationAddress, ReaderAlignType Alignment,
-                       bool IsVolatile, IRNode **NewIR);
-  virtual void initObj(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg2,
-                       IRNode **NewIR);
-  virtual void insertThrow(CorInfoHelpFunc ThrowHelper, uint32_t Offset,
-                           IRNode **NewIR);
+                       bool IsVolatile);
+  virtual void initObj(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg2);
+  virtual void insertThrow(CorInfoHelpFunc ThrowHelper, uint32_t Offset);
   virtual void jmp(ReaderBaseNS::CallOpcode Opcode, mdToken Token, bool HasThis,
-                   bool HasVarArg, IRNode **NewIR) = 0;
+                   bool HasVarArg) = 0;
 
   virtual void leave(uint32_t TargetOffset, bool IsNonLocal,
-                     bool EndsWithNonLocalGoto, IRNode **NewIR) = 0;
-  virtual IRNode *loadArg(uint32_t ArgOrdinal, bool IsJmp, IRNode **NewIR) = 0;
-  virtual IRNode *loadLocal(uint32_t ArgOrdinal, IRNode **NewIR) = 0;
-  virtual IRNode *loadArgAddress(uint32_t ArgOrdinal, IRNode **NewIR) = 0;
-  virtual IRNode *loadLocalAddress(uint32_t LocOrdinal, IRNode **NewIR) = 0;
-  virtual IRNode *loadConstantI4(int32_t Constant, IRNode **NewIR) = 0;
-  virtual IRNode *loadConstantI8(int64_t Constant, IRNode **NewIR) = 0;
-  virtual IRNode *loadConstantI(size_t Constant, IRNode **NewIR) = 0;
-  virtual IRNode *loadConstantR4(float Value, IRNode **NewIR) = 0;
-  virtual IRNode *loadConstantR8(double Value, IRNode **NewIR) = 0;
+                     bool EndsWithNonLocalGoto) = 0;
+  virtual IRNode *loadArg(uint32_t ArgOrdinal, bool IsJmp) = 0;
+  virtual IRNode *loadLocal(uint32_t ArgOrdinal) = 0;
+  virtual IRNode *loadArgAddress(uint32_t ArgOrdinal) = 0;
+  virtual IRNode *loadLocalAddress(uint32_t LocOrdinal) = 0;
+  virtual IRNode *loadConstantI4(int32_t Constant) = 0;
+  virtual IRNode *loadConstantI8(int64_t Constant) = 0;
+  virtual IRNode *loadConstantI(size_t Constant) = 0;
+  virtual IRNode *loadConstantR4(float Value) = 0;
+  virtual IRNode *loadConstantR8(double Value) = 0;
   virtual IRNode *loadElem(ReaderBaseNS::LdElemOpcode Opcode,
                            CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
-                           IRNode *Arg2, IRNode **NewIR) = 0;
+                           IRNode *Arg2) = 0;
   virtual IRNode *loadElemA(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
-                            IRNode *Arg2, bool IsReadOnly, IRNode **NewIR) = 0;
+                            IRNode *Arg2, bool IsReadOnly) = 0;
   virtual IRNode *loadField(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
-                            ReaderAlignType Alignment, bool IsVolatile,
-                            IRNode **NewIR) = 0;
+                            ReaderAlignType Alignment, bool IsVolatile) = 0;
   virtual IRNode *loadIndir(ReaderBaseNS::LdIndirOpcode Opcode, IRNode *Address,
                             ReaderAlignType Alignement, bool IsVolatile,
-                            bool IsInterfReadOnly, IRNode **NewIR);
-  virtual IRNode *loadNull(IRNode **NewIR) = 0;
-  virtual IRNode *localAlloc(IRNode *Arg, bool IsZeroInit, IRNode **NewIR) = 0;
+                            bool IsInterfReadOnly);
+  virtual IRNode *loadNull() = 0;
+  virtual IRNode *localAlloc(IRNode *Arg, bool IsZeroInit) = 0;
   virtual IRNode *loadFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                                   IRNode *Obj, IRNode **NewIR) = 0;
-  virtual IRNode *loadLen(IRNode *Arg1, IRNode **NewIR) = 0;
-  virtual bool arrayAddress(CORINFO_SIG_INFO *Aig, IRNode **RetVal,
-                            IRNode **NewIR) = 0;
-  virtual IRNode *loadStringLen(IRNode *Arg1, IRNode **NewIR) = 0;
-  virtual IRNode *getTypeFromHandle(IRNode *Arg1, IRNode **NewIR) = 0;
-  virtual IRNode *getValueFromRuntimeHandle(IRNode *Arg1, IRNode **NewIR) = 0;
+                                   IRNode *Obj) = 0;
+  virtual IRNode *loadLen(IRNode *Arg1) = 0;
+  virtual bool arrayAddress(CORINFO_SIG_INFO *Aig, IRNode **RetVal) = 0;
+  virtual IRNode *loadStringLen(IRNode *Arg1) = 0;
+  virtual IRNode *getTypeFromHandle(IRNode *Arg1) = 0;
+  virtual IRNode *getValueFromRuntimeHandle(IRNode *Arg1) = 0;
   virtual IRNode *arrayGetDimLength(IRNode *Arg1, IRNode *Arg2,
-                                    CORINFO_CALL_INFO *CallInfo,
-                                    IRNode **NewIR) = 0;
+                                    CORINFO_CALL_INFO *CallInfo) = 0;
   virtual IRNode *loadObj(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
                           ReaderAlignType AlignmentPrefix, bool IsVolatile,
-                          bool IsField, IRNode **NewIR);
+                          bool IsField);
   virtual IRNode *loadAndBox(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                             IRNode *Address, ReaderAlignType AlignmentPrefix,
-                             IRNode **NewIR) = 0;
+                             IRNode *Address,
+                             ReaderAlignType AlignmentPrefix) = 0;
   virtual IRNode *convertHandle(IRNode *GetTokenNumeric,
                                 CorInfoHelpFunc HelperID,
-                                CORINFO_CLASS_HANDLE Class, IRNode **NewIR) = 0;
+                                CORINFO_CLASS_HANDLE Class) = 0;
   virtual void
-  convertTypeHandleLookupHelperToIntrinsic(bool CanCompareToGetType,
-                                           IRNode *IR) = 0;
+  convertTypeHandleLookupHelperToIntrinsic(bool CanCompareToGetType) = 0;
 
   virtual IRNode *loadStaticField(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                                  bool IsVolatile, IRNode **NewIR) = 0;
-  virtual IRNode *loadStr(mdToken Token, IRNode **NewIR) = 0;
-  virtual IRNode *loadToken(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                            IRNode **NewIR);
+                                  bool IsVolatile) = 0;
+  virtual IRNode *loadStr(mdToken Token) = 0;
+  virtual IRNode *loadToken(CORINFO_RESOLVED_TOKEN *ResolvedToken);
   virtual IRNode *loadVirtFunc(IRNode *Arg1,
                                CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                               CORINFO_CALL_INFO *CallInfo, IRNode **NewIR) = 0;
+                               CORINFO_CALL_INFO *CallInfo) = 0;
   virtual IRNode *loadPrimitiveType(IRNode *Address, CorInfoType CorType,
                                     ReaderAlignType Slignment, bool IsVolatile,
-                                    bool IsInterfConst, IRNode **NewIR) = 0;
+                                    bool IsInterfConst) = 0;
   virtual IRNode *loadNonPrimitiveObj(IRNode *Address,
                                       CORINFO_CLASS_HANDLE Class,
                                       ReaderAlignType Alignment,
-                                      bool IsVolatile, IRNode **NewIR) = 0;
+                                      bool IsVolatile) = 0;
   virtual IRNode *makeRefAny(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                             IRNode *Object, IRNode **NewIR) = 0;
-  virtual IRNode *newArr(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
-                         IRNode **NewIR) = 0;
+                             IRNode *Object) = 0;
+  virtual IRNode *newArr(CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                         IRNode *Arg1) = 0;
   virtual IRNode *newObj(mdToken Token, mdToken LoadFtnToken,
-                         uint32_t CurrentOffset, IRNode **NewIR) = 0;
-  virtual void pop(IRNode *Opr, IRNode **NewIR) = 0;
-  virtual IRNode *refAnyType(IRNode *Arg1, IRNode **NewIR) = 0;
-  virtual IRNode *refAnyVal(IRNode *Val, CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                            IRNode **NewIR);
-  virtual void rethrow(IRNode **NewIR) = 0;
-  virtual void returnOpcode(IRNode *Opr, bool IsSynchronousMethod,
-                            IRNode **NewIR) = 0;
+                         uint32_t CurrentOffset) = 0;
+  virtual void pop(IRNode *Opr) = 0;
+  virtual IRNode *refAnyType(IRNode *Arg1) = 0;
+  virtual IRNode *refAnyVal(IRNode *Val, CORINFO_RESOLVED_TOKEN *ResolvedToken);
+  virtual void rethrow() = 0;
+  virtual void returnOpcode(IRNode *Opr, bool IsSynchronousMethod) = 0;
   virtual IRNode *shift(ReaderBaseNS::ShiftOpcode Opcode, IRNode *ShiftAmount,
-                        IRNode *ShiftOperand, IRNode **NewIR) = 0;
-  virtual IRNode *sizeofOpcode(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                               IRNode **NewIR) = 0;
+                        IRNode *ShiftOperand) = 0;
+  virtual IRNode *sizeofOpcode(CORINFO_RESOLVED_TOKEN *ResolvedToken) = 0;
   virtual void storeArg(uint32_t LocOrdinal, IRNode *Arg1,
-                        ReaderAlignType Alignment, bool IsVolatile,
-                        IRNode **NewIR) = 0;
+                        ReaderAlignType Alignment, bool IsVolatile) = 0;
   virtual void storeElem(ReaderBaseNS::StElemOpcode Opcode,
                          CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
-                         IRNode *Arg2, IRNode *Arg3, IRNode **NewIR) = 0;
-  virtual void storeElemRefAny(IRNode *Value, IRNode *Index, IRNode *Obj,
-                               IRNode **NewIR);
+                         IRNode *Arg2, IRNode *Arg3) = 0;
+  virtual void storeElemRefAny(IRNode *Value, IRNode *Index, IRNode *Obj);
   virtual void storeField(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
                           IRNode *Arg2, ReaderAlignType Alignment,
-                          bool IsVolatile, IRNode **NewIR) = 0;
+                          bool IsVolatile) = 0;
   virtual void storeIndir(ReaderBaseNS::StIndirOpcode Opcode, IRNode *Arg1,
                           IRNode *Arg2, ReaderAlignType Alignment,
-                          bool IsVolatile, IRNode **NewIR);
+                          bool IsVolatile);
   virtual void storePrimitiveType(IRNode *Value, IRNode *Address,
                                   CorInfoType CorType,
-                                  ReaderAlignType Alignment, bool IsVolatile,
-                                  IRNode **NewIR) = 0;
+                                  ReaderAlignType Alignment,
+                                  bool IsVolatile) = 0;
   virtual void storeLocal(uint32_t LocOrdinal, IRNode *Arg1,
-                          ReaderAlignType Alignment, bool IsVolatile,
-                          IRNode **NewIR) = 0;
+                          ReaderAlignType Alignment, bool IsVolatile) = 0;
   virtual void storeObj(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
                         IRNode *Arg2, ReaderAlignType Alignment,
-                        bool IsVolatile, bool IsField, IRNode **NewIR);
+                        bool IsVolatile, bool IsField);
   virtual void storeStaticField(CORINFO_RESOLVED_TOKEN *FieldToken,
-                                IRNode *ValueToStore, bool IsVolatile,
-                                IRNode **NewIR) = 0;
-  virtual IRNode *stringGetChar(IRNode *Arg1, IRNode *Arg2, IRNode **NewIR) = 0;
-  virtual bool sqrt(IRNode *Arg1, IRNode **RetVal, IRNode **NewIR) = 0;
+                                IRNode *ValueToStore, bool IsVolatile) = 0;
+  virtual IRNode *stringGetChar(IRNode *Arg1, IRNode *Arg2) = 0;
+  virtual bool sqrt(IRNode *Arg1, IRNode **RetVal) = 0;
 
   virtual bool interlockedIntrinsicBinOp(IRNode *Arg1, IRNode *Arg2,
                                          IRNode **RetVal,
-                                         CorInfoIntrinsics IntrinsicID,
-                                         IRNode **NewIR) = 0;
+                                         CorInfoIntrinsics IntrinsicID) = 0;
   virtual bool interlockedCmpXchg(IRNode *Arg1, IRNode *Arg2, IRNode *Arg3,
                                   IRNode **RetVal,
-                                  CorInfoIntrinsics IntrinsicID,
-                                  IRNode **NewIR) = 0;
-  virtual bool memoryBarrier(IRNode **NewIR) = 0;
-  virtual void switchOpcode(IRNode *Opr, IRNode **NewIR) = 0;
-  virtual void throwOpcode(IRNode *Arg1, IRNode **NewIR) = 0;
-  virtual IRNode *unaryOp(ReaderBaseNS::UnaryOpcode Opcode, IRNode *Arg1,
-                          IRNode **NewIR) = 0;
+                                  CorInfoIntrinsics IntrinsicID) = 0;
+  virtual bool memoryBarrier() = 0;
+  virtual void switchOpcode(IRNode *Opr) = 0;
+  virtual void throwOpcode(IRNode *Arg1) = 0;
+  virtual IRNode *unaryOp(ReaderBaseNS::UnaryOpcode Opcode, IRNode *Arg1) = 0;
   virtual IRNode *unbox(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg2,
-                        IRNode **NewIR, bool AndLoad, ReaderAlignType Alignment,
+                        bool AndLoad, ReaderAlignType Alignment,
                         bool IsVolatile) = 0;
 
   virtual IRNode *unboxAny(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
-                           ReaderAlignType Alignment, bool IsVolatilePrefix,
-                           IRNode **NewIR);
-  virtual void nop(IRNode **NewIR) = 0;
+                           ReaderAlignType Alignment, bool IsVolatilePrefix);
+  virtual void nop() = 0;
 
   virtual void insertIBCAnnotations() = 0;
   virtual IRNode *insertIBCAnnotation(FlowGraphNode *Node, uint32_t Count,
                                       uint32_t Offset) = 0;
 
   // Insert class constructor
-  virtual void insertClassConstructor(IRNode **NewIR);
+  virtual void insertClassConstructor();
 
   //
   // REQUIRED Client Helper Routines.
@@ -1822,26 +1789,22 @@ public:
   virtual void beginFlowGraphNode(FlowGraphNode *Fg, uint32_t CurrentOffset,
                                   bool IsVerifyOnly) = 0;
   // Called at the end of block processing.
-  virtual void endFlowGraphNode(FlowGraphNode *Fg, uint32_t CurrentOffset,
-                                IRNode **NewIR) = 0;
+  virtual void endFlowGraphNode(FlowGraphNode *Fg, uint32_t CurrentOffset) = 0;
 
   // Used to maintain operand stack.
   virtual void maintainOperandStack(IRNode **Opr1, IRNode **Opr2,
-                                    FlowGraphNode *CurrentBlock,
-                                    IRNode **NewIR) = 0;
+                                    FlowGraphNode *CurrentBlock) = 0;
   virtual void assignToSuccessorStackNode(FlowGraphNode *, IRNode *Destination,
-                                          IRNode *Source, IRNode **NewIR,
-                                          bool *) = 0;
+                                          IRNode *Source, bool *) = 0;
   virtual bool typesCompatible(IRNode *Src1, IRNode *Src2) = 0;
 
-  virtual void removeStackInterference(IRNode **NewIR) = 0;
+  virtual void removeStackInterference() = 0;
 
   virtual void removeStackInterferenceForLocalStore(uint32_t Opcode,
-                                                    uint32_t Ordinal,
-                                                    IRNode **NewIR) = 0;
+                                                    uint32_t Ordinal) = 0;
 
   // Remove all IRNodes from block (for verification error processing.)
-  virtual void clearCurrentBlock(IRNode **NewIR) = 0;
+  virtual void clearCurrentBlock() = 0;
 
   // Called when an assert occurs (debug only)
   static void debugError(const char *Filename, uint32_t LineNumber,
@@ -1954,14 +1917,14 @@ public:
   // after the region.
   virtual IRNode *findTryRegionEndOfClauses(EHRegion *TryRegion) = 0;
 
-  virtual bool isCall(IRNode **NewIR) = 0;
+  virtual bool isCall() = 0;
   virtual bool isRegionStartBlock(FlowGraphNode *Fg) = 0;
   virtual bool isRegionEndBlock(FlowGraphNode *Fg) = 0;
 
   // Create a symbol node that will be used to represent the stack-incoming
   // exception object
   // upon entry to funclets.
-  virtual IRNode *makeExceptionObject(IRNode **NewIR) = 0;
+  virtual IRNode *makeExceptionObject() = 0;
 
   // //////////////////////////////////////////////////////////////////////////
   // Client Supplied Helper Routines, required by VOS support
@@ -1970,58 +1933,54 @@ public:
   // Asks GenIR to make operand value accessible by address, and return a node
   // that references
   // the incoming operand by address.
-  virtual IRNode *addressOfLeaf(IRNode *Leaf, IRNode **NewIR) = 0;
-  virtual IRNode *addressOfValue(IRNode *Leaf, IRNode **NewIR) = 0;
+  virtual IRNode *addressOfLeaf(IRNode *Leaf) = 0;
+  virtual IRNode *addressOfValue(IRNode *Leaf) = 0;
 
   // Helper callback used by rdrCall to emit call code.
   virtual IRNode *genCall(ReaderCallTargetData *CallTargetDaTA,
                           CallArgTriple *Args, uint32_t NumArgs,
-                          IRNode **CallNode, IRNode **NewIR) = 0;
+                          IRNode **CallNode) = 0;
 
   virtual bool canMakeDirectCall(ReaderCallTargetData *CallTargetData) = 0;
 
   // Generate call to helper
   virtual IRNode *callHelper(CorInfoHelpFunc HelperID, IRNode *Dst,
-                             IRNode **NewIR, IRNode *Arg1 = NULL,
-                             IRNode *Arg2 = NULL, IRNode *Arg3 = NULL,
-                             IRNode *Arg4 = NULL,
+                             IRNode *Arg1 = NULL, IRNode *Arg2 = NULL,
+                             IRNode *Arg3 = NULL, IRNode *Arg4 = NULL,
                              ReaderAlignType Alignment = Reader_AlignUnknown,
                              bool IsVolatile = false, bool NoCtor = false,
                              bool CanMoveUp = false) = 0;
 
   // Generate special generics helper that might need to insert flow
   virtual IRNode *callRuntimeHandleHelper(CorInfoHelpFunc Helper, IRNode *Arg1,
-                                          IRNode *Arg2, IRNode *NullCheckArg,
-                                          IRNode **NewIR) = 0;
+                                          IRNode *Arg2,
+                                          IRNode *NullCheckArg) = 0;
 
   virtual IRNode *convertToHelperArgumentType(IRNode *Opr,
-                                              uint32_t DestinationSize,
-                                              IRNode **NewIR) = 0;
+                                              uint32_t DestinationSize) = 0;
 
-  virtual IRNode *genNullCheck(IRNode *Node, IRNode **NewIR) = 0;
+  virtual IRNode *genNullCheck(IRNode *Node) = 0;
 
   virtual void
   createSym(uint32_t Num, bool IsAuto, CorInfoType CorType,
             CORINFO_CLASS_HANDLE Class, bool IsPinned,
             ReaderSpecialSymbolType Type = Reader_NotSpecialSymbol) = 0;
 
-  virtual IRNode *derefAddress(IRNode *Address, bool DestIsGCPtr, bool IsConst,
-                               IRNode **NewIR) = 0;
+  virtual IRNode *derefAddress(IRNode *Address, bool DestIsGCPtr,
+                               bool IsConst) = 0;
 
-  virtual IRNode *conditionalDerefAddress(IRNode *Address, IRNode **NewIR) = 0;
+  virtual IRNode *conditionalDerefAddress(IRNode *Address) = 0;
 
-  virtual IRNode *getHelperCallAddress(CorInfoHelpFunc HelperId,
-                                       IRNode **NewIR) = 0;
+  virtual IRNode *getHelperCallAddress(CorInfoHelpFunc HelperId) = 0;
 
   virtual IRNode *simpleFieldAddress(IRNode *BaseAddress,
                                      CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                                     CORINFO_FIELD_INFO *FieldInfo,
-                                     IRNode **NewIR) = 0;
+                                     CORINFO_FIELD_INFO *FieldInfo) = 0;
 
   virtual IRNode *handleToIRNode(mdToken Token, void *EmbedHandle,
                                  void *RealHandle, bool IsIndirect,
                                  bool IsReadOnly, bool IsRelocatable,
-                                 bool IsCallTarget, IRNode **NewIR,
+                                 bool IsCallTarget,
                                  bool IsFrozenObject = false) = 0;
 
   // Create an operand that will be used to hold a pointer.
@@ -2040,31 +1999,27 @@ public:
                          EHRegionList *EhRegionList) = 0;
 
   // Line number info
-  virtual void sequencePoint(int32_t Offset, ReaderBaseNS::OPCODE PrevOp,
-                             IRNode **NewIR);
-  virtual void setSequencePoint(uint32_t, ICorDebugInfo::SourceTypes,
-                                IRNode **NewIR) = 0;
+  virtual void sequencePoint(int32_t Offset, ReaderBaseNS::OPCODE PrevOp);
+  virtual void setSequencePoint(uint32_t, ICorDebugInfo::SourceTypes) = 0;
   virtual bool needSequencePoints() = 0;
 
   // Used to turn token into handle/IRNode
   virtual IRNode *
-  genericTokenToNode(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode **NewIR,
+  genericTokenToNode(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                      bool EmbedParent = false, bool MustRestoreHandle = false,
                      CORINFO_GENERIC_HANDLE *StaticHandle = NULL,
                      bool *IsRuntimeLookup = NULL, bool NeedsResult = true);
 
   virtual IRNode *runtimeLookupToNode(CORINFO_RUNTIME_LOOKUP_KIND Kind,
-                                      CORINFO_RUNTIME_LOOKUP *Lookup,
-                                      IRNode **NewIR);
+                                      CORINFO_RUNTIME_LOOKUP *Lookup);
 
   // Used to expand multidimensional array access intrinsics
-  virtual bool arrayGet(CORINFO_SIG_INFO *Sig, IRNode **RetVal,
-                        IRNode **NewIR) = 0;
-  virtual bool arraySet(CORINFO_SIG_INFO *Sig, IRNode **NewIR) = 0;
+  virtual bool arrayGet(CORINFO_SIG_INFO *Sig, IRNode **RetVal) = 0;
+  virtual bool arraySet(CORINFO_SIG_INFO *Sig) = 0;
 
 #if !defined(NDEBUG)
   virtual void dbDumpFunction(void) = 0;
-  virtual void dbPrintIRNode(IRNode *NewIR) = 0;
+  virtual void dbPrintIRNode(IRNode *Instr) = 0;
   virtual void dbPrintFGNode(FlowGraphNode *Fg) = 0;
   virtual void dbPrintEHRegion(EHRegion *Eh) = 0;
   virtual uint32_t dbGetFuncHash(void) = 0;
