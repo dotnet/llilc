@@ -2603,29 +2603,13 @@ void GenIR::storePrimitiveType(IRNode *Value, IRNode *Addr,
                                IRNode **NewIR) {
   ASSERTNR(isPrimitiveType(CorInfoType));
 
-  // Get type of the result.
-  Type *AddressTy = Addr->getType();
-  ASSERT(AddressTy->isPointerTy());
-  PointerType *Ty = cast<PointerType>(AddressTy);
-  Type *ReferentTy = Ty->getPointerElementType();
-  IRNode *TypedAddr = Addr;
-
-  // We need to cast the address when types are mismatched.
-  Type *ExpectedTy = this->getType(CorInfoType, NULL);
-  if (ReferentTy != ExpectedTy) {
-    Type *PtrToExpectedTy = getUnmanagedPointerType(ExpectedTy);
-    TypedAddr =
-      (IRNode *)LLVMBuilder->CreatePointerCast(Addr, PtrToExpectedTy);
-  }
-
-  // Convert the value as necessary.
+  uint32_t Align;
+  IRNode *TypedAddr = getPrimitiveAddress(Addr, CorInfoType, Alignment, &Align);
+  Type *ExpectedTy =
+      cast<PointerType>(TypedAddr->getType())->getPointerElementType();
   IRNode *ValueToStore = convertFromStackType(Value, CorInfoType, ExpectedTy);
-
-  uint32_t Align = (Alignment == Reader_AlignNatural)
-    ? TargetPointerSizeInBits / 8
-    : Alignment;
-  StoreInst *StoreInst = LLVMBuilder->CreateStore(ValueToStore, TypedAddr, 
-                                                  IsVolatile);
+  StoreInst *StoreInst =
+      LLVMBuilder->CreateStore(ValueToStore, TypedAddr, IsVolatile);
   StoreInst->setAlignment(Align);
 }
 
@@ -3737,29 +3721,28 @@ IRNode *GenIR::loadVirtFunc(IRNode *Arg1, CORINFO_RESOLVED_TOKEN *ResolvedToken,
       getUnmanagedPointerType(FunctionType));
 }
 
-IRNode *GenIR::loadPrimitiveType(IRNode *Addr, CorInfoType CorInfoType,
-                                 ReaderAlignType Alignment, bool IsVolatile,
-                                 bool IsInterfReadOnly, IRNode **NewIR) {
+IRNode *GenIR::getPrimitiveAddress(IRNode *Addr, CorInfoType CorInfoType,
+                                   ReaderAlignType Alignment, uint32_t *Align) {
   ASSERTNR(isPrimitiveType(CorInfoType) || CorInfoType == CORINFO_TYPE_REFANY);
 
   // Get type of the result.
   Type *AddressTy = Addr->getType();
-  ASSERT(AddressTy->isPointerTy());
-  PointerType *Ty = cast<PointerType>(AddressTy);
-  Type *ReferentTy = Ty->getPointerElementType();
   IRNode *TypedAddr = Addr;
 
   // For the 'REFANY' case, verify the address carries
   // reasonable typing. Address producer must ensure this.
   if (CorInfoType == CORINFO_TYPE_REFANY) {
+    PointerType *PointerTy = cast<PointerType>(AddressTy);
+    Type *ReferentTy = PointerTy->getPointerElementType();
+
     // The result of the load is an object reference,
     // So addr should be ptr to managed ptr to struct
     if (!ReferentTy->isPointerTy()) {
       // If we hit this we should fix the address producer, not
       // coerce the type here.
-      throw NotYetImplementedException("unexpected type in load primitive");
+      throw
+          NotYetImplementedException("unexpected type in load/store primitive");
     }
-    ASSERT(ReferentTy->isPointerTy());
     PointerType *ReferentPtrTy = cast<PointerType>(ReferentTy);
     ASSERT(isManagedPointerType(ReferentPtrTy));
     ASSERT(ReferentTy->getPointerElementType()->isStructTy());
@@ -3767,23 +3750,39 @@ IRNode *GenIR::loadPrimitiveType(IRNode *Addr, CorInfoType CorInfoType,
     Alignment = Reader_AlignNatural;
   } else {
     // For the true primitve case we may need to cast the address.
-    Type *ExpectedTy = this->getType(CorInfoType, NULL);
-    if (ReferentTy != ExpectedTy) {
+    Type *ExpectedTy = this->getType(CorInfoType, nullptr);
+    PointerType *PointerTy = dyn_cast<PointerType>(AddressTy);
+    if (PointerTy != nullptr) {
+      Type *ReferentTy = PointerTy->getPointerElementType();
+      if (ReferentTy != ExpectedTy) {
+        Type *PtrToExpectedTy = isManagedPointerType(PointerTy)
+            ? getManagedPointerType(ExpectedTy)
+            : getUnmanagedPointerType(ExpectedTy);
+        TypedAddr =
+            (IRNode *)LLVMBuilder->CreatePointerCast(Addr, PtrToExpectedTy);
+      }
+    } else {
+      ASSERT(AddressTy->isIntegerTy());
       Type *PtrToExpectedTy = getUnmanagedPointerType(ExpectedTy);
       TypedAddr =
-          (IRNode *)LLVMBuilder->CreatePointerCast(Addr, PtrToExpectedTy);
+          (IRNode *)LLVMBuilder->CreateIntToPtr(Addr, PtrToExpectedTy);
     }
   }
 
-  uint32_t Align = (Alignment == Reader_AlignNatural)
-                       ? TargetPointerSizeInBits / 8
-                       : Alignment;
+  *Align = (Alignment == Reader_AlignNatural) ? TargetPointerSizeInBits / 8
+     : Alignment;
+  return TypedAddr;
+}
+
+IRNode *GenIR::loadPrimitiveType(IRNode *Addr, CorInfoType CorInfoType,
+                                 ReaderAlignType Alignment, bool IsVolatile,
+                                 bool IsInterfReadOnly, IRNode **NewIR) {
+  uint32_t Align;
+  IRNode *TypedAddr = getPrimitiveAddress(Addr, CorInfoType, Alignment, &Align);
   LoadInst *LoadInst = LLVMBuilder->CreateLoad(TypedAddr, IsVolatile);
   LoadInst->setAlignment(Align);
 
-  IRNode *Result = convertToStackType((IRNode *)LoadInst, CorInfoType);
-
-  return Result;
+  return convertToStackType((IRNode *)LoadInst, CorInfoType);
 }
 
 void GenIR::classifyCmpType(Type *Ty, uint32_t &Size, bool &IsPointer,
@@ -4266,23 +4265,21 @@ void GenIR::maintainOperandStack(IRNode **Opr1, IRNode **Opr2,
           }
         } else {
           // PHI instructions should have been inserted already
-          Phi = dyn_cast<PHINode>(CurrentInst);
-          ASSERT(Phi != nullptr);
+          Phi = cast<PHINode>(CurrentInst);
           CurrentInst = CurrentInst->getNextNode();
         }
         if (Phi->getType() != CurrentValue->getType()) {
           throw NotYetImplementedException("Phi type mismatch");
         }
         Phi->addIncoming(CurrentValue, (BasicBlock *)CurrentBlock);
-        SuccessorStack->push((IRNode *)Phi, NewIR);
+        if (CreatePHIs) {
+          SuccessorStack->push((IRNode *)Phi, NewIR);
+        }
       }
 
-      // The number if PHI instructions should match the number of values on the
+      // The number of PHI instructions should match the number of values on the
       // stack.
-      if (!CreatePHIs) {
-        Phi = dyn_cast<PHINode>(CurrentInst);
-        ASSERT(Phi == nullptr);
-      }
+      ASSERT(CreatePHIs || !isa<PHINode>(CurrentInst));
     }
     SuccessorList = fgEdgeListGetNextSuccessorActual(SuccessorList);
   }
