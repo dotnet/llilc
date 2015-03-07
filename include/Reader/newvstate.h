@@ -113,7 +113,7 @@ void VerificationState::init(uint32_t MaxStackSize, uint32_t NumLocals,
   VolatilePrefix = false;
   UnalignedPrefix = false;
   TailInBlock = false;
-  DelegateCreateStart = NULL;
+  DelegateCreateStart = nullptr;
   ThisInitializedThisBlock = false;
 
   ThisInitialized = InitState;

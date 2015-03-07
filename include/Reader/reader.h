@@ -358,7 +358,7 @@ public:
   /// \brief Push \p NewVal onto the operand stack.
   ///
   /// \param NewVal The value to be pushed.
-  /// \pre NewVal != NULL
+  /// \pre NewVal != nullptr
   virtual void push(IRNode *NewVal) = 0;
 
   /// \brief Make the operand stack empty.
@@ -471,7 +471,7 @@ public:
   uint32_t getMethodAttribs() { return TargetMethodAttribs; };
   CORINFO_SIG_INFO *getSigInfo() { return &SigInfo; };
   CORINFO_CALL_INFO *getCallInfo() {
-    return IsCallInfoValid ? &CallInfo : NULL;
+    return IsCallInfoValid ? &CallInfo : nullptr;
   }
   IRNode *getIndirectionCellNode() { return IndirectionCellNode; }
   IRNode *getCallTargetNode() { return CallTargetNode; }
@@ -525,15 +525,13 @@ public:
     return true;
   }
 
-  // Return NULL if we either can't know the call target statically, and if we
-  // have a method handle
-  // it is only representative.  Otherwise it returns the same as
-  // getMethodHandle.  Think of a virtual
-  // call, where we have the baseclass or interface method handle, *NOT* the
-  // actual target.
+  // Return nullptr if we either can't know the call target statically, and if
+  // we have a method handle it is only representative.  Otherwise it returns
+  // the same as getMethodHandle.  Think of a virtual call, where we have the
+  // baseclass or interface method handle, *NOT* the actual target.
   CORINFO_METHOD_HANDLE getKnownMethodHandle() {
     if (IsCallI || !IsCallInfoValid || (CallInfo.kind != CORINFO_CALL))
-      return NULL;
+      return nullptr;
     return TargetMethodHandle;
   }
 
@@ -808,9 +806,9 @@ public:
                               IRNode *Node);
   CORINFO_ARG_LIST_HANDLE argListNext(CORINFO_ARG_LIST_HANDLE ArgListHandle,
                                       CORINFO_SIG_INFO *Sig,
-                                      CorInfoType *CorType = NULL,
-                                      CORINFO_CLASS_HANDLE *Class = NULL,
-                                      bool *IsPinned = NULL);
+                                      CorInfoType *CorType = nullptr,
+                                      CORINFO_CLASS_HANDLE *Class = nullptr,
+                                      bool *IsPinned = nullptr);
   void buildUpParams(uint32_t NumParams);
   void buildUpAutos(uint32_t NumAutos);
 #if defined(_DEBUG)
@@ -1195,7 +1193,7 @@ protected:
   void verCheckClassAccess(CORINFO_RESOLVED_TOKEN *ResolvedToken);
 
   void eeGetMethodSig(CORINFO_METHOD_HANDLE Method, CORINFO_SIG_INFO *SigRet,
-                      bool GiveUp, CORINFO_CLASS_HANDLE Owwner = NULL);
+                      bool GiveUp, CORINFO_CLASS_HANDLE Owwner = nullptr);
   void eeGetCallSiteSig(uint32_t SigToken, CORINFO_MODULE_HANDLE Scope,
                         CORINFO_CONTEXT_HANDLE Context,
                         CORINFO_SIG_INFO *SigRet, bool GiveUp = true);
@@ -1304,12 +1302,11 @@ private:
                                      IRNode **ThisPtr);
 
 public:
-  void
-  rdrCallFieldHelper(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                     CorInfoHelpFunc HelperId, bool IsLoad,
-                     IRNode *Dst, // dst node if this is a load, otherwise NULL
-                     IRNode *Obj, IRNode *Value, ReaderAlignType Alignment,
-                     bool IsVolatile);
+  void rdrCallFieldHelper(
+      CORINFO_RESOLVED_TOKEN *ResolvedToken, CorInfoHelpFunc HelperId,
+      bool IsLoad,
+      IRNode *Dst, // dst node if this is a load, otherwise nullptr
+      IRNode *Obj, IRNode *Value, ReaderAlignType Alignment, bool IsVolatile);
   void rdrCallWriteBarrierHelper(IRNode *Arg1, IRNode *Arg2,
                                  ReaderAlignType Alignment, bool IsVolatile,
 
@@ -1471,7 +1468,7 @@ public:
   const char *getFieldName(CORINFO_FIELD_HANDLE, const char **ModuleName);
   CORINFO_CLASS_HANDLE getFieldClass(CORINFO_FIELD_HANDLE);
   CorInfoType getFieldType(CORINFO_FIELD_HANDLE, CORINFO_CLASS_HANDLE *Class,
-                           CORINFO_CLASS_HANDLE Owner = NULL);
+                           CORINFO_CLASS_HANDLE Owner = nullptr);
   CorInfoHelpFunc getSharedCCtorHelper(CORINFO_CLASS_HANDLE);
   CORINFO_CLASS_HANDLE getTypeForBox(CORINFO_CLASS_HANDLE Class);
   CorInfoHelpFunc getBoxHelper(CORINFO_CLASS_HANDLE);
@@ -1593,8 +1590,8 @@ public:
   virtual void boolBranch(ReaderBaseNS::BoolBranchOpcode Opcode,
                           IRNode *Arg1) = 0;
   virtual IRNode *box(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
-                      uint32_t *NextOffset = NULL,
-                      VerificationState *VState = NULL);
+                      uint32_t *NextOffset = nullptr,
+                      VerificationState *VState = nullptr);
   virtual IRNode *binaryOp(ReaderBaseNS::BinaryOpcode Opcode, IRNode *Arg1,
                            IRNode *Arg2) = 0;
   virtual void branch() = 0;
@@ -2000,8 +1997,8 @@ public:
 
   // Generate call to helper
   virtual IRNode *callHelper(CorInfoHelpFunc HelperID, IRNode *Dst,
-                             IRNode *Arg1 = NULL, IRNode *Arg2 = NULL,
-                             IRNode *Arg3 = NULL, IRNode *Arg4 = NULL,
+                             IRNode *Arg1 = nullptr, IRNode *Arg2 = nullptr,
+                             IRNode *Arg3 = nullptr, IRNode *Arg4 = nullptr,
                              ReaderAlignType Alignment = Reader_AlignUnknown,
                              bool IsVolatile = false, bool NoCtor = false,
                              bool CanMoveUp = false) = 0;
@@ -2066,8 +2063,8 @@ public:
   virtual IRNode *
   genericTokenToNode(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                      bool EmbedParent = false, bool MustRestoreHandle = false,
-                     CORINFO_GENERIC_HANDLE *StaticHandle = NULL,
-                     bool *IsRuntimeLookup = NULL, bool NeedsResult = true);
+                     CORINFO_GENERIC_HANDLE *StaticHandle = nullptr,
+                     bool *IsRuntimeLookup = nullptr, bool NeedsResult = true);
 
   virtual IRNode *runtimeLookupToNode(CORINFO_RUNTIME_LOOKUP_KIND Kind,
                                       CORINFO_RUNTIME_LOOKUP *Lookup);

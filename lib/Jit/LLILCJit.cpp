@@ -40,13 +40,13 @@
 using namespace llvm;
 
 // The one and only Jit Object.
-LLILCJit *LLILCJit::TheJit = NULL;
+LLILCJit *LLILCJit::TheJit = nullptr;
 
 // This is guaranteed to be called by the EE
 // in single-threaded mode.
 ICorJitCompiler *__stdcall getJit() {
 
-  if (LLILCJit::TheJit == NULL) {
+  if (LLILCJit::TheJit == nullptr) {
     // These are one-time only operations.
     // Create the singleton jit object.
     LLILCJit::TheJit = new LLILCJit();
@@ -89,8 +89,8 @@ extern "C" void __stdcall sxsJitStartup(void *CcCallbacks) {
 void LLILCJitContext::outputDebugMethodName() {
   const size_t SizeOfBuffer = 512;
   char TempBuffer[SizeOfBuffer];
-  const char *DebugClassName = NULL;
-  const char *DebugMethodName = NULL;
+  const char *DebugClassName = nullptr;
+  const char *DebugMethodName = nullptr;
 
   DebugMethodName = JitInfo->getMethodName(MethodInfo->ftn, &DebugClassName);
   dbgs() << format("INFO:  jitting method %s::%s using LLILCJit\n",
@@ -116,18 +116,18 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
                                      ULONG *NativeSizeOfCode) {
 
   // Bail if input is malformed
-  if (NULL == JitInfo || NULL == MethodInfo || NULL == NativeEntry ||
-      NULL == NativeSizeOfCode) {
+  if (nullptr == JitInfo || nullptr == MethodInfo || nullptr == NativeEntry ||
+      nullptr == NativeSizeOfCode) {
     return CORJIT_INTERNALERROR;
   }
 
   // Prep main outputs
-  *NativeEntry = NULL;
+  *NativeEntry = nullptr;
   *NativeSizeOfCode = 0;
 
   // Set up state for this thread (if necessary)
   LLILCJitPerThreadState *PerThreadState = State.get();
-  if (PerThreadState == NULL) {
+  if (PerThreadState == nullptr) {
     PerThreadState = new LLILCJitPerThreadState();
     State.set(PerThreadState);
   }
@@ -212,8 +212,8 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
 std::unique_ptr<Module>
 LLILCJitContext::getModuleForMethod(CORINFO_METHOD_INFO *MethodInfo) {
   // Grab name info from the EE.
-  const char *DebugClassName = NULL;
-  const char *DebugMethodName = NULL;
+  const char *DebugClassName = nullptr;
+  const char *DebugMethodName = nullptr;
   DebugMethodName = JitInfo->getMethodName(MethodInfo->ftn, &DebugClassName);
 
   // Stop gap name.  The full naming will likely require some more info.
@@ -224,7 +224,7 @@ LLILCJitContext::getModuleForMethod(CORINFO_METHOD_INFO *MethodInfo) {
   std::unique_ptr<Module> M;
   char *BitcodePath = getenv("BITCODE_PATH");
 
-  if (BitcodePath != NULL) {
+  if (BitcodePath != nullptr) {
     SMDiagnostic Err;
     std::string Path = std::string(BitcodePath);
 
