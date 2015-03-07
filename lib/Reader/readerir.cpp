@@ -319,7 +319,7 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
       // so we need them to interoperate.
       throw NotYetImplementedException("Struct parameter");
     }
-    LLVMBuilder->CreateStore(CurrentArg, Arguments[I]);
+    makeStoreNonNull(CurrentArg, Arguments[I], false);
   }
 
   // Check for special cases where the Jit needs to do extra work.
@@ -1961,9 +1961,9 @@ IRNode *GenIR::loadConstantR8(double Value) {
 }
 
 // Load the array length field.
-IRNode *GenIR::loadLen(IRNode *Address) {
+IRNode *GenIR::loadLen(IRNode *Array, bool ArrayMayBeNull) {
   // Validate address is ptr to struct.
-  Type *AddressTy = Address->getType();
+  Type *AddressTy = Array->getType();
   ASSERT(AddressTy->isPointerTy());
   Type *ArrayTy = cast<PointerType>(AddressTy)->getPointerElementType();
   ASSERT(ArrayTy->isStructTy());
@@ -1971,12 +1971,19 @@ IRNode *GenIR::loadLen(IRNode *Address) {
   // TODO: verify this struct looks like an array... field index 1 is at
   // offset 4 with type i32; last "field" is zero sized array.
 
+  if (ArrayMayBeNull && UseExplicitNullChecks) {
+    // Check whether the array pointer, rather than the pointer to its
+    // length field, is null.
+    Array = genNullCheck(Array);
+    ArrayMayBeNull = false;
+  }
+
   // Length field is at field index 1. Get its address.
-  Value *LengthFieldAddress = LLVMBuilder->CreateStructGEP(Address, 1);
+  Value *LengthFieldAddress = LLVMBuilder->CreateStructGEP(Array, 1);
 
   // Load and return the length.
   // TODO: this load cannot be aliased.
-  Value *Length = LLVMBuilder->CreateLoad(LengthFieldAddress);
+  Value *Length = makeLoad(LengthFieldAddress, false, ArrayMayBeNull);
 
   // Result is an unsigned native int.
   IRNode *Result = convertToStackType((IRNode *)Length,
@@ -1992,6 +1999,13 @@ IRNode *GenIR::loadStringLen(IRNode *Address) {
   Type *StringTy = cast<PointerType>(AddressTy)->getPointerElementType();
   ASSERT(StringTy->isStructTy());
 
+  bool NullCheckBeforeLoad = UseExplicitNullChecks;
+  if (NullCheckBeforeLoad) {
+    // Check whether the string pointer, rather than the pointer to its
+    // length field, is null.
+    Address = genNullCheck(Address);
+  }
+
   // Verify this type is a string.
   StringRef StringName = cast<StructType>(StringTy)->getStructName();
   ASSERT(StringName.startswith("System.String"));
@@ -2001,7 +2015,7 @@ IRNode *GenIR::loadStringLen(IRNode *Address) {
 
   // Load and return the length.
   // TODO: this load cannot be aliased.
-  Value *Length = LLVMBuilder->CreateLoad(LengthFieldAddress);
+  Value *Length = makeLoad(LengthFieldAddress, false, !NullCheckBeforeLoad);
   return (IRNode *)Length;
 }
 
@@ -2017,6 +2031,13 @@ IRNode *GenIR::stringGetChar(IRNode *Address, IRNode *Index) {
   StringRef StringName = cast<StructType>(StringTy)->getStructName();
   ASSERT(StringName.startswith("System.String"));
 
+  bool NullCheckBeforeLoad = UseExplicitNullChecks;
+  if (NullCheckBeforeLoad) {
+    // Check whether the string pointer, rather than the pointer to its
+    // length field, is null.
+    Address = genNullCheck(Address);
+  }
+
   // Cache the context
   LLVMContext &Context = *JitContext->LLVMContext;
 
@@ -2028,7 +2049,7 @@ IRNode *GenIR::stringGetChar(IRNode *Address, IRNode *Index) {
   Value *CharAddress = LLVMBuilder->CreateInBoundsGEP(Address, Indexes);
 
   // Load and return the char.
-  Value *Char = LLVMBuilder->CreateLoad(CharAddress);
+  Value *Char = makeLoad(CharAddress, false, !NullCheckBeforeLoad);
   IRNode *Result =
       convertToStackType((IRNode *)Char, CorInfoType::CORINFO_TYPE_CHAR);
 
@@ -2328,13 +2349,13 @@ void GenIR::storeLocal(uint32_t LocalOrdinal, IRNode *Arg1,
   Type *LocalTy = LocalAddress->getType()->getPointerElementType();
   IRNode *Value =
       convertFromStackType(Arg1, LocalVarCorTypes[LocalIndex], LocalTy);
-  LLVMBuilder->CreateStore(Value, LocalAddress);
+  makeStoreNonNull(Value, LocalAddress, false);
 }
 
 IRNode *GenIR::loadLocal(uint32_t LocalOrdinal) {
   uint32_t LocalIndex = LocalOrdinal;
   Value *LocalAddress = LocalVars[LocalIndex];
-  IRNode *Value = (IRNode *)LLVMBuilder->CreateLoad(LocalAddress);
+  IRNode *Value = (IRNode *)makeLoadNonNull(LocalAddress, false);
   IRNode *Result = convertToStackType(Value, LocalVarCorTypes[LocalIndex]);
   return Result;
 }
@@ -2350,7 +2371,7 @@ void GenIR::storeArg(uint32_t ArgOrdinal, IRNode *Arg1,
   Value *ArgAddress = Arguments[ArgIndex];
   Type *ArgTy = ArgAddress->getType()->getPointerElementType();
   IRNode *Value = convertFromStackType(Arg1, ArgumentCorTypes[ArgIndex], ArgTy);
-  LLVMBuilder->CreateStore(Value, ArgAddress);
+  makeStoreNonNull(Value, ArgAddress, false);
 }
 
 IRNode *GenIR::loadArg(uint32_t ArgOrdinal, bool IsJmp) {
@@ -2359,7 +2380,7 @@ IRNode *GenIR::loadArg(uint32_t ArgOrdinal, bool IsJmp) {
   }
   uint32_t ArgIndex = argOrdinalToArgIndex(ArgOrdinal);
   Value *ArgAddress = Arguments[ArgIndex];
-  IRNode *Value = (IRNode *)LLVMBuilder->CreateLoad(ArgAddress);
+  IRNode *Value = (IRNode *)makeLoadNonNull(ArgAddress, false);
   IRNode *Result = convertToStackType(Value, ArgumentCorTypes[ArgIndex]);
   return Result;
 }
@@ -2494,12 +2515,20 @@ IRNode *GenIR::loadField(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Obj,
     AlignmentPrefix = getMinimumClassAlignment(Class, AlignmentPrefix);
   }
 
-  IRNode *Address = getFieldAddress(ResolvedToken, &FieldInfo, Obj, false);
+  // When using explicit null checks, have getFieldAddress insert a null check
+  // on the base object and indicate that it is known not to be null later when
+  // generating the load.
+  // Otherwise, skip the null check here but indicate that the load may be
+  // null so that it can (in theory) be annotated accordingly.
+  bool NullCheckBeforeLoad = UseExplicitNullChecks;
+  IRNode *Address =
+      getFieldAddress(ResolvedToken, &FieldInfo, Obj, NullCheckBeforeLoad);
 
   if (FieldTy->isStructTy()) {
-    return loadObj(ResolvedToken, Address, AlignmentPrefix, IsVolatile, true);
+    return loadObj(ResolvedToken, Address, AlignmentPrefix, IsVolatile, true,
+                   !NullCheckBeforeLoad);
   } else {
-    LoadInst *LoadInst = LLVMBuilder->CreateLoad(Address, IsVolatile);
+    LoadInst *LoadInst = makeLoad(Address, IsVolatile, !NullCheckBeforeLoad);
     uint32_t Align = (AlignmentPrefix == Reader_AlignNatural)
                          ? TargetPointerSizeInBits / 8
                          : AlignmentPrefix;
@@ -2554,8 +2583,14 @@ void GenIR::storeField(CORINFO_RESOLVED_TOKEN *FieldToken, IRNode *ValueToStore,
     return;
   }
 
-  // Otherwise, obtain the address of the field.
-  IRNode *Address = getFieldAddress(FieldToken, &FieldInfo, Object, false);
+  // When using explicit null checks, have getFieldAddress insert a null check
+  // on the base object and indicate that it is known not to be null later when
+  // generating the store.
+  // Otherwise, skip the null check here but indicate that the store may be
+  // null so that it can (in theory) be annotated accordingly.
+  bool NullCheckBeforeStore = UseExplicitNullChecks;
+  IRNode *Address =
+      getFieldAddress(FieldToken, &FieldInfo, Object, NullCheckBeforeStore);
 
   // Stores might require write barriers. If so, call the appropriate
   // helper method.
@@ -2569,7 +2604,7 @@ void GenIR::storeField(CORINFO_RESOLVED_TOKEN *FieldToken, IRNode *ValueToStore,
 
   // We do things differently based on whether the field is a value class.
   if (!IsStructTy) {
-    makeStore(FieldTy, Address, ValueToStore, IsVolatile);
+    makeStore(ValueToStore, Address, IsVolatile, !NullCheckBeforeStore);
     return;
   } else {
     // The WVM lowerer cannot handle multi-byte indirs whose base pointer
@@ -2578,14 +2613,16 @@ void GenIR::storeField(CORINFO_RESOLVED_TOKEN *FieldToken, IRNode *ValueToStore,
         FieldCorType == CORINFO_TYPE_REFANY) {
       Alignment = getMinimumClassAlignment(FieldClassHandle, Alignment);
     }
-    storeObj(FieldToken, ValueToStore, Address, Alignment, IsVolatile, true);
+    storeObj(FieldToken, ValueToStore, Address, Alignment, IsVolatile, true,
+             !NullCheckBeforeStore);
     return;
   }
 }
 
 void GenIR::storePrimitiveType(IRNode *Value, IRNode *Addr,
                                CorInfoType CorInfoType,
-                               ReaderAlignType Alignment, bool IsVolatile) {
+                               ReaderAlignType Alignment, bool IsVolatile,
+                               bool AddressMayBeNull) {
   ASSERTNR(isPrimitiveType(CorInfoType));
 
   uint32_t Align;
@@ -2594,20 +2631,46 @@ void GenIR::storePrimitiveType(IRNode *Value, IRNode *Addr,
       cast<PointerType>(TypedAddr->getType())->getPointerElementType();
   IRNode *ValueToStore = convertFromStackType(Value, CorInfoType, ExpectedTy);
   StoreInst *StoreInst =
-      LLVMBuilder->CreateStore(ValueToStore, TypedAddr, IsVolatile);
+      makeStore(ValueToStore, TypedAddr, IsVolatile, AddressMayBeNull);
   StoreInst->setAlignment(Align);
 }
 
-// Helper used by StorePrimitive and StoreField.
-void GenIR::makeStore(Type *Ty, Value *Address, Value *ValueToStore,
-                      bool IsVolatile) {
+// Helper used to wrap CreateStore
+StoreInst *GenIR::makeStore(Value *ValueToStore, Value *Address,
+                            bool IsVolatile, bool AddressMayBeNull) {
   if (IsVolatile) {
     // TODO: There is a JitConfig call back which can alter
     // how volatile stores are handled.
     throw NotYetImplementedException("Volatile store");
   }
 
-  LLVMBuilder->CreateStore(ValueToStore, Address, IsVolatile);
+  if (AddressMayBeNull) {
+    if (UseExplicitNullChecks) {
+      Address = genNullCheck((IRNode *)Address);
+    } else {
+      // If we had support for implicit null checks, this
+      // path would need to annotate the store we're about
+      // to generate.
+    }
+  }
+
+  return LLVMBuilder->CreateStore(ValueToStore, Address, IsVolatile);
+}
+
+// Helper used to wrap CreateLoad
+LoadInst *GenIR::makeLoad(Value *Address, bool IsVolatile,
+                          bool AddressMayBeNull) {
+  if (AddressMayBeNull) {
+    if (UseExplicitNullChecks) {
+      Address = genNullCheck((IRNode *)Address);
+    } else {
+      // If we had support for implicit null checks, this
+      // path would need to annotate the load we're about
+      // to generate.
+    }
+  }
+
+  return LLVMBuilder->CreateLoad(Address, IsVolatile);
 }
 
 void GenIR::storeStaticField(CORINFO_RESOLVED_TOKEN *FieldToken,
@@ -2650,7 +2713,7 @@ void GenIR::storeStaticField(CORINFO_RESOLVED_TOKEN *FieldToken,
 
   // Create an assignment which stores the value into the static field.
   if (!IsStructTy) {
-    makeStore(FieldTy, Address, ValueToStore, IsVolatile);
+    makeStoreNonNull(ValueToStore, Address, IsVolatile);
   } else {
     throw NotYetImplementedException("Store value type to static field");
   }
@@ -2692,7 +2755,7 @@ IRNode *GenIR::loadStaticField(CORINFO_RESOLVED_TOKEN *FieldToken,
     Address = LLVMBuilder->CreatePointerCast(Address, PtrToFieldTy);
   }
 
-  IRNode *FieldValue = (IRNode *)LLVMBuilder->CreateLoad(Address, IsVolatile);
+  IRNode *FieldValue = (IRNode *)makeLoadNonNull(Address, IsVolatile);
   IRNode *Result = convertToStackType(FieldValue, FieldCorType);
   return Result;
 }
@@ -3073,7 +3136,7 @@ bool GenIR::canonNewObjCall(IRNode *CallNode,
         LLVMBuilder->CreatePointerCast(ManagedPointerToStruct, ThisType);
     CallInstruction->setArgOperand(0, ManagedPointerToStruct);
     LLVMBuilder->SetInsertPoint(CurrentBlock, SavedInsertPoint);
-    *OutResult = (IRNode *)LLVMBuilder->CreateLoad(AllocaInst);
+    *OutResult = (IRNode *)makeLoadNonNull(AllocaInst, false);
   } else {
     // We are allocating a fixed-size class on the heap.
     // Create a call to the newobj helper specific to this class,
@@ -3596,8 +3659,8 @@ IRNode *GenIR::stringLiteral(mdToken Token, void *StringHandle,
     IRNode *TypedAddress =
         (IRNode *)LLVMBuilder->CreateIntToPtr(RawAddress, AddressTy);
     // Fetch the string reference.
-    StringPtrNode = loadIndir(ReaderBaseNS::LdindRef, TypedAddress,
-                              Reader_AlignNatural, false, false);
+    StringPtrNode = loadIndirNonNull(ReaderBaseNS::LdindRef, TypedAddress,
+                                     Reader_AlignNatural, false, false);
     break;
   }
   default:
@@ -3638,7 +3701,8 @@ IRNode *GenIR::makePtrNode(ReaderPtrType PtrType) { return loadNull(); }
 // Load a pointer-sized value from the indicated address.
 // Used when navigating through runtime data structures.
 // This should not be used for accessing user data types.
-IRNode *GenIR::derefAddress(IRNode *Address, bool DstIsGCPtr, bool IsConst) {
+IRNode *GenIR::derefAddress(IRNode *Address, bool DstIsGCPtr, bool IsConst,
+                            bool AddressMayBeNull) {
 
   // TODO: If IsConst is false, the load could cause a null pointer exception,
   // so we may need an explicit null check. Not sure if there's a covering
@@ -3679,7 +3743,7 @@ IRNode *GenIR::derefAddress(IRNode *Address, bool DstIsGCPtr, bool IsConst) {
     Address = (IRNode *)LLVMBuilder->CreatePointerCast(Address, CastTy);
   }
 
-  Value *Result = LLVMBuilder->CreateLoad(Address);
+  Value *Result = makeLoad(Address, false, AddressMayBeNull);
   return (IRNode *)Result;
 }
 
@@ -3697,7 +3761,6 @@ IRNode *GenIR::loadVirtFunc(IRNode *Arg1, CORINFO_RESOLVED_TOKEN *ResolvedToken,
   return (IRNode *)LLVMBuilder->CreateIntToPtr(CodeAddress,
       getUnmanagedPointerType(FunctionType));
 }
-
 IRNode *GenIR::getPrimitiveAddress(IRNode *Addr, CorInfoType CorInfoType,
                                    ReaderAlignType Alignment, uint32_t *Align) {
   ASSERTNR(isPrimitiveType(CorInfoType) || CorInfoType == CORINFO_TYPE_REFANY);
@@ -3753,10 +3816,10 @@ IRNode *GenIR::getPrimitiveAddress(IRNode *Addr, CorInfoType CorInfoType,
 
 IRNode *GenIR::loadPrimitiveType(IRNode *Addr, CorInfoType CorInfoType,
                                  ReaderAlignType Alignment, bool IsVolatile,
-                                 bool IsInterfReadOnly) {
+                                 bool IsInterfReadOnly, bool AddressMayBeNull) {
   uint32_t Align;
   IRNode *TypedAddr = getPrimitiveAddress(Addr, CorInfoType, Alignment, &Align);
-  LoadInst *LoadInst = LLVMBuilder->CreateLoad(TypedAddr, IsVolatile);
+  LoadInst *LoadInst = makeLoad(TypedAddr, IsVolatile, AddressMayBeNull);
   LoadInst->setAlignment(Align);
 
   return convertToStackType((IRNode *)LoadInst, CorInfoType);

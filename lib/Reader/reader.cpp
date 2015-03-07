@@ -3875,6 +3875,9 @@ IRNode *ReaderBase::runtimeLookupToNode(CORINFO_RUNTIME_LOOKUP_KIND Kind,
     }
   }
 
+  // VTableNode now points into the runtime data structures.
+  // Assume they are non-null when dereferencing into them below.
+
   if (!Lookup->testForNull) {
     // We only use VTableNode as the seed for SlotPointerNode
     SlotPointerNode = VTableNode;
@@ -3889,7 +3892,7 @@ IRNode *ReaderBase::runtimeLookupToNode(CORINFO_RUNTIME_LOOKUP_KIND Kind,
   // Apply repeated indirections
   for (WORD I = 0; I < Lookup->indirections; I++) {
     if (I != 0) {
-      SlotPointerNode = derefAddress(SlotPointerNode, false, true);
+      SlotPointerNode = derefAddressNonNull(SlotPointerNode, false, true);
     }
     if (Lookup->offsets[I] != 0) {
       SlotPointerNode = binaryOp(ReaderBaseNS::Add, SlotPointerNode,
@@ -3902,7 +3905,7 @@ IRNode *ReaderBase::runtimeLookupToNode(CORINFO_RUNTIME_LOOKUP_KIND Kind,
     if (Lookup->indirections == 0)
       return SlotPointerNode;
 
-    SlotPointerNode = derefAddress(SlotPointerNode, false, true);
+    SlotPointerNode = derefAddressNonNull(SlotPointerNode, false, true);
     if (!Lookup->testForFixup)
       return SlotPointerNode;
 
@@ -3912,7 +3915,7 @@ IRNode *ReaderBase::runtimeLookupToNode(CORINFO_RUNTIME_LOOKUP_KIND Kind,
   ASSERTNR(Lookup->indirections != 0);
 
   // Extract the type handle
-  IRNode *HandleNode = derefAddress(SlotPointerNode, false, true);
+  IRNode *HandleNode = derefAddressNonNull(SlotPointerNode, false, true);
 
   IRNode *SignatureNode =
       handleToIRNode(mdtSignature, Lookup->signature, Lookup->signature, false,
@@ -4031,7 +4034,7 @@ void ReaderBase::storeElemRefAny(IRNode *Value, IRNode *Index, IRNode *Obj) {
 // 2nd from the top of the stack.
 void ReaderBase::storeIndir(ReaderBaseNS::StIndirOpcode Opcode, IRNode *Value,
                             IRNode *Address, ReaderAlignType Alignment,
-                            bool IsVolatile) {
+                            bool IsVolatile, bool AddressMayBeNull) {
   static const CorInfoType Map[ReaderBaseNS::LastStindOpcode] = {
       CORINFO_TYPE_BYTE,      // STIND_I1
       CORINFO_TYPE_SHORT,     // STIND_I2
@@ -4054,14 +4057,16 @@ void ReaderBase::storeIndir(ReaderBaseNS::StIndirOpcode Opcode, IRNode *Value,
     rdrCallWriteBarrierHelper(Address, Value, Reader_AlignNatural, IsVolatile,
                               NULL, true, false, false, false);
   } else {
-    storePrimitiveType(Value, Address, TheCorInfoType, Alignment, IsVolatile);
+    storePrimitiveType(Value, Address, TheCorInfoType, Alignment, IsVolatile,
+                       AddressMayBeNull);
   }
 }
 
 // LoadIndir -
 IRNode *ReaderBase::loadIndir(ReaderBaseNS::LdIndirOpcode Opcode,
                               IRNode *Address, ReaderAlignType Alignment,
-                              bool IsVolatile, bool IsInterfReadOnly) {
+                              bool IsVolatile, bool IsInterfReadOnly,
+                              bool AddressMayBeNull) {
   static const CorInfoType Map[ReaderBaseNS::LastLdindOpcode] = {
       CORINFO_TYPE_BYTE,      // STIND_I1
       CORINFO_TYPE_UBYTE,     // STIND_U1
@@ -4081,13 +4086,14 @@ IRNode *ReaderBase::loadIndir(ReaderBaseNS::LdIndirOpcode Opcode,
   CorInfoType TheCorInfoType = Map[Opcode];
 
   return loadPrimitiveType(Address, TheCorInfoType, Alignment, IsVolatile,
-                           IsInterfReadOnly);
+                           IsInterfReadOnly, AddressMayBeNull);
 }
 
 // StoreObj - default reader processing of CEE_STOBJ
 void ReaderBase::storeObj(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Value,
                           IRNode *Address, ReaderAlignType Alignment,
-                          bool IsVolatile, bool IsField) {
+                          bool IsVolatile, bool IsField,
+                          bool AddressMayBeNull) {
   CORINFO_CLASS_HANDLE Class;
   CorInfoType TheCorInfoType;
 
@@ -4100,9 +4106,11 @@ void ReaderBase::storeObj(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Value,
   }
 
   if (!(getClassAttribs(Class) & CORINFO_FLG_VALUECLASS)) {
-    storeIndir(ReaderBaseNS::StindRef, Value, Address, Alignment, IsVolatile);
+    storeIndir(ReaderBaseNS::StindRef, Value, Address, Alignment, IsVolatile,
+               AddressMayBeNull);
   } else if (isPrimitiveType(Class)) {
-    storePrimitiveType(Value, Address, TheCorInfoType, Alignment, IsVolatile);
+    storePrimitiveType(Value, Address, TheCorInfoType, Alignment, IsVolatile,
+                       AddressMayBeNull);
   } else {
     // Get the minimum Alignment for the class
     Alignment = getMinimumClassAlignment(Class, Alignment);
@@ -4114,7 +4122,8 @@ void ReaderBase::storeObj(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Value,
 // LoadObj - default reader processing of CEE_LDOBJ
 IRNode *ReaderBase::loadObj(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                             IRNode *Address, ReaderAlignType Alignment,
-                            bool IsVolatile, bool IsField) {
+                            bool IsVolatile, bool IsField,
+                            bool AddressMayBeNull) {
   CORINFO_CLASS_HANDLE Class;
   CorInfoType TheCorInfoType;
 
@@ -4128,12 +4137,13 @@ IRNode *ReaderBase::loadObj(CORINFO_RESOLVED_TOKEN *ResolvedToken,
 
   if (!(getClassAttribs(Class) & CORINFO_FLG_VALUECLASS)) {
     return loadIndir(ReaderBaseNS::LdindRef, Address, Alignment, IsVolatile,
-                     false);
+                     false, AddressMayBeNull);
   } else if (isPrimitiveType(TheCorInfoType)) {
     return loadPrimitiveType(Address, TheCorInfoType, Alignment, IsVolatile,
-                             false);
+                             false, AddressMayBeNull);
   } else {
-    return loadNonPrimitiveObj(Address, Class, Alignment, IsVolatile);
+    return loadNonPrimitiveObj(Address, Class, Alignment, IsVolatile,
+                               AddressMayBeNull);
   }
 }
 
@@ -4700,7 +4710,7 @@ ReaderBase::rdrGetStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
       IRNode *BoxedAddressNode;
       const uint32_t Offset = getPointerByteSize();
 
-      BoxedAddressNode = derefAddress(AddressNode, true, true);
+      BoxedAddressNode = derefAddressNonNull(AddressNode, true, true);
       AddressNode =
           binaryOp(ReaderBaseNS::Add, BoxedAddressNode, loadConstantI(Offset));
     }
@@ -4813,7 +4823,7 @@ ReaderBase::rdrGetStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
     // [FieldAddress]+sizeof(void*).
     IRNode *BoxedAddressNode;
     const uint32_t Offset = getPointerByteSize();
-    BoxedAddressNode = derefAddress(AddressNode, true, true);
+    BoxedAddressNode = derefAddressNonNull(AddressNode, true, true);
     AddressNode =
         binaryOp(ReaderBaseNS::Add, BoxedAddressNode, loadConstantI(Offset));
   }
@@ -5483,6 +5493,19 @@ void ReaderBase::rdrMakeCallTargetNode(ReaderCallTargetData *CallTargetData,
     return;
   }
 
+  // Insert the code sequence to load a pointer to the target function.
+  // If that sequence involves dereferencing the current method's instance
+  // parameter (e.g. to find dynamic type parameter information for shared
+  // generic code) or the target method's instance argument (e.g. to look up
+  // its VTable), the sequence  generated here will include that dereference
+  // and any null checks necessary for it.
+  // Additionally, the NeedsNullCheck flag will be set if the ensuing call
+  // sequence needs to explicitly null-check the target method's instance
+  // argument (e.g. because the callvirt opcode was used to call a non-virtual
+  // method).  The NeedsNullCheck flag will not be set if the sequence
+  // generated here already dereferences (and therefore null-checks) the target
+  // method's instance argument (e.g. if callvirt was used but the method is
+  // virtual and lookup is performed via the target's VTable).
   switch (CallInfo->kind) {
   case CORINFO_CALL:
     // Direct Call
@@ -5568,7 +5591,7 @@ IRNode *ReaderBase::rdrGetDirectCallTarget(CORINFO_METHOD_HANDLE Method,
     // TODO: call to same constant dominates this load then the load is
     // invariant
     if (AddressInfo.accessType == IAT_PPVALUE) {
-      TargetNode = derefAddress(TargetNode, false, true);
+      TargetNode = derefAddressNonNull(TargetNode, false, true);
     }
     UsesMethodDesc = true;
   }
@@ -5677,7 +5700,7 @@ ReaderBase::rdrGetVirtualStubCallTarget(ReaderCallTargetData *CallTargetData) {
   CallTargetData->setIndirectionCellNode(IndirectionCellCopy);
 
   // One indrection leads to the target
-  return derefAddress(IndirectionCell, false, true);
+  return derefAddressNonNull(IndirectionCell, false, true);
 }
 
 // Generate the target for a virtual call that will use the virtual
@@ -5704,13 +5727,14 @@ ReaderBase::rdrGetVirtualTableCallTarget(ReaderCallTargetData *CallTargetData,
   IRNode *OffsetNode = loadConstantI4(OffsetOfIndirection);
   IRNode *IndirectionSlot =
       binaryOp(ReaderBaseNS::Add, VTableAddress, OffsetNode);
-  IRNode *VTableChunkAddress = derefAddress(IndirectionSlot, false, true);
+  IRNode *VTableChunkAddress =
+      derefAddressNonNull(IndirectionSlot, false, true);
 
   // Return the appropriate VTable slot
   OffsetNode = loadConstantI4(OffsetAfterIndirection);
   IRNode *VTableSlot =
       binaryOp(ReaderBaseNS::Add, VTableChunkAddress, OffsetNode);
-  return derefAddress(VTableSlot, false, true);
+  return derefAddressNonNull(VTableSlot, false, true);
 }
 
 // Generate the target for a delegate invoke.
@@ -8322,6 +8346,9 @@ IRNode *ReaderCallTargetData::applyThisTransform(IRNode *ThisNode) {
   if (CallInfo->thisTransform == CORINFO_DEREF_THIS) {
     // constraint calls on reference types dereference the byref used
     // to specify the object
+    // Conservatively process the load as though the byref may be null.
+    // No front-end is likely to generate a null byref here, but it
+    // would be legal to do so.
     return Reader->loadIndir(ReaderBaseNS::LdindRef, ThisNode,
                              Reader_AlignNatural, false, false);
   } else {

@@ -745,6 +745,14 @@ private:
 protected:
   uint32_t CurrentBranchDepth;
 
+  // \brief Indicates that null checks use explicit compare+branch IR sequences
+  //
+  // Compiling with this set to false isn't really supported (the generated IR
+  // would not have sufficient EH annotations), but it is provided as a mock
+  // configuration flag to facilitate experimenting with what the IR/codegen
+  // could look like with null checks folded onto loads/stores.
+  static const bool UseExplicitNullChecks = true;
+
   // Verification Info
 public:
   bool VerificationNeeded;
@@ -1658,22 +1666,37 @@ public:
   virtual IRNode *loadField(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
                             ReaderAlignType Alignment, bool IsVolatile) = 0;
   virtual IRNode *loadIndir(ReaderBaseNS::LdIndirOpcode Opcode, IRNode *Address,
-                            ReaderAlignType Alignement, bool IsVolatile,
-                            bool IsInterfReadOnly);
+                            ReaderAlignType Alignment, bool IsVolatile,
+                            bool IsInterfReadOnly,
+                            bool AddressMayBeNull = true);
+  IRNode *loadIndirNonNull(ReaderBaseNS::LdIndirOpcode Opcode, IRNode *Address,
+                           ReaderAlignType Alignment, bool IsVolatile,
+                           bool IsInterfReadOnly) {
+    return loadIndir(Opcode, Address, Alignment, IsVolatile, IsInterfReadOnly,
+                     false);
+  }
   virtual IRNode *loadNull() = 0;
   virtual IRNode *localAlloc(IRNode *Arg, bool IsZeroInit) = 0;
   virtual IRNode *loadFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                                    IRNode *Obj) = 0;
-  virtual IRNode *loadLen(IRNode *Arg1) = 0;
+  virtual IRNode *loadLen(IRNode *Array, bool ArrayMayBeNull = true) = 0;
+  IRNode *loadLenNonNull(IRNode *Array) { return loadLen(Array, false); }
   virtual bool arrayAddress(CORINFO_SIG_INFO *Aig, IRNode **RetVal) = 0;
   virtual IRNode *loadStringLen(IRNode *Arg1) = 0;
   virtual IRNode *getTypeFromHandle(IRNode *Arg1) = 0;
   virtual IRNode *getValueFromRuntimeHandle(IRNode *Arg1) = 0;
   virtual IRNode *arrayGetDimLength(IRNode *Arg1, IRNode *Arg2,
                                     CORINFO_CALL_INFO *CallInfo) = 0;
-  virtual IRNode *loadObj(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
-                          ReaderAlignType AlignmentPrefix, bool IsVolatile,
-                          bool IsField);
+  virtual IRNode *loadObj(CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                          IRNode *Address, ReaderAlignType AlignmentPrefix,
+                          bool IsVolatile, bool IsField,
+                          bool AddressMayBeNull = true);
+  IRNode *loadObjNonNull(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Address,
+                         ReaderAlignType AlignmentPrefix, bool IsVolatile,
+                         bool IsField) {
+    return loadObj(ResolvedToken, Address, AlignmentPrefix, IsVolatile, IsField,
+                   false);
+  }
   virtual IRNode *loadAndBox(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                              IRNode *Address,
                              ReaderAlignType AlignmentPrefix) = 0;
@@ -1691,12 +1714,26 @@ public:
                                CORINFO_RESOLVED_TOKEN *ResolvedToken,
                                CORINFO_CALL_INFO *CallInfo) = 0;
   virtual IRNode *loadPrimitiveType(IRNode *Address, CorInfoType CorType,
-                                    ReaderAlignType Slignment, bool IsVolatile,
-                                    bool IsInterfConst) = 0;
+                                    ReaderAlignType Alignment, bool IsVolatile,
+                                    bool IsInterfConst,
+                                    bool AddressMayBeNull = true) = 0;
+  IRNode *loadPrimitiveTypeNonNull(IRNode *Address, CorInfoType CorType,
+                                   ReaderAlignType Alignment, bool IsVolatile,
+                                   bool IsInterfConst) {
+    return loadPrimitiveType(Address, CorType, Alignment, IsVolatile,
+                             IsInterfConst, false);
+  }
   virtual IRNode *loadNonPrimitiveObj(IRNode *Address,
                                       CORINFO_CLASS_HANDLE Class,
                                       ReaderAlignType Alignment,
-                                      bool IsVolatile) = 0;
+                                      bool IsVolatile,
+                                      bool AddressMayBeNull = true) = 0;
+  IRNode *loadNonPrimitiveObjNonNull(IRNode *Address,
+                                     CORINFO_CLASS_HANDLE Class,
+                                     ReaderAlignType Alignment,
+                                     bool IsVolatile) {
+    return loadNonPrimitiveObj(Address, Class, Alignment, IsVolatile, false);
+  }
   virtual IRNode *makeRefAny(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                              IRNode *Object) = 0;
   virtual IRNode *newArr(CORINFO_RESOLVED_TOKEN *ResolvedToken,
@@ -1722,16 +1759,34 @@ public:
                           bool IsVolatile) = 0;
   virtual void storeIndir(ReaderBaseNS::StIndirOpcode Opcode, IRNode *Arg1,
                           IRNode *Arg2, ReaderAlignType Alignment,
-                          bool IsVolatile);
+                          bool IsVolatile, bool AddressMayBeNull = true);
+  void storeIndirNonNull(ReaderBaseNS::StIndirOpcode Opcode, IRNode *Arg1,
+                         IRNode *Arg2, ReaderAlignType Alignment,
+                         bool IsVolatile) {
+    storeIndir(Opcode, Arg1, Arg2, Alignment, IsVolatile, false);
+  }
   virtual void storePrimitiveType(IRNode *Value, IRNode *Address,
                                   CorInfoType CorType,
-                                  ReaderAlignType Alignment,
-                                  bool IsVolatile) = 0;
+                                  ReaderAlignType Alignment, bool IsVolatile,
+
+                                  bool AddressMayBeNull = true) = 0;
+  void storePrimitiveTypeNonNull(IRNode *Value, IRNode *Address,
+                                 CorInfoType CorType, ReaderAlignType Alignment,
+                                 bool IsVolatile) {
+    storePrimitiveType(Value, Address, CorType, Alignment, IsVolatile, false);
+  }
   virtual void storeLocal(uint32_t LocOrdinal, IRNode *Arg1,
                           ReaderAlignType Alignment, bool IsVolatile) = 0;
-  virtual void storeObj(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
-                        IRNode *Arg2, ReaderAlignType Alignment,
-                        bool IsVolatile, bool IsField);
+  virtual void storeObj(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Value,
+                        IRNode *Address, ReaderAlignType Alignment,
+                        bool IsVolatile, bool IsField,
+                        bool AddressMayBeNull = true);
+  void storeObjNonNull(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Value,
+                       IRNode *Address, ReaderAlignType Alignment,
+                       bool IsVolatile, bool IsField) {
+    storeObj(ResolvedToken, Value, Address, Alignment, IsVolatile, IsField,
+             false);
+  }
   virtual void storeStaticField(CORINFO_RESOLVED_TOKEN *FieldToken,
                                 IRNode *ValueToStore, bool IsVolatile) = 0;
   virtual IRNode *stringGetChar(IRNode *Arg1, IRNode *Arg2) = 0;
@@ -1966,8 +2021,12 @@ public:
             CORINFO_CLASS_HANDLE Class, bool IsPinned,
             ReaderSpecialSymbolType Type = Reader_NotSpecialSymbol) = 0;
 
-  virtual IRNode *derefAddress(IRNode *Address, bool DestIsGCPtr,
-                               bool IsConst) = 0;
+  virtual IRNode *derefAddress(IRNode *Address, bool DestIsGCPtr, bool IsConst,
+
+                               bool AddressMayBeNull = true) = 0;
+  IRNode *derefAddressNonNull(IRNode *Address, bool DestIsGCPtr, bool IsConst) {
+    return derefAddress(Address, DestIsGCPtr, IsConst, false);
+  }
 
   virtual IRNode *conditionalDerefAddress(IRNode *Address) = 0;
 
