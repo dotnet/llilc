@@ -17,10 +17,19 @@
     The script will check if the desired executable is already on path.
     If not, it will stop going further.
 
-    2. LLVM and LLILC local repositories are created. Note that LLILC
-    should be located at the correct place under tools\LLILC in LLVM 
-    repository. The only environment variable you have to specify
-    is LLVMSOURCE.
+    2. LLVM and LLILC local repositories are created. The location of
+    LLVM source has to be specified with envrironment variable LLVMSOURCE.
+    LLILC repo can be placed in the default location under LLVMSOURCE\tools,
+    it will be automatically picked up. The LLILC repo can be placed out of
+    the LLVM source tree also. In this case, environment variable LLILCSOURCE
+    has to be used to specify that location.
+
+    A default location will be used for LLVM build directory. You can override
+    the location by specifying environmental variable LLVMBUILD. If LLILC
+    source is at default location in tree, LLILC will be built as part of LLVM
+    solution automatically. If LLILC is placed out of tree, a default LLILC
+    build directory will be used. You can override the location by specifying
+    environmental variable LLILCBUILD.
     
     This script completes the environment setup and reports the status.
     
@@ -44,10 +53,6 @@
 
     llilc, CopyJIT, ReBaseAll, ApplyFilter, CheckEnv 
     
-    LLILC is under the umbrella of LLVM. A default location is used for
-    LLVM build directory. You can override the location by specifying
-    environment variable LLVMBUILD. 
-
     Under the hood, LLILC uses CoreCLR's test assets and a CoreCLR
     Runtime paired with LLILC JIT for testing. The two parts will
     be downloaded and put in a default location. You can override
@@ -115,10 +120,23 @@ function ValidatePreConditions
   }
 
   # Validate LLILC
-  $LLILCSource = LLILCSource
-  $LLILCSourceExists = Test-Path $LLILCSource
+  $LLILCSourceExists = Test-Path Env:\LLILCSOURCE
   if (!$LLILCSourceExists) {
-    throw "!!! LLILC Source not available in correct place."
+    Write-Warning "LLILC source directory is not specified."
+    $DefaultLLILCSource = DefaultLLILCSource
+    $LLILCSourceExists = Test-Path $DefaultLLILCSource
+    if (!$LLILCSourceExists) {
+      throw "!!! Default LLILC source not available."
+    }
+    else {
+      Write-Warning "Default LLILC source directory: $DefaultLLILCSource"
+    }
+  }
+  else {
+    $LLILCSourceExists = Test-Path $Env:LLILCSOURCE
+    if (!$LLILCSourceExists) {
+      throw "!!! LLILC source not available in specified location." 
+    }
   }
 
   # Validate LLVMBuild
@@ -128,6 +146,18 @@ function ValidatePreConditions
     Write-Warning "LLVM build directory is not specified."
     $DefaultLLVMBuild = DefaultLLVMBuild
     Write-Warning "Default LLVM build directory: $DefaultLLVMBuild"
+  }
+
+  # Validate LLILCBuild
+
+  $OutOfTree = Test-Path Env:\LLILCSOURCE
+  if ($OutOfTree) {
+    $LLILCBuildExists = Test-Path Env:\LLILCBUILD
+    if (!$LLILCBuildExists) {
+      Write-Warning "LLILC build directory is not specified."
+      $DefaultLLILCBuild = DefaultLLILCBuild
+      Write-Warning "Default LLILC build directory: $DefaultLLILCBuild"
+    }
   }
 
   # Validate LLILCTESTRESULT
@@ -146,9 +176,21 @@ function ValidatePreConditions
 #
 # -------------------------------------------------------------------------
 
-function Global:LLILCSource
+function Global:DefaultLLILCSource
 {
   return "$Env:LLVMSOURCE\tools\llilc"
+}
+
+function Global:LLILCSource
+{
+  $LLILCSourceExists = Test-Path Env:\LLILCSOURCE
+  if (!$LLILCSourceExists) {
+    $DefaultLLILCSource = DefaultLLILCSource
+    return "$DefaultLLILCSource"
+  }
+  else {
+    return "$Env:LLILCSOURCE"
+  }
 }
 
 function Global:LLILCTest
@@ -159,8 +201,16 @@ function Global:LLILCTest
 
 function Global:LLILCJit([string]$Build="Debug")
 {
-  $LLVMBuild = LLVMBuild
-  $LLILCJit = "$LLVMBUILD\bin\$Build\LLILCJit.dll"
+  $OutOfTree = Test-Path Env:\LLILCSOURCE
+
+  if ($OutOfTree) {
+    $LLILCBuild = LLILCBuild
+    $LLILCJit = "$LLILCBuild\bin\$Build\LLILCJit.dll"
+  }
+  else {
+   $LLVMBuild = LLVMBuild
+   $LLILCJit = "$LLVMBUILD\bin\$Build\LLILCJit.dll"
+  }
   return $LLILCJit
 }
 
@@ -178,6 +228,23 @@ function Global:LLILCTestResult
   }
   else {
     return $Env:LLILCTESTRESULT
+  }
+}
+
+function Global:DefaultLLILCBuild
+{
+  return "$Env:TEMP\LLILCBuild"
+}
+
+function Global:LLILCBuild
+{
+  $LLILCBuildExists = Test-Path Env:\LLILCBUILD
+  if (!$LLILCBuildExists) {
+    $DefaultLLILCBuild = DefaultLLILCBuild
+    return "$DefaultLLILCBuild"
+  }
+  else {
+    return $Env:LLILCBUILD
   }
 }
 
@@ -346,6 +413,8 @@ function Global:IsOnPath([string]$executable, [string]$software)
 function CompleteEnvInit
 {
   SetVCVars
+
+  CreateLLILCBuildDirectory
   
   CreateLLILCTestResultDirectory
 
@@ -462,7 +531,12 @@ function Global:GetCLRTestAssets
 
 function Global:CheckEnv
 {
+  $OutOfTree = Test-Path Env:\LLILCSOURCE
+
   $LLVMBuild = LLVMBuild
+  if ($OutofTree) {
+    $LLILCBuild = LLILCBuild
+  }
   $LLILCSource = LLILCSource
   $LLILCTest = LLILCTest
   $LLILCTestResult = LLILCTestResult
@@ -474,6 +548,9 @@ function Global:CheckEnv
   Write-Output("LLVM Source         : $Env:LLVMSOURCE")
   Write-Output("LLVM Build          : $LLVMBuild")
   Write-Output("LLILC Source        : $LLILCSource")
+  if ($OutOfTree) {
+    Write-Output("LLILC Build         : $LLILCBuild")
+  }
   Write-Output("LLILC Test          : $LLILCTest")
   Write-Output("LLILC Test Result   : $LLILCTestResult")
   Write-Output("CoreCLR Test Assets : $CoreCLRTestAssets")
@@ -510,6 +587,24 @@ function CreateLLVMBuildDirectory
   $LLVMBuildExists = Test-Path $LLVMBuild
   if (!$LLVMBuildExists) {
     New-Item $LLVMBuild -itemtype Directory  | Out-Null
+  }
+}
+
+# -------------------------------------------------------------------------
+#
+# Create LLILC build directory
+# 
+# -------------------------------------------------------------------------
+
+function CreateLLILCBuildDirectory
+{
+  $OutOfTree = Test-Path Env:\LLILCSOURCE
+  if ($OutOfTree) {
+    $LLILCBuild = LLILCBuild
+    $LLILCBuildExists = Test-Path $LLILCBuild
+    if (!$LLILCBuildExists) {
+      New-Item $LLILCBuild -itemtype Directory  | Out-Null
+    }
   }
 }
 
@@ -562,6 +657,23 @@ function Global:CopyJIT([string]$Build="Debug")
 
 # -------------------------------------------------------------------------
 #
+# CMake Configuration based on architecture
+#
+# -------------------------------------------------------------------------
+
+function Global:CMakeConfig([string]$Arch="x64")
+{
+  if ($Arch -eq "x64") {
+    $CMakeConfig = "Visual Studio 12 2013 Win64"
+  }
+  else {
+    $CMakeConfig = "Visual Studio 12"
+  }
+  return $CMakeConfig
+}
+
+# -------------------------------------------------------------------------
+#
 # Configure LLVM Solution
 #
 # -------------------------------------------------------------------------
@@ -572,18 +684,37 @@ function Global:ConfigureLLVM([string]$Arch="x64", [string]$Build="Debug")
 
   pushd .
   cd $LLVMBuild
-  if ($Arch -eq "x64") {
-    cmake -G "Visual Studio 12 2013 Win64" $Env:LLVMSOURCE -DLLVM_TARGETS_TO_BUILD:STRING=X86 -DCMAKE_BUILD_TYPE:STRING=$Build
-  }
-  else {
-    cmake -G "Visual Studio 12" $Env:LLVMSOURCE -DLLVM_TARGETS_TO_BUILD:STRING=X86 -DCMAKE_BUILD_TYPE:STRING=$Build
-  }
+  $CMakeConfig = CMakeConfig -Arch $Arch
+  cmake -G $CMakeConfig $Env:LLVMSOURCE -DLLVM_TARGETS_TO_BUILD:STRING=X86 -DCMAKE_BUILD_TYPE:STRING=$Build
   popd
 }
 
 # -------------------------------------------------------------------------
 #
-# Build LLVM including LLILC JIT
+# Configure LLILC solution if LLILC is out of LLVM source tree
+#
+# -------------------------------------------------------------------------
+
+function Global:ConfigureLLILC([string]$Arch="x64", [string]$Build="Debug")
+{
+  $OutOfTree = Test-Path Env:\LLILCSOURCE
+  if (!$OutOfTree) {
+    return
+  }
+
+  $LLVMBuild = LLVMBuild  
+  $LLILCBuild = LLILCBuild
+
+  pushd .
+  cd $LLILCBuild
+  $CMakeConfig = CMakeConfig -Arch $Arch
+  cmake -G $CMakeConfig $Env:LLILCSOURCE -DWITH_LLVM:STRING=$LLVMBuild -DCMAKE_BUILD_TYPE:STRING=$Build
+  popd
+}
+
+# -------------------------------------------------------------------------
+#
+# Build LLVM, including LLILC if it is in default location in LLVM source.
 #
 # -------------------------------------------------------------------------
 
@@ -593,14 +724,48 @@ function Global:BuildLLVM([string]$Arch="x64", [string]$Build="Debug", [bool]$Pa
   $TempBat = Join-Path $Env:TEMP "buildllvm.bat"
   $File = "$Env:VS120COMNTOOLS\..\..\VC\vcvarsall.bat"
 
-  $MSwitch = ""
   if ($Parallel) {
     $MSwitch = " /m "
+  }
+  else {
+    $MSwitch = ""
   }
 
   ("call ""$File"" x86", "msbuild $LLVMBuild\LLVM.sln /p:Configuration=$Build /p:Platfrom=$Arch /t:ALL_BUILD $MSwitch") | Out-File -Encoding ascii $TempBat
   
   Write-Output ("Building LLVM...")
+  cmd /c $TempBat
+  Remove-Item -force $TempBat | Out-Null
+
+  $OutOfTree = Test-Path Env:\LLILCSOURCE
+  if (!$OutOfTree) {
+    CopyJIT -Build $Build
+  }
+}
+
+# -------------------------------------------------------------------------
+#
+# Build LLILC JIT
+#
+# -------------------------------------------------------------------------
+
+function Global:Build([string]$Build="Debug")
+{
+  $OutOfTree = Test-Path Env:\LLILCSOURCE
+
+  $LLILCBuild = LLILCBuild
+  $TempBat = Join-Path $Env:TEMP "buildllilc.bat"
+  $File = "$Env:VS120COMNTOOLS\..\..\VC\vcvarsall.bat"
+
+  if ($OutOfTree) {
+    $WhatToBuild = "$LLILCBuild\LLILC.sln"
+  }
+  else {
+    $WhatToBuild = "/Project llilcjit $LLVMBuild\LLVM.sln"
+  }
+
+  ("call ""$File"" x86", "devenv /Build $Build $WhatToBuild") | Out-File -Encoding ascii $TempBat
+
   cmd /c $TempBat
   Remove-Item -force $TempBat | Out-Null
   CopyJIT -Build $Build
@@ -616,25 +781,12 @@ function Global:BuildAll([string]$Arch="x64", [string]$Build="Debug", [bool]$Par
 {
   ConfigureLLVM -Arch $Arch -Build $Build
   BuildLLVM -Arch $Arch -Build $Build -Parallel $Parallel
-}
 
-# -------------------------------------------------------------------------
-#
-# Build LLILC JIT
-#
-# -------------------------------------------------------------------------
-
-function Global:Build([string]$Build="Debug")
-{
-  $LLVMBuild = LLVMBuild
-  $TempBat = Join-Path $Env:TEMP "buildllilc.bat"
-  $File = "$Env:VS120COMNTOOLS\..\..\VC\vcvarsall.bat"
-  
-  ("call ""$File"" x86", "devenv /Build $Build /Project llilcjit $LLVMBuild\LLVM.sln") | Out-File -Encoding ascii $TempBat
-
-  cmd /c $TempBat
-  Remove-Item -force $TempBat | Out-Null
-  CopyJIT -Build $Build
+  $OutOfTree = Test-Path Env:\LLILCSOURCE
+  if ($OutOfTree) {
+    ConfigureLLILC -Arch $Arch -Build $Build
+    Build -Build $Build
+  }
 }
 
 # -------------------------------------------------------------------------
