@@ -335,14 +335,10 @@ public:
   IRNode *loadConstantR4(float Value) override;
   IRNode *loadConstantR8(double Value) override;
   IRNode *loadElem(ReaderBaseNS::LdElemOpcode Opcode,
-                   CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
-                   IRNode *Arg2) override {
-    throw NotYetImplementedException("loadElem");
-  };
-  IRNode *loadElemA(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
-                    IRNode *Arg2, bool IsReadOnly) override {
-    throw NotYetImplementedException("loadElemA");
-  };
+                   CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Index,
+                   IRNode *Array) override;
+  IRNode *loadElemA(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Index,
+                    IRNode *Array, bool IsReadOnly) override;
   IRNode *loadField(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
                     ReaderAlignType Alignment, bool IsVolatile) override;
 
@@ -853,9 +849,49 @@ private:
 
   IRNode *getPrimitiveAddress(IRNode *Addr, CorInfoType CorInfoType,
                               ReaderAlignType Alignment, uint32_t *Align);
+  /// Generate instructions for loading value of the specified type at the
+  /// specified address.
+  ///
+  /// \p Address - Address to load from.
+  /// \p Ty - llvm type of the value to load.
+  /// \p CorType - CorInfoType of the value to load.
+  /// \p ResolvedToken - Resolved token corresponding to the type of the value
+  ///                    to load.
+  /// \p AlignmentPrefix - Alignment of the value.
+  /// \p IsVolatile - true if the load is volatile.
+  /// \p AddressMayBeNull - true if the address may be null.
+  /// \returns Value at the specified address.
+  IRNode *loadAtAddress(IRNode *Address, llvm::Type *Ty, CorInfoType CorType,
+                        CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                        ReaderAlignType AlignmentPrefix, bool IsVolatile,
+                        bool AddressMayBeNull=true);
+
+  IRNode *loadAtAddressNonNull(IRNode *Address, llvm::Type *Ty,
+                               CorInfoType CorType,
+                               CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                               ReaderAlignType AlignmentPrefix,
+                               bool IsVolatile) {
+    return loadAtAddress(Address, Ty, CorType, ResolvedToken, AlignmentPrefix,
+                         IsVolatile, false);
+  }
 
   void classifyCmpType(llvm::Type *Ty, uint32_t &Size, bool &IsPointer,
                        bool &IsFloat);
+
+  /// Generate a call to the throw helper if the condition is met.
+  ///
+  /// \p Condition - Condition that will trigger the throw.
+  /// \p HelperId - Id of the throw-helper.
+  /// \p ThrowBlockName - Name of the basic block that will contain the throw.
+  void genConditionalThrow(llvm::Value *Condition, CorInfoHelpFunc HelperId,
+                           const llvm::Twine &ThrowBlockName);
+
+  /// Generate array bounds check.
+  ///
+  /// \p Array - Array to be accessed.
+  /// \p Index - Index to be accessed.
+  /// \returns - The input array.
+  IRNode *genBoundsCheck(IRNode *Array, IRNode *Index);
 
   uint32_t size(CorInfoType CorType);
   uint32_t stackSize(CorInfoType CorType);
@@ -912,6 +948,15 @@ private:
   llvm::LoadInst *makeLoadNonNull(llvm::Value *Address, bool IsVolatile) {
     return makeLoad(Address, IsVolatile, false);
   }
+
+  /// Get address of the array element.
+  ///
+  /// \p Array - Array that the element belongs to.
+  /// \p Index - Index of the element.
+  /// \p ElementTy - Type of the element.
+  /// \returns Value representing the address of the element.
+  llvm::Value *genArrayElemAddress(IRNode *Array, IRNode *Index,
+                                   llvm::Type *ElementTy);
 
 private:
   LLILCJitContext *JitContext;

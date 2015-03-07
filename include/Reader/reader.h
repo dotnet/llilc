@@ -2014,10 +2014,10 @@ public:
   virtual IRNode *loadConstantR4(float Value) = 0;
   virtual IRNode *loadConstantR8(double Value) = 0;
   virtual IRNode *loadElem(ReaderBaseNS::LdElemOpcode Opcode,
-                           CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
-                           IRNode *Arg2) = 0;
-  virtual IRNode *loadElemA(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
-                            IRNode *Arg2, bool IsReadOnly) = 0;
+                           CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Index,
+                           IRNode *Array) = 0;
+  virtual IRNode *loadElemA(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Index,
+                            IRNode *Array, bool IsReadOnly) = 0;
   virtual IRNode *loadField(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
                             ReaderAlignType Alignment, bool IsVolatile) = 0;
   virtual IRNode *loadIndir(ReaderBaseNS::LdIndirOpcode Opcode, IRNode *Address,
