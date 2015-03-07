@@ -94,7 +94,7 @@ public:
   /// Construct a flow graph edge list for iterating over the predecessors
   /// of the \p Fg node.
   /// \param Fg The node whose predecessors are desired.
-  /// \pre \p Fg != NULL.
+  /// \pre \p Fg != nullptr.
   /// \post **this** is a predecessor edge list representing the predecessors
   /// of \p Fg.
   FlowGraphPredecessorEdgeList(FlowGraphNode *Fg)
@@ -114,9 +114,9 @@ public:
 
   /// \return The source of the current edge which will be one of the predecessors
   /// of the \p Fg node, unless the list has been exhausted in which case
-  /// return NULL.
+  /// return nullptr.
   FlowGraphNode *getSource() override {
-    return (PredIterator == PredIteratorEnd) ? NULL
+    return (PredIterator == PredIteratorEnd) ? nullptr
                                              : (FlowGraphNode *)*PredIterator;
   }
 
@@ -140,7 +140,7 @@ public:
   /// Construct a flow graph edge list for iterating over the successors
   /// of the \p Fg node.
   /// \param Fg The node whose successors are desired.
-  /// \pre \p Fg != NULL.
+  /// \pre \p Fg != nullptr.
   /// \post **this** is a successor edge list representing the successors
   /// of \p Fg.
   FlowGraphSuccessorEdgeList(FlowGraphNode *Fg)
@@ -155,9 +155,9 @@ public:
 
   /// \return The sink of the current edge which will be one of the successors
   /// of the \p Fg node, unless the list has been exhausted in which case
-  /// return NULL.
+  /// return nullptr.
   FlowGraphNode *getSink() override {
-    return (SuccIterator == SuccIteratorEnd) ? NULL
+    return (SuccIterator == SuccIteratorEnd) ? nullptr
                                              : (FlowGraphNode *)*SuccIterator;
   }
 
@@ -206,7 +206,7 @@ public:
   /// \brief Push \p NewVal onto the operand stack.
   ///
   /// \param NewVal The value to be pushed.
-  /// \pre NewVal != NULL
+  /// \pre NewVal != nullptr
   void push(IRNode *NewVal) override;
 
   /// \brief If the stack is not empty, cause an assertion failure.
@@ -704,17 +704,17 @@ public:
   bool canMakeDirectCall(ReaderCallTargetData *CallTargetData) override;
 
   // Generate call to helper
-  IRNode *callHelper(CorInfoHelpFunc HelperID, IRNode *Dst, IRNode *Arg1 = NULL,
-                     IRNode *Arg2 = NULL, IRNode *Arg3 = NULL,
-                     IRNode *Arg4 = NULL,
+  IRNode *callHelper(CorInfoHelpFunc HelperID, IRNode *Dst,
+                     IRNode *Arg1 = nullptr, IRNode *Arg2 = nullptr,
+                     IRNode *Arg3 = nullptr, IRNode *Arg4 = nullptr,
                      ReaderAlignType Alignment = Reader_AlignUnknown,
                      bool IsVolatile = false, bool NoCtor = false,
                      bool CanMoveUp = false) override;
 
   // Generate call to helper
   IRNode *callHelperImpl(CorInfoHelpFunc HelperID, llvm::Type *ReturnType,
-                         IRNode *Arg1 = NULL, IRNode *Arg2 = NULL,
-                         IRNode *Arg3 = NULL, IRNode *Arg4 = NULL,
+                         IRNode *Arg1 = nullptr, IRNode *Arg2 = nullptr,
+                         IRNode *Arg3 = nullptr, IRNode *Arg4 = nullptr,
                          ReaderAlignType Alignment = Reader_AlignUnknown,
                          bool IsVolatile = false, bool NoCtor = false,
                          bool CanMoveUp = false);
