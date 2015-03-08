@@ -2534,7 +2534,7 @@ int __cdecl labelSortFunction(const void *C1, const void *C2) {
 
 // Insert labels from label offset list into block stream, splitting
 // blocks if necessary.  The list is currently ordered.
-void ReaderBase::fgReplaceBranchTargets(void) {
+void ReaderBase::fgReplaceBranchTargets() {
   FlowGraphNodeOffsetList *List;
   FlowGraphNode *Block;
   uint32_t Index;
@@ -6475,7 +6475,7 @@ bool ReaderBase::checkExplicitTailCall(uint32_t ILOffset, bool AllowPop) {
   const uint32_t ILInputSize = MethodInfo->ILCodeSize;
   uint8_t *ILInput = MethodInfo->ILCode;
   uint8_t *UnusedOperand;
-  uint32_t Offset = ILOffset = SizeOfCEECall;
+  uint32_t Offset = ILOffset + SizeOfCEECall;
   ReaderBaseNS::OPCODE Opcode;
 
   do {
@@ -6495,7 +6495,7 @@ bool ReaderBase::checkExplicitTailCall(uint32_t ILOffset, bool AllowPop) {
 }
 
 // Main reader loop, called once for each reachable block.
-void ReaderBase::readBytesForFlowGraphNode_Helper(
+void ReaderBase::readBytesForFlowGraphNodeHelper(
     ReadBytesForFlowGraphNodeHelperParam *Param) {
 
   FlowGraphNode *&Fg = Param->Fg;
@@ -7869,7 +7869,7 @@ void ReaderBase::readBytesForFlowGraphNode(FlowGraphNode *Fg,
   }
 
   PAL_TRY(ReadBytesForFlowGraphNodeHelperParam *, Param, &TheParam) {
-    Param->This->readBytesForFlowGraphNode_Helper(Param);
+    Param->This->readBytesForFlowGraphNodeHelper(Param);
   }
   PAL_EXCEPT_FILTER(objectFilter) {
     CorInfoHelpFunc ThrowHelper = CORINFO_HELP_VERIFICATION;
