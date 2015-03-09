@@ -26,7 +26,7 @@ IRNode *fgNodeGetStartInsertIRNode(FlowGraphNode *FgNode) {
   return fgNodeGetStartIRNode(FgNode);
 }
 
-IRNode *fgNodeGetEndIRInsertionPoint(FlowGraphNode *FgNode) { return NULL; }
+IRNode *fgNodeGetEndIRInsertionPoint(FlowGraphNode *FgNode) { return nullptr; }
 
 GlobalVerifyData *fgNodeGetGlobalVerifyData(FlowGraphNode *Fg) {
   throw NotYetImplementedException("fgNodeGetGlobalVerifyData");
@@ -124,7 +124,7 @@ void ReaderBase::verifyNeedsVerification() { return; }
 
 VerificationState *ReaderBase::verifyInitializeBlock(FlowGraphNode *,
                                                      uint32_t IlOffset) {
-  return NULL;
+  return nullptr;
 }
 
 void ReaderBase::verPropEHInitFlow(FlowGraphNode *Block) { return; }
@@ -135,7 +135,7 @@ VerificationState *ReaderBase::verCreateNewVState(uint32_t MaxStack,
                                                   uint32_t NumLocals,
                                                   bool InitLocals,
                                                   InitState InitState) {
-  return NULL;
+  return nullptr;
 }
 
 void ReaderBase::verifyFinishBlock(VerificationState *Vstate,
@@ -153,7 +153,7 @@ void ReaderBase::verifyPropCtorInitThroughBadBlock(FlowGraphNode *Block) {
 }
 
 FlowGraphNode *ReaderBase::verifyGetRegionBlock(EHRegion *Region) {
-  return NULL;
+  return nullptr;
 }
 
 void ReaderBase::verifyEnqueueBlock(GlobalVerifyData *GvSucc) { return; }
@@ -161,7 +161,7 @@ void ReaderBase::verifyEnqueueBlock(GlobalVerifyData *GvSucc) { return; }
 FlowGraphNode *
 ReaderBase::verifyFindFaultHandlerBlock(VerificationState *Vstate,
                                         EHRegion *TryRegion) {
-  return NULL;
+  return nullptr;
 }
 
 void ReaderBase::verifyRecordLocalType(uint32_t Num, CorInfoType Type,

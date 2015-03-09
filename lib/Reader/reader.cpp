@@ -263,7 +263,7 @@ FlowGraphEdgeList *fgNodeGetSuccessorListActual(FlowGraphNode *Fg) {
 
   FgEdge = fgNodeGetSuccessorList(Fg);
 
-  if ((FgEdge != NULL) && fgEdgeListIsNominal(FgEdge))
+  if ((FgEdge != nullptr) && fgEdgeListIsNominal(FgEdge))
     FgEdge = fgEdgeListGetNextSuccessorActual(FgEdge);
   return FgEdge;
 }
@@ -272,7 +272,7 @@ FlowGraphEdgeList *fgNodeGetPredecessorListActual(FlowGraphNode *Fg) {
   FlowGraphEdgeList *FgEdge;
 
   FgEdge = fgNodeGetPredecessorList(Fg);
-  if (FgEdge != NULL && fgEdgeListIsNominal(FgEdge))
+  if (FgEdge != nullptr && fgEdgeListIsNominal(FgEdge))
     FgEdge = fgEdgeListGetNextPredecessorActual(FgEdge);
   return FgEdge;
 }
@@ -296,7 +296,7 @@ uint32_t getMSILInstrLength(ReaderBaseNS::OPCODE Opcode, uint8_t *Operand) {
   uint32_t Length;
 
   if (Opcode == ReaderBaseNS::CEE_SWITCH) {
-    ASSERTNR(NULL != Operand);
+    ASSERTNR(nullptr != Operand);
     // Length of a switch is the 4 bytes + 4 bytes * the value of the first 4
     // bytes
     uint32_t NumCases = readNumberOfSwitchCases(&Operand);
@@ -673,14 +673,14 @@ bool ReaderBase::isPrimitiveType(CorInfoType CorInfoType) {
 void *ReaderBase::getHelperDescr(CorInfoHelpFunc HelpFuncId, bool *IsIndirect) {
   void *HelperHandle, *IndirectHelperHandle;
 
-  ASSERTNR(IsIndirect != NULL);
+  ASSERTNR(IsIndirect != nullptr);
   HelperHandle = JitInfo->getHelperFtn(HelpFuncId, &IndirectHelperHandle);
-  if (HelperHandle != NULL) {
+  if (HelperHandle != nullptr) {
     *IsIndirect = false;
     return HelperHandle;
   }
 
-  ASSERTNR(IndirectHelperHandle != NULL);
+  ASSERTNR(IndirectHelperHandle != nullptr);
   *IsIndirect = true;
   return IndirectHelperHandle;
 }
@@ -697,7 +697,7 @@ void *ReaderBase::getVarArgsHandle(CORINFO_SIG_INFO *Sig, bool *IsIndirect) {
   VarCookie = JitInfo->getVarArgsHandle(Sig, (void **)&IndirectVarCookie);
   ASSERTNR((!VarCookie) != (!IndirectVarCookie));
 
-  if (VarCookie != NULL) {
+  if (VarCookie != nullptr) {
     *IsIndirect = false;
     return VarCookie;
   } else {
@@ -846,7 +846,7 @@ GCLayout *ReaderBase::getClassGCLayout(CORINFO_CLASS_HANDLE Class) {
     // GCLayout.  It is our convention that if you have a GCLayout,
     // then you have pointers.  This allows us to do only one check
     // when we want to know if a MB has GC pointers.
-    GCLayoutInfo = NULL;
+    GCLayoutInfo = nullptr;
   }
 
   return GCLayoutInfo;
@@ -891,7 +891,7 @@ ReaderBase::getMinimumClassAlignment(CORINFO_CLASS_HANDLE Class,
 
   // Unaligned GC pointers are not supported by the CLR.
   // Simply ignore users that specify otherwise
-  if (getClassGCLayout(Class) != NULL) {
+  if (getClassGCLayout(Class) != nullptr) {
     Alignment = Reader_AlignNatural;
   }
 
@@ -902,7 +902,7 @@ CorInfoType ReaderBase::getClassType(CORINFO_CLASS_HANDLE Class) {
   return JitInfo->asCorInfoType(Class);
 }
 
-// Size and pRetSig are 0/NULL if type is non-value or primitive.
+// Size and pRetSig are 0/nullptr if type is non-value or primitive.
 void ReaderBase::getClassType(CORINFO_CLASS_HANDLE Class, uint32_t ClassAttribs,
                               CorInfoType *CorInfoType, uint32_t *Size) {
 
@@ -960,12 +960,12 @@ ReaderBase::embedFieldHandle(CORINFO_FIELD_HANDLE Field, bool *IsIndirect) {
   DirectFieldHandle =
       JitInfo->embedFieldHandle(Field, (void **)&IndirectFieldHandle);
 
-  if (DirectFieldHandle != NULL) {
-    ASSERTNR(IndirectFieldHandle == NULL);
+  if (DirectFieldHandle != nullptr) {
+    ASSERTNR(IndirectFieldHandle == nullptr);
     *IsIndirect = false;
     return DirectFieldHandle;
   } else {
-    ASSERTNR(IndirectFieldHandle != NULL);
+    ASSERTNR(IndirectFieldHandle != nullptr);
     *IsIndirect = true;
     return IndirectFieldHandle;
   }
@@ -1030,10 +1030,10 @@ void *ReaderBase::getStaticFieldAddress(CORINFO_FIELD_HANDLE Field,
   void *FieldAddress =
       (void *)JitInfo->getFieldAddress(Field, &IndirectFieldAddress);
 
-  ASSERTNR(((FieldAddress != NULL) && (IndirectFieldAddress == NULL)) ||
-           ((FieldAddress == NULL) && (IndirectFieldAddress != NULL)));
+  ASSERTNR(((FieldAddress != nullptr) && (IndirectFieldAddress == nullptr)) ||
+           ((FieldAddress == nullptr) && (IndirectFieldAddress != nullptr)));
 
-  if (FieldAddress == NULL) {
+  if (FieldAddress == nullptr) {
     *IsIndirect = true;
     return IndirectFieldAddress;
   }
@@ -1043,7 +1043,7 @@ void *ReaderBase::getStaticFieldAddress(CORINFO_FIELD_HANDLE Field,
 
 void *ReaderBase::getJustMyCodeHandle(CORINFO_METHOD_HANDLE Handle,
                                       bool *IsIndirect) {
-  CORINFO_JUST_MY_CODE_HANDLE DebugHandle, *IndirectDebugHandle = NULL;
+  CORINFO_JUST_MY_CODE_HANDLE DebugHandle, *IndirectDebugHandle = nullptr;
   DebugHandle = JitInfo->getJustMyCodeHandle(Handle, &IndirectDebugHandle);
   ASSERTNR(!(DebugHandle && IndirectDebugHandle)); // both can't be non-null
 
@@ -1073,7 +1073,7 @@ void *ReaderBase::getMethodSync(bool *IsIndirect) {
 
 void *ReaderBase::getCookieForPInvokeCalliSig(CORINFO_SIG_INFO *SigTarget,
                                               bool *IsIndirect) {
-  void *CalliCookie, *IndirectCalliCookie = NULL;
+  void *CalliCookie, *IndirectCalliCookie = nullptr;
   CalliCookie =
       JitInfo->GetCookieForPInvokeCalliSig(SigTarget, &IndirectCalliCookie);
   ASSERTNR((!CalliCookie) != (!IndirectCalliCookie)); // both can't be non-null
@@ -1321,10 +1321,10 @@ void *ReaderBase::getEmbedModuleDomainIDForStatics(CORINFO_CLASS_HANDLE Class,
   size_t ModuleDomainID;
   void *IndirectModuleDomainID;
 
-  ModuleDomainID =
-      JitInfo->getClassModuleIdForStatics(Class, NULL, &IndirectModuleDomainID);
+  ModuleDomainID = JitInfo->getClassModuleIdForStatics(Class, nullptr,
+                                                       &IndirectModuleDomainID);
 
-  if (IndirectModuleDomainID == NULL) {
+  if (IndirectModuleDomainID == nullptr) {
     *IsIndirect = false;
     /* Note this is an unsigned integer not a relocatable pointer */
     return (void *)ModuleDomainID;
@@ -1341,7 +1341,7 @@ void *ReaderBase::getEmbedClassDomainID(CORINFO_CLASS_HANDLE Class,
 
   ClassDomainID = JitInfo->getClassDomainID(Class, &IndirectClassDomainID);
 
-  if (IndirectClassDomainID == NULL) {
+  if (IndirectClassDomainID == nullptr) {
     *IsIndirect = false;
     /* Note this is an unsigned integer not a relocatable pointer */
     return (void *)(size_t)ClassDomainID;
@@ -1356,23 +1356,21 @@ InfoAccessType ReaderBase::constructStringLiteral(mdToken Token, void **Info) {
 }
 
 void ReaderBase::handleMemberAccess(CorInfoIsAccessAllowedResult AccessAllowed,
-                                    const CORINFO_HELPER_DESC &AccessHelper,
-                                    IRNode **NewIR) {
+                                    const CORINFO_HELPER_DESC &AccessHelper) {
   if (AccessAllowed == CORINFO_ACCESS_ALLOWED)
     return;
-  handleMemberAccessWorker(AccessAllowed, AccessHelper, NewIR);
+  handleMemberAccessWorker(AccessAllowed, AccessHelper);
 }
 
-void
-ReaderBase::handleMemberAccessWorker(CorInfoIsAccessAllowedResult AccessAllowed,
-                                     const CORINFO_HELPER_DESC &AccessHelper,
-                                     IRNode **NewIR) {
+void ReaderBase::handleMemberAccessWorker(
+    CorInfoIsAccessAllowedResult AccessAllowed,
+    const CORINFO_HELPER_DESC &AccessHelper) {
   switch (AccessAllowed) {
   case CORINFO_ACCESS_ALLOWED:
     ASSERTNR(!"don't call this for allowed");
   case CORINFO_ACCESS_ILLEGAL:
   case CORINFO_ACCESS_RUNTIME_CHECK:
-    insertHelperCall(AccessHelper, NewIR);
+    insertHelperCall(AccessHelper);
   }
 }
 
@@ -1406,32 +1404,31 @@ void ReaderBase::handleMemberAccessForVerification(
   }
 }
 
-void ReaderBase::handleClassAccess(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                                   IRNode **NewIR) {
+void ReaderBase::handleClassAccess(CORINFO_RESOLVED_TOKEN *ResolvedToken) {
   CorInfoIsAccessAllowedResult Auth;
   CORINFO_HELPER_DESC AccessAllowedInfo;
 
   Auth = JitInfo->canAccessClass(ResolvedToken, getCurrentMethodHandle(),
                                  &AccessAllowedInfo);
-  handleMemberAccess(Auth, AccessAllowedInfo, NewIR);
+  handleMemberAccess(Auth, AccessAllowedInfo);
 }
 
-void ReaderBase::insertHelperCall(const CORINFO_HELPER_DESC &AccessAllowedInfo,
-                                  IRNode **NewIR) {
+void ReaderBase::insertHelperCall(
+    const CORINFO_HELPER_DESC &AccessAllowedInfo) {
   // Decision deferred
 
-  removeStackInterference(NewIR);
+  removeStackInterference();
 
   bool IsIndirect;
 
-  void *RealHandle = NULL;
-  void *EmbeddedHandle = NULL;
+  void *RealHandle = nullptr;
+  void *EmbeddedHandle = nullptr;
 
   IRNode *HelperArgNodes[CORINFO_ACCESS_ALLOWED_MAX_ARGS] = {0};
   ASSERTNR(AccessAllowedInfo.numArgs <=
            (sizeof(HelperArgNodes) / sizeof(HelperArgNodes[0])));
   for (uint32_t Index = 0; Index < AccessAllowedInfo.numArgs; ++Index) {
-    IRNode *CurrentArg = NULL;
+    IRNode *CurrentArg = nullptr;
     const CORINFO_HELPER_ARG &HelperArg = AccessAllowedInfo.args[Index];
     switch (HelperArg.argType) {
     case CORINFO_HELPER_ARG_TYPE_Field:
@@ -1455,7 +1452,7 @@ void ReaderBase::insertHelperCall(const CORINFO_HELPER_DESC &AccessAllowedInfo,
       RealHandle = HelperArg.moduleHandle;
       EmbeddedHandle = JitInfo->embedModuleHandle(HelperArg.moduleHandle,
                                                   &IndirectModuleHandle);
-      if (EmbeddedHandle == NULL) {
+      if (EmbeddedHandle == nullptr) {
         IsIndirect = true;
         EmbeddedHandle = IndirectModuleHandle;
       } else {
@@ -1466,13 +1463,12 @@ void ReaderBase::insertHelperCall(const CORINFO_HELPER_DESC &AccessAllowedInfo,
     HANDLE_COMMON:
       CurrentArg = handleToIRNode(mdTokenNil, /*Never used*/
                                   EmbeddedHandle, RealHandle, IsIndirect,
-                                  IsIndirect,  /* read only */
-                                  true, false, /* call target */
-                                  NewIR);
+                                  IsIndirect,   /* read only */
+                                  true, false); /* call target */
       break;
 
     case CORINFO_HELPER_ARG_TYPE_Const:
-      CurrentArg = loadConstantI8((__int32)HelperArg.constant, NewIR);
+      CurrentArg = loadConstantI8((__int32)HelperArg.constant);
       break;
     default:
       ASSERTMNR(UNREACHED, "Unexpected constant kind.");
@@ -1481,7 +1477,7 @@ void ReaderBase::insertHelperCall(const CORINFO_HELPER_DESC &AccessAllowedInfo,
     HelperArgNodes[Index] = CurrentArg;
   }
 
-  callHelper(AccessAllowedInfo.helperNum, NULL, NewIR, HelperArgNodes[0],
+  callHelper(AccessAllowedInfo.helperNum, nullptr, HelperArgNodes[0],
              HelperArgNodes[1], HelperArgNodes[2], HelperArgNodes[3]);
 }
 
@@ -1563,7 +1559,7 @@ static int rgnRangeIsEnclosedInRegion(uint32_t StartOffset, uint32_t EndOffset,
 EHRegion *rgnFindLowestEnclosingRegion(EHRegion *RegionTree, uint32_t StartOffset,
                                        uint32_t EndOffset) {
   EHRegion *TryChild;
-  EHRegion *RetVal = NULL;
+  EHRegion *RetVal = nullptr;
 
   // RegionTree is a non-empty region tree
   // ASSERTNR(RegionTree);
@@ -1651,11 +1647,11 @@ EHRegion *ReaderBase::rgnMakeRegion(ReaderBaseNS::RegionKind Type,
 
   // Convert from ReaderBaseNS region kind to compiler region kind...
   rgnSetRegionType(Result, Type);
-  rgnSetHead(Result, NULL);
-  rgnSetLast(Result, NULL);
+  rgnSetHead(Result, nullptr);
+  rgnSetLast(Result, nullptr);
   rgnSetIsLive(Result, false);
   rgnSetParent(Result, Parent);
-  rgnSetChildList(Result, NULL);
+  rgnSetChildList(Result, nullptr);
   rgnSetHasNonLocalFlow(Result, false);
 
   if (Type == ReaderBaseNS::RGN_Try) {
@@ -1793,12 +1789,12 @@ void ReaderBase::rgnCreateRegionTree(void) {
   EHRegion *RegionTree, *RegionTreeRoot;
   EHRegionList *AllRegionList;
 
-  // Initialize all region list to NULL.
-  AllRegionList = NULL;
+  // Initialize all region list to nullptr.
+  AllRegionList = nullptr;
 
-  RegionTreeRoot = NULL;
+  RegionTreeRoot = nullptr;
 
-  EHClauses = NULL;
+  EHClauses = nullptr;
 
   if (MethodInfo->EHcount > 0) {
     uint32_t NumEHMarkers;
@@ -1813,8 +1809,8 @@ void ReaderBase::rgnCreateRegionTree(void) {
     }
   } else {
     // No EH.
-    EhRegionTree = NULL;
-    AllRegionList = NULL;
+    EhRegionTree = nullptr;
+    AllRegionList = nullptr;
     return;
   }
 
@@ -1851,8 +1847,8 @@ void ReaderBase::rgnCreateRegionTree(void) {
 
   EhClauseInfo = EHClauses;
 
-  RegionTreeRoot = rgnMakeRegion(ReaderBaseNS::RGN_Root, NULL, RegionTreeRoot,
-                                 &AllRegionList);
+  RegionTreeRoot = rgnMakeRegion(ReaderBaseNS::RGN_Root, nullptr,
+                                 RegionTreeRoot, &AllRegionList);
   RegionTree = RegionTreeRoot;
 
   // Map the clause information into try regions for later processing
@@ -1874,8 +1870,8 @@ void ReaderBase::rgnCreateRegionTree(void) {
         RegionTree, CurrentEHClause->TryOffset,
         CurrentEHClause->TryOffset + CurrentEHClause->TryLength);
 
-    EHRegion *RegionTry = NULL;
-    EHRegion *RegionHandler = NULL;
+    EHRegion *RegionTry = nullptr;
+    EHRegion *RegionHandler = nullptr;
 
     ASSERTNR(CurrentEHClause);
 
@@ -1900,8 +1896,8 @@ void ReaderBase::rgnCreateRegionTree(void) {
       rgnSetStartMSILOffset(RegionTry, CurrentEHClause->TryOffset);
       rgnSetEndMSILOffset(RegionTry, CurrentEHClause->TryOffset +
                                          CurrentEHClause->TryLength);
-      rgnSetEndOfClauses(RegionTry, NULL);
-      rgnSetTryBodyEnd(RegionTry, NULL);
+      rgnSetEndOfClauses(RegionTry, nullptr);
+      rgnSetTryBodyEnd(RegionTry, nullptr);
       rgnSetTryType(RegionTry, ReaderBaseNS::TRY_None);
     }
 
@@ -2016,10 +2012,10 @@ void ReaderBase::rgnCreateRegionTree(void) {
 // (2) Set a debug sequence point at the start of the an catch/filter/except.
 //
 // This is required since the stack is not empty at these points.
-void ReaderBase::setupBlockForEH(IRNode **NewIR) {
+void ReaderBase::setupBlockForEH() {
   FlowGraphNode *Fg = CurrentFgNode;
 
-  if (CurrentRegion != NULL) {
+  if (CurrentRegion != nullptr) {
     rgnSetIsLive(CurrentRegion, true);
 
     if (isRegionStartBlock(Fg)) {
@@ -2032,7 +2028,7 @@ void ReaderBase::setupBlockForEH(IRNode **NewIR) {
         // SEQUENCE POINTS: ensure sequence point at eh region start
         if (needSequencePoints()) {
           setSequencePoint(fgNodeGetStartMSILOffset(Fg),
-                           ICorDebugInfo::SOURCE_TYPE_INVALID, NewIR);
+                           ICorDebugInfo::SOURCE_TYPE_INVALID);
         }
 
         // If we are currently entering a handler, we must reset the evaluation
@@ -2044,12 +2040,8 @@ void ReaderBase::setupBlockForEH(IRNode **NewIR) {
         ReaderOperandStack->clearStack();
 
         // Make the exception object and push it onto the empty stack.
-        ExceptionObject = makeExceptionObject(NewIR);
-
-        // Passing NULL is okay here because the second argument is
-        //  only used to convert types. ExceptionObject is a reference (int64)
-        //  so it never needs a conversion.
-        ReaderOperandStack->push(ExceptionObject, NULL);
+        ExceptionObject = makeExceptionObject();
+        ReaderOperandStack->push(ExceptionObject);
         break;
 
       case ReaderBaseNS::RGN_Try:
@@ -2072,7 +2064,7 @@ void ReaderBase::fgFixRecursiveEdges(FlowGraphNode *HeadBlock) {
   bool HasFallThrough;
 
   HasFallThrough = false;
-  FallThroughBlock = NULL;
+  FallThroughBlock = nullptr;
 
   // As a special case, localloc is incompatible with the recursive
   // tail call optimization, and any branches that we initially set up
@@ -2084,7 +2076,7 @@ void ReaderBase::fgFixRecursiveEdges(FlowGraphNode *HeadBlock) {
     // For a tail.call, this involves changing to fall-through.
     // For a jmp, this involves changing to point at the exit label.
     BranchList *BranchList, *BranchListNext;
-    for (BranchList = fgGetLabelBranchList(entryLabel()); BranchList != NULL;
+    for (BranchList = fgGetLabelBranchList(entryLabel()); BranchList != nullptr;
          BranchList = BranchListNext) {
       BranchListNext = branchListGetNext(BranchList);
       BranchNode = branchListGetIRNode(BranchList);
@@ -2136,7 +2128,7 @@ FlowGraphNodeOffsetList *ReaderBase::fgAddNodeMSILOffset(
   uint32_t Index;
 
   // Check to see if we already have this offset
-  PreviousElement = NULL;
+  PreviousElement = nullptr;
 
   Index = TargetOffset / FLOW_GRAPH_NODE_LIST_ARRAY_STRIDE;
   Element = NodeOffsetListArray[Index];
@@ -2161,7 +2153,7 @@ FlowGraphNodeOffsetList *ReaderBase::fgAddNodeMSILOffset(
       (FlowGraphNodeOffsetList *)getTempMemory(sizeof(FlowGraphNodeOffsetList));
   NewElement->setOffset(TargetOffset);
 
-  if (*Node == NULL) {
+  if (*Node == nullptr) {
     *Node = makeFlowGraphNode(TargetOffset,
                               fgGetRegionFromMSILOffset(TargetOffset));
   }
@@ -2187,11 +2179,11 @@ void ReaderBase::fgDeleteBlockAndNodes(FlowGraphNode *Block) {
 
   fgDeleteNodesFromBlock(Block);
 
-  for (Arc = fgNodeGetSuccessorList(Block); Arc != NULL; Arc = ArcNext) {
+  for (Arc = fgNodeGetSuccessorList(Block); Arc != nullptr; Arc = ArcNext) {
     ArcNext = fgEdgeListGetNextSuccessor(Arc);
     fgDeleteEdge(Arc);
   }
-  for (Arc = fgNodeGetPredecessorList(Block); Arc != NULL; Arc = ArcNext) {
+  for (Arc = fgNodeGetPredecessorList(Block); Arc != nullptr; Arc = ArcNext) {
     ArcNext = fgEdgeListGetNextPredecessor(Arc);
     fgDeleteEdge(Arc);
   }
@@ -2236,7 +2228,7 @@ void ReaderBase::fgRemoveUnusedBlocks(FlowGraphNode *FgHead,
 // leave that doesn't point to this point, then it is nonLocal!
 uint32_t ReaderBase::fgGetRegionCanonicalExitOffset(EHRegion *Region) {
   uint32_t CanonicalOffset;
-  EHRegion *ChildRegion, *TryRegion = NULL, *ParentRegion;
+  EHRegion *ChildRegion, *TryRegion = nullptr, *ParentRegion;
   ReaderBaseNS::RegionKind RegionType;
 
   RegionType = rgnGetRegionType(Region);
@@ -2290,7 +2282,7 @@ uint32_t ReaderBase::fgGetRegionCanonicalExitOffset(EHRegion *Region) {
   // Going to a pool allocator is overkill because we only need the
   // memory for this short period of time, so go directly to malloc.
   // We arbitrarily pick 100 * 1024 as a threshold for this.
-  if (FgGetRegionCanonicalExitOffsetBuff != NULL) {
+  if (FgGetRegionCanonicalExitOffsetBuff != nullptr) {
     ASSERTNR(BufferSize >= 100 * 1024);
     Buffer = FgGetRegionCanonicalExitOffsetBuff;
   } else if (BufferSize < 100 * 1024) {
@@ -2299,7 +2291,7 @@ uint32_t ReaderBase::fgGetRegionCanonicalExitOffset(EHRegion *Region) {
     Buffer = (int *)getTempMemory(BufferSize);
 
     // Wups, out of memory!
-    if (Buffer == NULL) {
+    if (Buffer == nullptr) {
       fatal(CORJIT_OUTOFMEM);
     }
 
@@ -2460,8 +2452,8 @@ FlowGraphNode *ReaderBase::fgSplitBlock(FlowGraphNode *Block,
   // Set the EH region
   fgNodeSetRegion(NewBlock, fgGetRegionFromMSILOffset(CurrentOffset));
 
-  // Init operand stack to NULL.
-  fgNodeSetOperandStack(NewBlock, NULL);
+  // Init operand stack to nullptr.
+  fgNodeSetOperandStack(NewBlock, nullptr);
 
   // Return the new block
   return NewBlock;
@@ -2479,14 +2471,14 @@ ReaderBase::fgReplaceBranchTarget(uint32_t Offset,
                                   FlowGraphNode *StartBlock) {
   FlowGraphNode *Block, *NextBlock;
 
-  if (StartBlock == NULL) {
+  if (StartBlock == nullptr) {
     StartBlock = fgGetHeadBlock();
   }
 
   bool FoundTargetBlock = false;
 
   // Iterate over all blocks until block that contains the offset is found.
-  for (Block = StartBlock; Block != NULL; Block = NextBlock) {
+  for (Block = StartBlock; Block != nullptr; Block = NextBlock) {
 
     uint32_t Start, End;
 
@@ -2542,15 +2534,15 @@ int __cdecl labelSortFunction(const void *C1, const void *C2) {
 
 // Insert labels from label offset list into block stream, splitting
 // blocks if necessary.  The list is currently ordered.
-void ReaderBase::fgReplaceBranchTargets(void) {
+void ReaderBase::fgReplaceBranchTargets() {
   FlowGraphNodeOffsetList *List;
   FlowGraphNode *Block;
   uint32_t Index;
 
-  Block = NULL;
+  Block = nullptr;
 
   for (Index = 0; Index < NodeOffsetListArraySize; Index++) {
-    for (List = NodeOffsetListArray[Index]; List != NULL;
+    for (List = NodeOffsetListArray[Index]; List != nullptr;
          List = List->getNext()) {
       Block = fgReplaceBranchTarget(List->getOffset(), List->getNode(), Block);
     }
@@ -2579,7 +2571,8 @@ void ReaderBase::fgInsertBeginRegionExceptionNode(
   bool Found = false;
 
   // Find the block that this exception node should be placed into
-  for (Block = fgGetHeadBlock(); Block != NULL; Block = fgNodeGetNext(Block)) {
+  for (Block = fgGetHeadBlock(); Block != nullptr;
+       Block = fgNodeGetNext(Block)) {
     uint32_t Start = fgNodeGetStartMSILOffset(Block);
     uint32_t End = fgNodeGetEndMSILOffset(Block);
 
@@ -2648,7 +2641,8 @@ void ReaderBase::fgInsertEndRegionExceptionNode(
 
   irNodeExceptSetMSILOffset(Node, Offset);
 
-  for (Block = fgGetHeadBlock(); Block != NULL; Block = fgNodeGetNext(Block)) {
+  for (Block = fgGetHeadBlock(); Block != nullptr;
+       Block = fgNodeGetNext(Block)) {
     uint32_t Start = fgNodeGetStartMSILOffset(Block);
     uint32_t End = fgNodeGetEndMSILOffset(Block);
     IRNode *InsertionPointNode;
@@ -2707,7 +2701,7 @@ ReaderBase::fgEnsureEnclosingRegionBeginsWithLabel(IRNode *HandlerStartNode) {
       irNodeGetFirstLabelOrInstrNodeInEnclosingBlock(HandlerStartNode);
   ASSERTNR(HandlerLabelNode); // Assert that we found something
 
-  if (HandlerLabelNode == NULL) {
+  if (HandlerLabelNode == nullptr) {
     return;
   }
 
@@ -2823,7 +2817,7 @@ void ReaderBase::fgInsertEHAnnotations(EHRegion *Region) {
   }
 
   EHRegionList *ChildList;
-  for (ChildList = rgnGetChildList(Region); ChildList != NULL;
+  for (ChildList = rgnGetChildList(Region); ChildList != nullptr;
        ChildList = rgnListGetNext(ChildList)) {
     fgInsertEHAnnotations(rgnListGetRgn(ChildList));
   }
@@ -2888,7 +2882,7 @@ EHRegion *ReaderBase::fgGetRegionFromMSILOffset(uint32_t Offset) {
   // Search each child region for a match
   // TODO: traverse tree instead of list.
   for (RegionList = AllRegionList, CandidateRegion = EhRegionTree;
-       RegionList != NULL; RegionList = rgnListGetNext(RegionList)) {
+       RegionList != nullptr; RegionList = rgnListGetNext(RegionList)) {
     uint32_t StartOffset, EndOffset;
 
     Region = rgnListGetRgn(RegionList);
@@ -2958,7 +2952,7 @@ void ReaderBase::getMSILInstrStackDelta(ReaderBaseNS::OPCODE Opcode,
         resolveToken(Token, CORINFO_TOKENKIND_Method, &ResolvedToken);
         Handle = ResolvedToken.hMethod;
       } else
-        Handle = NULL;
+        Handle = nullptr;
 
       getCallSiteSignature(Handle, Token, &Sig, &HasThis);
       ReturnsVoid = (Sig.retType == CORINFO_TYPE_VOID);
@@ -3124,7 +3118,7 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
   PreviousWasPrefix = false;
   TokenConstrained = mdTokenNil;
   LoadFtnToken = false;
-  BranchesToVerify = NULL;
+  BranchesToVerify = nullptr;
   HasLocAlloc = false;
   NextOffset = CurrentOffset = 0;
 
@@ -3215,10 +3209,10 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
         }
       }
 
-      GraphNode = NULL;
+      GraphNode = nullptr;
       fgAddNodeMSILOffset(&GraphNode, TargetOffset);
 
-      ASSERTNR(GraphNode != NULL);
+      ASSERTNR(GraphNode != nullptr);
 
       // Make branch node
       BlockNode = fgNodeGetStartIRNode(Block);
@@ -3234,7 +3228,7 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
       // split the block
       fgNodeSetEndMSILOffset(Block, NextOffset);
 
-      Block = fgSplitBlock(Block, NextOffset, NULL);
+      Block = fgSplitBlock(Block, NextOffset, nullptr);
 
       // Reset flags
       IsConditional = false;
@@ -3252,7 +3246,7 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
 
       // Make the short-circuit target label
       BlockNode = fgNodeGetStartIRNode(Block);
-      GraphNode = NULL;
+      GraphNode = nullptr;
       CHECKTARGET(NextOffset, ILInputSize);
       fgAddNodeMSILOffset(&GraphNode, NextOffset);
 
@@ -3263,7 +3257,7 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
 
       // Create the block to hold the switch node.
       fgNodeSetEndMSILOffset(Block, NextOffset);
-      Block = fgSplitBlock(Block, NextOffset, NULL);
+      Block = fgSplitBlock(Block, NextOffset, nullptr);
 
       // Set up labels for each case.
       for (uint32_t I = 0; (uint32_t)I < NumCases; I++) {
@@ -3271,9 +3265,9 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
         TargetOffset = NextOffset + BranchOffset;
         CHECKTARGET(TargetOffset, ILInputSize);
 
-        GraphNode = NULL;
+        GraphNode = nullptr;
         fgAddNodeMSILOffset(&GraphNode, TargetOffset);
-        ASSERTNR(GraphNode != NULL);
+        ASSERTNR(GraphNode != nullptr);
         fgAddCaseToCaseListHelper(BranchNode, (IRNode *)GraphNode, I);
 
         // record a branch
@@ -3291,7 +3285,7 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
       irNodeSetRegion(BranchNode, fgNodeGetRegion(Block));
 
       fgNodeSetEndMSILOffset(Block, NextOffset);
-      Block = fgSplitBlock(Block, NextOffset, NULL);
+      Block = fgSplitBlock(Block, NextOffset, nullptr);
       break;
 
     case ReaderBaseNS::CEE_ENDFILTER:
@@ -3306,7 +3300,7 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
       Region = fgGetRegionFromMSILOffset(CurrentOffset);
 
       // note endfinally is same instruction as endfault
-      if (Region == NULL ||
+      if (Region == nullptr ||
           (rgnGetRegionType(Region) != ReaderBaseNS::RGN_Finally &&
            rgnGetRegionType(Region) != ReaderBaseNS::RGN_Fault)) {
         BADCODE(MVER_E_ENDFINALLY);
@@ -3380,7 +3374,7 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
       verifyReturnFlow(CurrentOffset);
       fgNodeSetEndMSILOffset(Block, NextOffset);
       if (NextOffset < ILInputSize) {
-        Block = makeFlowGraphNode(NextOffset, NULL);
+        Block = makeFlowGraphNode(NextOffset, nullptr);
       }
       break;
 
@@ -3636,7 +3630,7 @@ void ReaderBase::fgAttachGlobalVerifyData(FlowGraphNode *HeadBlock) {
     GvData->NetStack = Current;
     GvData->TOSTempsCount = NumTOSTemps;
     GvData->StkDepth = -1;
-    GvData->TiStack = NULL;
+    GvData->TiStack = nullptr;
     GvData->IsOnWorklist = false;
     GvData->Block = Block;
     GvData->ThisInitialized = ThisInit;
@@ -3712,7 +3706,7 @@ ReaderBase::fgBuildBasicBlocksFromBytes(uint8_t *Buffer, uint32_t BufferSize) {
     VerificationBranchInfo *BranchInfo = BranchesToVerify;
     while (BranchInfo) {
       VerInstrStartOffset = BranchInfo->SrcOffset;
-      verifyBranchTarget(NULL, irNodeGetEnclosingBlock(BranchInfo->BranchOp),
+      verifyBranchTarget(nullptr, irNodeGetEnclosingBlock(BranchInfo->BranchOp),
                          fgGetRegionFromMSILOffset(BranchInfo->SrcOffset),
                          BranchInfo->TargetOffset, BranchInfo->IsLeave);
       BranchInfo = BranchInfo->Next;
@@ -3757,8 +3751,7 @@ ReaderBase::fgBuildBasicBlocksFromBytes(uint8_t *Buffer, uint32_t BufferSize) {
 // the handle is *not* being passed to a helper call that will do the
 // restore for us. Field handles never need to be restored.
 IRNode *ReaderBase::genericTokenToNode(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                                       IRNode **NewIR, bool EmbedParent,
-                                       bool MustRestoreHandle,
+                                       bool EmbedParent, bool MustRestoreHandle,
                                        CORINFO_GENERIC_HANDLE *StaticHandle,
                                        bool *RuntimeLookup, bool NeedResult) {
   CORINFO_GENERICHANDLE_RESULT Result;
@@ -3770,10 +3763,10 @@ IRNode *ReaderBase::genericTokenToNode(CORINFO_RESOLVED_TOKEN *ResolvedToken,
     ReaderBase::fatal(CORJIT_INTERNALERROR);
   }
 
-  if (RuntimeLookup != NULL)
+  if (RuntimeLookup != nullptr)
     *RuntimeLookup = Result.lookup.lookupKind.needsRuntimeLookup;
 
-  if (StaticHandle != NULL)
+  if (StaticHandle != nullptr)
     *StaticHandle = Result.compileTimeHandle;
 
   if (MustRestoreHandle && !Result.lookup.lookupKind.needsRuntimeLookup) {
@@ -3802,25 +3795,25 @@ IRNode *ReaderBase::genericTokenToNode(CORINFO_RESOLVED_TOKEN *ResolvedToken,
   if (!Result.lookup.lookupKind.needsRuntimeLookup) {
     if (NeedResult) {
       if (Result.lookup.constLookup.accessType == IAT_VALUE) {
-        ASSERTNR(Result.lookup.constLookup.handle != NULL);
+        ASSERTNR(Result.lookup.constLookup.handle != nullptr);
         return handleToIRNode(
             ResolvedToken->token, Result.lookup.constLookup.handle,
-            Result.compileTimeHandle, false, false, true, false, NewIR);
+            Result.compileTimeHandle, false, false, true, false);
       } else {
         ASSERTNR(Result.lookup.constLookup.accessType == IAT_PVALUE);
         // TODO: Can we mark this as readonly for aliasing?
         return handleToIRNode(
             ResolvedToken->token, Result.lookup.constLookup.addr,
-            Result.compileTimeHandle, true, true, true, false, NewIR);
+            Result.compileTimeHandle, true, true, true, false);
       }
     } else
-      return NULL;
+      return nullptr;
   } else {
     // TODO: runtime lookup may be incompatible with inlining.
     // LLILC doesn't do any inlining yet...
 
     return runtimeLookupToNode(Result.lookup.lookupKind.runtimeLookupKind,
-                               &Result.lookup.runtimeLookup, NewIR);
+                               &Result.lookup.runtimeLookup);
   }
 }
 
@@ -3830,8 +3823,7 @@ IRNode *ReaderBase::genericTokenToNode(CORINFO_RESOLVED_TOKEN *ResolvedToken,
 // between instantiations and the token refers to formal type
 // parameters whose instantiation is not known at compile-time
 IRNode *ReaderBase::runtimeLookupToNode(CORINFO_RUNTIME_LOOKUP_KIND Kind,
-                                        CORINFO_RUNTIME_LOOKUP *Lookup,
-                                        IRNode **NewIR) {
+                                        CORINFO_RUNTIME_LOOKUP *Lookup) {
   // Collectible types needs the generics context when gc-ing. Keeping
   // it alive for the entire method if the generics context is
   // referenced is a conservative approach which should not have
@@ -3843,25 +3835,25 @@ IRNode *ReaderBase::runtimeLookupToNode(CORINFO_RUNTIME_LOOKUP_KIND Kind,
     IRNode *Arg1, *Arg2;
 
     Arg2 = handleToIRNode(mdtSignature, Lookup->signature, Lookup->signature,
-                          false, true, true, false, NewIR);
+                          false, true, true, false);
 
     // It requires the exact method desc argument
     if (Kind == CORINFO_LOOKUP_METHODPARAM) {
       // inst-param
-      Arg1 = instParam(NewIR);
+      Arg1 = instParam();
     } else {
       // It requires the vtable pointer
       if (Kind == CORINFO_LOOKUP_CLASSPARAM) {
         // use inst-param
-        Arg1 = instParam(NewIR);
+        Arg1 = instParam();
       } else {
         // use this ptr
         ASSERTNR(Kind == CORINFO_LOOKUP_THISOBJ);
-        Arg1 = derefAddress(thisObj(NewIR), false, false, NewIR);
+        Arg1 = derefAddress(thisObj(), false, false);
       }
     }
 
-    return callRuntimeHandleHelper(Lookup->helper, Arg1, Arg2, NULL, NewIR);
+    return callRuntimeHandleHelper(Lookup->helper, Arg1, Arg2, nullptr);
   }
 
   IRNode *VTableNode, *SlotPointerNode;
@@ -3869,17 +3861,20 @@ IRNode *ReaderBase::runtimeLookupToNode(CORINFO_RUNTIME_LOOKUP_KIND Kind,
   // Use the method descriptor that was passed in to get at
   // instantiation info
   if (Kind == CORINFO_LOOKUP_METHODPARAM) {
-    VTableNode = instParam(NewIR);
+    VTableNode = instParam();
   } else {
     if (Kind == CORINFO_LOOKUP_CLASSPARAM) {
       // Use the vtable pointer that was passed in
-      VTableNode = instParam(NewIR);
+      VTableNode = instParam();
     } else {
       // Use the vtable of "this" to get at instantiation info
       ASSERTNR(Kind == CORINFO_LOOKUP_THISOBJ);
-      VTableNode = derefAddress(thisObj(NewIR), false, false, NewIR);
+      VTableNode = derefAddress(thisObj(), false, false);
     }
   }
+
+  // VTableNode now points into the runtime data structures.
+  // Assume they are non-null when dereferencing into them below.
 
   if (!Lookup->testForNull) {
     // We only use VTableNode as the seed for SlotPointerNode
@@ -3887,7 +3882,7 @@ IRNode *ReaderBase::runtimeLookupToNode(CORINFO_RUNTIME_LOOKUP_KIND Kind,
   } else {
     // SlotPointerNode is used for the indirections
     // but VTableNode is passed to the call
-    dup(VTableNode, &SlotPointerNode, &VTableNode, NewIR);
+    dup(VTableNode, &SlotPointerNode, &VTableNode);
   }
 
   // Use the vtable of "this" to get at instantiation info
@@ -3895,12 +3890,11 @@ IRNode *ReaderBase::runtimeLookupToNode(CORINFO_RUNTIME_LOOKUP_KIND Kind,
   // Apply repeated indirections
   for (WORD I = 0; I < Lookup->indirections; I++) {
     if (I != 0) {
-      SlotPointerNode = derefAddress(SlotPointerNode, false, true, NewIR);
+      SlotPointerNode = derefAddressNonNull(SlotPointerNode, false, true);
     }
     if (Lookup->offsets[I] != 0) {
-      SlotPointerNode =
-          binaryOp(ReaderBaseNS::Add, SlotPointerNode,
-                   loadConstantI(Lookup->offsets[I], NewIR), NewIR);
+      SlotPointerNode = binaryOp(ReaderBaseNS::Add, SlotPointerNode,
+                                 loadConstantI(Lookup->offsets[I]));
     }
   }
 
@@ -3909,25 +3903,25 @@ IRNode *ReaderBase::runtimeLookupToNode(CORINFO_RUNTIME_LOOKUP_KIND Kind,
     if (Lookup->indirections == 0)
       return SlotPointerNode;
 
-    SlotPointerNode = derefAddress(SlotPointerNode, false, true, NewIR);
+    SlotPointerNode = derefAddressNonNull(SlotPointerNode, false, true);
     if (!Lookup->testForFixup)
       return SlotPointerNode;
 
-    return conditionalDerefAddress(SlotPointerNode, NewIR);
+    return conditionalDerefAddress(SlotPointerNode);
   }
 
   ASSERTNR(Lookup->indirections != 0);
 
   // Extract the type handle
-  IRNode *HandleNode = derefAddress(SlotPointerNode, false, true, NewIR);
+  IRNode *HandleNode = derefAddressNonNull(SlotPointerNode, false, true);
 
   IRNode *SignatureNode =
       handleToIRNode(mdtSignature, Lookup->signature, Lookup->signature, false,
-                     true, true, false, NewIR);
+                     true, true, false);
 
   // Call helper on null
   return callRuntimeHandleHelper(Lookup->helper, VTableNode, SignatureNode,
-                                 HandleNode, NewIR);
+                                 HandleNode);
 }
 
 CorInfoHelpFunc ReaderBase::getNewArrHelper(CORINFO_CLASS_HANDLE ElementType) {
@@ -3938,9 +3932,8 @@ CorInfoHelpFunc ReaderBase::getNewArrHelper(CORINFO_CLASS_HANDLE ElementType) {
 void ReaderBase::cpBlk(IRNode *Count,    // byte count
                        IRNode *SrcAddr,  // source address
                        IRNode *DestAddr, // dest address
-                       ReaderAlignType Alignment, bool IsVolatile,
-                       IRNode **NewIR) {
-  callHelper(CORINFO_HELP_MEMCPY, NULL, NewIR, DestAddr, SrcAddr, Count, NULL,
+                       ReaderAlignType Alignment, bool IsVolatile) {
+  callHelper(CORINFO_HELP_MEMCPY, nullptr, DestAddr, SrcAddr, Count, nullptr,
              Alignment, IsVolatile);
 }
 
@@ -3948,30 +3941,28 @@ void ReaderBase::cpBlk(IRNode *Count,    // byte count
 void ReaderBase::initBlk(IRNode *Count,    // byte count
                          IRNode *Value,    // Value
                          IRNode *DestAddr, // dest address
-                         ReaderAlignType Alignment, bool IsVolatile,
-                         IRNode **NewIR) {
-  callHelper(CORINFO_HELP_MEMSET, NULL, NewIR, DestAddr, Value, Count, NULL,
+                         ReaderAlignType Alignment, bool IsVolatile) {
+  callHelper(CORINFO_HELP_MEMSET, nullptr, DestAddr, Value, Count, nullptr,
              Alignment, IsVolatile);
 }
 
 void ReaderBase::initObj(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                         IRNode *ObjectAddr, IRNode **NewIR) {
+                         IRNode *ObjectAddr) {
   // GENERICS NOTE:
   //
   // This routine can take in a reference, in which case we need to
   // zero-init it as well.
   uint32_t Size = getClassSize(ResolvedToken->hClass);
-  IRNode *SizeNode = loadConstantI4(Size, NewIR);
-  IRNode *ValueNode = loadConstantI4(0, NewIR);
+  IRNode *SizeNode = loadConstantI4(Size);
+  IRNode *ValueNode = loadConstantI4(0);
 
   // Use init blk to initialize the object
-  initBlk(SizeNode, ValueNode, ObjectAddr, Reader_AlignUnknown, false, NewIR);
+  initBlk(SizeNode, ValueNode, ObjectAddr, Reader_AlignUnknown, false);
 }
 
 // Box - Default reader processing for CEE_BOX.
 IRNode *ReaderBase::box(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg2,
-                        IRNode **NewIR, uint32_t *NextOffset,
-                        VerificationState *VState) {
+                        uint32_t *NextOffset, VerificationState *VState) {
   IRNode *Dst, *Arg1;
   CORINFO_CLASS_HANDLE Class = ResolvedToken->hClass;
 
@@ -3979,20 +3970,20 @@ IRNode *ReaderBase::box(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg2,
     // Ensure that operand from operand stack has type that is
     // compatible with box destination, then get the (possibly
     // converted) operand's address.
-    Arg2 = convertToHelperArgumentType(Arg2, getClassSize(Class), NewIR);
+    Arg2 = convertToHelperArgumentType(Arg2, getClassSize(Class));
 
     // Use address of value here, this helps to prevent user-syms from
     // being aliased.
-    Arg2 = addressOfValue(Arg2, NewIR);
+    Arg2 = addressOfValue(Arg2);
 
     // Pointer operand to hold result of call to box.
     Dst = makePtrDstGCOperand(false);
 
     // The first arg for the helper is the class handle. Derive it
     // from the token.
-    Arg1 = genericTokenToNode(ResolvedToken, NewIR, true);
+    Arg1 = genericTokenToNode(ResolvedToken, true);
 
-    Dst = callHelper(getBoxHelper(Class), Dst, NewIR, Arg1, Arg2);
+    Dst = callHelper(getBoxHelper(Class), Dst, Arg1, Arg2);
 
     return Dst;
   } else {
@@ -4003,39 +3994,37 @@ IRNode *ReaderBase::box(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg2,
 
 // CastClass - Generate a simple helper call for the cast class.
 IRNode *ReaderBase::castClass(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                              IRNode *ObjRefNode, IRNode **NewIR) {
+                              IRNode *ObjRefNode) {
   CorInfoHelpFunc HelperId = JitInfo->getCastingHelper(ResolvedToken, true);
 
-  return castOp(ResolvedToken, ObjRefNode, NewIR, HelperId);
+  return castOp(ResolvedToken, ObjRefNode, HelperId);
 }
 
 // IsInst - Default reader processing of CEE_ISINST.
 IRNode *ReaderBase::isInst(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                           IRNode *ObjRefNode, IRNode **NewIR) {
+                           IRNode *ObjRefNode) {
   CorInfoHelpFunc HelperId = JitInfo->getCastingHelper(ResolvedToken, false);
 
-  return castOp(ResolvedToken, ObjRefNode, NewIR, HelperId);
+  return castOp(ResolvedToken, ObjRefNode, HelperId);
 }
 
 IRNode *ReaderBase::refAnyVal(IRNode *RefAny,
-                              CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                              IRNode **NewIR) {
+                              CORINFO_RESOLVED_TOKEN *ResolvedToken) {
   IRNode *Dst, *Arg1;
 
   // first argument is class handle
-  Arg1 = genericTokenToNode(ResolvedToken, NewIR);
+  Arg1 = genericTokenToNode(ResolvedToken);
 
   // Create Dst operand, interior gc ptr
   Dst = makePtrDstGCOperand(true);
 
   // Make the helper call
-  return callHelper(CORINFO_HELP_GETREFANY, Dst, NewIR, Arg1, RefAny);
+  return callHelper(CORINFO_HELP_GETREFANY, Dst, Arg1, RefAny);
 }
 
-void ReaderBase::storeElemRefAny(IRNode *Value, IRNode *Index, IRNode *Obj,
-                                 IRNode **NewIR) {
+void ReaderBase::storeElemRefAny(IRNode *Value, IRNode *Index, IRNode *Obj) {
   // Make the helper call
-  callHelper(CORINFO_HELP_ARRADDR_ST, NULL, NewIR, Obj, Index, Value);
+  callHelper(CORINFO_HELP_ARRADDR_ST, nullptr, Obj, Index, Value);
 }
 
 // StoreIndir - Creates an instruction to assign the value on
@@ -4043,7 +4032,7 @@ void ReaderBase::storeElemRefAny(IRNode *Value, IRNode *Index, IRNode *Obj,
 // 2nd from the top of the stack.
 void ReaderBase::storeIndir(ReaderBaseNS::StIndirOpcode Opcode, IRNode *Value,
                             IRNode *Address, ReaderAlignType Alignment,
-                            bool IsVolatile, IRNode **NewIR) {
+                            bool IsVolatile, bool AddressMayBeNull) {
   static const CorInfoType Map[ReaderBaseNS::LastStindOpcode] = {
       CORINFO_TYPE_BYTE,      // STIND_I1
       CORINFO_TYPE_SHORT,     // STIND_I2
@@ -4064,10 +4053,10 @@ void ReaderBase::storeIndir(ReaderBaseNS::StIndirOpcode Opcode, IRNode *Value,
     // Pass in null for CLASS_HANDLE and TOKEN.
     // And they are always naturally aligned, so ignore any other Alignment
     rdrCallWriteBarrierHelper(Address, Value, Reader_AlignNatural, IsVolatile,
-                              NewIR, NULL, true, false, false, false);
+                              nullptr, true, false, false, false);
   } else {
     storePrimitiveType(Value, Address, TheCorInfoType, Alignment, IsVolatile,
-                       NewIR);
+                       AddressMayBeNull);
   }
 }
 
@@ -4075,7 +4064,7 @@ void ReaderBase::storeIndir(ReaderBaseNS::StIndirOpcode Opcode, IRNode *Value,
 IRNode *ReaderBase::loadIndir(ReaderBaseNS::LdIndirOpcode Opcode,
                               IRNode *Address, ReaderAlignType Alignment,
                               bool IsVolatile, bool IsInterfReadOnly,
-                              IRNode **NewIR) {
+                              bool AddressMayBeNull) {
   static const CorInfoType Map[ReaderBaseNS::LastLdindOpcode] = {
       CORINFO_TYPE_BYTE,      // STIND_I1
       CORINFO_TYPE_UBYTE,     // STIND_U1
@@ -4095,13 +4084,14 @@ IRNode *ReaderBase::loadIndir(ReaderBaseNS::LdIndirOpcode Opcode,
   CorInfoType TheCorInfoType = Map[Opcode];
 
   return loadPrimitiveType(Address, TheCorInfoType, Alignment, IsVolatile,
-                           IsInterfReadOnly, NewIR);
+                           IsInterfReadOnly, AddressMayBeNull);
 }
 
 // StoreObj - default reader processing of CEE_STOBJ
 void ReaderBase::storeObj(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Value,
                           IRNode *Address, ReaderAlignType Alignment,
-                          bool IsVolatile, bool IsField, IRNode **NewIR) {
+                          bool IsVolatile, bool IsField,
+                          bool AddressMayBeNull) {
   CORINFO_CLASS_HANDLE Class;
   CorInfoType TheCorInfoType;
 
@@ -4115,14 +4105,14 @@ void ReaderBase::storeObj(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Value,
 
   if (!(getClassAttribs(Class) & CORINFO_FLG_VALUECLASS)) {
     storeIndir(ReaderBaseNS::StindRef, Value, Address, Alignment, IsVolatile,
-               NewIR);
+               AddressMayBeNull);
   } else if (isPrimitiveType(Class)) {
     storePrimitiveType(Value, Address, TheCorInfoType, Alignment, IsVolatile,
-                       NewIR);
+                       AddressMayBeNull);
   } else {
     // Get the minimum Alignment for the class
     Alignment = getMinimumClassAlignment(Class, Alignment);
-    rdrCallWriteBarrierHelper(Address, Value, Alignment, IsVolatile, NewIR,
+    rdrCallWriteBarrierHelper(Address, Value, Alignment, IsVolatile,
                               ResolvedToken, false, false, IsField, false);
   }
 }
@@ -4130,7 +4120,8 @@ void ReaderBase::storeObj(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Value,
 // LoadObj - default reader processing of CEE_LDOBJ
 IRNode *ReaderBase::loadObj(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                             IRNode *Address, ReaderAlignType Alignment,
-                            bool IsVolatile, bool IsField, IRNode **NewIR) {
+                            bool IsVolatile, bool IsField,
+                            bool AddressMayBeNull) {
   CORINFO_CLASS_HANDLE Class;
   CorInfoType TheCorInfoType;
 
@@ -4144,47 +4135,46 @@ IRNode *ReaderBase::loadObj(CORINFO_RESOLVED_TOKEN *ResolvedToken,
 
   if (!(getClassAttribs(Class) & CORINFO_FLG_VALUECLASS)) {
     return loadIndir(ReaderBaseNS::LdindRef, Address, Alignment, IsVolatile,
-                     false, NewIR);
+                     false, AddressMayBeNull);
   } else if (isPrimitiveType(TheCorInfoType)) {
     return loadPrimitiveType(Address, TheCorInfoType, Alignment, IsVolatile,
-                             false, NewIR);
+                             false, AddressMayBeNull);
   } else {
-    return loadNonPrimitiveObj(Address, Class, Alignment, IsVolatile, NewIR);
+    return loadNonPrimitiveObj(Address, Class, Alignment, IsVolatile,
+                               AddressMayBeNull);
   }
 }
 
 // CpObj - default reader processing of CEE_CPOBJ
 void ReaderBase::cpObj(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Src,
-                       IRNode *Dst, ReaderAlignType Alignment, bool IsVolatile,
-                       IRNode **NewIR) {
-  IRNode *Value =
-      loadObj(ResolvedToken, Src, Alignment, IsVolatile, false, NewIR);
-  storeObj(ResolvedToken, Value, Dst, Alignment, IsVolatile, false, NewIR);
+                       IRNode *Dst, ReaderAlignType Alignment,
+                       bool IsVolatile) {
+  IRNode *Value = loadObj(ResolvedToken, Src, Alignment, IsVolatile, false);
+  storeObj(ResolvedToken, Value, Dst, Alignment, IsVolatile, false);
 }
 
 // UnboxAny - Default reader processing for CEE_UNBOXANY.
 IRNode *ReaderBase::unboxAny(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg,
                              ReaderAlignType AlignmentPrefix,
-                             bool IsVolatilePrefix, IRNode **NewIR) {
+                             bool IsVolatilePrefix) {
   // GENERICS NOTE: New Instruction
   //   Value Types: unbox followed by ldobj
   //   Reference Types: castclass
   if (getClassAttribs(ResolvedToken->hClass) & CORINFO_FLG_VALUECLASS) {
-    return unbox(ResolvedToken, Arg, NewIR, true, AlignmentPrefix,
-                 IsVolatilePrefix);
+    return unbox(ResolvedToken, Arg, true, AlignmentPrefix, IsVolatilePrefix);
   } else {
-    return castClass(ResolvedToken, Arg, NewIR);
+    return castClass(ResolvedToken, Arg);
   }
 }
 
 // Break - Default reader processing for CEE_BREAK.
-void ReaderBase::breakOpcode(IRNode **NewIR) {
+void ReaderBase::breakOpcode() {
   // Make the helper call
-  callHelper(CORINFO_HELP_USER_BREAKPOINT, NULL, NewIR);
+  callHelper(CORINFO_HELP_USER_BREAKPOINT, nullptr);
 }
 
 // InsertClassConstructor - Insert a call to the class constructor helper.
-void ReaderBase::insertClassConstructor(IRNode **NewIR) {
+void ReaderBase::insertClassConstructor() {
   CORINFO_CLASS_HANDLE Class = getCurrentMethodClass();
   CORINFO_METHOD_HANDLE Method = getCurrentMethodHandle();
   mdToken MethodToken = mdtMethodDef;
@@ -4208,26 +4198,24 @@ void ReaderBase::insertClassConstructor(IRNode **NewIR) {
       Method = embedMethodHandle(Method, &IsIndirect);
       // TODO: Aliasing -- always readonly?
       MethodNode = handleToIRNode(MethodToken, Method, 0, IsIndirect,
-                                  IsIndirect, true, false, NewIR);
-      ClassNode = derefAddress(thisObj(NewIR), false, false, NewIR);
-      callHelper(CORINFO_HELP_INITINSTCLASS, NULL, NewIR, ClassNode,
-                 MethodNode);
+                                  IsIndirect, true, false);
+      ClassNode = derefAddress(thisObj(), false, false);
+      callHelper(CORINFO_HELP_INITINSTCLASS, nullptr, ClassNode, MethodNode);
       return;
     case CORINFO_LOOKUP_CLASSPARAM:
       // will only be returned when you are compiling code that takes
       // a hidden parameter P.  You should emit a call
       // CORINFO_HELP_INITCLASS(P)
-      ClassNode = instParam(NewIR);
-      callHelper(CORINFO_HELP_INITCLASS, NULL, NewIR, ClassNode);
+      ClassNode = instParam();
+      callHelper(CORINFO_HELP_INITCLASS, nullptr, ClassNode);
       return;
     case CORINFO_LOOKUP_METHODPARAM:
       // will only be returned when you are compiling code that takes
       // a hidden parameter P.  You should emit a call
-      // CORINFO_HELP_INITINSTCLASS(NULL, P)
-      MethodNode = instParam(NewIR);
-      ClassNode = loadConstantI8(0, NewIR);
-      callHelper(CORINFO_HELP_INITINSTCLASS, NULL, NewIR, ClassNode,
-                 MethodNode);
+      // CORINFO_HELP_INITINSTCLASS(nullptr, P)
+      MethodNode = instParam();
+      ClassNode = loadConstantI8(0);
+      callHelper(CORINFO_HELP_INITINSTCLASS, nullptr, ClassNode, MethodNode);
       return;
     default:
       ASSERTNR(!"NYI");
@@ -4246,12 +4234,11 @@ void ReaderBase::insertClassConstructor(IRNode **NewIR) {
       void *ClassHandle = embedClassHandle(Class, &IsIndirect);
 
       ClassNode = handleToIRNode(MethodToken, ClassHandle, Class, IsIndirect,
-                                 IsIndirect, true, false, NewIR);
+                                 IsIndirect, true, false);
 
-      callHelper(HelperId, NULL, NewIR, ClassNode);
+      callHelper(HelperId, nullptr, ClassNode);
     } else {
-      rdrCallGetStaticBase(Class, MethodToken, HelperId, false, false, NULL,
-                           NewIR);
+      rdrCallGetStaticBase(Class, MethodToken, HelperId, false, false, nullptr);
     }
   }
 }
@@ -4263,13 +4250,13 @@ void ReaderBase::insertClassConstructor(IRNode **NewIR) {
 // method also safely handles non-static methods and non-generic
 // static methods. The return value of the method is an IRNode that
 // can be passed to any of the locking methods.
-IRNode *ReaderBase::rdrGetCritSect(IRNode **NewIR) {
+IRNode *ReaderBase::rdrGetCritSect() {
   // For non-static methods, simply use the "This" pointer
   if ((getCurrentMethodAttribs() & CORINFO_FLG_STATIC) == 0) {
-    return thisObj(NewIR);
+    return thisObj();
   }
 
-  IRNode *HandleNode = NULL;
+  IRNode *HandleNode = nullptr;
 
   CORINFO_LOOKUP_KIND Kind =
       JitInfo->getLocationOfThisType(getCurrentMethodHandle());
@@ -4277,8 +4264,8 @@ IRNode *ReaderBase::rdrGetCritSect(IRNode **NewIR) {
   if (!Kind.needsRuntimeLookup) {
     bool IsIndirect = false;
     void *CritSect = getMethodSync(&IsIndirect);
-    HandleNode = handleToIRNode(mdtSyncHandle, CritSect, NULL, IsIndirect,
-                                IsIndirect, IsIndirect, false, NewIR);
+    HandleNode = handleToIRNode(mdtSyncHandle, CritSect, nullptr, IsIndirect,
+                                IsIndirect, IsIndirect, false);
   } else {
     // Collectible types needs the generics context when
     // gc-ing. Keeping it alive for the entire method if the generics
@@ -4292,15 +4279,15 @@ IRNode *ReaderBase::rdrGetCritSect(IRNode **NewIR) {
       break;
     case CORINFO_LOOKUP_CLASSPARAM:
       // In this case, the hidden param is the class handle.
-      HandleNode = instParam(NewIR);
+      HandleNode = instParam();
       break;
     case CORINFO_LOOKUP_METHODPARAM:
       // In this case, the hidden param is the method handle.
-      HandleNode = instParam(NewIR);
+      HandleNode = instParam();
       // Call helper CORINFO_HELP_GETCLASSFROMMETHODPARAM to get the
       // class handle from the method handle.
       HandleNode = callHelper(CORINFO_HELP_GETCLASSFROMMETHODPARAM,
-                              makePtrNode(), NewIR, HandleNode);
+                              makePtrNode(), HandleNode);
       break;
     default:
       ASSERTNR(!"Unknown LOOKUP_KIND");
@@ -4312,7 +4299,7 @@ IRNode *ReaderBase::rdrGetCritSect(IRNode **NewIR) {
 
     // Given the class handle, get the pointer to the Monitor.
     HandleNode = callHelper(CORINFO_HELP_GETSYNCFROMCLASSHANDLE, makePtrNode(),
-                            NewIR, HandleNode);
+                            HandleNode);
   }
 
   ASSERTNR(HandleNode);
@@ -4328,13 +4315,12 @@ IRNode *ReaderBase::rdrGetCritSect(IRNode **NewIR) {
 void ReaderBase::rdrCallFieldHelper(
     CORINFO_RESOLVED_TOKEN *ResolvedToken, CorInfoHelpFunc HelperId,
     bool IsLoad,
-    IRNode *Dst, // Dst node if this is a load, otherwise NULL
-    IRNode *Obj, IRNode *Value, ReaderAlignType Alignment, bool IsVolatile,
-    IRNode **NewIR) {
+    IRNode *Dst, // Dst node if this is a load, otherwise nullptr
+    IRNode *Obj, IRNode *Value, ReaderAlignType Alignment, bool IsVolatile) {
   IRNode *Arg1, *Arg2, *Arg3, *Arg4;
 
   if (IsLoad) {
-    ASSERTNR(Value == NULL);
+    ASSERTNR(Value == nullptr);
 
     if (HelperId == CORINFO_HELP_GETFIELDSTRUCT) {
       // For a GetFieldStruct, we want to create the following:
@@ -4345,38 +4331,38 @@ void ReaderBase::rdrCallFieldHelper(
       // What this means, is that the helper will *not* return the
       // value that we are interested in.  Instead, it will pass a
       // pointer to the return value as the first param.
-      Arg1 = addressOfLeaf(Dst, NewIR);
+      Arg1 = addressOfLeaf(Dst);
 
       // Arg 2
       Arg2 = Obj;
 
       // Arg 3 is the field handle.
-      Arg3 = genericTokenToNode(ResolvedToken, NewIR);
+      Arg3 = genericTokenToNode(ResolvedToken);
 
       // Arg 4 is the field type handle.
-      CORINFO_CLASS_HANDLE Class = NULL;
+      CORINFO_CLASS_HANDLE Class = nullptr;
       getFieldType(ResolvedToken->hField, &Class);
 
       bool IsIndirect;
       void *ClassHandle = embedClassHandle(Class, &IsIndirect);
 
       Arg4 = handleToIRNode(ResolvedToken->token, ClassHandle, Class,
-                            IsIndirect, IsIndirect, true, false, NewIR);
+                            IsIndirect, IsIndirect, true, false);
 
       // Make the helper call
-      callHelper(HelperId, NULL, NewIR, Arg1, Arg2, Arg3, Arg4, Alignment,
+      callHelper(HelperId, nullptr, Arg1, Arg2, Arg3, Arg4, Alignment,
                  IsVolatile);
     } else {
       // OTHER LOAD
 
       // Arg2 - the field handle.
-      Arg2 = genericTokenToNode(ResolvedToken, NewIR);
+      Arg2 = genericTokenToNode(ResolvedToken);
 
       // Arg1 - this pointer
       Arg1 = Obj;
 
       // Make the helper call
-      callHelper(HelperId, Dst, NewIR, Arg1, Arg2, NULL, NULL, Alignment,
+      callHelper(HelperId, Dst, Arg1, Arg2, nullptr, nullptr, Alignment,
                  IsVolatile);
     }
   } else {
@@ -4391,26 +4377,26 @@ void ReaderBase::rdrCallFieldHelper(
       // The idea here is that we must pass a *pointer* to the value
       // that we are setting, rather than the value itself.  Simple
       // enough... MSILAddressOf is your friend!
-      Arg4 = addressOfValue(Value, NewIR);
+      Arg4 = addressOfValue(Value);
 
       // The third argument is the field type handle.
-      CORINFO_CLASS_HANDLE Class = NULL;
+      CORINFO_CLASS_HANDLE Class = nullptr;
       getFieldType(ResolvedToken->hField, &Class);
 
       bool IsIndirect;
       void *ClassHandle = embedClassHandle(Class, &IsIndirect);
 
       Arg3 = handleToIRNode(ResolvedToken->token, ClassHandle, Class,
-                            IsIndirect, IsIndirect, true, false, NewIR);
+                            IsIndirect, IsIndirect, true, false);
 
       // The second argument to the helper is the field handle.
-      Arg2 = genericTokenToNode(ResolvedToken, NewIR);
+      Arg2 = genericTokenToNode(ResolvedToken);
 
       // The first argument to the helper is the this pointer.
       Arg1 = Obj;
 
       // Make the helper call
-      callHelper(HelperId, NULL, NewIR, Arg1, Arg2, Arg3, Arg4, Alignment,
+      callHelper(HelperId, nullptr, Arg1, Arg2, Arg3, Arg4, Alignment,
                  IsVolatile);
     } else {
       // assert that the helper id is expected
@@ -4425,13 +4411,13 @@ void ReaderBase::rdrCallFieldHelper(
       Arg3 = Value;
 
       // The second argument to the helper is the field handle.
-      Arg2 = genericTokenToNode(ResolvedToken, NewIR);
+      Arg2 = genericTokenToNode(ResolvedToken);
 
       // The first argument to the helper is the this pointer.
       Arg1 = Obj;
 
       // Make the helper call
-      callHelper(HelperId, NULL, NewIR, Arg1, Arg2, Arg3, NULL, Alignment,
+      callHelper(HelperId, nullptr, Arg1, Arg2, Arg3, nullptr, Alignment,
                  IsVolatile);
     }
   }
@@ -4459,7 +4445,7 @@ void ReaderBase::rdrCallFieldHelper(
 void ReaderBase::rdrCallWriteBarrierHelper(
     IRNode *Arg1, // addrDst
     IRNode *Arg2, // addrSrc
-    ReaderAlignType Alignment, bool IsVolatile, IRNode **NewIR,
+    ReaderAlignType Alignment, bool IsVolatile,
     CORINFO_RESOLVED_TOKEN *ResolvedToken, bool IsNotValueClass,
     bool IsValueIsPointer, bool IsFieldToken, bool IsUnchecked) {
   if (IsNotValueClass) {
@@ -4469,7 +4455,7 @@ void ReaderBase::rdrCallWriteBarrierHelper(
     // HCIMPL2(void, JIT_CheckedWriteBarrier, Object** dest, Object * value)
     callHelper(IsUnchecked ? CORINFO_HELP_ASSIGN_REF
                            : CORINFO_HELP_CHECKED_ASSIGN_REF,
-               NULL, NewIR, Arg1, Arg2, NULL, NULL, Alignment, IsVolatile);
+               nullptr, Arg1, Arg2, nullptr, nullptr, Alignment, IsVolatile);
   } else {
     // This is the case in which we will be copying a value class into
     // the field of this struct.  The runtime will need to be passed
@@ -4483,10 +4469,10 @@ void ReaderBase::rdrCallWriteBarrierHelper(
       // Do note that in this case we want a pointer to the source,
       // but we will actually have is the struct itself, therefore we
       // need to get its address.
-      Arg2 = (IRNode *)addressOfValue(Arg2, NewIR);
+      Arg2 = (IRNode *)addressOfValue(Arg2);
     }
 
-    CORINFO_CLASS_HANDLE Class = NULL;
+    CORINFO_CLASS_HANDLE Class = nullptr;
     if (IsFieldToken) {
       getFieldType(ResolvedToken->hField, &Class);
     } else {
@@ -4505,14 +4491,14 @@ void ReaderBase::rdrCallWriteBarrierHelper(
       void *ClassHandle = embedClassHandle(Class, &IsIndirect);
 
       Arg3 = handleToIRNode(ResolvedToken->token, ClassHandle, Class,
-                            IsIndirect, IsIndirect, true, false, NewIR);
+                            IsIndirect, IsIndirect, true, false);
 
-      callHelper(CORINFO_HELP_ASSIGN_STRUCT, NULL, NewIR, Arg1, Arg2, Arg3,
-                 NULL, Alignment, IsVolatile);
+      callHelper(CORINFO_HELP_ASSIGN_STRUCT, nullptr, Arg1, Arg2, Arg3, nullptr,
+                 Alignment, IsVolatile);
     } else {
       // If the class doesn't have a gc layout then use a memcopy
-      IRNode *Size = loadConstantI4(getClassSize(Class), NewIR);
-      callHelper(CORINFO_HELP_MEMCPY, NULL, NewIR, Arg1, Arg2, Size, NULL,
+      IRNode *Size = loadConstantI4(getClassSize(Class));
+      callHelper(CORINFO_HELP_MEMCPY, nullptr, Arg1, Arg2, Size, nullptr,
                  Alignment, IsVolatile);
     }
   }
@@ -4523,11 +4509,11 @@ void ReaderBase::rdrCallWriteBarrierHelper(
 // This is a variant of rdrCallWriteBarrierHelper where we are
 // returning a struct with gc pointers by value through a hidden
 // parameter.
-void
-ReaderBase::rdrCallWriteBarrierHelperForReturnValue(IRNode *Arg1, // addrDst
-                                                    IRNode *Arg2, // addrSrc
-                                                    IRNode **NewIR,
-                                                    mdToken Token) {
+void ReaderBase::rdrCallWriteBarrierHelperForReturnValue(
+    IRNode *Arg1, // addrDst
+    IRNode *Arg2, // addrSrc
+
+    mdToken Token) {
   IRNode *Arg3;
   bool IsIndirect;
 
@@ -4540,15 +4526,14 @@ ReaderBase::rdrCallWriteBarrierHelperForReturnValue(IRNode *Arg1, // addrDst
   // TODO: Note this handle is read-only for aliasing purposes?
   Arg3 =
       handleToIRNode(Token, ClassHandle, SignatureOfCurrentMethod.retTypeClass,
-                     IsIndirect, IsIndirect, true, false, NewIR);
-  callHelper(CORINFO_HELP_ASSIGN_STRUCT, NULL, NewIR, Arg1, Arg2, Arg3);
+                     IsIndirect, IsIndirect, true, false);
+  callHelper(CORINFO_HELP_ASSIGN_STRUCT, nullptr, Arg1, Arg2, Arg3);
 }
 
 IRNode *ReaderBase::rdrCallGetStaticBase(CORINFO_CLASS_HANDLE Class,
                                          mdToken Token,
                                          CorInfoHelpFunc HelperId, bool NoCtor,
-                                         bool CanMoveUp, IRNode *Dst,
-                                         IRNode **NewIR) {
+                                         bool CanMoveUp, IRNode *Dst) {
   bool IsIndirect, IsIndirect2;
 
   void *EmbedModuleDomainID =
@@ -4566,7 +4551,7 @@ IRNode *ReaderBase::rdrCallGetStaticBase(CORINFO_CLASS_HANDLE Class,
   IRNode *ModuleDomainIDNode =
       handleToIRNode(mdtModuleID, EmbedModuleDomainID,
                      (CORINFO_MODULE_HANDLE)((size_t)Class | 2), IsIndirect,
-                     IsIndirect, IsIndirect, false, NewIR);
+                     IsIndirect, IsIndirect, false);
   // Can't use the Class directly because we're not embedding a
   // handle to the class, but a handle to the ClassDomainID.  Since
   // handles are pointers in disguise, take advantage of them always
@@ -4575,33 +4560,32 @@ IRNode *ReaderBase::rdrCallGetStaticBase(CORINFO_CLASS_HANDLE Class,
   ASSERTNR(((size_t)Class & 1) == 0);
   IRNode *ClassDomainIDNode = handleToIRNode(
       Token, EmbedClassDomainID, (CORINFO_CLASS_HANDLE)((size_t)Class | 1),
-      IsIndirect2, IsIndirect2, IsIndirect2, false, NewIR);
+      IsIndirect2, IsIndirect2, IsIndirect2, false);
 
-  return callHelper(HelperId, Dst, NewIR, ModuleDomainIDNode, ClassDomainIDNode,
-                    NULL, NULL, Reader_AlignUnknown, false, NoCtor, CanMoveUp);
+  return callHelper(HelperId, Dst, ModuleDomainIDNode, ClassDomainIDNode,
+                    nullptr, nullptr, Reader_AlignUnknown, false, NoCtor,
+                    CanMoveUp);
 }
 
 IRNode *
 ReaderBase::rdrGetStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                                     CORINFO_FIELD_INFO *FieldInfo,
-                                     IRNode **NewIR) {
+                                     CORINFO_FIELD_INFO *FieldInfo) {
   IRNode *AddressNode;
 
   ASSERTNR(FieldInfo->fieldFlags & CORINFO_FLG_FIELD_STATIC);
 
-  handleMemberAccess(FieldInfo->accessAllowed, FieldInfo->accessCalloutHelper,
-                     NewIR);
+  handleMemberAccess(FieldInfo->accessAllowed, FieldInfo->accessCalloutHelper);
 
   switch (FieldInfo->fieldAccessor) {
   case CORINFO_FIELD_STATIC_TLS:
   case CORINFO_FIELD_STATIC_ADDR_HELPER: {
     // Need to generate a helper call to get the address.
     // The first argument to the helper is the field handle.
-    IRNode *FieldHandleNode = genericTokenToNode(ResolvedToken, NewIR);
+    IRNode *FieldHandleNode = genericTokenToNode(ResolvedToken);
     IRNode *PointerNode = makePtrDstGCOperand(true);
 
     // Now make the call and attach the arguments.
-    return callHelper(FieldInfo->helper, PointerNode, NewIR, FieldHandleNode);
+    return callHelper(FieldInfo->helper, PointerNode, FieldHandleNode);
   }
 
   case CORINFO_FIELD_STATIC_SHARED_STATIC_HELPER:
@@ -4613,8 +4597,7 @@ ReaderBase::rdrGetStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
 
     if (FieldInfo->fieldAccessor ==
         CORINFO_FIELD_STATIC_GENERICS_STATIC_HELPER) {
-      IRNode *ClassHandleNode =
-          genericTokenToNode(ResolvedToken, NewIR, true, false);
+      IRNode *ClassHandleNode = genericTokenToNode(ResolvedToken, true, false);
 
       // classHandle is not sufficient to uniquely identify the static base
       // when we are dealing with generics (as identified by the runtime
@@ -4625,8 +4608,7 @@ ReaderBase::rdrGetStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
       SharedStaticsBaseNode = makePtrNode(Reader_PtrGcInterior);
 
       // Now make the call and attach the arguments.
-      callHelper(FieldInfo->helper, SharedStaticsBaseNode, NewIR,
-                 ClassHandleNode);
+      callHelper(FieldInfo->helper, SharedStaticsBaseNode, ClassHandleNode);
     } else {
       CorInfoHelpFunc HelperId = FieldInfo->helper;
       CORINFO_CLASS_HANDLE Class = ResolvedToken->hClass;
@@ -4659,7 +4641,7 @@ ReaderBase::rdrGetStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
       SharedStaticsBaseNode = domInfoDominatorDefinesSharedStaticBase(
           CurrentFgNode, HelperId, Class, &NoCtor);
 
-      if (SharedStaticsBaseNode == NULL) {
+      if (SharedStaticsBaseNode == nullptr) {
         bool CanMoveUp = false;
 
         if (HelperId == CORINFO_HELP_GETSHARED_GCSTATIC_BASE ||
@@ -4700,9 +4682,9 @@ ReaderBase::rdrGetStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
         // to infer type for the call instruction.
         // Ideally, we should pass the type, which needs refactoring.
         // So, SharedStaticsBaseNode now becomes the defined instruction.
-        SharedStaticsBaseNode = rdrCallGetStaticBase(Class,
-           ResolvedToken->token, HelperId, NoCtor, CanMoveUp,
-           SharedStaticsBaseNode, NewIR);
+        SharedStaticsBaseNode =
+            rdrCallGetStaticBase(Class, ResolvedToken->token, HelperId, NoCtor,
+                                 CanMoveUp, SharedStaticsBaseNode);
 
         // Record (def) instruction that holds shared statics base
         domInfoRecordSharedStaticBaseDefine(CurrentFgNode, HelperId, Class,
@@ -4716,7 +4698,7 @@ ReaderBase::rdrGetStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
     // interior (even for an add of zero), so this add is necessary
     // for GC to work.
     AddressNode = binaryOp(ReaderBaseNS::Add, SharedStaticsBaseNode,
-                           loadConstantI(FieldInfo->offset, NewIR), NewIR);
+                           loadConstantI(FieldInfo->offset));
 
     // This occurs for a static value classes
     //
@@ -4731,9 +4713,9 @@ ReaderBase::rdrGetStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
       IRNode *BoxedAddressNode;
       const uint32_t Offset = getPointerByteSize();
 
-      BoxedAddressNode = derefAddress(AddressNode, true, true, NewIR);
-      AddressNode = binaryOp(ReaderBaseNS::Add, BoxedAddressNode,
-                             loadConstantI(Offset, NewIR), NewIR);
+      BoxedAddressNode = derefAddressNonNull(AddressNode, true, true);
+      AddressNode =
+          binaryOp(ReaderBaseNS::Add, BoxedAddressNode, loadConstantI(Offset));
     }
 
     return AddressNode;
@@ -4785,7 +4767,7 @@ ReaderBase::rdrGetStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
 
       // call the faster init class helper
       rdrCallGetStaticBase(Class, ResolvedToken->token, HelperId, NoCtor,
-                           CanMoveUp, NULL, NewIR);
+                           CanMoveUp, nullptr);
 
       // Record that this block initialized this class.
       domInfoRecordClassInit(CurrentFgNode, Class);
@@ -4798,7 +4780,7 @@ ReaderBase::rdrGetStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
   // Get the address of the field.
   bool IsIndirect;
   void *FieldAddress = getStaticFieldAddress(Field, &IsIndirect);
-  ASSERTNR(FieldAddress != NULL);
+  ASSERTNR(FieldAddress != nullptr);
 
 #if !defined(NODEBUG)
   CORINFO_CLASS_HANDLE Class;
@@ -4827,10 +4809,10 @@ ReaderBase::rdrGetStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
   // wants to associate a different value with the field handle.  So
   // we take advantage of the fact that handles are really pointers
   // and thus never odd.
-  ASSERTNR((CORINFO_FIELD_HANDLE)((size_t)Field & 1) == NULL);
+  ASSERTNR((CORINFO_FIELD_HANDLE)((size_t)Field & 1) == nullptr);
   AddressNode = handleToIRNode(ResolvedToken->token, FieldAddress,
                                (CORINFO_FIELD_HANDLE)((size_t)Field | 1),
-                               IsIndirect, IsIndirect, true, false, NewIR);
+                               IsIndirect, IsIndirect, true, false);
 
   // We can be have both IsIndirect and fBoxed This occurs for a static
   // value classes
@@ -4844,9 +4826,9 @@ ReaderBase::rdrGetStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
     // [FieldAddress]+sizeof(void*).
     IRNode *BoxedAddressNode;
     const uint32_t Offset = getPointerByteSize();
-    BoxedAddressNode = derefAddress(AddressNode, true, true, NewIR);
-    AddressNode = binaryOp(ReaderBaseNS::Add, BoxedAddressNode,
-                           loadConstantI(Offset, NewIR), NewIR);
+    BoxedAddressNode = derefAddressNonNull(AddressNode, true, true);
+    AddressNode =
+        binaryOp(ReaderBaseNS::Add, BoxedAddressNode, loadConstantI(Offset));
   }
 
   return AddressNode;
@@ -4855,13 +4837,12 @@ ReaderBase::rdrGetStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
 IRNode *ReaderBase::rdrGetFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                                        CORINFO_FIELD_INFO *FieldInfo,
                                        IRNode *Obj, bool BaseIsGCObj,
-                                       bool MustNullCheck, IRNode **NewIR) {
+                                       bool MustNullCheck) {
   if (FieldInfo->fieldFlags & CORINFO_FLG_FIELD_STATIC) {
-    return rdrGetStaticFieldAddress(ResolvedToken, FieldInfo, NewIR);
+    return rdrGetStaticFieldAddress(ResolvedToken, FieldInfo);
   }
 
-  handleMemberAccess(FieldInfo->accessAllowed, FieldInfo->accessCalloutHelper,
-                     NewIR);
+  handleMemberAccess(FieldInfo->accessAllowed, FieldInfo->accessCalloutHelper);
 
   if (FieldInfo->fieldAccessor != CORINFO_FIELD_INSTANCE) {
     // Need to generate a helper call to get the address.
@@ -4871,7 +4852,7 @@ IRNode *ReaderBase::rdrGetFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
     Arg1 = Obj;
 
     // The second argument to the helper is the field handle.
-    Arg2 = genericTokenToNode(ResolvedToken, NewIR);
+    Arg2 = genericTokenToNode(ResolvedToken);
 
     // Get the func. descr.
     if (BaseIsGCObj) {
@@ -4880,7 +4861,7 @@ IRNode *ReaderBase::rdrGetFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
       Dst = makePtrNode();
     }
 
-    return callHelper(FieldInfo->helper, Dst, NewIR, Arg1, Arg2);
+    return callHelper(FieldInfo->helper, Dst, Arg1, Arg2);
   } else {
     // Get the offset, add it to the this pointer to calculate the
     // actual address of the field.
@@ -4890,37 +4871,36 @@ IRNode *ReaderBase::rdrGetFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
     //  then we need to insert an explicit null check on the object pointer.
     if (MustNullCheck ||
         (FieldOffset >= MAX_UNCHECKED_OFFSET_FOR_NULL_OBJECT)) {
-      Obj = genNullCheck(Obj, NewIR);
+      Obj = genNullCheck(Obj);
     }
 
-    IRNode *Address = simpleFieldAddress(Obj, ResolvedToken, FieldInfo, NewIR);
+    IRNode *Address = simpleFieldAddress(Obj, ResolvedToken, FieldInfo);
 
     return Address;
   }
 }
 
-IRNode *ReaderBase::loadToken(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                              IRNode **NewIR) {
+IRNode *ReaderBase::loadToken(CORINFO_RESOLVED_TOKEN *ResolvedToken) {
   CORINFO_GENERIC_HANDLE CompileTimeHandleValue = 0;
   bool RequiresRuntimeLookup = true;
   IRNode *GetTokenNumericNode =
-      genericTokenToNode(ResolvedToken, NewIR, false, true,
-                         &CompileTimeHandleValue, &RequiresRuntimeLookup);
+      genericTokenToNode(ResolvedToken, false, true, &CompileTimeHandleValue,
+                         &RequiresRuntimeLookup);
   IRNode *LdtokenNode;
   CORINFO_CLASS_HANDLE TokenType;
 
   CorInfoHelpFunc Helper = CORINFO_HELP_UNDEF;
   TokenType = JitInfo->getTokenTypeAsHandle(ResolvedToken);
 
-  if (ResolvedToken->hMethod != NULL) {
+  if (ResolvedToken->hMethod != nullptr) {
     Helper = CORINFO_HELP_METHODDESC_TO_STUBRUNTIMEMETHOD;
-  } else if (ResolvedToken->hField != NULL) {
+  } else if (ResolvedToken->hField != nullptr) {
     Helper = CORINFO_HELP_FIELDDESC_TO_STUBRUNTIMEFIELD;
   } else {
     Helper = CORINFO_HELP_TYPEHANDLE_TO_RUNTIMETYPE;
   }
 
-  LdtokenNode = convertHandle(GetTokenNumericNode, Helper, TokenType, NewIR);
+  LdtokenNode = convertHandle(GetTokenNumericNode, Helper, TokenType);
 
   if (Helper == CORINFO_HELP_TYPEHANDLE_TO_RUNTIMETYPE) {
     bool CanCompareToGetType = false;
@@ -4931,7 +4911,7 @@ IRNode *ReaderBase::loadToken(CORINFO_RESOLVED_TOKEN *ResolvedToken,
       CanCompareToGetType = true;
     }
 
-    convertTypeHandleLookupHelperToIntrinsic(CanCompareToGetType, *NewIR);
+    convertTypeHandleLookupHelperToIntrinsic(CanCompareToGetType);
   }
 
   return LdtokenNode;
@@ -4949,7 +4929,7 @@ void ReaderBase::getCallSiteSignature(CORINFO_METHOD_HANDLE Method,
                                       bool *HasThis,
                                       CORINFO_CONTEXT_HANDLE Context,
                                       CORINFO_MODULE_HANDLE Scope) {
-  CORINFO_CLASS_HANDLE ActualMethodRetTypeSigClass = NULL;
+  CORINFO_CLASS_HANDLE ActualMethodRetTypeSigClass = nullptr;
 
   // See if we have been given a method token or a signature token.
   if (Method) {
@@ -4975,7 +4955,7 @@ void ReaderBase::getCallSiteSignature(CORINFO_METHOD_HANDLE Method,
   // any value type return values that we have (including enums).
   CorInfoType CorType = Sig->retType;
   if (CorType != CORINFO_TYPE_CLASS && CorType != CORINFO_TYPE_BYREF &&
-      CorType != CORINFO_TYPE_PTR && Sig->retTypeSigClass != NULL) {
+      CorType != CORINFO_TYPE_PTR && Sig->retTypeSigClass != nullptr) {
     // Ensure that the class is restored
     JitInfo->classMustBeLoadedBeforeCodeIsRun(Sig->retTypeSigClass);
 
@@ -4984,7 +4964,7 @@ void ReaderBase::getCallSiteSignature(CORINFO_METHOD_HANDLE Method,
     // specified in the vararg signature. With type equivalency, these types
     // may not be the same.
     if ((ActualMethodRetTypeSigClass != Sig->retTypeSigClass) &&
-        (ActualMethodRetTypeSigClass != NULL)) {
+        (ActualMethodRetTypeSigClass != nullptr)) {
       JitInfo->classMustBeLoadedBeforeCodeIsRun(ActualMethodRetTypeSigClass);
     }
   }
@@ -5034,8 +5014,7 @@ void ReaderBase::getCallSiteSignature(CORINFO_METHOD_HANDLE Method,
 // conditions are not true then LoadFtnToken will be mdTokenNil
 IRNode *
 ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
-                    IRNode **CallNode, // out param is defined by GenCall
-                    IRNode **NewIR) {
+                    IRNode **CallNode) { // out param is defined by GenCall
   IRNode *ReturnNode;
   CallArgTriple *ArgArray;
   uint32_t NumArgs;
@@ -5074,7 +5053,7 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
     Data->CallTargetNode = ReaderOperandStack->pop();
   } else {
     handleMemberAccess(Data->getCallInfo()->accessAllowed,
-                       Data->getCallInfo()->callsiteCalloutHelper, NewIR);
+                       Data->getCallInfo()->callsiteCalloutHelper);
 
     // If the current method calls a method which needs a security
     // check, we need to reserve a slot for the security object in
@@ -5101,20 +5080,20 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
         IRNode *IntrinsicArg1, *IntrinsicArg2, *IntrinsicArg3, *IntrinsicRet;
 
         Data->CorIntrinsicId = IntrinsicID;
-        IntrinsicRet = NULL;
+        IntrinsicRet = nullptr;
         switch (IntrinsicID) {
         case CORINFO_INTRINSIC_Array_GetDimLength:
           IntrinsicArg1 = (IRNode *)ReaderOperandStack->pop();
           IntrinsicArg2 = (IRNode *)ReaderOperandStack->pop();
 
           IntrinsicRet = arrayGetDimLength(IntrinsicArg1, IntrinsicArg2,
-                                           Data->getCallInfo(), NewIR);
+                                           Data->getCallInfo());
           if (IntrinsicRet) {
             return IntrinsicRet;
           }
 
-          ReaderOperandStack->push(IntrinsicArg2, NewIR);
-          ReaderOperandStack->push(IntrinsicArg1, NewIR);
+          ReaderOperandStack->push(IntrinsicArg2);
+          ReaderOperandStack->push(IntrinsicArg1);
           CallCanSideEffect = false;
           break;
 
@@ -5126,26 +5105,26 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
         case CORINFO_INTRINSIC_Sqrt:
           IntrinsicArg1 = (IRNode *)ReaderOperandStack->pop();
 
-          if (sqrt(IntrinsicArg1, &IntrinsicRet, NewIR))
+          if (sqrt(IntrinsicArg1, &IntrinsicRet))
             return IntrinsicRet;
 
-          ReaderOperandStack->push(IntrinsicArg1, NewIR);
+          ReaderOperandStack->push(IntrinsicArg1);
           break;
 
         case CORINFO_INTRINSIC_InterlockedXAdd32:
         case CORINFO_INTRINSIC_InterlockedXAdd64:
         case CORINFO_INTRINSIC_InterlockedXchg32:
         case CORINFO_INTRINSIC_InterlockedXchg64: {
-          IRNode *CallTargetNode = NULL;
+          IRNode *CallTargetNode = nullptr;
           IntrinsicArg2 = (IRNode *)ReaderOperandStack->pop();
           IntrinsicArg1 = (IRNode *)ReaderOperandStack->pop();
 
           if (interlockedIntrinsicBinOp(IntrinsicArg1, IntrinsicArg2,
-                                        &IntrinsicRet, IntrinsicID, NewIR))
+                                        &IntrinsicRet, IntrinsicID))
             return IntrinsicRet;
 
-          ReaderOperandStack->push(IntrinsicArg1, NewIR);
-          ReaderOperandStack->push(IntrinsicArg2, NewIR);
+          ReaderOperandStack->push(IntrinsicArg1);
+          ReaderOperandStack->push(IntrinsicArg2);
           CallCanSideEffect = true;
           break;
         }
@@ -5157,17 +5136,17 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
           IntrinsicArg1 = (IRNode *)ReaderOperandStack->pop();
 
           if (interlockedCmpXchg(IntrinsicArg1, IntrinsicArg2, IntrinsicArg3,
-                                 &IntrinsicRet, IntrinsicID, NewIR))
+                                 &IntrinsicRet, IntrinsicID))
             return IntrinsicRet;
 
-          ReaderOperandStack->push(IntrinsicArg1, NewIR);
-          ReaderOperandStack->push(IntrinsicArg2, NewIR);
-          ReaderOperandStack->push(IntrinsicArg3, NewIR);
+          ReaderOperandStack->push(IntrinsicArg1);
+          ReaderOperandStack->push(IntrinsicArg2);
+          ReaderOperandStack->push(IntrinsicArg3);
           CallCanSideEffect = true;
           break;
 
         case CORINFO_INTRINSIC_MemoryBarrier:
-          if (memoryBarrier(NewIR))
+          if (memoryBarrier())
             return IntrinsicRet;
 
           CallCanSideEffect = true;
@@ -5176,27 +5155,27 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
         case CORINFO_INTRINSIC_Abs:
           IntrinsicArg1 = (IRNode *)ReaderOperandStack->pop();
 
-          if (abs(IntrinsicArg1, &IntrinsicRet, NewIR))
+          if (abs(IntrinsicArg1, &IntrinsicRet))
             return IntrinsicRet;
 
-          ReaderOperandStack->push(IntrinsicArg1, NewIR);
+          ReaderOperandStack->push(IntrinsicArg1);
           break;
 
         case CORINFO_INTRINSIC_Array_Get:
-          if (arrayGet(Data->getSigInfo(), &IntrinsicRet, NewIR)) {
+          if (arrayGet(Data->getSigInfo(), &IntrinsicRet)) {
             return IntrinsicRet;
           }
           break;
 
         case CORINFO_INTRINSIC_Array_Address:
-          if (arrayAddress(Data->getSigInfo(), &IntrinsicRet, NewIR)) {
+          if (arrayAddress(Data->getSigInfo(), &IntrinsicRet)) {
             return IntrinsicRet;
           }
           break;
 
         case CORINFO_INTRINSIC_Array_Set:
-          if (arraySet(Data->getSigInfo(), NewIR)) {
-            return NULL;
+          if (arraySet(Data->getSigInfo())) {
+            return nullptr;
           }
           break;
 
@@ -5206,12 +5185,12 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
         case CORINFO_INTRINSIC_StringLength:
           IntrinsicArg1 = (IRNode *)ReaderOperandStack->pop();
 
-          IntrinsicRet = loadStringLen(IntrinsicArg1, NewIR);
+          IntrinsicRet = loadStringLen(IntrinsicArg1);
           if (IntrinsicRet) {
             return IntrinsicRet;
           }
 
-          ReaderOperandStack->push(IntrinsicArg1, NewIR);
+          ReaderOperandStack->push(IntrinsicArg1);
           CallCanSideEffect = false;
           break;
 
@@ -5219,13 +5198,13 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
           IntrinsicArg2 = (IRNode *)ReaderOperandStack->pop();
           IntrinsicArg1 = (IRNode *)ReaderOperandStack->pop();
 
-          IntrinsicRet = stringGetChar(IntrinsicArg1, IntrinsicArg2, NewIR);
+          IntrinsicRet = stringGetChar(IntrinsicArg1, IntrinsicArg2);
           if (IntrinsicRet) {
             return IntrinsicRet;
           }
 
-          ReaderOperandStack->push(IntrinsicArg1, NewIR);
-          ReaderOperandStack->push(IntrinsicArg2, NewIR);
+          ReaderOperandStack->push(IntrinsicArg1);
+          ReaderOperandStack->push(IntrinsicArg2);
           CallCanSideEffect = true;
           break;
 
@@ -5236,25 +5215,25 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
 
         case CORINFO_INTRINSIC_GetTypeFromHandle:
           IntrinsicArg1 = (IRNode *)ReaderOperandStack->pop();
-          IntrinsicRet = getTypeFromHandle(IntrinsicArg1, NewIR);
+          IntrinsicRet = getTypeFromHandle(IntrinsicArg1);
 
           if (IntrinsicRet) {
             return IntrinsicRet;
           }
 
-          ReaderOperandStack->push(IntrinsicArg1, NewIR);
+          ReaderOperandStack->push(IntrinsicArg1);
           CallCanSideEffect = false;
           break;
 
         case CORINFO_INTRINSIC_RTH_GetValueInternal:
           IntrinsicArg1 = (IRNode *)ReaderOperandStack->pop();
-          IntrinsicRet = getValueFromRuntimeHandle(IntrinsicArg1, NewIR);
+          IntrinsicRet = getValueFromRuntimeHandle(IntrinsicArg1);
 
           if (IntrinsicRet) {
             return IntrinsicRet;
           }
 
-          ReaderOperandStack->push(IntrinsicArg1, NewIR);
+          ReaderOperandStack->push(IntrinsicArg1);
           CallCanSideEffect = false;
           break;
 
@@ -5262,7 +5241,7 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
           break;
 
         case CORINFO_INTRINSIC_StubHelpers_GetStubContext:
-          IntrinsicRet = secretParam(NewIR);
+          IntrinsicRet = secretParam();
           if (IntrinsicRet) {
             return IntrinsicRet;
           }
@@ -5270,8 +5249,8 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
 
 #ifdef _WIN64
         case CORINFO_INTRINSIC_StubHelpers_GetStubContextAddr:
-          IntrinsicRet = secretParam(NewIR);
-          IntrinsicRet = addressOfLeaf(IntrinsicRet, NewIR);
+          IntrinsicRet = secretParam();
+          IntrinsicRet = addressOfLeaf(IntrinsicRet);
           if (IntrinsicRet) {
             return IntrinsicRet;
           }
@@ -5310,11 +5289,11 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
             CORINFO_METHOD_HANDLE CalleeMethod = TargetMethod;
             mdToken TargetMethodToken = Data->getMethodToken();
             rdrInsertCalloutForDelegate(DelegateType, CalleeMethod,
-                                        TargetMethodToken, NewIR);
+                                        TargetMethodToken);
           }
 #endif // FEATURE_CORECLR
 
-          CORINFO_METHOD_HANDLE AlternateCtor = NULL;
+          CORINFO_METHOD_HANDLE AlternateCtor = nullptr;
 
           DelegateCtorArgs *CtorData =
               (DelegateCtorArgs *)getTempMemory(sizeof(DelegateCtorArgs));
@@ -5335,20 +5314,20 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
 
             // Add the additional Args (if any)
             if (CtorData->pArg3) {
-              ArgIR = handleToIRNode(TargetMethodToken, CtorData->pArg3,
-                                     CtorData->pArg3, false, false, true, false,
-                                     NewIR);
-              ReaderOperandStack->push(ArgIR, NewIR);
+              ArgIR =
+                  handleToIRNode(TargetMethodToken, CtorData->pArg3,
+                                 CtorData->pArg3, false, false, true, false);
+              ReaderOperandStack->push(ArgIR);
               if (CtorData->pArg4) {
-                ArgIR = handleToIRNode(TargetMethodToken, CtorData->pArg4,
-                                       CtorData->pArg4, false, false, true,
-                                       false, NewIR);
-                ReaderOperandStack->push(ArgIR, NewIR);
+                ArgIR =
+                    handleToIRNode(TargetMethodToken, CtorData->pArg4,
+                                   CtorData->pArg4, false, false, true, false);
+                ReaderOperandStack->push(ArgIR);
                 if (CtorData->pArg5) {
                   ArgIR = handleToIRNode(TargetMethodToken, CtorData->pArg5,
                                          CtorData->pArg5, false, false, true,
-                                         false, NewIR);
-                  ReaderOperandStack->push(ArgIR, NewIR);
+                                         false);
+                  ReaderOperandStack->push(ArgIR);
                 }
               }
             }
@@ -5387,7 +5366,7 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
   // the Data is stored with opposite orderings.
 
   // First populate ArgType, argClass fields.
-  ArgArray = NULL;
+  ArgArray = nullptr;
 
   if ((HasThis + NumArgs) > 0) {
     CORINFO_ARG_LIST_HANDLE Args;
@@ -5406,7 +5385,7 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
     if (HasThis) {
       ArgArray[Index].ArgType = CORINFO_TYPE_BYREF;
       ArgArray[Index].ArgClass = Data->getClassHandle();
-      if (Data->getMethodHandle() != NULL) {
+      if (Data->getMethodHandle() != nullptr) {
         if ((Data->getClassAttribs() & CORINFO_FLG_VALUECLASS) == 0) {
           ArgArray[Index].ArgType = CORINFO_TYPE_CLASS;
         }
@@ -5426,7 +5405,7 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
       } else if (CorType == CORINFO_TYPE_REFANY) {
         Class = JitInfo->getBuiltinClass(CLASSID_TYPED_BYREF);
       } else {
-        Class = NULL;
+        Class = nullptr;
       }
 
 #ifndef CC_PEVERIFY
@@ -5460,10 +5439,9 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
       if (Opcode == ReaderBaseNS::NewObj) {
         // First argument to newobj has complete type info, but no argument
         // node.
-        ArgArray[0].ArgNode = NULL;
+        ArgArray[0].ArgNode = nullptr;
       } else {
-        ArgArray[0].ArgNode =
-            Data->applyThisTransform(ArgArray[0].ArgNode, NewIR);
+        ArgArray[0].ArgNode = Data->applyThisTransform(ArgArray[0].ArgNode);
       }
     }
   }
@@ -5478,17 +5456,17 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
   //        incremented after all uses of the induction variable.
 
   if (CallCanSideEffect) {
-    removeStackInterference(NewIR);
+    removeStackInterference();
   }
 
   // Get the call target
   if (ReaderBaseNS::Calli != Opcode) {
-    rdrMakeCallTargetNode(Data, ArgArray != NULL ? &ArgArray[0].ArgNode : NULL,
-                          NewIR);
+    rdrMakeCallTargetNode(Data,
+                          ArgArray != nullptr ? &ArgArray[0].ArgNode : nullptr);
   }
 
   // Ask GenIR to emit call, returns a ReturnNode.
-  ReturnNode = genCall(Data, ArgArray, NumArgs + HasThis, CallNode, NewIR);
+  ReturnNode = genCall(Data, ArgArray, NumArgs + HasThis, CallNode);
   return ReturnNode;
 }
 
@@ -5503,57 +5481,70 @@ bool ReaderBase::rdrCallIsDelegateInvoke(ReaderCallTargetData *CallTargetData) {
 }
 
 void ReaderBase::rdrMakeCallTargetNode(ReaderCallTargetData *CallTargetData,
-                                       IRNode **ThisPtr, IRNode **NewIR) {
+                                       IRNode **ThisPtr) {
   CORINFO_CALL_INFO *CallInfo = CallTargetData->getCallInfo();
   ASSERTNR(CallInfo);
   IRNode *Target;
 
-  if (CallInfo == NULL) {
+  if (CallInfo == nullptr) {
     return;
   }
 
   // Check for Delegate Invoke optimization
   if (rdrCallIsDelegateInvoke(CallTargetData)) {
     CallTargetData->CallTargetNode =
-        rdrGetDelegateInvokeTarget(CallTargetData, ThisPtr, NewIR);
+        rdrGetDelegateInvokeTarget(CallTargetData, ThisPtr);
     return;
   }
 
+  // Insert the code sequence to load a pointer to the target function.
+  // If that sequence involves dereferencing the current method's instance
+  // parameter (e.g. to find dynamic type parameter information for shared
+  // generic code) or the target method's instance argument (e.g. to look up
+  // its VTable), the sequence  generated here will include that dereference
+  // and any null checks necessary for it.
+  // Additionally, the NeedsNullCheck flag will be set if the ensuing call
+  // sequence needs to explicitly null-check the target method's instance
+  // argument (e.g. because the callvirt opcode was used to call a non-virtual
+  // method).  The NeedsNullCheck flag will not be set if the sequence
+  // generated here already dereferences (and therefore null-checks) the target
+  // method's instance argument (e.g. if callvirt was used but the method is
+  // virtual and lookup is performed via the target's VTable).
   switch (CallInfo->kind) {
   case CORINFO_CALL:
     // Direct Call
     CallTargetData->NeedsNullCheck = CallInfo->nullInstanceCheck == TRUE;
-    Target = rdrGetDirectCallTarget(CallTargetData, NewIR);
+    Target = rdrGetDirectCallTarget(CallTargetData);
     break;
   case CORINFO_CALL_CODE_POINTER:
     // Runtime lookup required (code sharing w/o using inst param)
     CallTargetData->NeedsNullCheck = CallInfo->nullInstanceCheck == TRUE;
-    Target = rdrGetCodePointerLookupCallTarget(CallTargetData, NewIR);
+    Target = rdrGetCodePointerLookupCallTarget(CallTargetData);
     break;
   case CORINFO_VIRTUALCALL_STUB:
     // Virtual Call via virtual dispatch stub
     CallTargetData->NeedsNullCheck = true;
-    Target = rdrGetVirtualStubCallTarget(CallTargetData, NewIR);
+    Target = rdrGetVirtualStubCallTarget(CallTargetData);
     break;
   case CORINFO_VIRTUALCALL_LDVIRTFTN:
     // Virtual Call via indirect virtual call
-    Target = rdrGetIndirectVirtualCallTarget(CallTargetData, ThisPtr, NewIR);
+    Target = rdrGetIndirectVirtualCallTarget(CallTargetData, ThisPtr);
     break;
   case CORINFO_VIRTUALCALL_VTABLE:
     // Virtual call via table lookup (vtable)
-    Target = rdrGetVirtualTableCallTarget(CallTargetData, ThisPtr, NewIR);
+    Target = rdrGetVirtualTableCallTarget(CallTargetData, ThisPtr);
     break;
   default:
     ASSERTMNR(UNREACHED, "Unexpected call kind");
-    Target = NULL;
+    Target = nullptr;
   }
 
   CallTargetData->CallTargetNode = Target;
 }
 
-IRNode *ReaderBase::rdrMakeLdFtnTargetNode(
-    CORINFO_RESOLVED_TOKEN *ResolvedToken, CORINFO_CALL_INFO *CallInfo,
-    IRNode **NewIR) {
+IRNode *
+ReaderBase::rdrMakeLdFtnTargetNode(CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                                   CORINFO_CALL_INFO *CallInfo) {
   bool Unused = false;
 
   switch (CallInfo->kind) {
@@ -5561,24 +5552,23 @@ IRNode *ReaderBase::rdrMakeLdFtnTargetNode(
     // Direct Call
     return rdrGetDirectCallTarget(CallInfo->hMethod, ResolvedToken->token,
                                   CallInfo->nullInstanceCheck == TRUE, true,
-                                  Unused, NewIR);
+                                  Unused);
   case CORINFO_CALL_CODE_POINTER:
     // Runtime lookup required (code sharing w/o using inst param)
-    return rdrGetCodePointerLookupCallTarget(CallInfo, Unused, NewIR);
+    return rdrGetCodePointerLookupCallTarget(CallInfo, Unused);
 
   default:
     ASSERTNR("Bad CORINFO_CALL_KIND for ldftn");
-    return NULL;
+    return nullptr;
   }
 }
 
-IRNode *ReaderBase::rdrGetDirectCallTarget(ReaderCallTargetData *CallTargetData,
-                                           IRNode **NewIR) {
-  return rdrGetDirectCallTarget(CallTargetData->getMethodHandle(),
-                                CallTargetData->getMethodToken(),
-                                CallTargetData->NeedsNullCheck,
-                                canMakeDirectCall(CallTargetData),
-                                CallTargetData->UsesMethodDesc, NewIR);
+IRNode *
+ReaderBase::rdrGetDirectCallTarget(ReaderCallTargetData *CallTargetData) {
+  return rdrGetDirectCallTarget(
+      CallTargetData->getMethodHandle(), CallTargetData->getMethodToken(),
+      CallTargetData->NeedsNullCheck, canMakeDirectCall(CallTargetData),
+      CallTargetData->UsesMethodDesc);
 }
 
 // Generate the target for a direct call. "Direct call" can either be
@@ -5588,8 +5578,7 @@ IRNode *ReaderBase::rdrGetDirectCallTarget(CORINFO_METHOD_HANDLE Method,
                                            mdToken MethodToken,
                                            bool NeedsNullCheck,
                                            bool CanMakeDirectCall,
-                                           bool &UsesMethodDesc,
-                                           IRNode **NewIR) {
+                                           bool &UsesMethodDesc) {
   CORINFO_CONST_LOOKUP AddressInfo;
   getFunctionEntryPoint(Method, &AddressInfo, NeedsNullCheck
                                                   ? CORINFO_ACCESS_NONNULL
@@ -5600,14 +5589,13 @@ IRNode *ReaderBase::rdrGetDirectCallTarget(CORINFO_METHOD_HANDLE Method,
     TargetNode = makeDirectCallTargetNode(Method, AddressInfo.addr);
   } else {
     bool IsIndirect = AddressInfo.accessType != IAT_VALUE;
-    TargetNode =
-        handleToIRNode(MethodToken, AddressInfo.addr, 0, IsIndirect,
-                       IsIndirect, true, IsIndirect, NewIR);
+    TargetNode = handleToIRNode(MethodToken, AddressInfo.addr, 0, IsIndirect,
+                                IsIndirect, true, IsIndirect);
 
     // TODO: call to same constant dominates this load then the load is
     // invariant
     if (AddressInfo.accessType == IAT_PPVALUE) {
-      TargetNode = derefAddress(TargetNode, false, true, NewIR);
+      TargetNode = derefAddressNonNull(TargetNode, false, true);
     }
     UsesMethodDesc = true;
   }
@@ -5624,7 +5612,7 @@ IRNode *ReaderBase::rdrGetDirectCallTarget(CORINFO_METHOD_HANDLE Method,
 // that case the runtime will return the true entry point aperrnd
 // expect the JIT to call it with the typeArg parameter directly.
 IRNode *ReaderBase::rdrGetCodePointerLookupCallTarget(
-    ReaderCallTargetData *CallTargetData, IRNode **NewIR) {
+    ReaderCallTargetData *CallTargetData) {
   // These calls always follow a uniform calling convention
   ASSERTNR(!CallTargetData->getSigInfo()->hasTypeArg());
   ASSERTNR(!CallTargetData->getSigInfo()->isVarArg());
@@ -5632,19 +5620,19 @@ IRNode *ReaderBase::rdrGetCodePointerLookupCallTarget(
   CORINFO_CALL_INFO *CallInfo = CallTargetData->getCallInfo();
 
   return rdrGetCodePointerLookupCallTarget(CallTargetData->getCallInfo(),
-                                           CallTargetData->IsIndirect,
-                                           NewIR);
+                                           CallTargetData->IsIndirect);
 }
 
-IRNode *ReaderBase::rdrGetCodePointerLookupCallTarget(
-    CORINFO_CALL_INFO *CallInfo, bool &IsIndirect, IRNode **NewIR) {
+IRNode *
+ReaderBase::rdrGetCodePointerLookupCallTarget(CORINFO_CALL_INFO *CallInfo,
+                                              bool &IsIndirect) {
   // The EE has asked us to call by computing a code pointer and then
   // doing an indirect call. This is because a runtime lookup is
   // required to get the code entry point.
   ASSERTNR(CallInfo);
 
-  if (CallInfo == NULL) {
-    return NULL;
+  if (CallInfo == nullptr) {
+    return nullptr;
   }
 
   ASSERTNR(CallInfo->codePointerLookup.lookupKind.needsRuntimeLookup);
@@ -5654,16 +5642,16 @@ IRNode *ReaderBase::rdrGetCodePointerLookupCallTarget(
 
   return runtimeLookupToNode(
       CallInfo->codePointerLookup.lookupKind.runtimeLookupKind,
-      &CallInfo->codePointerLookup.runtimeLookup, NewIR);
+      &CallInfo->codePointerLookup.runtimeLookup);
 }
 
 // This is basically a runtime look up for virtual calls. A JIT helper
 // call is invoked at runtime which finds the virutal call target. The
 // return value of this helper call is then called indirectly.
 IRNode *ReaderBase::rdrGetIndirectVirtualCallTarget(
-    ReaderCallTargetData *CallTargetData, IRNode **ThisPtr, IRNode **NewIR) {
-  IRNode *ClassHandle = CallTargetData->getClassHandleNode(NewIR);
-  IRNode *MethodHandle = CallTargetData->getMethodHandleNode(NewIR);
+    ReaderCallTargetData *CallTargetData, IRNode **ThisPtr) {
+  IRNode *ClassHandle = CallTargetData->getClassHandleNode();
+  IRNode *MethodHandle = CallTargetData->getMethodHandleNode();
 
   ASSERTMNR(!CallTargetData->getSigInfo()->isVarArg(),
             "varargs + generics is not supported\n");
@@ -5679,60 +5667,59 @@ IRNode *ReaderBase::rdrGetIndirectVirtualCallTarget(
   //     1) to look up the virtual function
   //     2) to call the method itself
   IRNode *ThisPtrCopy;
-  dup(*ThisPtr, &ThisPtrCopy, ThisPtr, NewIR);
+  dup(*ThisPtr, &ThisPtrCopy, ThisPtr);
 
   // Get the address of the target function by calling helper
   IRNode *Dst = makePtrNode();
-  return callHelper(CORINFO_HELP_VIRTUAL_FUNC_PTR, Dst, NewIR, ThisPtrCopy,
+  return callHelper(CORINFO_HELP_VIRTUAL_FUNC_PTR, Dst, ThisPtrCopy,
                     ClassHandle, MethodHandle);
 }
 
 // Generate the target for a virtual stub dispatch call. This is the
 // normal path for a virtual call.
 IRNode *
-ReaderBase::rdrGetVirtualStubCallTarget(ReaderCallTargetData *CallTargetData,
-                                        IRNode **NewIR) {
+ReaderBase::rdrGetVirtualStubCallTarget(ReaderCallTargetData *CallTargetData) {
   CORINFO_CALL_INFO *CallInfo = CallTargetData->getCallInfo();
   ASSERTNR(CallInfo);
 
-  if (CallInfo == NULL) {
-    return NULL;
+  if (CallInfo == nullptr) {
+    return nullptr;
   }
 
   IRNode *IndirectionCell, *IndirectionCellCopy;
   if (CallInfo->stubLookup.lookupKind.needsRuntimeLookup) {
     IndirectionCell =
         runtimeLookupToNode(CallInfo->stubLookup.lookupKind.runtimeLookupKind,
-                            &CallInfo->stubLookup.runtimeLookup, NewIR);
+                            &CallInfo->stubLookup.runtimeLookup);
   } else {
     ASSERTNR(CallInfo->stubLookup.constLookup.accessType == IAT_PVALUE);
     IndirectionCell = handleToIRNode(CallTargetData->getMethodToken(),
                                      CallInfo->stubLookup.constLookup.addr, 0,
-                                     false, false, true, false, NewIR);
+                                     false, false, true, false);
   }
 
   // For Stub Dispatch we need to pass the address of the indirection
   // cell as a secret param
-  dup(IndirectionCell, &IndirectionCellCopy, &IndirectionCell, NewIR);
+  dup(IndirectionCell, &IndirectionCellCopy, &IndirectionCell);
   CallTargetData->setIndirectionCellNode(IndirectionCellCopy);
 
   // One indrection leads to the target
-  return derefAddress(IndirectionCell, false, true, NewIR);
+  return derefAddressNonNull(IndirectionCell, false, true);
 }
 
 // Generate the target for a virtual call that will use the virtual
 // call table.
 IRNode *
 ReaderBase::rdrGetVirtualTableCallTarget(ReaderCallTargetData *CallTargetData,
-                                         IRNode **ThisPtr, IRNode **NewIR) {
+                                         IRNode **ThisPtr) {
   // We need to make a copy because the "this" pointer
   IRNode *ThisPtrCopy;
-  dup(*ThisPtr, &ThisPtrCopy, ThisPtr, NewIR);
+  dup(*ThisPtr, &ThisPtrCopy, ThisPtr);
 
   // VTable call uses method desc
   CallTargetData->UsesMethodDesc = true;
 
-  IRNode *VTableAddress = derefAddress(ThisPtrCopy, true, true, NewIR);
+  IRNode *VTableAddress = derefAddress(ThisPtrCopy, true, true);
 
   // Get the VTable offset of the method.
   uint32_t OffsetOfIndirection;
@@ -5741,27 +5728,27 @@ ReaderBase::rdrGetVirtualTableCallTarget(ReaderCallTargetData *CallTargetData,
                         &OffsetAfterIndirection);
 
   // Get the appropriate VTable chunk
-  IRNode *OffsetNode = loadConstantI4(OffsetOfIndirection, NewIR);
+  IRNode *OffsetNode = loadConstantI4(OffsetOfIndirection);
   IRNode *IndirectionSlot =
-      binaryOp(ReaderBaseNS::Add, VTableAddress, OffsetNode, NewIR);
+      binaryOp(ReaderBaseNS::Add, VTableAddress, OffsetNode);
   IRNode *VTableChunkAddress =
-      derefAddress(IndirectionSlot, false, true, NewIR);
+      derefAddressNonNull(IndirectionSlot, false, true);
 
   // Return the appropriate VTable slot
-  OffsetNode = loadConstantI4(OffsetAfterIndirection, NewIR);
+  OffsetNode = loadConstantI4(OffsetAfterIndirection);
   IRNode *VTableSlot =
-      binaryOp(ReaderBaseNS::Add, VTableChunkAddress, OffsetNode, NewIR);
-  return derefAddress(VTableSlot, false, true, NewIR);
+      binaryOp(ReaderBaseNS::Add, VTableChunkAddress, OffsetNode);
+  return derefAddressNonNull(VTableSlot, false, true);
 }
 
 // Generate the target for a delegate invoke.
 IRNode *
 ReaderBase::rdrGetDelegateInvokeTarget(ReaderCallTargetData *CallTargetData,
-                                       IRNode **ThisPtr, IRNode **NewIR) {
+                                       IRNode **ThisPtr) {
   ASSERTNR(CallTargetData->hasThis());
 
   IRNode *ThisPtrCopy, *AddressNode;
-  dup(*ThisPtr, &ThisPtrCopy, ThisPtr, NewIR);
+  dup(*ThisPtr, &ThisPtrCopy, ThisPtr);
 
   // Delegate invoke uses method desc
   CallTargetData->UsesMethodDesc = true;
@@ -5770,17 +5757,17 @@ ReaderBase::rdrGetDelegateInvokeTarget(ReaderCallTargetData *CallTargetData,
   JitInfo->getEEInfo(&EEInfo);
   uint32_t Instance = EEInfo.offsetOfDelegateInstance;
   uint32_t TargetPointerValue = EEInfo.offsetOfDelegateFirstTarget;
-  IRNode *InstanceNode = loadConstantI4(Instance, NewIR);
-  IRNode *TargetPointerValueNode = loadConstantI4(TargetPointerValue, NewIR);
+  IRNode *InstanceNode = loadConstantI4(Instance);
+  IRNode *TargetPointerValueNode = loadConstantI4(TargetPointerValue);
 
   // Create a new this pointer
-  AddressNode = binaryOp(ReaderBaseNS::Add, *ThisPtr, InstanceNode, NewIR);
-  *ThisPtr = derefAddress(AddressNode, true, false, NewIR);
+  AddressNode = binaryOp(ReaderBaseNS::Add, *ThisPtr, InstanceNode);
+  *ThisPtr = derefAddress(AddressNode, true, false);
 
   // Locate the call target
   AddressNode =
-      binaryOp(ReaderBaseNS::Add, ThisPtrCopy, TargetPointerValueNode, NewIR);
-  return derefAddress(AddressNode, false, true, NewIR);
+      binaryOp(ReaderBaseNS::Add, ThisPtrCopy, TargetPointerValueNode);
+  return derefAddress(AddressNode, false, true);
 }
 
 bool
@@ -5800,10 +5787,9 @@ ReaderBase::rdrCallIsDelegateConstruct(ReaderCallTargetData *CallTargetData) {
 
 #ifdef FEATURE_CORECLR
 
-void
-ReaderBase::rdrInsertCalloutForDelegate(CORINFO_CLASS_HANDLE DelegateType,
-                                        CORINFO_METHOD_HANDLE CalleeMethod,
-                                        mdToken MethodToken, IRNode **NewIR) {
+void ReaderBase::rdrInsertCalloutForDelegate(CORINFO_CLASS_HANDLE DelegateType,
+                                             CORINFO_METHOD_HANDLE CalleeMethod,
+                                             mdToken MethodToken) {
   if (!JitInfo->isDelegateCreationAllowed(DelegateType, CalleeMethod)) {
     IRNode *Arg1, *Arg2;
     bool IsIndirect;
@@ -5811,23 +5797,23 @@ ReaderBase::rdrInsertCalloutForDelegate(CORINFO_CLASS_HANDLE DelegateType,
     CORINFO_CLASS_HANDLE DelegateTypeHandle =
         embedClassHandle(DelegateType, &IsIndirect);
     Arg1 = handleToIRNode(MethodToken, DelegateTypeHandle, DelegateType,
-                          IsIndirect, IsIndirect, true, false, NewIR);
+                          IsIndirect, IsIndirect, true, false);
 
     CORINFO_METHOD_HANDLE CalleeMethodHandle =
         embedMethodHandle(CalleeMethod, &IsIndirect);
     Arg2 = handleToIRNode(MethodToken, CalleeMethodHandle, CalleeMethod,
-                          IsIndirect, IsIndirect, true, false, NewIR);
+                          IsIndirect, IsIndirect, true, false);
 
     // Make the helper call
-    callHelper(CORINFO_HELP_DELEGATE_SECURITY_CHECK, NULL, NewIR, Arg1, Arg2);
+    callHelper(CORINFO_HELP_DELEGATE_SECURITY_CHECK, nullptr, Arg1, Arg2);
   }
 }
 
 #endif // FEATURE_CORECLR
 
-void ReaderBase::clearStack(IRNode **NewIR) {
+void ReaderBase::clearStack() {
   while (!ReaderOperandStack->empty()) {
-    pop(ReaderOperandStack->pop(), NewIR);
+    pop(ReaderOperandStack->pop());
   }
 }
 
@@ -5859,11 +5845,11 @@ void ReaderBase::initParamsAndAutos(uint32_t NumParam,
 CORINFO_ARG_LIST_HANDLE
 ReaderBase::argListNext(CORINFO_ARG_LIST_HANDLE ArgListHandle,
                         CORINFO_SIG_INFO *Sig,
-                        CorInfoType *CorType,        // default to NULL
-                        CORINFO_CLASS_HANDLE *Class, // default to NULL
-                        bool *IsPinned               // default to NULL
+                        CorInfoType *CorType,        // default to nullptr
+                        CORINFO_CLASS_HANDLE *Class, // default to nullptr
+                        bool *IsPinned               // default to nullptr
                         ) {
-  CORINFO_CLASS_HANDLE TheClass = NULL, ArgType;
+  CORINFO_CLASS_HANDLE TheClass = nullptr, ArgType;
   CORINFO_ARG_LIST_HANDLE NextArg = JitInfo->getArgNext(ArgListHandle);
   CorInfoTypeWithMod TheCorTypeWithMod =
       JitInfo->getArgType(Sig, ArgListHandle, &ArgType);
@@ -5877,11 +5863,11 @@ ReaderBase::argListNext(CORINFO_ARG_LIST_HANDLE ArgListHandle,
     TheClass = JitInfo->getBuiltinClass(CLASSID_TYPED_BYREF);
   }
 
-  if (CorType != NULL)
+  if (CorType != nullptr)
     *CorType = TheCorType;
-  if (Class != NULL)
+  if (Class != nullptr)
     *Class = TheClass;
-  if (IsPinned != NULL)
+  if (IsPinned != nullptr)
     *IsPinned = ((TheCorTypeWithMod & CORINFO_TYPE_MOD_PINNED) != 0);
 
   return NextArg;
@@ -6033,7 +6019,7 @@ struct FgData {
 
     HashListNode *ListBase;
 
-    void init(void) { ListBase = NULL; }
+    void init(void) { ListBase = nullptr; }
 
     void insert(ReaderBase *Reader, CorInfoHelpFunc Key1,
                 CORINFO_CLASS_HANDLE Key2, void *Data) {
@@ -6051,12 +6037,12 @@ struct FgData {
       HashListNode *Node;
 
       Node = ListBase;
-      while (Node != NULL) {
+      while (Node != nullptr) {
         if ((Node->Key1 == Key1) && (Node->Key2 == Key2))
           return Node->Data;
         Node = Node->Next;
       }
-      return NULL;
+      return nullptr;
     }
   };
 
@@ -6066,11 +6052,11 @@ struct FgData {
     FgDataListHash *Hash;
 
   public:
-    void init(void) { Hash = NULL; }
+    void init(void) { Hash = nullptr; }
 
     void insert(ReaderBase *Reader, CorInfoHelpFunc Key1,
                 CORINFO_CLASS_HANDLE Key2, void *Data) {
-      if (Hash == NULL) {
+      if (Hash == nullptr) {
         Hash = (FgDataListHash *)Reader->getTempMemory(sizeof(FgDataListHash) *
                                                        DataArrayHashSize);
       }
@@ -6078,8 +6064,8 @@ struct FgData {
     }
 
     void *get(CorInfoHelpFunc Key1, CORINFO_CLASS_HANDLE Key2) {
-      if (Hash == NULL) {
-        return NULL;
+      if (Hash == nullptr) {
+        return nullptr;
       }
       return Hash[Key1 % DataArrayHashSize].get(Key1, Key2);
     }
@@ -6103,7 +6089,7 @@ struct FgData {
                             CORINFO_CLASS_HANDLE Key2ClassHandle,
                             bool *Key3NoCtor) {
     void *RetVal = StaticBaseHash.get(Key1HelperID, Key2ClassHandle);
-    if (RetVal != NULL)
+    if (RetVal != nullptr)
       return RetVal;
 
     // We didn't find the getter we're looking for, so try some
@@ -6132,17 +6118,18 @@ struct FgData {
       // for the other variant, but we do know that the .cctor never
       // needs to be run.
       *Key3NoCtor = true;
-      return NULL;
+      return nullptr;
 
     default:
       // If we're still not sure about whether the .cctor has run, check
-      // before returning NULL (because there are no other equivalent helpers).
+      // before returning nullptr (because there are no other equivalent
+      // helpers).
       if (!*Key3NoCtor &&
           ClassInitHash.get(CorInfoHelpFunc::CORINFO_HELP_UNDEF,
                             Key2ClassHandle)) {
         *Key3NoCtor = true;
       }
-      return NULL;
+      return nullptr;
     }
 
     // We have an equivalent helper, look it up to see if it exists.
@@ -6150,7 +6137,7 @@ struct FgData {
 
     // If we found a NoCtor variant or this class has already had it's
     // .cctor run, then we know the .cctor will not be run again.
-    if (RetVal != NULL ||
+    if (RetVal != nullptr ||
         (!*Key3NoCtor &&
          ClassInitHash.get(CorInfoHelpFunc::CORINFO_HELP_UNDEF,
                            Key2ClassHandle))) {
@@ -6162,8 +6149,8 @@ struct FgData {
   void *getClassInit(CorInfoHelpFunc Key1, CORINFO_CLASS_HANDLE Key2ClassHandle,
                      bool *Key3) {
     ASSERTNR(Key1 == 0);
-    ASSERTNR(Key2ClassHandle != NULL);
-    ASSERTNR(Key3 == NULL);
+    ASSERTNR(Key2ClassHandle != nullptr);
+    ASSERTNR(Key3 == nullptr);
     return (ClassInitHash.get(CorInfoHelpFunc::CORINFO_HELP_UNDEF,
                               Key2ClassHandle));
   }
@@ -6190,8 +6177,8 @@ FgData *ReaderBase::domInfoGetBlockData(FlowGraphNode *Fg, bool DoCreate) {
   FgData *TheFgData;
   uint32_t BlockNum;
 
-  if (BlockArray == NULL)
-    return NULL;
+  if (BlockArray == nullptr)
+    return nullptr;
 
   BlockNum = fgNodeGetBlockNum(Fg);
   ASSERTNR(BlockNum != (uint32_t)-1);
@@ -6216,7 +6203,7 @@ void *ReaderBase::domInfoGetInfoFromDominator(
   void *RetVal;
   FlowGraphNode *FgCurrent;
 
-  RetVal = NULL;
+  RetVal = nullptr;
   FgCurrent = Fg;
 
   do {
@@ -6239,7 +6226,7 @@ void *ReaderBase::domInfoGetInfoFromDominator(
 }
 
 // Returns node that holds previously calculated shared static base
-// address, otherwise NULL.
+// address, otherwise nullptr.
 IRNode *ReaderBase::domInfoDominatorDefinesSharedStaticBase(
     FlowGraphNode *Fg, CorInfoHelpFunc &HelperID,
     CORINFO_CLASS_HANDLE ClassHandle, bool *NoCtor) {
@@ -6247,12 +6234,12 @@ IRNode *ReaderBase::domInfoDominatorDefinesSharedStaticBase(
   *NoCtor = false;
 
   if (generateDebugCode())
-    return NULL;
+    return nullptr;
 
   RetVal = (IRNode *)domInfoGetInfoFromDominator(
       Fg, HelperID, ClassHandle, NoCtor, true, &FgData::getSharedStaticBase);
   if (*NoCtor) {
-    if (RetVal == NULL) {
+    if (RetVal == nullptr) {
       switch (HelperID) {
       case CORINFO_HELP_GETSHARED_GCSTATIC_BASE:
         HelperID = CORINFO_HELP_GETSHARED_GCSTATIC_BASE_NOCTOR;
@@ -6284,7 +6271,7 @@ void ReaderBase::domInfoRecordSharedStaticBaseDefine(
     return;
 
   FgData *FgData = domInfoGetBlockData(Fg, true);
-  if (FgData != NULL) {
+  if (FgData != nullptr) {
     FgData->setSharedStaticBase(this, HelperID, ClassHandle, BasePointer);
   }
 }
@@ -6300,8 +6287,8 @@ ReaderBase::domInfoDominatorHasClassInit(FlowGraphNode *Fg,
   bool RetVal;
 
   RetVal = (domInfoGetInfoFromDominator(Fg, CorInfoHelpFunc::CORINFO_HELP_UNDEF,
-                                        ClassHandle, NULL, false,
-                                        &FgData::getClassInit) != NULL);
+                                        ClassHandle, nullptr, false,
+                                        &FgData::getClassInit) != nullptr);
   return RetVal;
 }
 
@@ -6312,7 +6299,7 @@ void ReaderBase::domInfoRecordClassInit(FlowGraphNode *Fg,
     return;
 
   FgData *FgData = domInfoGetBlockData(Fg, true);
-  if (FgData != NULL) {
+  if (FgData != nullptr) {
     FgData->setClassInit(this, ClassHandle);
   }
 }
@@ -6322,10 +6309,9 @@ void ReaderBase::domInfoRecordClassInit(FlowGraphNode *Fg,
 // =================================================================
 
 // Default routine to insert verification throw.
-void ReaderBase::insertThrow(CorInfoHelpFunc ThrowHelper, uint32_t Offset,
-                             IRNode **NewIR) {
-  IRNode *IntConstant = loadConstantI4(Offset, NewIR);
-  callHelper(ThrowHelper, NULL, NewIR, IntConstant);
+void ReaderBase::insertThrow(CorInfoHelpFunc ThrowHelper, uint32_t Offset) {
+  IRNode *IntConstant = loadConstantI4(Offset);
+  callHelper(ThrowHelper, nullptr, IntConstant);
 }
 
 // Macro used by main reader loop for distinguishing verify-only passes
@@ -6489,7 +6475,7 @@ bool ReaderBase::checkExplicitTailCall(uint32_t ILOffset, bool AllowPop) {
   const uint32_t ILInputSize = MethodInfo->ILCodeSize;
   uint8_t *ILInput = MethodInfo->ILCode;
   uint8_t *UnusedOperand;
-  uint32_t Offset = ILOffset = SizeOfCEECall;
+  uint32_t Offset = ILOffset + SizeOfCEECall;
   ReaderBaseNS::OPCODE Opcode;
 
   do {
@@ -6509,9 +6495,8 @@ bool ReaderBase::checkExplicitTailCall(uint32_t ILOffset, bool AllowPop) {
 }
 
 // Main reader loop, called once for each reachable block.
-void ReaderBase::readBytesForFlowGraphNode_Helper(
+void ReaderBase::readBytesForFlowGraphNodeHelper(
     ReadBytesForFlowGraphNodeHelperParam *Param) {
-  IRNode **&NewIR = Param->NewIR;
 
   FlowGraphNode *&Fg = Param->Fg;
   ReaderBaseNS::OPCODE Opcode = ReaderBaseNS::CEE_ILLEGAL;
@@ -6519,7 +6504,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
   IRNode *Arg2;
   IRNode *Arg3;
   IRNode *ResultIR;
-  uint8_t *ILInput = NULL;
+  uint8_t *ILInput = nullptr;
   uint32_t ILSize;
   uint32_t CurrentOffset = Param->CurrentOffset;
   uint32_t NextOffset;
@@ -6579,7 +6564,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
 
     // SEQUENCE POINTS
     if (!Param->IsVerifyOnly && needSequencePoints()) {
-      sequencePoint(CurrentOffset, PrevOp, NewIR);
+      sequencePoint(CurrentOffset, PrevOp);
     }
 
 #if !defined(NODEBUG)
@@ -6611,17 +6596,16 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
 
       Arg2 = ReaderOperandStack->pop();
       Arg1 = ReaderOperandStack->pop();
-      ResultIR =
-          binaryOp((ReaderBaseNS::BinaryOpcode)MappedValue, Arg1, Arg2, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ResultIR = binaryOp((ReaderBaseNS::BinaryOpcode)MappedValue, Arg1, Arg2);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_ARGLIST:
       verifyArgList(TheVerificationState);
       BREAK_ON_VERIFY_ONLY;
 
-      ResultIR = argList(NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ResultIR = argList();
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_BOX:
@@ -6631,12 +6615,11 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       BREAK_ON_VERIFY_ONLY;
 
       Arg1 = ReaderOperandStack->pop(); // Pop the valuetype we need to box
-      removeStackInterference(NewIR);
-      handleClassAccess(&ResolvedToken, NewIR);
-      ResultIR =
-          box(&ResolvedToken, Arg1, NewIR, &NextOffset, TheVerificationState);
+      removeStackInterference();
+      handleClassAccess(&ResolvedToken);
+      ResultIR = box(&ResolvedToken, Arg1, &NextOffset, TheVerificationState);
       NextInstrOffset = NextOffset;
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_BEQ:
@@ -6676,13 +6659,12 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       Arg1 = ReaderOperandStack->pop();
 
       if (!ReaderOperandStack->empty()) {
-        maintainOperandStack(&Arg1, &Arg2, Fg, NewIR);
+        maintainOperandStack(&Arg1, &Arg2, Fg);
         ReaderOperandStack->clearStack();
       }
 
       // First pass create the branch and target to label
-      condBranch((ReaderBaseNS::CondBranchOpcode)MappedValue, Arg1, Arg2,
-                 NewIR);
+      condBranch((ReaderBaseNS::CondBranchOpcode)MappedValue, Arg1, Arg2);
       break;
 
     case ReaderBaseNS::CEE_BRTRUE:
@@ -6704,10 +6686,10 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
 
       Arg1 = ReaderOperandStack->pop();
       if (!ReaderOperandStack->empty()) {
-        maintainOperandStack(&Arg1, NULL, Fg, NewIR);
+        maintainOperandStack(&Arg1, nullptr, Fg);
         ReaderOperandStack->clearStack();
       }
-      boolBranch((ReaderBaseNS::BoolBranchOpcode)MappedValue, Arg1, NewIR);
+      boolBranch((ReaderBaseNS::BoolBranchOpcode)MappedValue, Arg1);
       break;
 
     case ReaderBaseNS::CEE_BR:
@@ -6728,16 +6710,16 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       // Assumes first pass created branch label, here we just assist
       // any live stack operands across the block boundary.
       if (!ReaderOperandStack->empty()) {
-        maintainOperandStack(NULL, NULL, Fg, NewIR);
+        maintainOperandStack(nullptr, nullptr, Fg);
         ReaderOperandStack->clearStack();
       }
-      branch(NewIR);
+      branch();
       break;
 
     case ReaderBaseNS::CEE_BREAK:
       // CEE_BREAK is always verifiable
       BREAK_ON_VERIFY_ONLY;
-      breakOpcode(NewIR);
+      breakOpcode();
       break;
 
     case ReaderBaseNS::CEE_CALL:
@@ -6762,9 +6744,9 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       ResultIR =
           call((ReaderBaseNS::CallOpcode)MappedValue, Token, ConstraintTypeRef,
                mdTokenNil, HasReadOnlyPrefix, HasTailCallPrefix,
-               IsUnmarkedTailCall, CurrentOffset, &IsRecursiveTailCall, NewIR);
-      if (ResultIR != NULL) {
-        ReaderOperandStack->push(ResultIR, NewIR);
+               IsUnmarkedTailCall, CurrentOffset, &IsRecursiveTailCall);
+      if (ResultIR != nullptr) {
+        ReaderOperandStack->push(ResultIR);
       }
 
       if (IsRecursiveTailCall) {
@@ -6788,10 +6770,10 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       BREAK_ON_VERIFY_ONLY;
 
       Arg1 = ReaderOperandStack->pop();
-      handleClassAccess(&ResolvedToken, NewIR);
-      removeStackInterference(NewIR);
-      ResultIR = castClass(&ResolvedToken, Arg1, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      handleClassAccess(&ResolvedToken);
+      removeStackInterference();
+      ResultIR = castClass(&ResolvedToken, Arg1);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_ISINST:
@@ -6801,10 +6783,10 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       BREAK_ON_VERIFY_ONLY;
 
       Arg1 = ReaderOperandStack->pop();
-      handleClassAccess(&ResolvedToken, NewIR);
-      removeStackInterference(NewIR);
-      ResultIR = isInst(&ResolvedToken, Arg1, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      handleClassAccess(&ResolvedToken);
+      removeStackInterference();
+      ResultIR = isInst(&ResolvedToken, Arg1);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_CEQ:
@@ -6817,8 +6799,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
 
       Arg2 = ReaderOperandStack->pop();
       Arg1 = ReaderOperandStack->pop();
-      ResultIR = cmp((ReaderBaseNS::CmpOpcode)MappedValue, Arg1, Arg2, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ResultIR = cmp((ReaderBaseNS::CmpOpcode)MappedValue, Arg1, Arg2);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_CKFINITE:
@@ -6827,9 +6809,9 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       BREAK_ON_VERIFY_ONLY;
 
       Arg1 = ReaderOperandStack->pop();
-      removeStackInterference(NewIR);
-      ResultIR = ckFinite(Arg1, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      removeStackInterference();
+      ResultIR = ckFinite(Arg1);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_CONV_I1:
@@ -6872,8 +6854,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       BREAK_ON_VERIFY_ONLY;
 
       Arg1 = ReaderOperandStack->pop(); // Operand to be converted
-      ResultIR = conv((ReaderBaseNS::ConvOpcode)MappedValue, Arg1, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ResultIR = conv((ReaderBaseNS::ConvOpcode)MappedValue, Arg1);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_CPBLK:
@@ -6883,9 +6865,9 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       Arg1 = ReaderOperandStack->pop(); // Copy the number of bytes to copy
       Arg2 = ReaderOperandStack->pop(); // Pop the source address
       Arg3 = ReaderOperandStack->pop(); // Pop the dest   address
-      removeStackInterference(NewIR);
-      cpBlk(Arg1, Arg2, Arg3, AlignmentPrefix, HasVolatilePrefix, NewIR);
-      ResultIR = NULL;
+      removeStackInterference();
+      cpBlk(Arg1, Arg2, Arg3, AlignmentPrefix, HasVolatilePrefix);
+      ResultIR = nullptr;
       break;
 
     case ReaderBaseNS::CEE_CPOBJ:
@@ -6896,9 +6878,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
 
       Arg1 = ReaderOperandStack->pop(); // Source object
       Arg2 = ReaderOperandStack->pop(); // Dest   object
-      removeStackInterference(NewIR);
-      cpObj(&ResolvedToken, Arg1, Arg2, AlignmentPrefix, HasVolatilePrefix,
-            NewIR);
+      removeStackInterference();
+      cpObj(&ResolvedToken, Arg1, Arg2, AlignmentPrefix, HasVolatilePrefix);
       break;
 
     case ReaderBaseNS::CEE_DUP: {
@@ -6908,9 +6889,9 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       BREAK_ON_VERIFY_ONLY;
 
       Arg1 = ReaderOperandStack->pop();
-      dup(Arg1, &Result1, &Result2, NewIR);
-      ReaderOperandStack->push(Result1, NewIR);
-      ReaderOperandStack->push(Result2, NewIR);
+      dup(Arg1, &Result1, &Result2);
+      ReaderOperandStack->push(Result1);
+      ReaderOperandStack->push(Result2);
     } break;
 
     case ReaderBaseNS::CEE_ENDFILTER:
@@ -6926,8 +6907,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       //    EXCEPTION_CONTINUE_SEARCH    (0)
       //    EXCEPTION_CONTINUE_EXECUTION (-1, not supported in CLR currently)
       Arg1 = ReaderOperandStack->pop(); // Pop the object pointer
-      endFilter(Arg1, NewIR);
-      clearStack(NewIR);
+      endFilter(Arg1);
+      clearStack();
       break;
 
     case ReaderBaseNS::CEE_ENDFINALLY:
@@ -6944,7 +6925,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       // but it's a block marker, so it needs to consume some bytes
       // However, this information should also been conveyed by
       // the EIT so we don't need to do anything.
-      clearStack(NewIR);
+      clearStack();
       break;
 
     case ReaderBaseNS::CEE_INITOBJ:
@@ -6954,8 +6935,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       BREAK_ON_VERIFY_ONLY;
 
       Arg1 = ReaderOperandStack->pop(); // Pop address of object
-      removeStackInterference(NewIR);
-      initObj(&ResolvedToken, Arg1, NewIR);
+      removeStackInterference();
+      initObj(&ResolvedToken, Arg1);
       break;
 
     case ReaderBaseNS::CEE_INITBLK:
@@ -6965,9 +6946,9 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       Arg1 = ReaderOperandStack->pop(); // Pop the number of bytes
       Arg2 = ReaderOperandStack->pop(); // Pop the value to assign to each byte
       Arg3 = ReaderOperandStack->pop(); // Pop the destination address
-      removeStackInterference(NewIR);
-      initBlk(Arg1, Arg2, Arg3, AlignmentPrefix, HasVolatilePrefix, NewIR);
-      ResultIR = NULL;
+      removeStackInterference();
+      initBlk(Arg1, Arg2, Arg3, AlignmentPrefix, HasVolatilePrefix);
+      ResultIR = nullptr;
       break;
 
     case ReaderBaseNS::CEE_JMP: {
@@ -6978,7 +6959,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
 
       // check before verification otherwise we get different exceptions
       // badcode vs verification exception depending if verifier is on
-      if (CurrentRegion != NULL &&
+      if (CurrentRegion != nullptr &&
           ReaderBaseNS::RGN_Root != rgnGetRegionType(CurrentRegion)) {
 
         BADCODE(MVER_E_TAILCALL_INSIDE_EH);
@@ -6994,7 +6975,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       // The stack must be empty when jmp is reached. If it is not
       // empty (and verification is off), then pop stack until it
       // is empty.
-      clearStack(NewIR);
+      clearStack();
 
       // Jmp needs to know about this and vararg params
       // so fetch the information.
@@ -7023,8 +7004,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       // TODO: Populate stack with current method's incoming
       // parameters, currently the genIR method needs to obtain it
       // from information gathered during the prepass.
-      jmp((ReaderBaseNS::CallOpcode)MappedValue, Token, HasThis, HasVarArg,
-          NewIR);
+      jmp((ReaderBaseNS::CallOpcode)MappedValue, Token, HasThis, HasVarArg);
 
       // NOTE: jmp's stack transition shows that no value is placed on
       // the stack
@@ -7043,8 +7023,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
     LOAD_ARG:
       verifyLdarg(TheVerificationState, MappedValue, Opcode);
       BREAK_ON_VERIFY_ONLY;
-      ResultIR = loadArg(MappedValue, false, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ResultIR = loadArg(MappedValue, false);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_LDLOC:
@@ -7060,8 +7040,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
     LOAD_LOCAL:
       verifyLdloc(TheVerificationState, MappedValue, Opcode);
       BREAK_ON_VERIFY_ONLY;
-      ResultIR = loadLocal(MappedValue, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ResultIR = loadLocal(MappedValue);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_LDARGA: {
@@ -7072,8 +7052,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       verifyLoadAddr(TheVerificationState);
       BREAK_ON_VERIFY_ONLY;
 
-      ResultIR = loadArgAddress(ArgNumber, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ResultIR = loadArgAddress(ArgNumber);
+      ReaderOperandStack->push(ResultIR);
     } break;
 
     case ReaderBaseNS::CEE_LDARGA_S: {
@@ -7084,8 +7064,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       verifyLoadAddr(TheVerificationState);
       BREAK_ON_VERIFY_ONLY;
 
-      ResultIR = loadArgAddress(ArgNumber, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ResultIR = loadArgAddress(ArgNumber);
+      ReaderOperandStack->push(ResultIR);
     } break;
 
     case ReaderBaseNS::CEE_LDLOCA: {
@@ -7096,8 +7076,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       verifyLoadAddr(TheVerificationState);
       BREAK_ON_VERIFY_ONLY;
 
-      ResultIR = loadLocalAddress(ArgNumber, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ResultIR = loadLocalAddress(ArgNumber);
+      ReaderOperandStack->push(ResultIR);
     } break;
 
     case ReaderBaseNS::CEE_LDLOCA_S: {
@@ -7108,30 +7088,30 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       verifyLoadAddr(TheVerificationState);
       BREAK_ON_VERIFY_ONLY;
 
-      ResultIR = loadLocalAddress(ArgNumber, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ResultIR = loadLocalAddress(ArgNumber);
+      ReaderOperandStack->push(ResultIR);
     } break;
 
     case ReaderBaseNS::CEE_LDC_I8:
       verifyLoadConstant(TheVerificationState, Opcode);
       BREAK_ON_VERIFY_ONLY;
 
-      ResultIR = loadConstantI8(readValue<int64_t>(Operand), NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ResultIR = loadConstantI8(readValue<int64_t>(Operand));
+      ReaderOperandStack->push(ResultIR);
       break;
     case ReaderBaseNS::CEE_LDC_R4:
       verifyLoadConstant(TheVerificationState, Opcode);
       BREAK_ON_VERIFY_ONLY;
 
-      ResultIR = loadConstantR4(readValue<float>(Operand), NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ResultIR = loadConstantR4(readValue<float>(Operand));
+      ReaderOperandStack->push(ResultIR);
       break;
     case ReaderBaseNS::CEE_LDC_R8:
       verifyLoadConstant(TheVerificationState, Opcode);
       BREAK_ON_VERIFY_ONLY;
 
-      ResultIR = loadConstantR8(readValue<double>(Operand), NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ResultIR = loadConstantR8(readValue<double>(Operand));
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_LDC_I4:
@@ -7154,8 +7134,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       verifyLoadConstant(TheVerificationState, Opcode);
       BREAK_ON_VERIFY_ONLY;
 
-      ResultIR = loadConstantI4(MappedValue, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ResultIR = loadConstantI4(MappedValue);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_LDELEM:
@@ -7181,8 +7161,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       Arg1 = ReaderOperandStack->pop();
       Arg2 = ReaderOperandStack->pop();
       ResultIR = loadElem((ReaderBaseNS::LdElemOpcode)MappedValue,
-                          &ResolvedToken, Arg1, Arg2, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+                          &ResolvedToken, Arg1, Arg2);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_LDELEMA:
@@ -7193,9 +7173,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
 
       Arg1 = ReaderOperandStack->pop();
       Arg2 = ReaderOperandStack->pop();
-      ResultIR =
-          loadElemA(&ResolvedToken, Arg1, Arg2, HasReadOnlyPrefix, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ResultIR = loadElemA(&ResolvedToken, Arg1, Arg2, HasReadOnlyPrefix);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_LDFLD:
@@ -7205,9 +7184,9 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       BREAK_ON_VERIFY_ONLY;
 
       Arg1 = ReaderOperandStack->pop(); // pop load address
-      ResultIR = loadField(&ResolvedToken, Arg1, AlignmentPrefix,
-                           HasVolatilePrefix, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ResultIR =
+          loadField(&ResolvedToken, Arg1, AlignmentPrefix, HasVolatilePrefix);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_LDFTN: {
@@ -7215,19 +7194,19 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       resolveToken(LoadFtnToken, CORINFO_TOKENKIND_Method, &ResolvedToken);
 
       CORINFO_CALL_INFO CallInfo;
-      getCallInfo(&ResolvedToken, NULL /*constraint*/, CORINFO_CALLINFO_LDFTN,
-                  &CallInfo);
+      getCallInfo(&ResolvedToken, nullptr /*constraint*/,
+                  CORINFO_CALLINFO_LDFTN, &CallInfo);
 
       verifyLoadFtn(TheVerificationState, Opcode, &ResolvedToken,
                     ILInput + CurrentOffset, &CallInfo);
       BREAK_ON_VERIFY_ONLY;
 
-      handleMemberAccess(CallInfo.accessAllowed, CallInfo.callsiteCalloutHelper,
-                         NewIR);
+      handleMemberAccess(CallInfo.accessAllowed,
+                         CallInfo.callsiteCalloutHelper);
 
-      ResultIR = rdrMakeLdFtnTargetNode(&ResolvedToken, &CallInfo, NewIR);
+      ResultIR = rdrMakeLdFtnTargetNode(&ResolvedToken, &CallInfo);
 
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ReaderOperandStack->push(ResultIR);
     } break;
 
     case ReaderBaseNS::CEE_LDIND_I1:
@@ -7247,8 +7226,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
 
       Arg1 = ReaderOperandStack->pop();
       ResultIR = loadIndir((ReaderBaseNS::LdIndirOpcode)MappedValue, Arg1,
-                           AlignmentPrefix, HasVolatilePrefix, false, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+                           AlignmentPrefix, HasVolatilePrefix, false);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_LDLEN:
@@ -7256,16 +7235,16 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       BREAK_ON_VERIFY_ONLY;
 
       Arg1 = ReaderOperandStack->pop();
-      ResultIR = loadLen(Arg1, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ResultIR = loadLen(Arg1);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_LDNULL:
       verifyLoadNull(TheVerificationState);
       BREAK_ON_VERIFY_ONLY;
 
-      ResultIR = loadNull(NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ResultIR = loadNull();
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_LDSTR:
@@ -7273,8 +7252,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       verifyLoadStr(TheVerificationState, Token);
       BREAK_ON_VERIFY_ONLY;
 
-      ResultIR = loadStr(Token, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ResultIR = loadStr(Token);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_LDSFLD:
@@ -7283,8 +7262,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       verifyFieldAccess(TheVerificationState, Opcode, &ResolvedToken);
       BREAK_ON_VERIFY_ONLY;
 
-      ResultIR = loadStaticField(&ResolvedToken, HasVolatilePrefix, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ResultIR = loadStaticField(&ResolvedToken, HasVolatilePrefix);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_LDSFLDA:
@@ -7293,8 +7272,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       verifyFieldAccess(TheVerificationState, Opcode, &ResolvedToken);
       BREAK_ON_VERIFY_ONLY;
 
-      ResultIR = getStaticFieldAddress(&ResolvedToken, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ResultIR = getStaticFieldAddress(&ResolvedToken);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_LDFLDA:
@@ -7304,8 +7283,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       BREAK_ON_VERIFY_ONLY;
 
       Arg1 = ReaderOperandStack->pop();
-      ResultIR = loadFieldAddress(&ResolvedToken, Arg1, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ResultIR = loadFieldAddress(&ResolvedToken, Arg1);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_LDOBJ:
@@ -7315,10 +7294,10 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       BREAK_ON_VERIFY_ONLY;
 
       Arg1 = ReaderOperandStack->pop();
-      removeStackInterference(NewIR);
+      removeStackInterference();
       ResultIR = loadObj(&ResolvedToken, Arg1, AlignmentPrefix,
-                         HasVolatilePrefix, false, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+                         HasVolatilePrefix, false);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_LDTOKEN:
@@ -7328,8 +7307,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       LastLoadToken = Token;
       BREAK_ON_VERIFY_ONLY;
 
-      ResultIR = loadToken(&ResolvedToken, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ResultIR = loadToken(&ResolvedToken);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_LDVIRTFTN: {
@@ -7337,19 +7316,19 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       resolveToken(LoadFtnToken, CORINFO_TOKENKIND_Method, &ResolvedToken);
 
       CORINFO_CALL_INFO CallInfo;
-      getCallInfo(&ResolvedToken, NULL /*constraint*/, CORINFO_CALLINFO_LDFTN,
-                  &CallInfo);
+      getCallInfo(&ResolvedToken, nullptr /*constraint*/,
+                  CORINFO_CALLINFO_LDFTN, &CallInfo);
 
       verifyLoadFtn(TheVerificationState, Opcode, &ResolvedToken,
                     ILInput + CurrentOffset, &CallInfo);
       BREAK_ON_VERIFY_ONLY;
 
-      handleMemberAccess(CallInfo.accessAllowed, CallInfo.callsiteCalloutHelper,
-                         NewIR);
+      handleMemberAccess(CallInfo.accessAllowed,
+                         CallInfo.callsiteCalloutHelper);
 
       Arg1 = ReaderOperandStack->pop();
-      ResultIR = loadVirtFunc(Arg1, &ResolvedToken, &CallInfo, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ResultIR = loadVirtFunc(Arg1, &ResolvedToken, &CallInfo);
+      ReaderOperandStack->push(ResultIR);
     } break;
 
     case ReaderBaseNS::CEE_LEAVE:
@@ -7376,12 +7355,12 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
           throw NotYetImplementedException(NyiIter->second);
         }
 
-        clearStack(NewIR);
+        clearStack();
         NonLocal = fgLeaveIsNonLocal(Fg, NextOffset, TargetOffset,
                                      &EndsWithNonLocalGoto);
 
         // Note here we record the nonlocal flow
-        leave(TargetOffset, NonLocal, EndsWithNonLocalGoto, NewIR);
+        leave(TargetOffset, NonLocal, EndsWithNonLocalGoto);
       }
       break;
 
@@ -7395,15 +7374,15 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
         BADCODE("LOCALLOC requires that the evaluation stack be empty, apart "
                 "from the size parameter");
       }
-      if (CurrentRegion != NULL &&
+      if (CurrentRegion != nullptr &&
           ReaderBaseNS::RGN_Root != rgnGetRegionType(CurrentRegion) &&
           ReaderBaseNS::RGN_Try != rgnGetRegionType(CurrentRegion)) {
         BADCODE("LOCALLOC cannot occur within an exception block: filter, "
                 "catch, finally, or fault");
       }
 
-      ResultIR = localAlloc(Arg1, isZeroInitLocals(), NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ResultIR = localAlloc(Arg1, isZeroInitLocals());
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_MKREFANY:
@@ -7413,10 +7392,10 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       BREAK_ON_VERIFY_ONLY;
 
       Arg1 = ReaderOperandStack->pop();
-      removeStackInterference(NewIR);
-      handleClassAccess(&ResolvedToken, NewIR);
-      ResultIR = makeRefAny(&ResolvedToken, Arg1, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      removeStackInterference();
+      handleClassAccess(&ResolvedToken);
+      ResultIR = makeRefAny(&ResolvedToken, Arg1);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_NEG:
@@ -7425,8 +7404,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       BREAK_ON_VERIFY_ONLY;
 
       Arg1 = ReaderOperandStack->pop();
-      ResultIR = unaryOp((ReaderBaseNS::UnaryOpcode)MappedValue, Arg1, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ResultIR = unaryOp((ReaderBaseNS::UnaryOpcode)MappedValue, Arg1);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_NEWARR:
@@ -7435,12 +7414,12 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       verifyNewArr(TheVerificationState, &ResolvedToken);
       BREAK_ON_VERIFY_ONLY;
 
-      handleClassAccess(&ResolvedToken, NewIR);
+      handleClassAccess(&ResolvedToken);
 
       Arg1 = ReaderOperandStack->pop();
-      removeStackInterference(NewIR);
-      ResultIR = newArr(&ResolvedToken, Arg1, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      removeStackInterference();
+      ResultIR = newArr(&ResolvedToken, Arg1);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_NEWOBJ:
@@ -7450,11 +7429,11 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
                    &ResolvedToken, ILInput + CurrentOffset);
       BREAK_ON_VERIFY_ONLY;
 
-      ResultIR = newObj(Token, LoadFtnToken, CurrentOffset, NewIR);
+      ResultIR = newObj(Token, LoadFtnToken, CurrentOffset);
       // If we inlined the .ctor, then we won't have the return value
       // until after the inlinee
-      if (ResultIR != NULL) {
-        ReaderOperandStack->push(ResultIR, NewIR);
+      if (ResultIR != nullptr) {
+        ReaderOperandStack->push(ResultIR);
       }
 
       // Only the next newobj can 'consume' the LoadFtnToken
@@ -7463,7 +7442,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
 
     case ReaderBaseNS::CEE_NOP:
       BREAK_ON_VERIFY_ONLY;
-      nop(NewIR);
+      nop();
       break;
 
     case ReaderBaseNS::CEE_POP:
@@ -7471,7 +7450,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       BREAK_ON_VERIFY_ONLY;
 
       Arg1 = ReaderOperandStack->pop();
-      pop(Arg1, NewIR);
+      pop(Arg1);
       break;
 
     case ReaderBaseNS::CEE_REFANYTYPE:
@@ -7479,9 +7458,9 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       BREAK_ON_VERIFY_ONLY;
 
       Arg1 = ReaderOperandStack->pop();
-      removeStackInterference(NewIR);
-      ResultIR = refAnyType(Arg1, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      removeStackInterference();
+      ResultIR = refAnyType(Arg1);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_REFANYVAL:
@@ -7491,20 +7470,20 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       BREAK_ON_VERIFY_ONLY;
 
       Arg1 = ReaderOperandStack->pop();
-      removeStackInterference(NewIR);
-      ResultIR = refAnyVal(Arg1, &ResolvedToken, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      removeStackInterference();
+      ResultIR = refAnyVal(Arg1, &ResolvedToken);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_RETHROW:
       // We have to clear the stack here because we're leaving the handler
-      clearStack(NewIR);
+      clearStack();
       verifyRethrow(TheVerificationState,
                     fgGetRegionFromMSILOffset(CurrentOffset));
       Param->HasFallThrough = false;
       BREAK_ON_VERIFY_ONLY;
 
-      rethrow(NewIR);
+      rethrow();
       break;
 
     case ReaderBaseNS::CEE_RET: {
@@ -7529,7 +7508,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
 
       // If no return type then stack must be empty
       if (CorType == CORINFO_TYPE_VOID) {
-        Arg1 = NULL;
+        Arg1 = nullptr;
       } else {
         Arg1 = ReaderOperandStack->pop();
       }
@@ -7538,7 +7517,7 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       // if return type is non-void, Return performs:
       //   - Convert return value to return type (if necessary)
       //   - Generate return instruction
-      returnOpcode(Arg1, SynchronizedMethod, NewIR);
+      returnOpcode(Arg1, SynchronizedMethod);
     } break;
 
     case ReaderBaseNS::CEE_SHL:
@@ -7555,9 +7534,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       // to mimic the implicit conversion done by the abstract machine
       // Also if the shift is signed and the operand is no then force it
 
-      ResultIR =
-          shift((ReaderBaseNS::ShiftOpcode)MappedValue, Arg1, Arg2, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ResultIR = shift((ReaderBaseNS::ShiftOpcode)MappedValue, Arg1, Arg2);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_SIZEOF:
@@ -7566,8 +7544,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       verifySizeOf(TheVerificationState, &ResolvedToken);
       BREAK_ON_VERIFY_ONLY;
 
-      ResultIR = sizeofOpcode(&ResolvedToken, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      ResultIR = sizeofOpcode(&ResolvedToken);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_STARG: {
@@ -7579,8 +7557,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
 
       Arg1 = ReaderOperandStack->pop();
 
-      removeStackInterferenceForLocalStore(Opcode, ArgNumber, NewIR);
-      storeArg(ArgNumber, Arg1, AlignmentPrefix, HasVolatilePrefix, NewIR);
+      removeStackInterferenceForLocalStore(Opcode, ArgNumber);
+      storeArg(ArgNumber, Arg1, AlignmentPrefix, HasVolatilePrefix);
     } break;
 
     case ReaderBaseNS::CEE_STARG_S: {
@@ -7592,8 +7570,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
 
       Arg1 = ReaderOperandStack->pop();
 
-      removeStackInterferenceForLocalStore(Opcode, ArgNumber, NewIR);
-      storeArg(ArgNumber, Arg1, AlignmentPrefix, HasVolatilePrefix, NewIR);
+      removeStackInterferenceForLocalStore(Opcode, ArgNumber);
+      storeArg(ArgNumber, Arg1, AlignmentPrefix, HasVolatilePrefix);
     } break;
 
     case ReaderBaseNS::CEE_STELEM:
@@ -7617,9 +7595,9 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       Arg1 = ReaderOperandStack->pop(); // Pop the value to store
       Arg2 = ReaderOperandStack->pop(); // Pop the array index
       Arg3 = ReaderOperandStack->pop(); // Pop the address of the array base
-      removeStackInterference(NewIR);
+      removeStackInterference();
       storeElem((ReaderBaseNS::StElemOpcode)MappedValue, &ResolvedToken, Arg1,
-                Arg2, Arg3, NewIR);
+                Arg2, Arg3);
       break;
 
     case ReaderBaseNS::CEE_STFLD:
@@ -7630,9 +7608,9 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
 
       Arg1 = ReaderOperandStack->pop(); // Pop the value to store
       Arg2 = ReaderOperandStack->pop(); // Pop the address of the object
-      removeStackInterference(NewIR);
-      storeField(&ResolvedToken, Arg1, Arg2, AlignmentPrefix, HasVolatilePrefix,
-                 NewIR);
+      removeStackInterference();
+      storeField(&ResolvedToken, Arg1, Arg2, AlignmentPrefix,
+                 HasVolatilePrefix);
       break;
 
     case ReaderBaseNS::CEE_STLOC:
@@ -7649,8 +7627,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       verifyStloc(TheVerificationState, MappedValue);
       BREAK_ON_VERIFY_ONLY;
       Arg1 = ReaderOperandStack->pop();
-      removeStackInterferenceForLocalStore(Opcode, MappedValue, NewIR);
-      storeLocal(MappedValue, Arg1, AlignmentPrefix, HasVolatilePrefix, NewIR);
+      removeStackInterferenceForLocalStore(Opcode, MappedValue);
+      storeLocal(MappedValue, Arg1, AlignmentPrefix, HasVolatilePrefix);
       break;
 
     case ReaderBaseNS::CEE_STIND_I1:
@@ -7667,9 +7645,9 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
 
       Arg1 = ReaderOperandStack->pop();
       Arg2 = ReaderOperandStack->pop();
-      removeStackInterference(NewIR);
+      removeStackInterference();
       storeIndir((ReaderBaseNS::StIndirOpcode)MappedValue, Arg1, Arg2,
-                 AlignmentPrefix, HasVolatilePrefix, NewIR);
+                 AlignmentPrefix, HasVolatilePrefix);
       break;
 
     case ReaderBaseNS::CEE_STOBJ:
@@ -7680,9 +7658,9 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
 
       Arg1 = ReaderOperandStack->pop(); // Pop the source object
       Arg2 = ReaderOperandStack->pop(); // Pop the destination object
-      removeStackInterference(NewIR);
+      removeStackInterference();
       storeObj(&ResolvedToken, Arg1, Arg2, AlignmentPrefix, HasVolatilePrefix,
-               false, NewIR);
+               false);
       break;
 
     case ReaderBaseNS::CEE_STSFLD:
@@ -7692,8 +7670,8 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       BREAK_ON_VERIFY_ONLY;
 
       Arg1 = ReaderOperandStack->pop(); // Pop the value to store from the stack
-      removeStackInterference(NewIR);
-      storeStaticField(&ResolvedToken, Arg1, HasVolatilePrefix, NewIR);
+      removeStackInterference();
+      storeStaticField(&ResolvedToken, Arg1, HasVolatilePrefix);
       break;
 
     case ReaderBaseNS::CEE_SWITCH: {
@@ -7717,17 +7695,17 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       // 3. If switch had cases then the flow graph builder has
       // rigged up successor edges from the switch.
       if (NumCases != 0) {
-        switchOpcode(Arg1, NewIR);
+        switchOpcode(Arg1);
 
         // 4. Maintain operand stack for all successors.
         // If the operand stack is non-empty then it must be ushered
         // across the block boundaries.
         if (!ReaderOperandStack->empty()) {
-          maintainOperandStack(NULL, NULL, Fg, NewIR);
+          maintainOperandStack(nullptr, nullptr, Fg);
         }
       } else {
         // consume the operand
-        pop(Arg1, NewIR);
+        pop(Arg1);
       }
       ReaderOperandStack->clearStack();
     } break;
@@ -7763,11 +7741,11 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       BREAK_ON_VERIFY_ONLY;
 
       Arg1 = ReaderOperandStack->pop();
-      throwOpcode(Arg1, NewIR);
+      throwOpcode(Arg1);
 
       // Should this be supported or does the stack need to be null at this
       // point?
-      clearStack(NewIR);
+      clearStack();
       break;
 
     case ReaderBaseNS::CEE_UNALIGNED:
@@ -7785,11 +7763,10 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       BREAK_ON_VERIFY_ONLY;
 
       Arg1 = ReaderOperandStack->pop(); // Pop the object pointer
-      removeStackInterference(NewIR);
-      handleClassAccess(&ResolvedToken, NewIR);
-      ResultIR =
-          unbox(&ResolvedToken, Arg1, NewIR, false, Reader_AlignNatural, false);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      removeStackInterference();
+      handleClassAccess(&ResolvedToken);
+      ResultIR = unbox(&ResolvedToken, Arg1, false, Reader_AlignNatural, false);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_UNBOX_ANY:
@@ -7799,11 +7776,11 @@ void ReaderBase::readBytesForFlowGraphNode_Helper(
       BREAK_ON_VERIFY_ONLY;
 
       Arg1 = ReaderOperandStack->pop(); // Pop the object pointer
-      removeStackInterference(NewIR);
-      handleClassAccess(&ResolvedToken, NewIR);
-      ResultIR = unboxAny(&ResolvedToken, Arg1, AlignmentPrefix,
-                          HasVolatilePrefix, NewIR);
-      ReaderOperandStack->push(ResultIR, NewIR);
+      removeStackInterference();
+      handleClassAccess(&ResolvedToken);
+      ResultIR =
+          unboxAny(&ResolvedToken, Arg1, AlignmentPrefix, HasVolatilePrefix);
+      ReaderOperandStack->push(ResultIR);
       break;
 
     case ReaderBaseNS::CEE_VOLATILE:
@@ -7857,11 +7834,10 @@ void ReaderBase::readBytesForFlowGraphNode(FlowGraphNode *Fg,
   TheParam.This = this;
   TheParam.Fg = Fg;
   TheParam.IsVerifyOnly = IsVerifyOnly;
-  TheParam.NewIR = NULL;
   TheParam.CurrentOffset = 0;
   TheParam.LocalFault = false;
   TheParam.HasFallThrough = true;
-  TheParam.VState = NULL;
+  TheParam.VState = nullptr;
   TheParam.VerifiedEndBlock = false;
 
   // Quick check that the array is initialized correctly.
@@ -7888,17 +7864,12 @@ void ReaderBase::readBytesForFlowGraphNode(FlowGraphNode *Fg,
 
   beginFlowGraphNode(Fg, TheParam.CurrentOffset, IsVerifyOnly);
 
-  // Get IRNode insertion point for this block and
-  // init newIR
-  IRNode *IrStartNode = fgNodeGetEndIRInsertionPoint(Fg);
-  TheParam.NewIR = &IrStartNode;
-
   if (!IsVerifyOnly) {
-    setupBlockForEH(TheParam.NewIR);
+    setupBlockForEH();
   }
 
   PAL_TRY(ReadBytesForFlowGraphNodeHelperParam *, Param, &TheParam) {
-    Param->This->readBytesForFlowGraphNode_Helper(Param);
+    Param->This->readBytesForFlowGraphNodeHelper(Param);
   }
   PAL_EXCEPT_FILTER(objectFilter) {
     CorInfoHelpFunc ThrowHelper = CORINFO_HELP_VERIFICATION;
@@ -7906,7 +7877,7 @@ void ReaderBase::readBytesForFlowGraphNode(FlowGraphNode *Fg,
     // Handle verification error, remove IRNodes from block
     // and have it filled with code to throw a verification
     // error.
-    clearCurrentBlock(TheParam.NewIR);
+    clearCurrentBlock();
 
     switch (TheParam.Excep->Type) {
     case Reader_LocalVerificationException:
@@ -7924,7 +7895,7 @@ void ReaderBase::readBytesForFlowGraphNode(FlowGraphNode *Fg,
     delete TheParam.Excep;
 
     if ((Flags & CORJIT_FLG_IMPORT_ONLY) == 0)
-      insertThrow(ThrowHelper, TheParam.CurrentOffset, TheParam.NewIR);
+      insertThrow(ThrowHelper, TheParam.CurrentOffset);
 
     TheParam.LocalFault = true;
     TheParam.HasFallThrough =
@@ -7932,7 +7903,8 @@ void ReaderBase::readBytesForFlowGraphNode(FlowGraphNode *Fg,
 
     // Delete all (non-EH reachability) flow edges that come from this block.
     FlowGraphEdgeList *Arc, *ArcNext;
-    for (Arc = fgNodeGetSuccessorListActual(Fg); Arc != NULL; Arc = ArcNext) {
+    for (Arc = fgNodeGetSuccessorListActual(Fg); Arc != nullptr;
+         Arc = ArcNext) {
       ArcNext = fgEdgeListGetNextSuccessorActual(Arc);
       fgDeleteEdge(Arc);
     }
@@ -7958,7 +7930,7 @@ void ReaderBase::readBytesForFlowGraphNode(FlowGraphNode *Fg,
 
   if (!IsVerifyOnly) {
     // Notify client JIT that end of block has been reached.
-    endFlowGraphNode(Fg, TheParam.CurrentOffset, TheParam.NewIR);
+    endFlowGraphNode(Fg, TheParam.CurrentOffset);
 
     // Propagate operand stack to successor blocks. Nothing to
     // do if stack is empty, or if this block caused a local
@@ -7966,7 +7938,7 @@ void ReaderBase::readBytesForFlowGraphNode(FlowGraphNode *Fg,
     // successor edges to be cut, so live operand stack has nowhere
     // to be propagated to.
     if (!(TheParam.LocalFault || ReaderOperandStack->empty())) {
-      maintainOperandStack(NULL, NULL, Fg, TheParam.NewIR);
+      maintainOperandStack(nullptr, nullptr, Fg);
     }
   }
 }
@@ -7977,7 +7949,7 @@ ReaderBase::fgAppendUnvisitedSuccToWorklist(FlowGraphNodeWorkList *Worklist,
   FlowGraphNode *Successor;
 
   for (FlowGraphEdgeList *FgEdge = fgNodeGetSuccessorList(CurrBlock);
-       FgEdge != NULL; FgEdge = fgEdgeListGetNextSuccessor(FgEdge)) {
+       FgEdge != nullptr; FgEdge = fgEdgeListGetNextSuccessor(FgEdge)) {
 
     Successor = fgEdgeListGetSink(FgEdge);
 
@@ -7987,7 +7959,7 @@ ReaderBase::fgAppendUnvisitedSuccToWorklist(FlowGraphNodeWorkList *Worklist,
       FlowGraphNodeWorkList *DbTemp;
 
       DbTemp = Worklist;
-      while (DbTemp != NULL) {
+      while (DbTemp != nullptr) {
         if (DbTemp->Block == Successor) {
           ASSERTNR(UNREACHED);
         }
@@ -8055,11 +8027,11 @@ void ReaderBase::msilToIR(void) {
   if (VerificationNeeded) {
     GlobalVerifyData *GvData = fgNodeGetGlobalVerifyData(FgHead);
     ASSERTNR(GvData);
-    GvData->TiStack = NULL;
+    GvData->TiStack = nullptr;
     GvData->StkDepth = 0;
     GvData->BlockIsBad = false;
-    GvWorklistHead = NULL;
-    GvWorklistTail = NULL;
+    GvWorklistHead = nullptr;
+    GvWorklistTail = nullptr;
   }
 
   AreInlining = true;
@@ -8071,8 +8043,8 @@ void ReaderBase::msilToIR(void) {
   Worklist =
       (FlowGraphNodeWorkList *)getTempMemory(sizeof(FlowGraphNodeWorkList));
   Worklist->Block = FgHead;
-  Worklist->Next = NULL;
-  Worklist->Parent = NULL;
+  Worklist->Next = nullptr;
+  Worklist->Parent = nullptr;
   fgNodeSetVisited(FgHead, true);
 
 // fake up edges to unreachable code for peverify
@@ -8085,7 +8057,7 @@ void ReaderBase::msilToIR(void) {
 
     if (!fgNodeGetPredecessorList(Block) && Block != FgHead &&
         (fgNodeGetStartMSILOffset(Block) != fgNodeGetEndMSILOffset(Block))) {
-      fgAddArc(NULL, FgHead, Block);
+      fgAddArc(nullptr, FgHead, Block);
       FlowGraphEdgeList *edgeList = fgNodeGetSuccessorList(FgHead);
       while (edgeList) {
         FlowGraphNode *succBlock = fgEdgeListGetSink(edgeList);
@@ -8109,7 +8081,7 @@ void ReaderBase::msilToIR(void) {
 
   bool IsImportOnly = (Flags & CORJIT_FLG_IMPORT_ONLY) != 0;
 
-  while (Worklist != NULL) {
+  while (Worklist != nullptr) {
     FlowGraphNode *Block, *Parent;
 
     // Pop top block
@@ -8214,8 +8186,7 @@ void ReaderBase::runtimeHandleException(
 // call/calli/callvirt/jmp/newobj instructions.  Debugger generated
 // sequece points are placed based on the values revieved from the
 // runtime via getSequencePoints
-void ReaderBase::sequencePoint(int Offset, ReaderBaseNS::OPCODE PrevOp,
-                               IRNode **NewIR) {
+void ReaderBase::sequencePoint(int Offset, ReaderBaseNS::OPCODE PrevOp) {
   ASSERTNR(needSequencePoints());
 
   uint32_t TypeFlags = ICorDebugInfo::SOURCE_TYPE_INVALID;
@@ -8249,7 +8220,7 @@ void ReaderBase::sequencePoint(int Offset, ReaderBaseNS::OPCODE PrevOp,
   }
 
   if (GenSeqPoint) {
-    setSequencePoint(Offset, (ICorDebugInfo::SourceTypes)TypeFlags, NewIR);
+    setSequencePoint(Offset, (ICorDebugInfo::SourceTypes)TypeFlags);
   }
 }
 
@@ -8314,11 +8285,11 @@ void ReaderCallTargetData::resetReader(ReaderBase *Reader) {
   this->Reader = Reader;
 
   // Now flush all of the cached IRNodes!
-  TargetMethodHandleNode = NULL;
-  TargetClassHandleNode = NULL;
+  TargetMethodHandleNode = nullptr;
+  TargetClassHandleNode = nullptr;
 
-  CallTargetNode = NULL;
-  IndirectionCellNode = NULL;
+  CallTargetNode = nullptr;
+  IndirectionCellNode = nullptr;
 
   // Reset some stuff
   IsIndirect = IsCallI;
@@ -8351,30 +8322,29 @@ ReaderCallTargetData::getExactContext() {
              : CallInfo.contextHandle;
 }
 
-IRNode *ReaderCallTargetData::getMethodHandleNode(IRNode **NewIR) {
+IRNode *ReaderCallTargetData::getMethodHandleNode() {
   if (!TargetMethodHandleNode) {
     ASSERTNR(!isIndirect()); // This makes no sense for indirect calls
     TargetMethodHandleNode =
-        Reader->genericTokenToNode(&ResolvedToken, NewIR, false, true);
+        Reader->genericTokenToNode(&ResolvedToken, false, true);
   }
   return TargetMethodHandleNode;
 }
 
-IRNode *ReaderCallTargetData::getClassHandleNode(IRNode **NewIR) {
+IRNode *ReaderCallTargetData::getClassHandleNode() {
   if (!TargetClassHandleNode) {
     TargetClassHandleNode =
-        Reader->genericTokenToNode(&ResolvedToken, NewIR, true, true);
+        Reader->genericTokenToNode(&ResolvedToken, true, true);
   }
   return TargetClassHandleNode;
 }
 
-IRNode *ReaderCallTargetData::applyThisTransform(IRNode *ThisNode,
-                                                 IRNode **NewIR) {
+IRNode *ReaderCallTargetData::applyThisTransform(IRNode *ThisNode) {
   ASSERTNR(hasThis());
   CORINFO_CALL_INFO *CallInfo = getCallInfo();
 
   // No CallInfo for CALLI, which also can't have any this transform
-  if (CallInfo == NULL ||
+  if (CallInfo == nullptr ||
       CallInfo->thisTransform == CORINFO_NO_THIS_TRANSFORM) {
     return ThisNode;
   }
@@ -8382,8 +8352,11 @@ IRNode *ReaderCallTargetData::applyThisTransform(IRNode *ThisNode,
   if (CallInfo->thisTransform == CORINFO_DEREF_THIS) {
     // constraint calls on reference types dereference the byref used
     // to specify the object
+    // Conservatively process the load as though the byref may be null.
+    // No front-end is likely to generate a null byref here, but it
+    // would be legal to do so.
     return Reader->loadIndir(ReaderBaseNS::LdindRef, ThisNode,
-                             Reader_AlignNatural, false, false, NewIR);
+                             Reader_AlignNatural, false, false);
   } else {
     ASSERTNR(CallInfo->thisTransform == CORINFO_BOX_THIS);
     // Constraint calls on value types where there is no unboxed entry
@@ -8398,7 +8371,7 @@ IRNode *ReaderCallTargetData::applyThisTransform(IRNode *ThisNode,
     //   2. box obj that was loaded
     //   3. set this pointer to address returned from box
     return Reader->loadAndBox(&ResolvedConstraintToken, ThisNode,
-                              Reader_AlignNatural, NewIR);
+                              Reader_AlignNatural);
   }
 }
 
@@ -8406,7 +8379,7 @@ bool ReaderCallTargetData::getCallTargetNodeRequiresRuntimeLookup() {
   CORINFO_CALL_INFO *CallInfo = getCallInfo();
 
   ASSERTNR(CallInfo);
-  if (CallInfo == NULL) {
+  if (CallInfo == nullptr) {
     return true; // Shouldn't have gotten here, but assume the worst
   }
 
@@ -8477,7 +8450,7 @@ bool ReaderCallTargetData::getTypeContextNodeRequiresRuntimeLookup() {
   return false;
 }
 
-IRNode *ReaderCallTargetData::getTypeContextNode(IRNode **NewIR) {
+IRNode *ReaderCallTargetData::getTypeContextNode() {
   if (SigInfo.hasTypeArg()) {
     if (((SIZE_T)CallInfo.contextHandle & CORINFO_CONTEXTFLAGS_MASK) ==
         CORINFO_CONTEXTFLAGS_METHOD) {
@@ -8487,10 +8460,10 @@ IRNode *ReaderCallTargetData::getTypeContextNode(IRNode **NewIR) {
           // The runtime passes back bogus values for runtime lookups
           // of inlinees so the inliner only allows it if the handle
           // is never used
-          return Reader->loadConstantI(0, NewIR);
+          return Reader->loadConstantI(0);
         } else {
           // runtime lookup based on the method token
-          return getMethodHandleNode(NewIR);
+          return getMethodHandleNode();
         }
       } else {
         // embed the handle passed back from getCallInfo
@@ -8500,13 +8473,13 @@ IRNode *ReaderCallTargetData::getTypeContextNode(IRNode **NewIR) {
         bool IsIndirect = false;
         void *MethodHandle = Reader->embedMethodHandle(Method, &IsIndirect);
         return Reader->handleToIRNode(mdtMethodHandle, MethodHandle, Method,
-                                      IsIndirect, true, true, false, NewIR);
+                                      IsIndirect, true, true, false);
       }
     } else if ((getClassAttribs() & CORINFO_FLG_ARRAY) && IsReadonlyCall) {
       // We indicate "readonly" to the Array::Address operation by
       // using a null instParam. This effectively tells it to not do
       // type validation.
-      return Reader->loadConstantI(0, NewIR);
+      return Reader->loadConstantI(0);
     } else {
       // otherwise must be an instance method in a generic struct, a
       // static method in a generic type, or a runtime-generated array
@@ -8516,10 +8489,10 @@ IRNode *ReaderCallTargetData::getTypeContextNode(IRNode **NewIR) {
           // The runtime passes back invalid values for runtime lookups
           // of inlinees so the inliner only allows it if the handle
           // is never used
-          return Reader->loadConstantI(0, NewIR);
+          return Reader->loadConstantI(0);
         } else {
           // runtime lookup based on the class token
-          return getClassHandleNode(NewIR);
+          return getClassHandleNode();
         }
       } else {
         ASSERTNR(((SIZE_T)CallInfo.contextHandle & CORINFO_CONTEXTFLAGS_MASK) ==
@@ -8530,11 +8503,11 @@ IRNode *ReaderCallTargetData::getTypeContextNode(IRNode **NewIR) {
         bool IsIndirect = false;
         void *ClassHandle = Reader->embedClassHandle(Class, &IsIndirect);
         return Reader->handleToIRNode(mdtClassHandle, ClassHandle, Class,
-                                      IsIndirect, true, true, false, NewIR);
+                                      IsIndirect, true, true, false);
       }
     }
   }
-  return NULL;
+  return nullptr;
 }
 
 void ReaderCallTargetData::setOptimizedDelegateCtor(
@@ -8542,7 +8515,7 @@ void ReaderCallTargetData::setOptimizedDelegateCtor(
   // Leave the original class handle info around for canonNewObjCall
 
   this->TargetMethodHandle = NewTargetMethodHandle;
-  this->TargetMethodHandleNode = NULL;
+  this->TargetMethodHandleNode = nullptr;
   this->IsOptimizedDelegateCtor = true;
 
   this->TargetMethodAttribs = Reader->getMethodAttribs(TargetMethodHandle);
@@ -8572,19 +8545,19 @@ void ReaderCallTargetData::init(
   this->IsUnmarkedTailCall = IsUnmarkedTailCall;
   this->IsReadonlyCall = IsReadonlyCall;
 
-  // NULL out attribs, class handle, and nodes
+  // nullptr out attribs, class handle, and nodes
   this->AreClassAttribsValid = false;
   this->IsCallInfoValid = false;
   this->NeedsNullCheck = false;
   this->CorIntrinsicId = CORINFO_INTRINSIC_Count;
   this->UsesMethodDesc = false;
   this->IsOptimizedDelegateCtor = false;
-  this->CtorArgs = NULL;
-  this->TargetClassHandle = NULL;
-  this->TargetClassHandleNode = NULL;
-  this->TargetMethodHandleNode = NULL;
-  this->IndirectionCellNode = NULL;
-  this->CallTargetNode = NULL;
+  this->CtorArgs = nullptr;
+  this->TargetClassHandle = nullptr;
+  this->TargetClassHandleNode = nullptr;
+  this->TargetMethodHandleNode = nullptr;
+  this->IndirectionCellNode = nullptr;
+  this->CallTargetNode = nullptr;
 
   // fill CALL_INFO, SIG_INFO, METHOD_HANDLE, METHOD_ATTRIBS
   fillTargetInfo(TargetToken, ConstraintToken, Context, Scope, Caller,
@@ -8598,7 +8571,7 @@ void ReaderCallTargetData::fillTargetInfo(mdToken TargetToken,
                                           CORINFO_MODULE_HANDLE Scope,
                                           CORINFO_METHOD_HANDLE Caller,
                                           uint32_t MsilOffset) {
-  TargetMethodHandle = NULL;
+  TargetMethodHandle = nullptr;
   TargetMethodAttribs = 0;
 
   ResolvedToken.token = TargetToken;
@@ -8613,7 +8586,7 @@ void ReaderCallTargetData::fillTargetInfo(mdToken TargetToken,
                            &ResolvedConstraintToken);
     Reader->getCallInfo(
         &ResolvedToken,
-        (ConstraintToken != mdTokenNil) ? &ResolvedConstraintToken : NULL,
+        (ConstraintToken != mdTokenNil) ? &ResolvedConstraintToken : nullptr,
         (CORINFO_CALLINFO_FLAGS)((IsCallVirt ? CORINFO_CALLINFO_CALLVIRT : 0) |
                                  CORINFO_CALLINFO_ALLOWINSTPARAM),
         &CallInfo, Caller);

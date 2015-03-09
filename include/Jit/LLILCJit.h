@@ -109,7 +109,7 @@ public:
   /// Construct a new state.
   LLILCJitPerThreadState()
       : LLVMContext(), ClassTypeMap(), ArrayTypeMap(), FieldIndexMap(),
-        JitContext(NULL) {}
+        JitContext(nullptr) {}
 
   /// Each thread maintains its own \p LLVMContext. This is where
   /// LLVM keeps definitions of types and similar constructs.

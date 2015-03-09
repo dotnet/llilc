@@ -94,7 +94,7 @@ public:
   /// Construct a flow graph edge list for iterating over the predecessors
   /// of the \p Fg node.
   /// \param Fg The node whose predecessors are desired.
-  /// \pre \p Fg != NULL.
+  /// \pre \p Fg != nullptr.
   /// \post **this** is a predecessor edge list representing the predecessors
   /// of \p Fg.
   FlowGraphPredecessorEdgeList(FlowGraphNode *Fg)
@@ -114,9 +114,9 @@ public:
 
   /// \return The source of the current edge which will be one of the predecessors
   /// of the \p Fg node, unless the list has been exhausted in which case
-  /// return NULL.
+  /// return nullptr.
   FlowGraphNode *getSource() override {
-    return (PredIterator == PredIteratorEnd) ? NULL
+    return (PredIterator == PredIteratorEnd) ? nullptr
                                              : (FlowGraphNode *)*PredIterator;
   }
 
@@ -140,7 +140,7 @@ public:
   /// Construct a flow graph edge list for iterating over the successors
   /// of the \p Fg node.
   /// \param Fg The node whose successors are desired.
-  /// \pre \p Fg != NULL.
+  /// \pre \p Fg != nullptr.
   /// \post **this** is a successor edge list representing the successors
   /// of \p Fg.
   FlowGraphSuccessorEdgeList(FlowGraphNode *Fg)
@@ -155,9 +155,9 @@ public:
 
   /// \return The sink of the current edge which will be one of the successors
   /// of the \p Fg node, unless the list has been exhausted in which case
-  /// return NULL.
+  /// return nullptr.
   FlowGraphNode *getSink() override {
-    return (SuccIterator == SuccIteratorEnd) ? NULL
+    return (SuccIterator == SuccIteratorEnd) ? nullptr
                                              : (FlowGraphNode *)*SuccIterator;
   }
 
@@ -172,37 +172,53 @@ private:
   llvm::succ_iterator SuccIteratorEnd;
 };
 
+/// \brief A stack of IRNode pointers representing the MSIL operand stack.
+///
+/// The MSIL instruction set operates on a stack machine. Instructions
+/// with operands may take them from the stack (if not some kind of
+/// immediate) and the results of instruction are pushed on the operand stack.
+/// The MSIL operands are translated by the reader into IRNodes. 
+/// The operand stack is represented by a stack of pointers to the 
+/// IRNodes for the operands. 
+///
+/// This class completes the implementation of the ReaderStack base class.
 class GenStack : public ReaderStack {
+private:
+  /// Owner of the operand stack.
+  ReaderBase *Reader;
 public:
-  GenStack();
+  /// \brief Construct a GenStack with an initial capacity of \a MaxStack.
+  ///
+  /// \param MaxStack Suggested capacity for the stack. However the stack
+  /// is allowed to grow larger than MaxStack as needed (possibly due to
+  /// function inlining). 
+  /// \param Reader The ReaderBase that owns this operand stack. This is needed
+  /// so that storage can be allocated from the lifetime of the reader.
   GenStack(uint32_t MaxStack, ReaderBase *Reader);
-  IRNode *pop(void) override;
-  void push(IRNode *NewVal, IRNode **NewIR) override;
-  void clearStack(void) override;
-  bool empty(void) override;
-  void assertEmpty(void) override;
-  uint32_t depth() override;
+  
+  /// \brief Pop the top element off the operand stack.
+  ///
+  /// \return The top element of the stack.
+  /// \pre The stack is not empty
+  /// \post The top element of the stack has been removed.
+  IRNode *pop() override;
 
-  // For iteration
-  IRNode *getIterator(ReaderStackIterator& Iterator) override;
-  IRNode *iteratorGetNext(ReaderStackIterator& Iterator) override;
-  void iteratorReplace(ReaderStackIterator& Iterator, IRNode *) override;
-  IRNode *getReverseIterator(ReaderStackIterator& Iterator) override;
-  IRNode *getReverseIteratorFromDepth(ReaderStackIterator& Iterator,
-    uint32_t Depth) override;
-  IRNode *reverseIteratorGetNext(ReaderStackIterator& Iterator) override;
+  /// \brief Push \p NewVal onto the operand stack.
+  ///
+  /// \param NewVal The value to be pushed.
+  /// \pre NewVal != nullptr
+  void push(IRNode *NewVal) override;
+
+  /// \brief If the stack is not empty, cause an assertion failure.
+  void assertEmpty() override;
 
 #if !defined(NODEBUG)
+  /// \brief Print the contents of the operand stack onto the debug output.
   void print() override;
 #endif
 
+  /// \brief Returns a copy of this operand stack.
   ReaderStack *copy() override;
-
-private:
-  int32_t Max;
-  int32_t Top;
-  IRNode **Stack;
-  ReaderBase *Reader;
 };
 
 class GenIR : public ReaderBase {
@@ -246,47 +262,44 @@ public:
   // Used for testing, client can force verification.
   bool verForceVerification(void) override { return false; };
 
-  bool abs(IRNode *Arg1, IRNode **RetVal, IRNode **NewIR) override {
+  bool abs(IRNode *Arg1, IRNode **RetVal) override {
     throw NotYetImplementedException("abs");
   };
 
-  IRNode *argList(IRNode **NewIR) override;
-  IRNode *instParam(IRNode **NewIR) override;
+  IRNode *argList() override;
+  IRNode *instParam() override;
 
-  IRNode *secretParam(IRNode **NewIR) override {
+  IRNode *secretParam() override {
     throw NotYetImplementedException("secretParam");
   };
-  IRNode *thisObj(IRNode **NewIR) override;
+  IRNode *thisObj() override;
 
-  void boolBranch(ReaderBaseNS::BoolBranchOpcode Opcode, IRNode *Arg1,
-                  IRNode **NewIR) override;
+  void boolBranch(ReaderBaseNS::BoolBranchOpcode Opcode, IRNode *Arg1) override;
 
   IRNode *binaryOp(ReaderBaseNS::BinaryOpcode Opcode, IRNode *Arg1,
-                   IRNode *Arg2, IRNode **NewIR) override;
-  void branch(IRNode **NewIR) override;
+                   IRNode *Arg2) override;
+  void branch() override;
 
   IRNode *call(ReaderBaseNS::CallOpcode Opcode, mdToken Token,
                mdToken ConstraintTypeRef, mdToken LoadFtnToken,
                bool HasReadOnlyPrefix, bool HasTailCallPrefix,
                bool IsUnmarkedTailCall, uint32_t CurrOffset,
-               bool *RecursiveTailCall, IRNode **NewIR) override;
+               bool *RecursiveTailCall) override;
 
   IRNode *castOp(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *ObjRefNode,
-                 IRNode **NewIR, CorInfoHelpFunc HelperId) override;
+                 CorInfoHelpFunc HelperId) override;
 
-  IRNode *ckFinite(IRNode *Arg1, IRNode **NewIR) override {
+  IRNode *ckFinite(IRNode *Arg1) override {
     throw NotYetImplementedException("ckFinite");
   };
-  IRNode *cmp(ReaderBaseNS::CmpOpcode Opode, IRNode *Arg1, IRNode *Arg2,
-              IRNode **NewIR) override;
+  IRNode *cmp(ReaderBaseNS::CmpOpcode Opode, IRNode *Arg1,
+              IRNode *Arg2) override;
   void condBranch(ReaderBaseNS::CondBranchOpcode Opcode, IRNode *Arg1,
-                  IRNode *Arg2, IRNode **NewIR) override;
-  IRNode *conv(ReaderBaseNS::ConvOpcode Opcode, IRNode *Arg1,
-               IRNode **NewIR) override;
+                  IRNode *Arg2) override;
+  IRNode *conv(ReaderBaseNS::ConvOpcode Opcode, IRNode *Arg1) override;
 
-  void dup(IRNode *Opr, IRNode **Result1, IRNode **Result2,
-           IRNode **NewIR) override;
-  void endFilter(IRNode *Arg1, IRNode **NewIR) override {
+  void dup(IRNode *Opr, IRNode **Result1, IRNode **Result2) override;
+  void endFilter(IRNode *Arg1) override {
     throw NotYetImplementedException("endFilter");
   };
 
@@ -303,177 +316,162 @@ public:
   void fgNodeSetOperandStack(FlowGraphNode *Fg, ReaderStack *Stack) override;
   ReaderStack *fgNodeGetOperandStack(FlowGraphNode *Fg) override;
 
-  IRNode *getStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                                IRNode **NewIR) override;
+  IRNode *getStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken) override;
 
   void jmp(ReaderBaseNS::CallOpcode Opcode, mdToken Token, bool HasThis,
-           bool HasVarArg, IRNode **NewIR) override {
+           bool HasVarArg) override {
     throw NotYetImplementedException("jmp");
   };
 
   void leave(uint32_t TargetOffset, bool IsNonLocal,
-             bool EndsWithNonLocalGoto, IRNode **NewIR) override;
-  IRNode *loadArg(uint32_t ArgOrdinal, bool IsJmp, IRNode **NewIR) override;
-  IRNode *loadLocal(uint32_t ArgOrdinal, IRNode **NewIR) override;
-  IRNode *loadArgAddress(uint32_t ArgOrdinal, IRNode **NewIR) override;
-  IRNode *loadLocalAddress(uint32_t LocOrdinal, IRNode **NewIR) override;
-  IRNode *loadConstantI4(int32_t Constant, IRNode **NewIR) override;
-  IRNode *loadConstantI8(int64_t Constant, IRNode **NewIR) override;
-  IRNode *loadConstantI(size_t Constant, IRNode **NewIR) override;
-  IRNode *loadConstantR4(float Value, IRNode **NewIR) override;
-  IRNode *loadConstantR8(double Value, IRNode **NewIR) override;
+             bool EndsWithNonLocalGoto) override;
+  IRNode *loadArg(uint32_t ArgOrdinal, bool IsJmp) override;
+  IRNode *loadLocal(uint32_t ArgOrdinal) override;
+  IRNode *loadArgAddress(uint32_t ArgOrdinal) override;
+  IRNode *loadLocalAddress(uint32_t LocOrdinal) override;
+  IRNode *loadConstantI4(int32_t Constant) override;
+  IRNode *loadConstantI8(int64_t Constant) override;
+  IRNode *loadConstantI(size_t Constant) override;
+  IRNode *loadConstantR4(float Value) override;
+  IRNode *loadConstantR8(double Value) override;
   IRNode *loadElem(ReaderBaseNS::LdElemOpcode Opcode,
                    CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
-                   IRNode *Arg2, IRNode **NewIR) override {
+                   IRNode *Arg2) override {
     throw NotYetImplementedException("loadElem");
   };
   IRNode *loadElemA(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
-                    IRNode *Arg2, bool IsReadOnly, IRNode **NewIR) override {
+                    IRNode *Arg2, bool IsReadOnly) override {
     throw NotYetImplementedException("loadElemA");
   };
   IRNode *loadField(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
-                    ReaderAlignType Alignment, bool IsVolatile,
-                    IRNode **NewIR) override;
+                    ReaderAlignType Alignment, bool IsVolatile) override;
 
-  IRNode *loadNull(IRNode **NewIR) override;
-  IRNode *localAlloc(IRNode *Arg, bool ZeroInit, IRNode **NewIR) override {
+  IRNode *loadNull() override;
+  IRNode *localAlloc(IRNode *Arg, bool ZeroInit) override {
     throw NotYetImplementedException("localAlloc");
   };
-  IRNode *loadFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Obj,
-                           IRNode **NewIR) override;
+  IRNode *loadFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                           IRNode *Obj) override;
 
-  IRNode *loadLen(IRNode *Arg1, IRNode **NewIR) override;
+  IRNode *loadLen(IRNode *Array, bool ArrayMayBeNull = true) override;
 
-  bool arrayAddress(CORINFO_SIG_INFO *Sig, IRNode **RetVal,
-                    IRNode **NewIR) override {
+  bool arrayAddress(CORINFO_SIG_INFO *Sig, IRNode **RetVal) override {
     throw NotYetImplementedException("arrayAddress");
   };
-  IRNode *loadStringLen(IRNode *Arg1, IRNode **NewIR) override;
+  IRNode *loadStringLen(IRNode *Arg1) override;
 
-  IRNode *getTypeFromHandle(IRNode *Arg1, IRNode **NewIR) override {
+  IRNode *getTypeFromHandle(IRNode *Arg1) override {
     throw NotYetImplementedException("getTypeFromHandle");
   };
-  IRNode *getValueFromRuntimeHandle(IRNode *Arg1, IRNode **NewIR) override {
+  IRNode *getValueFromRuntimeHandle(IRNode *Arg1) override {
     throw NotYetImplementedException("getValueFromRuntimeHandle");
   };
   IRNode *arrayGetDimLength(IRNode *Arg1, IRNode *Arg2,
-                            CORINFO_CALL_INFO *CallInfo,
-                            IRNode **NewIR) override {
+                            CORINFO_CALL_INFO *CallInfo) override {
     throw NotYetImplementedException("arrayGetDimLength");
   };
 
   IRNode *loadAndBox(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Addr,
-                     ReaderAlignType AlignmentPrefix, IRNode **NewIR) override {
+                     ReaderAlignType AlignmentPrefix) override {
     throw NotYetImplementedException("loadAndBox");
   };
   IRNode *convertHandle(IRNode *GetTokenNumericNode, CorInfoHelpFunc HelperID,
-                        CORINFO_CLASS_HANDLE ClassHandle,
-                        IRNode **NewIR) override {
+                        CORINFO_CLASS_HANDLE ClassHandle) override {
     throw NotYetImplementedException("convertHandle");
   };
-  void convertTypeHandleLookupHelperToIntrinsic(bool CanCompareToGetType,
-                                                IRNode *IR) override {
+  void
+  convertTypeHandleLookupHelperToIntrinsic(bool CanCompareToGetType) override {
     throw NotYetImplementedException(
         "convertTypeHandleLookupHelperToIntrinsic");
   };
 
-  IRNode *loadStaticField(CORINFO_RESOLVED_TOKEN *FieldToken, bool IsVolatile,
-                          IRNode **NewIR) override;
+  IRNode *loadStaticField(CORINFO_RESOLVED_TOKEN *FieldToken,
+                          bool IsVolatile) override;
 
-  IRNode *stringLiteral(mdToken Token, void *StringHandle, InfoAccessType Iat,
-                        IRNode **NewIR);
+  IRNode *stringLiteral(mdToken Token, void *StringHandle, InfoAccessType Iat);
 
-  IRNode *loadStr(mdToken Token, IRNode **NewIR) override;
+  IRNode *loadStr(mdToken Token) override;
 
   IRNode *loadVirtFunc(IRNode *Arg1, CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                       CORINFO_CALL_INFO *CallInfo, IRNode **NewIR) override;
+                       CORINFO_CALL_INFO *CallInfo) override;
 
   IRNode *loadPrimitiveType(IRNode *Addr, CorInfoType CorInfoType,
                             ReaderAlignType Alignment, bool IsVolatile,
-                            bool IsInterfConst, IRNode **NewIR) override;
+                            bool IsInterfConst,
+                            bool AddressMayBeNull = true) override;
 
   IRNode *loadNonPrimitiveObj(IRNode *Addr, CORINFO_CLASS_HANDLE ClassHandle,
                               ReaderAlignType Alignment, bool IsVolatile,
-                              IRNode **NewIR) override {
+                              bool AddressMayBeNull = true) override {
     throw NotYetImplementedException("loadNonPrimitiveObj");
   };
-  IRNode *makeRefAny(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Object,
-                     IRNode **NewIR) override {
+  IRNode *makeRefAny(CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                     IRNode *Object) override {
     throw NotYetImplementedException("makeRefAny");
   };
-  IRNode *newArr(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
-                 IRNode **NewIR) override;
-  IRNode *newObj(mdToken Token, mdToken LoadFtnToken, uint32_t CurrOffset,
-                 IRNode **NewIR) override;
-  void pop(IRNode *Opr, IRNode **NewIR) override;
-  IRNode *refAnyType(IRNode *Arg1, IRNode **NewIR) override {
+  IRNode *newArr(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1) override;
+  IRNode *newObj(mdToken Token, mdToken LoadFtnToken,
+                 uint32_t CurrOffset) override;
+  void pop(IRNode *Opr) override;
+  IRNode *refAnyType(IRNode *Arg1) override {
     throw NotYetImplementedException("refAnyType");
   };
 
-  void rethrow(IRNode **NewIR) override {
-    throw NotYetImplementedException("rethrow");
-  };
-  void returnOpcode(IRNode *Opr, bool SynchronousMethod,
-                    IRNode **NewIR) override;
+  void rethrow() override { throw NotYetImplementedException("rethrow"); };
+  void returnOpcode(IRNode *Opr, bool SynchronousMethod) override;
   IRNode *shift(ReaderBaseNS::ShiftOpcode Opcode, IRNode *ShiftAmount,
-                IRNode *ShiftOperand, IRNode **NewIR) override;
-  IRNode *sizeofOpcode(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                       IRNode **NewIR) override;
-  void storeArg(uint32_t ArgOrdinal, IRNode *Arg1,
-                ReaderAlignType Alignment, bool IsVolatile,
-                IRNode **NewIR) override;
+                IRNode *ShiftOperand) override;
+  IRNode *sizeofOpcode(CORINFO_RESOLVED_TOKEN *ResolvedToken) override;
+  void storeArg(uint32_t ArgOrdinal, IRNode *Arg1, ReaderAlignType Alignment,
+                bool IsVolatile) override;
   void storeElem(ReaderBaseNS::StElemOpcode Opcode,
                  CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
-                 IRNode *Arg2, IRNode *Arg3, IRNode **NewIR) override {
+                 IRNode *Arg2, IRNode *Arg3) override {
     throw NotYetImplementedException("storeElem");
   };
 
   void storeField(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
-                  IRNode *Arg2, ReaderAlignType Alignment, bool IsVolatile,
-                  IRNode **NewIR) override;
+                  IRNode *Arg2, ReaderAlignType Alignment,
+                  bool IsVolatile) override;
 
   void storePrimitiveType(IRNode *Value, IRNode *Addr, CorInfoType CorInfoType,
                           ReaderAlignType Alignment, bool IsVolatile,
-                          IRNode **NewIR) override;
+                          bool AddressMayBeNull = true) override;
 
-  void storeLocal(uint32_t LocOrdinal, IRNode *Arg1,
-                  ReaderAlignType Alignment, bool IsVolatile,
-                  IRNode **NewIR) override;
+  void storeLocal(uint32_t LocOrdinal, IRNode *Arg1, ReaderAlignType Alignment,
+                  bool IsVolatile) override;
   void storeStaticField(CORINFO_RESOLVED_TOKEN *FieldToken,
-                        IRNode *ValueToStore,
-                        bool IsVolatile, IRNode **NewIR) override;
+                        IRNode *ValueToStore, bool IsVolatile) override;
 
-  IRNode *stringGetChar(IRNode *Arg1, IRNode *Arg2, IRNode **NewIR) override;
+  IRNode *stringGetChar(IRNode *Arg1, IRNode *Arg2) override;
 
-  bool sqrt(IRNode *Arg1, IRNode **RetVal, IRNode **NewIR) override {
+  bool sqrt(IRNode *Arg1, IRNode **RetVal) override {
     throw NotYetImplementedException("sqrt");
   };
 
   // The callTarget node is only required on IA64.
   bool interlockedIntrinsicBinOp(IRNode *Arg1, IRNode *Arg2, IRNode **RetVal,
-                                 CorInfoIntrinsics IntrinsicID,
-                                 IRNode **NewIR) override {
+                                 CorInfoIntrinsics IntrinsicID) override {
     throw NotYetImplementedException("interlockedIntrinsicBinOp");
   };
   bool interlockedCmpXchg(IRNode *Arg1, IRNode *Arg2, IRNode *Arg3,
-                          IRNode **RetVal, CorInfoIntrinsics IntrinsicID,
-                          IRNode **NewIR) override {
+                          IRNode **RetVal,
+                          CorInfoIntrinsics IntrinsicID) override {
     throw NotYetImplementedException("interlockedCmpXchg");
   };
-  bool memoryBarrier(IRNode **NewIR) override;
+  bool memoryBarrier() override;
 
-  void switchOpcode(IRNode *Opr, IRNode **NewIR) override;
+  void switchOpcode(IRNode *Opr) override;
 
-  void throwOpcode(IRNode *Arg1, IRNode **NewIR) override;
-  IRNode *unaryOp(ReaderBaseNS::UnaryOpcode Opcode, IRNode *Arg1,
-                  IRNode **NewIR) override;
+  void throwOpcode(IRNode *Arg1) override;
+  IRNode *unaryOp(ReaderBaseNS::UnaryOpcode Opcode, IRNode *Arg1) override;
   IRNode *unbox(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg2,
-                IRNode **NewIR, bool AndLoad, ReaderAlignType Alignment,
+                bool AndLoad, ReaderAlignType Alignment,
                 bool IsVolatile) override {
     throw NotYetImplementedException("unbox");
   };
 
-  void nop(IRNode **NewIR) override;
+  void nop() override;
 
   void insertIBCAnnotations() override;
   IRNode *insertIBCAnnotation(FlowGraphNode *Node, uint32_t Count,
@@ -510,15 +508,13 @@ public:
   void beginFlowGraphNode(FlowGraphNode *Fg, uint32_t CurrOffset,
                           bool IsVerifyOnly) override;
   // Called at the end of block processing.
-  void endFlowGraphNode(FlowGraphNode *Fg, uint32_t CurrOffset,
-                        IRNode **NewIR) override;
+  void endFlowGraphNode(FlowGraphNode *Fg, uint32_t CurrOffset) override;
 
   // Used to maintain operand stack.
   void maintainOperandStack(IRNode **Opr1, IRNode **Opr2,
-                            FlowGraphNode *CurrentBlock,
-                            IRNode **NewIR) override;
+                            FlowGraphNode *CurrentBlock) override;
   void assignToSuccessorStackNode(FlowGraphNode *, IRNode *Dst, IRNode *Src,
-                                  IRNode **NewIR,
+
                                   bool *IsMultiByteAssign) override {
     throw NotYetImplementedException("assignToSuccessorStackNode");
   };
@@ -526,14 +522,13 @@ public:
     throw NotYetImplementedException("typesCompatible");
   };
 
-  void removeStackInterference(IRNode **NewIR) override;
+  void removeStackInterference() override;
 
   void removeStackInterferenceForLocalStore(uint32_t Opcode,
-                                            uint32_t Ordinal,
-                                            IRNode **NewIR) override;
+                                            uint32_t Ordinal) override;
 
   // Remove all IRNodes from block (for verification error processing.)
-  void clearCurrentBlock(IRNode **NewIR) override {
+  void clearCurrentBlock() override {
     throw NotYetImplementedException("clearCurrentBlock");
   };
 
@@ -678,9 +673,7 @@ public:
     throw NotYetImplementedException("findTryRegionEndOfClauses");
   };
 
-  bool isCall(IRNode **NewIR) override {
-    throw NotYetImplementedException("isCall");
-  };
+  bool isCall() override { throw NotYetImplementedException("isCall"); };
   bool isRegionStartBlock(FlowGraphNode *Fg) override {
     throw NotYetImplementedException("isRegionStartBlock");
   };
@@ -691,7 +684,7 @@ public:
   // Create a symbol node that will be used to represent the stack-incoming
   // exception object
   // upon entry to funclets.
-  IRNode *makeExceptionObject(IRNode **NewIR) override {
+  IRNode *makeExceptionObject() override {
     throw NotYetImplementedException("makeExceptionObject");
   };
 
@@ -701,46 +694,43 @@ public:
 
   // Asks GenIR to make operand value accessible by address, and return a node
   // that references the incoming operand by address.
-  IRNode *addressOfLeaf(IRNode *Leaf, IRNode **NewIR) override;
-  IRNode *addressOfValue(IRNode *Leaf, IRNode **NewIR) override;
+  IRNode *addressOfLeaf(IRNode *Leaf) override;
+  IRNode *addressOfValue(IRNode *Leaf) override;
 
   // Helper callback used by rdrCall to emit call code.
   IRNode *genCall(ReaderCallTargetData *CallTargetInfo, CallArgTriple *ArgArray,
-                  uint32_t NumArgs, IRNode **CallNode,
-                  IRNode **NewIR) override;
+                  uint32_t NumArgs, IRNode **CallNode) override;
 
   bool canMakeDirectCall(ReaderCallTargetData *CallTargetData) override;
 
   // Generate call to helper
-  IRNode *callHelper(CorInfoHelpFunc HelperID, IRNode *Dst, IRNode **NewIR,
-                     IRNode *Arg1 = NULL, IRNode *Arg2 = NULL,
-                     IRNode *Arg3 = NULL, IRNode *Arg4 = NULL,
+  IRNode *callHelper(CorInfoHelpFunc HelperID, IRNode *Dst,
+                     IRNode *Arg1 = nullptr, IRNode *Arg2 = nullptr,
+                     IRNode *Arg3 = nullptr, IRNode *Arg4 = nullptr,
                      ReaderAlignType Alignment = Reader_AlignUnknown,
                      bool IsVolatile = false, bool NoCtor = false,
                      bool CanMoveUp = false) override;
 
   // Generate call to helper
   IRNode *callHelperImpl(CorInfoHelpFunc HelperID, llvm::Type *ReturnType,
-                         IRNode **NewIR, IRNode *Arg1 = NULL,
-                         IRNode *Arg2 = NULL, IRNode *Arg3 = NULL,
-                         IRNode *Arg4 = NULL,
+                         IRNode *Arg1 = nullptr, IRNode *Arg2 = nullptr,
+                         IRNode *Arg3 = nullptr, IRNode *Arg4 = nullptr,
                          ReaderAlignType Alignment = Reader_AlignUnknown,
                          bool IsVolatile = false, bool NoCtor = false,
                          bool CanMoveUp = false);
 
   // Generate special generics helper that might need to insert flow
   IRNode *callRuntimeHandleHelper(CorInfoHelpFunc Helper, IRNode *Arg1,
-                                  IRNode *Arg2, IRNode *NullCheckArg,
-                                  IRNode **NewIR) override {
+                                  IRNode *Arg2, IRNode *NullCheckArg) override {
     throw NotYetImplementedException("callRuntimeHandleHelper");
   };
 
-  IRNode *convertToHelperArgumentType(IRNode *Opr, uint32_t DestinationSize,
-                                      IRNode **NewIR) override {
+  IRNode *convertToHelperArgumentType(IRNode *Opr,
+                                      uint32_t DestinationSize) override {
     throw NotYetImplementedException("convertToHelperArgumentType");
   };
 
-  IRNode *genNullCheck(IRNode *Node, IRNode **NewIR) override;
+  IRNode *genNullCheck(IRNode *Node) override;
 
   void
   createSym(uint32_t Num, bool IsAuto, CorInfoType CorType,
@@ -748,18 +738,17 @@ public:
             ReaderSpecialSymbolType SymType = Reader_NotSpecialSymbol) override;
 
   IRNode *derefAddress(IRNode *Address, bool DstIsGCPtr, bool IsConst,
-                       IRNode **NewIR) override;
+                       bool AddressMayBeNull = true) override;
 
-  IRNode *conditionalDerefAddress(IRNode *Address, IRNode **NewIR) override {
+  IRNode *conditionalDerefAddress(IRNode *Address) override {
     throw NotYetImplementedException("conditionalDerefAddress");
   };
 
-  IRNode *getHelperCallAddress(CorInfoHelpFunc HelperId,
-                               IRNode **NewIR) override;
+  IRNode *getHelperCallAddress(CorInfoHelpFunc HelperId) override;
 
   IRNode *handleToIRNode(mdToken Token, void *EmbedHandle, void *RealHandle,
                          bool IsIndirect, bool IsReadOnly, bool IsRelocatable,
-                         bool IsCallTarget, IRNode **NewIR,
+                         bool IsCallTarget,
                          bool IsFrozenObject = false) override;
 
   // Create an operand that will be used to hold a pointer.
@@ -781,8 +770,7 @@ public:
   // Called once region tree has been built.
   void setEHInfo(EHRegion *EhRegionTree, EHRegionList *EhRegionList) override;
 
-  void setSequencePoint(uint32_t, ICorDebugInfo::SourceTypes,
-                        IRNode **NewIR) override {
+  void setSequencePoint(uint32_t, ICorDebugInfo::SourceTypes) override {
     throw NotYetImplementedException("setSequencePoint");
   };
   bool needSequencePoints() override;
@@ -794,24 +782,23 @@ public:
 
   // vararg
   bool callIsCorVarArgs(IRNode *CallNode);
-  void canonVarargsCall(IRNode *CallNode, ReaderCallTargetData *CallTargetInfo,
-                        IRNode **NewIR) {
+  void canonVarargsCall(IRNode *CallNode,
+                        ReaderCallTargetData *CallTargetInfo) {
     throw NotYetImplementedException("canonVarargsCall");
   };
 
   // newobj
   bool canonNewObjCall(IRNode *CallNode, ReaderCallTargetData *CallTargetData,
-                       IRNode **OutResult, IRNode **NewIR);
+                       IRNode **OutResult);
   void canonNewArrayCall(IRNode *CallNode, ReaderCallTargetData *CallTargetData,
-                         IRNode **OutResult, IRNode **NewIR);
+                         IRNode **OutResult);
 #endif
 
   // Used to expand multidimensional array access intrinsics
-  bool arrayGet(CORINFO_SIG_INFO *Sig, IRNode **RetVal,
-                IRNode **NewIR) override {
+  bool arrayGet(CORINFO_SIG_INFO *Sig, IRNode **RetVal) override {
     throw NotYetImplementedException("arrayGet");
   };
-  bool arraySet(CORINFO_SIG_INFO *Sig, IRNode **NewIR) override {
+  bool arraySet(CORINFO_SIG_INFO *Sig) override {
     throw NotYetImplementedException("arraySet");
   };
 
@@ -819,7 +806,7 @@ public:
   void dbDumpFunction(void) override {
     throw NotYetImplementedException("dbDumpFunction");
   };
-  void dbPrintIRNode(IRNode *NewIR) override { NewIR->dump(); };
+  void dbPrintIRNode(IRNode *Instr) override { Instr->dump(); };
   void dbPrintFGNode(FlowGraphNode *Fg) override {
     throw NotYetImplementedException("dbPrintFGNode");
   };
@@ -858,12 +845,14 @@ private:
   IRNode *genPointerSub(IRNode *Arg1, IRNode *Arg2);
   IRNode *getFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                           CORINFO_FIELD_INFO *FieldInfo, IRNode *Obj,
-                          bool MustNullCheck, IRNode **NewIR);
+                          bool MustNullCheck);
 
   IRNode *simpleFieldAddress(IRNode *BaseAddress,
                              CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                             CORINFO_FIELD_INFO *FieldInfo,
-                             IRNode **NewIR) override;
+                             CORINFO_FIELD_INFO *FieldInfo) override;
+
+  IRNode *getPrimitiveAddress(IRNode *Addr, CorInfoType CorInfoType,
+                              ReaderAlignType Alignment, uint32_t *Align);
 
   void classifyCmpType(llvm::Type *Ty, uint32_t &Size, bool &IsPointer,
                        bool &IsFloat);
@@ -911,8 +900,18 @@ private:
   uint32_t argOrdinalToArgIndex(uint32_t ArgOrdinal);
   uint32_t argIndexToArgOrdinal(uint32_t ArgIndex);
 
-  void makeStore(llvm::Type *Ty, llvm::Value *Address,
-                 llvm::Value *ValueToStore, bool IsVolatile, IRNode **NewIR);
+  llvm::StoreInst *makeStore(llvm::Value *ValueToStore, llvm::Value *Address,
+                             bool IsVolatile, bool AddressMayBeNull = true);
+  llvm::StoreInst *makeStoreNonNull(llvm::Value *ValueToStore,
+                                    llvm::Value *Address, bool IsVolatile) {
+    return makeStore(ValueToStore, Address, IsVolatile, false);
+  }
+
+  llvm::LoadInst *makeLoad(llvm::Value *Address, bool IsVolatile,
+                           bool AddressMayBeNull = true);
+  llvm::LoadInst *makeLoadNonNull(llvm::Value *Address, bool IsVolatile) {
+    return makeLoad(Address, IsVolatile, false);
+  }
 
 private:
   LLILCJitContext *JitContext;
