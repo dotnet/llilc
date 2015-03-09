@@ -41,7 +41,11 @@ def runTidy(args):
       return 1
 
     llilcSrc = expandPath(args.llilc_source)
-    llilcBuild = expandPath(args.llilc_build)
+    llilcBuild = ""
+    if args.llilc_build != None:
+      llilcBuild = expandPath(args.llilc_build)
+    else:
+      llilcBuild = expandPath(os.path.join(args.llvm_build, "tools", "llilc"))
     llilcLib = os.path.join(llilcSrc, "lib")
     llilcInc = os.path.join(llilcSrc, "include")
 
