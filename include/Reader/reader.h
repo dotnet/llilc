@@ -671,20 +671,39 @@ struct VerificationBranchInfo {
 
 ReaderBaseNS::CallOpcode remapCallOpcode(ReaderBaseNS::OPCODE Opcode);
 
+/// \brief Parameters needed for converting MSIL to client IR for
+/// a particular flow graph node.
+///
+/// The MSIL conversion for a flow graph node happens within a protected region 
+/// set up by \p readBytesForFlowGraphNode. This struct is used to pass state 
+/// information back and forth to the helper method.
 struct ReadBytesForFlowGraphNodeHelperParam {
-  ReaderBase *This;
-  ReaderException *Excep;
-  FlowGraphNode *Fg;
-  bool IsVerifyOnly;
-  uint32_t CurrentOffset;
-  bool LocalFault;
-  bool HasFallThrough;
-  VerificationState *VState;
-  bool VerifiedEndBlock;
+  ReaderBase *This;                ///< The base reader instance
+  ReaderException *Excep;          ///< Captured exception state
+  FlowGraphNode *Fg;               ///< The flow graph node being processed
+  bool IsVerifyOnly;               ///< True if the reader is just verifying
+  uint32_t CurrentOffset;          ///< Offset within the IL stream
+  bool LocalFault;                 ///< True if the current node failed
+                                   ///< verification
+  bool HasFallThrough;             ///< True if the control flows off the end
+                                   ///< of this node into the next one
+  VerificationState *VState;       ///< Verifier state for the node
+  bool VerifiedEndBlock;           ///< True if we've verified the block has
+                                   ///< an appropriate ending
 };
 
 static const int32_t SizeOfCEECall = 5;
 
+/// \brief \p ReaderBase is an abstract base class for tools that need to 
+/// both model MSIL and interact with the CoreCLR ExecutionEngine or some
+/// similar repository of knowledge.
+///
+/// \p ReaderBase is intended to be used as a traversal agent through
+/// MSIL for a derived \p Reader class (aka *Client*) with more specialized 
+/// requirements. 
+/// 
+/// For instance an MSIL Verifier or a JIT might derive from \p ReaderBase 
+/// and provide suitable implementations of the companion classes.
 class ReaderBase {
   friend class ReaderCallTargetData;
 
@@ -790,91 +809,434 @@ private:
 
 public:
   bool AreInlining;
+  
+  /// \brief Constructor
+  ///
+  /// Initializes the base part of the reader object, setting all fields to
+  /// zero, and then initializing key fields from the parameters.
+  ///
+  /// \param CorJitInfo    The jit interface for this method
+  /// \param MethodInfo    The method description provided by the EE
+  /// \param Flags         Flags indicating various options for processing.
+  ///                      \see \p CorJitFlag for more details.
   ReaderBase(ICorJitInfo *CorJitInfo, CORINFO_METHOD_INFO *MethodInfo,
              uint32_t Flags);
 
-  // Main Reader Entry
-  void msilToIR(void);
+  /// \brief Main entry point for the reader
+  ///
+  /// This method orchestrates client processing of the MSIL for the method 
+  /// specified by the constructor parameters. The processing runs in a series
+  /// of steps:
+  /// 1. Pre pass to allow the client to do initialization
+  /// 2. Setup: get sequents points, verify the exception information,
+  ///    build a region tree for exception handling, look for special keep
+  ///    alive parameters
+  /// 3. Build a flow graph for the method. Client is invoked on the explicit
+  ////   control flow inducing instructions in the MSIL.
+  /// 4. Middle pass to allow the client to process the flow graph
+  /// 5. Depth-first preorder traversal of the blocks in the flow graph. Client
+  ///    is invoked on each instruction in the block.    
+  /// 6. Flow graph cleanup
+  /// 7. Final pass to allow the client a chance to finish up
+  void msilToIR();
 
-  // Call CreateSym for each param and auto. Also return function bytecode
-  // start and length.
+  /// \brief Set up parameters and locals (autos)
+  ///
+  /// Uses the method and local signatures and information from the EE to 
+  /// direct client processing for the method parameters and the local
+  /// variables of the method.
+  ///
+  /// \params NumParams   Number of parameters to the method. Note this may
+  ///                     include implicit parameters like the this pointer.
+  /// \params NumAutos    Number of locals described in the local signature.
   void initParamsAndAutos(uint32_t NumParam, uint32_t NumAuto);
 
-  // Needed by inlining so public
-  FlowGraphNode *buildFlowGraph(FlowGraphNode **FgTail);
-  FlowGraphNode *fgSplitBlock(FlowGraphNode *Block, uint32_t Offset,
-                              IRNode *Node);
+  /// \brief Set up parameters
+  ///
+  /// Uses the method signature and information from the EE to direct the 
+  /// client to set up processing for method parameters.
+  ///
+  /// \params NumParams   Number of parameters to the method. Note this may
+  ///                     include implicit parameters like the this pointer.     
+  void buildUpParams(uint32_t NumParams);
+
+  /// \brief Set up locals (autos)
+  ///
+  /// Uses the local signature to direct the client to set up processing
+  /// for local variables in the method.
+  ///
+  /// \params NumAutos   Number of locals described in the signature.
+  void buildUpAutos(uint32_t NumAutos);
+
+  /// \brief Process the next element (argument or local) in a signature
+  ///
+  /// Utility routine used by \p buildUpParams and \p buildUpLocals to iterate
+  /// through a signature and obtain more detailed information about each 
+  /// element.
+  ///
+  /// \params ArgListHandle  Handle for the current element of the signature
+  /// \param Sig             The signature being iterated over.
+  /// \param CorType [out]   Optional; the CorInfoType of the current element.
+  /// \param Class [out]     Optional; the class handle of the current element.
+  /// \param IsPinned [out]  Optional; true if the current element is pinned.
+  ///
+  /// \returns Handle for the next element of the signature.
   CORINFO_ARG_LIST_HANDLE argListNext(CORINFO_ARG_LIST_HANDLE ArgListHandle,
                                       CORINFO_SIG_INFO *Sig,
                                       CorInfoType *CorType = nullptr,
                                       CORINFO_CLASS_HANDLE *Class = nullptr,
                                       bool *IsPinned = nullptr);
-  void buildUpParams(uint32_t NumParams);
-  void buildUpAutos(uint32_t NumAutos);
+
+  /// \brief Build the flow graph for the method
+  ///
+  /// Create a flow graph for the method. This determines which range of
+  /// MSIL instructions will lie within each node in the flow graph,
+  /// and also builds associations between the nodes and the EH regions.
+  ///
+  /// \param FgTail [out] The last flow graph node in the graph.
+  /// \returns The first flow graph node in the graph.
+  FlowGraphNode *buildFlowGraph(FlowGraphNode **FgTail);
+
+  /// \brief Split a flow graph node (aka block)
+  ///
+  /// Break the indicated \p Block into two blocks, with the divsion
+  /// happening at the indicated MSIL \p Offset. The client method
+  /// \p fgSplitBlock is invoked to allow the client to update its model
+  /// of the code as necessary.
+  ///
+  /// \param Block   The flow graph mode to split
+  /// \param Offset  The MSIL offset of the split point. Must be within
+  ///                the MSIL range for the block.
+  /// \param IRNode  The IR node corresponding to the split point.
+  /// \returns       The new node.
+  FlowGraphNode *fgSplitBlock(FlowGraphNode *Block, uint32_t Offset,
+                              IRNode *Node);
+
 #if defined(_DEBUG)
-  // Debug-only reader function to print range of MSIL.
+  /// \brief Debug-only reader function to print range of MSIL.
+  ///
+  /// Print the MSIL in the buffer for the given range. Output emitted via 
+  /// \p dbPrint().
+  ///
+  /// \param Buf           Buffer containing MSIL bytecode
+  /// \param StartOffset   Initial offset for the range to print
+  /// \param EndOffset     Ending offset for the range to print
   void printMSIL(uint8_t *Buf, uint32_t StartOffset, uint32_t EndOffset);
 #endif
 
+  /// \brief Determine the effect of this instruction on the operand stack
+  ///
+  /// Many MSIL instructions push or pop operands from the stack, or both pop
+  /// and push operands. This method determines the net number of pushes and 
+  /// pops for a particular instruction.
+  ///
+  /// \param Opcode     The MSIL opcode for the instruction
+  /// \param Operand    For call opcodes with signature tokens, pointer to the
+  ///                   token value in the IL stream
+  /// \param Pop [out]  Number of operands popped from the stack
+  /// \param Push [out] Number of operands pushed onto the stack
   void getMSILInstrStackDelta(ReaderBaseNS::OPCODE Opcode, uint8_t *Operand,
                               uint16_t *Pop, uint16_t *Push);
 
 private:
+  /// \brief Determine if a call instruction is a candidate to be a tail call
+  ///
+  /// The client may decide to give special tail-call treatment to calls that 
+  /// are followed closely by returns, even if the calls are not marked with 
+  /// the tail prefix. This method determines if such treatment is possible.
+  ///
+  /// \param ILInput       Pointer to the start of the MSIL bytecode stream
+  /// \param ILInputSize   Length of the MSIL bytecode stream
+  /// \param NextOffset    Offset into the stream just past the call
+  /// \param Token         Token value for calls that have sig tokens
+  ///
+  /// \returns             True if treating this call as a tail call is 
+  ///                      reasonble.
   bool isUnmarkedTailCall(uint8_t *ILInput, uint32_t ILInputSize,
                           uint32_t NextOffset, mdToken Token);
+
+  /// \brief Helper method called from \p isUnmarkedTailCall
+  ///
+  /// \param ILInput       Pointer to the start of the MSIL bytecode stream
+  /// \param ILInputSize   Length of the MSIL bytecode stream
+  /// \param NextOffset    Offset into the stream just past the call
+  /// \param Token         Token value for calls that have sig tokens
+  ///
+  /// \returns             True if treating this call as a tail call is 
+  ///                      reasonble.
   bool isUnmarkedTailCallHelper(uint8_t *ILInput, uint32_t ILInputSize,
                                 uint32_t NextOffset, mdToken Token);
+  
+  /// \brief Check if the current instruction is a valid explicit tail call
+  ///
+  /// Verify that this call is a valid explicit tail call. The call must be
+  /// closely followed by a return.
+  ///
+  /// \param ILOffset       Offset of the call instruction in the IL stream
+  /// \param AllowPop       true if it is acceptable for the call to be 
+  ///                       followed by a single pop before reaching the
+  ///                       return.
+  /// \returns              True if the current instruction is a valid explicit
+  ///                       tail call.
   bool checkExplicitTailCall(uint32_t ILOffset, bool AllowPop);
 
-  // Reduce given block from MSIL to IR
+  /// \brief Convert the MSIL for this flow graph node into the client IR
+  ///
+  /// Orchestrates client processing the MSIL in this flow graph node,
+  /// filling in the block contents. This outer method sets up a parameter 
+  /// block for its helper method and the invokes its helper within a protected
+  /// region so that various errors can be caught and handled appropriately.
+  ///
+  /// \param Fg                 The flow graph node to process.
+  /// \param IsVerifyOnly       True if the reader is only verifying the MSIL.
   void readBytesForFlowGraphNode(FlowGraphNode *Fg, bool IsVerifyOnly);
-  void
-  readBytesForFlowGraphNode_Helper(ReadBytesForFlowGraphNodeHelperParam *Param);
 
-public:
-  void initVerifyInfo(void);
+  /// \brief Helper method for \p readBytesForFlowGraphNode
+  ///
+  /// Helper method that orchestrates client processing the MSIL in a flow 
+  /// graph node specified by the parameters.
+  ///
+  /// \param Param              Encapsulated state from the main method
+  /// \param IsVerifyOnly       True if the reader is only verifying the MSIL.
+  void
+  readBytesForFlowGraphNodeHelper(ReadBytesForFlowGraphNodeHelperParam *Param);
 
 private:
+
+  /// \brief Perform special processing for blocks that start EH regions.
+  ///
+  /// Uses the \p CurrentFgNode to determine which block to process. Ensures
+  /// the operand stack and debugger info is in the proper state for blocks
+  /// that start EH regions.
   void setupBlockForEH();
 
+  /// \brief Check if this offset is the start of an MSIL instruction.
+  ///
+  /// Helper used to check whether branch targets and similar are referring
+  /// to the start of instructions.
+  ///
+  /// \param Offset     Offset into the MSIL stream
+  /// \returns          True if \pO Offset is the start of an MSIL instruction.
   bool isOffsetInstrStart(uint32_t Offset);
 
-  // SEQUENCE POINTS
+  // \brief Get custom sequence points
+  ///
+  /// This method checks with the EE to see if there are any debugger-specified
+  /// sequence points in the method. The results of this call is a bit vector
+  /// of offsets, stored in \p CustomSequencePoints. The native offsets that
+  /// correspond to these sequence points must be reported back in debug
+  /// information.
   void getCustomSequencePoints();
 
-  //
-  // FlowGraph
-  //
+  /// \name FlowGraph
+  ///{@
 
+  /// \brief Build the flow graph for the method.
+  ///
+  /// Walks the MSIL in the buffer, looking for explicit control flow
+  /// instructions (branches and similar). Uses these to instruct the client
+  /// to produce a flow graph describing the method's control flow.
+  ///
+  /// \param Buffer      Buffer of MSIL bytecodes
+  /// \param BufferSize  Length of the buffer in bytes
+  /// \returns           Head node of the flow graph.
   FlowGraphNode *fgBuildBasicBlocksFromBytes(uint8_t *Buffer,
                                              uint32_t BufferSize);
+
+  /// \brief First pass of flow graph construction
+  ///
+  /// This pass determines the legal starting points of all MSIL instructions,
+  /// locates all block-ending instructions (branches and similar) and all
+  /// branch targets, and builds blocks that end with the block-ending 
+  /// instructions and have appropriate flow graph edges to successor blocks.
+  /// 
+  /// \param Fg          Nominal entry node for the method
+  /// \param Buffer      Buffer of MSIL bytecodes
+  /// \param BufferSize  Length of the buffer in bytes
   void fgBuildPhase1(FlowGraphNode *Fg, uint8_t *Buffer, uint32_t BufferSize);
+
+  /// Create initial global verification data for all blocks in the flow graph
+  ///
+  /// \param HeadBlock   Initial block in the flow graph
   void fgAttachGlobalVerifyData(FlowGraphNode *HeadBlock);
+
+  /// Perform special case repair for recursive tail call and localloc
+  ///
+  /// The flow graph builder can optimistically describe recursive tail
+  /// calls as branches back to the start of the method. However this must
+  /// be undone if the method being compiled contains a localloc.
+  ///
+  /// \param HeadBlock   Initial block in the flow graph.
   void fgFixRecursiveEdges(FlowGraphNode *HeadBlock);
+
+  /// Helper method for building up the cases of a switch.
+  ///
+  /// \param SwitchNode    The client IR representing the switch
+  /// \param LabelNode     The client IR representing the case target
+  /// \param Element       The switch value for this case
+  /// \returns             The case node added to the switch.
   IRNode *fgAddCaseToCaseListHelper(IRNode *SwitchNode, IRNode *LabelNode,
                                     uint32_t Element);
+
+  /// \brief Add the unvisited successors of this block to the worklist
+  ///
+  /// This method scans all the successor blocks of \p CurrBlock, and
+  /// if there are any, creates new work list nodes for these successors,
+  /// marks them as visited, and (despite the method name) prepends them, 
+  /// returning a new worklist head node.
+  ///
+  /// \param Worklist       The current worklist of unvisited blocks
+  /// \param CurrBlock      The block to examine for unvisited successors
+  /// \returns              Updated list of unvisited blocks.
   FlowGraphNodeWorkList *
   fgAppendUnvisitedSuccToWorklist(FlowGraphNodeWorkList *Worklist,
                                   FlowGraphNode *CurrBlock);
+
+  /// \brief Remove this flow graph node and associated client IRNodes.
+  ///
+  /// This method removes \p Block from the flow graph along with all
+  /// incoming and outgoing edges. It also invokes \p fgDeleteNodesFromBlock
+  /// to enable the client to remove any IRNodes.
+  ///
+  /// \param Block          The block to delete
   void fgDeleteBlockAndNodes(FlowGraphNode *Block);
+
+  /// \brief Ensure the start of the current region includes all labels
+  ///        found right at the start of the region.
+  ///
+  /// Make sure that any instruction that targets this region via a
+  /// label is targeting the inside of the region, by moving the region
+  /// entry up before the labels as necessary.
+  ///
+  /// \param HandlerStartNode      First instruction in the region.
   void fgEnsureEnclosingRegionBeginsWithLabel(IRNode *HandlerStartNode);
+
+  /// \brief Get the innermost region that contains this MSIL offset
+  ///
+  /// Scan the EH regions of the method looking for the smallest region
+  /// that contains this MSIL offset.
+  ///
+  /// \param Offset        The MSIL offset in question
+  /// \returns             Pointer to the innermost region, or nullptr if none
   EHRegion *fgGetRegionFromMSILOffset(uint32_t Offset);
+
+  /// \brief Update the branches with temporary targets at this offset.
+  ///
+  /// When the flow graph is initially built, branches target temporary
+  /// graph nodes. This function updates all of the branches that target
+  /// a particular temporary node with the actual node representing the 
+  /// target in the flow graph.
+  ///
+  /// \param Offset             The MSIL offset of the branch target
+  /// \param TempBranchTarget   The placeholder node for the target
+  /// \param StartBlock         A node at an offset less than the target.
+  /// \returns                  The updated target block
   FlowGraphNode *fgReplaceBranchTarget(uint32_t Offset,
                                        FlowGraphNode *TempBranchTarget,
                                        FlowGraphNode *StartBlock);
-  void fgReplaceBranchTargets(void);
+
+  /// \brief Update all branches with temporary targets
+  ///
+  /// Walks the list of branch target offsets, invoking 
+  /// \p fgReplaceBranchTarget to update all branches with that target to
+  /// refer to the proper blocks.
+  void fgReplaceBranchTargets();
+
+  /// Process the end of a try region
+  /// \param EHRegion   The region to process.
   void fgInsertTryEnd(EHRegion *EhRegion);
+
+  /// Place client IR into the start of the EH region that begins at Offset.
+  ///
+  /// \param Offset        MSIL offset of the start of an EH region
+  /// \param EHNode        Client IR to insert into the block that
+  ///                      starts that region.
   void fgInsertBeginRegionExceptionNode(uint32_t Offset, IRNode *EHNode);
+
+  /// Place client IR into the end of the EH region that ends at Offset.
+  ///
+  /// \param Offset        MSIL offset of the end of an EH region
+  /// \param EHNode        Client IR to insert into the block that
+  ///                      ends that region.
   void fgInsertEndRegionExceptionNode(uint32_t Offset, IRNode *EHNode);
+
+  /// Add client IR for an EH region and all contained regions.
+  ///
+  /// \param Region    Root region to process
   void fgInsertEHAnnotations(EHRegion *Region);
+
+  /// \brief Create branch IR
+  ///
+  /// Have the client create a branch to \p LabelNode from \p BlockNode.
+  ///
+  /// \param LabelNode       target block of the branch
+  /// \param BlockNode       source block for the branch
+  /// \param Offset          MSIL offset of the branch target
+  /// \param IsConditional   true if this is a conditional branch
+  /// \param IsNominal       true if this is a nominal branch
+  /// \returns               IRNode for the branch created
   IRNode *fgMakeBranchHelper(IRNode *LabelNode, IRNode *BlockNode,
                              uint32_t Offset, bool IsConditional,
                              bool IsNominal);
+
+  /// \brief Create IR for an endfinally instruction
+  ///
+  /// Have the client create IR for an endfinally instruction. Note
+  /// there can be more than one of these in a finally region. 
+  ///
+  /// \param BlockNode     the block that is the end of the finally
+  /// \param CurentOffset  msil offset for the endfinally instruction
+  /// \param IsLexicalEnd  true if the endfinally is at the end of the finally
   IRNode *fgMakeEndFinallyHelper(IRNode *BlockNode, uint32_t Offset,
                                  bool IsLexicalEnd);
+
+  /// \brief Remove all unreachable blocks
+  ///
+  /// Walk the flow graph and remove any block (except the tail block)
+  /// that cannot be reached from the head block. Blocks are removed by
+  /// calling \p fgDeleteBlockAndNodes.
+  ///
+  /// \param FgHead     the head block of the flow graph
+  /// \param FgTail     the tail block of the flow graph
   void fgRemoveUnusedBlocks(FlowGraphNode *FgHead, FlowGraphNode *FgTail);
+
+  /// Find the canonical landing point for leaves from an EH region
+  ///
+  /// \param Region    The region in question.
+  /// \returns         The MSIL offset of the canonical landing point
   uint32_t fgGetRegionCanonicalExitOffset(EHRegion *Region);
+
+  /// Buffer used by \p fgGetRegionCanonicalExitOffset for cases where
+  /// there are large amounts of MSIL for the method.
   int32_t *FgGetRegionCanonicalExitOffsetBuff;
+
+  /// \brief Create or return a flow graph node for the indicated offset
+  ///
+  /// This method sees if there is an existing flow graph node that begins at
+  /// the indicated target. If so, \p Node is set to this block. If not, a
+  /// temporary block is allocated to use as a target, and an entry is added
+  /// to the \p NodeOffsetListArray so a subsequent pass can update the 
+  /// temporary target blocks to real target blocks.
+  /// 
+  /// \param Node [out]          Node to use as the branch target
+  /// \param TargetOffset        MSIL offset of the branch target
+  /// \returns                   List node of target in offset list
+  FlowGraphNodeOffsetList *fgAddNodeMSILOffset(FlowGraphNode **Node,
+                                               uint32_t TargetOffset);
+
+  /// Determine if a leave exits the enclosing EH region in a non-local manner.
+  ///
+  /// \param Fg                            flow graph node containing the leave
+  /// \param LeaveOffset                   MSIL offset of the leave
+  /// \param LeaveTarget                   MSIL offset of the leave's target
+  /// \param EndsWithNonLocalGoto [out]    Target of the leave is not the 
+  ///                                      canonical exit offset of the region
+  ///
+  /// \returns True if this is a nonlocal leave
+  bool fgLeaveIsNonLocal(FlowGraphNode *Fg, uint32_t LeaveOffset,
+                         uint32_t LeaveTarget, bool *EndsWithNonLocalGoto);
+
+  ///@}
 
   // DomInfo - get and set properties of dominators
   void initBlockArray(uint32_t BlockCount);
@@ -897,10 +1259,6 @@ private:
                                     CORINFO_CLASS_HANDLE Class);
   void domInfoRecordClassInit(FlowGraphNode *Fg, CORINFO_CLASS_HANDLE Class);
 
-  FlowGraphNodeOffsetList *fgAddNodeMSILOffset(FlowGraphNode **Node,
-                                               uint32_t TargetOffset);
-  bool fgLeaveIsNonLocal(FlowGraphNode *Fg, uint32_t LeaveOffset,
-                         uint32_t LeaveTarget, bool *EndsWithNonLocalGoto);
 
   // =============================================================================
   // =============================================================================
