@@ -110,6 +110,7 @@ def runTidy(args):
 def runFormat(args):
   formatFix = "-i" if args.fix else ""
   returncode = 0
+
   if args.formatall:
     llilcSrc = expandPath(args.llilc_source)
     for dirname,subdir,files in os.walk(llilcSrc):
@@ -123,21 +124,26 @@ def runFormat(args):
               formatFix, "2>" + os.devnull]), shell=True, stdout=subprocess.PIPE)
             
           output,error = proc.communicate()
-          if output != "":
-            if not args.fix:
-              with open(filepath) as f:
-                code = f.read().splitlines()
-              formatted_code = StringIO.StringIO(output).read().splitlines()
-              diff = difflib.unified_diff(code, formatted_code,
-                                          filepath, filepath,
-                                          '(before formatting)', '(after formatting)')
-              diff_string = string.join(diff, '')
-              if len(diff_string) > 0:
-                print(filepath)
-                returncode = -1
+          
+          # Compute the diff if not fixing
+          if not args.fix:
+            with open(filepath) as f:
+              code = f.read().splitlines()
+            formatted_code = StringIO.StringIO(output).read().splitlines()
+            diff = difflib.unified_diff(code, formatted_code,
+                                        filepath, filepath,
+                                        '(before formatting)', '(after formatting)')
+            diff_string = string.join(diff, '')
+            if len(diff_string) > 0:
+              # If there was a diff, print out the file name.
+              print(filepath)
+              returncode = -1
   else:
     noindex = ""
+
+    # base and no-index are mutually exclusive
     base = "" if args.noindex else args.base
+    
     if args.noindex:
       noindex = "--no-index"
       if args.left == "" or args.right == "":
