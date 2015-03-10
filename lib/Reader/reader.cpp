@@ -4066,17 +4066,17 @@ IRNode *ReaderBase::loadIndir(ReaderBaseNS::LdIndirOpcode Opcode,
                               bool IsVolatile, bool IsInterfReadOnly,
                               bool AddressMayBeNull) {
   static const CorInfoType Map[ReaderBaseNS::LastLdindOpcode] = {
-      CORINFO_TYPE_BYTE,      // STIND_I1
-      CORINFO_TYPE_UBYTE,     // STIND_U1
-      CORINFO_TYPE_SHORT,     // STIND_I2
-      CORINFO_TYPE_USHORT,    // STIND_U2
-      CORINFO_TYPE_INT,       // STIND_I4
-      CORINFO_TYPE_UINT,      // STIND_U4
-      CORINFO_TYPE_LONG,      // STIND_I8
-      CORINFO_TYPE_NATIVEINT, // STIND_I
-      CORINFO_TYPE_FLOAT,     // STIND_R4
-      CORINFO_TYPE_DOUBLE,    // STIND_R8
-      CORINFO_TYPE_REFANY     // STIND_REF
+      CORINFO_TYPE_BYTE,      // LDIND_I1
+      CORINFO_TYPE_UBYTE,     // LDIND_U1
+      CORINFO_TYPE_SHORT,     // LDIND_I2
+      CORINFO_TYPE_USHORT,    // LDIND_U2
+      CORINFO_TYPE_INT,       // LDIND_I4
+      CORINFO_TYPE_UINT,      // LDIND_U4
+      CORINFO_TYPE_LONG,      // LDIND_I8
+      CORINFO_TYPE_NATIVEINT, // LDIND_I
+      CORINFO_TYPE_FLOAT,     // LDIND_R4
+      CORINFO_TYPE_DOUBLE,    // LDIND_R8
+      CORINFO_TYPE_REFANY     // LDIND_REF
   };
 
   ASSERTNR(Opcode >= ReaderBaseNS::LdindI1 &&
