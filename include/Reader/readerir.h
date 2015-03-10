@@ -9,8 +9,8 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief Declares the GenIR class, which overrides ReaderBase to generate LLVM IR
-/// from MSIL bytecode.
+/// \brief Declares the GenIR class, which overrides ReaderBase to generate LLVM
+/// IR from MSIL bytecode.
 ///
 //===----------------------------------------------------------------------===//
 
@@ -39,7 +39,8 @@ public:
   /// in this basic block.
   uint32_t StartMSILOffset;
 
-  /// Byte offset that is just past the last MSIL instruction of the Basic Block.
+  /// Byte offset that is just past the last MSIL instruction of the Basic
+  /// Block.
   uint32_t EndMSILOffset;
 
   /// In algorithms traversing the flow graph, used to track which basic blocks
@@ -54,8 +55,8 @@ public:
 ///
 /// The MSIL reader expects to use a type called IRNode to represent the
 /// translation of the MSIL instructions. But the LLVM infrastructure uses
-/// the llvm::Value type as the base class of its IR representation. 
-/// To reconcile these we make IRNode a class that merely derives from 
+/// the llvm::Value type as the base class of its IR representation.
+/// To reconcile these we make IRNode a class that merely derives from
 /// llvm::Value.
 class IRNode : public llvm::Value {};
 
@@ -78,15 +79,14 @@ public:
   virtual FlowGraphNode *getSource() = 0;
 };
 
-
 /// \brief A list of predecessor edges of a given flow graph node.
 ///
 /// This is used for iterating over the predecessors of a flow graph node.
 /// After creating the predecessor edge list the getSource method is used
 /// to get the first predecessor (if any). As long as the result of getSource()
 /// is non-null, the moveNext() method may be used to advance to the next
-/// predecessor edge. When getSource() returns null there are no more 
-/// predecessor edges (or predecessors). 
+/// predecessor edge. When getSource() returns null there are no more
+/// predecessor edges (or predecessors).
 /// \invariant The current edge iterator either points to a real edge or else
 /// equals the end iterator meaning the list has been exhausted.
 class FlowGraphPredecessorEdgeList : public FlowGraphEdgeList {
@@ -103,7 +103,7 @@ public:
   /// Move the current location in the flow graph edge list to the next edge.
   /// \pre The current edge has not reached the end of the edge list.
   /// \post The current edge has been advanced to the next, or has possibly
-  /// reached the end iterator (meaning no more predecessors). 
+  /// reached the end iterator (meaning no more predecessors).
   void moveNext() override { PredIterator++; }
 
   /// \return The sink of the current edge which will be \p Fg node.
@@ -112,9 +112,9 @@ public:
     return (FlowGraphNode *)PredIterator.getUse().get();
   }
 
-  /// \return The source of the current edge which will be one of the predecessors
-  /// of the \p Fg node, unless the list has been exhausted in which case
-  /// return nullptr.
+  /// \return The source of the current edge which will be one of the
+  /// predecessors of the \p Fg node, unless the list has been exhausted in
+  /// which case return nullptr.
   FlowGraphNode *getSource() override {
     return (PredIterator == PredIteratorEnd) ? nullptr
                                              : (FlowGraphNode *)*PredIterator;
@@ -131,8 +131,8 @@ private:
 /// After creating the successor edge list the getSink method is used
 /// to get the first successor (if any). As long as the result of getSink()
 /// is non-null, the moveNext() method may be used to advance to the next
-/// successor edge. When getSink() returns null there are no more 
-/// successor edges (or successors). 
+/// successor edge. When getSink() returns null there are no more
+/// successor edges (or successors).
 /// \invariant The current edge iterator either points to a real edge or else
 /// equals the end iterator meaning the list has been exhausted.
 class FlowGraphSuccessorEdgeList : public FlowGraphEdgeList {
@@ -150,7 +150,7 @@ public:
   /// Move the current location in the flow graph edge list to the next edge.
   /// \pre The current edge has not reached the end of the edge list.
   /// \post The current edge has been advanced to the next, or has possibly
-  /// reached the end iterator (meaning no more successors). 
+  /// reached the end iterator (meaning no more successors).
   void moveNext() override { SuccIterator++; }
 
   /// \return The sink of the current edge which will be one of the successors
@@ -177,25 +177,26 @@ private:
 /// The MSIL instruction set operates on a stack machine. Instructions
 /// with operands may take them from the stack (if not some kind of
 /// immediate) and the results of instruction are pushed on the operand stack.
-/// The MSIL operands are translated by the reader into IRNodes. 
-/// The operand stack is represented by a stack of pointers to the 
-/// IRNodes for the operands. 
+/// The MSIL operands are translated by the reader into IRNodes.
+/// The operand stack is represented by a stack of pointers to the
+/// IRNodes for the operands.
 ///
 /// This class completes the implementation of the ReaderStack base class.
 class GenStack : public ReaderStack {
 private:
   /// Owner of the operand stack.
   ReaderBase *Reader;
+
 public:
   /// \brief Construct a GenStack with an initial capacity of \a MaxStack.
   ///
   /// \param MaxStack Suggested capacity for the stack. However the stack
   /// is allowed to grow larger than MaxStack as needed (possibly due to
-  /// function inlining). 
+  /// function inlining).
   /// \param Reader The ReaderBase that owns this operand stack. This is needed
   /// so that storage can be allocated from the lifetime of the reader.
   GenStack(uint32_t MaxStack, ReaderBase *Reader);
-  
+
   /// \brief Pop the top element off the operand stack.
   ///
   /// \return The top element of the stack.
@@ -250,9 +251,7 @@ public:
   // MSIL Routines - client defined routines that are invoked by the reader.
   //                 One will be called for each msil opcode.
 
-  uint32_t getPointerByteSize() override {
-    return TargetPointerSizeInBits / 8;
-  }
+  uint32_t getPointerByteSize() override { return TargetPointerSizeInBits / 8; }
 
   void opcodeDebugPrint(uint8_t *Buf, unsigned StartOffset,
                         unsigned EndOffset) override {
@@ -305,11 +304,9 @@ public:
 
   FlowGraphNode *fgNodeGetNext(FlowGraphNode *FgNode) override;
   uint32_t fgNodeGetStartMSILOffset(FlowGraphNode *Fg) override;
-  void fgNodeSetStartMSILOffset(FlowGraphNode *Fg,
-                                uint32_t Offset) override;
+  void fgNodeSetStartMSILOffset(FlowGraphNode *Fg, uint32_t Offset) override;
   uint32_t fgNodeGetEndMSILOffset(FlowGraphNode *Fg) override;
-  void fgNodeSetEndMSILOffset(FlowGraphNode *FgNode,
-                              uint32_t Offset) override;
+  void fgNodeSetEndMSILOffset(FlowGraphNode *FgNode, uint32_t Offset) override;
 
   bool fgNodeIsVisited(FlowGraphNode *FgNode) override;
   void fgNodeSetVisited(FlowGraphNode *FgNode, bool Visited) override;
@@ -824,8 +821,8 @@ private:
   llvm::FunctionType *getFunctionType(CORINFO_SIG_INFO &Sig,
                                       CORINFO_CLASS_HANDLE ThisClass);
 
-  llvm::Type *getClassType(CORINFO_CLASS_HANDLE ClassHandle,
-                           bool IsRefClass, bool GetRefClassFields);
+  llvm::Type *getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
+                           bool GetRefClassFields);
 
   /// Convert node to the desired type.
   /// May reinterpret, truncate, or extend as needed.
@@ -864,7 +861,7 @@ private:
   IRNode *loadAtAddress(IRNode *Address, llvm::Type *Ty, CorInfoType CorType,
                         CORINFO_RESOLVED_TOKEN *ResolvedToken,
                         ReaderAlignType AlignmentPrefix, bool IsVolatile,
-                        bool AddressMayBeNull=true);
+                        bool AddressMayBeNull = true);
 
   IRNode *loadAtAddressNonNull(IRNode *Address, llvm::Type *Ty,
                                CorInfoType CorType,

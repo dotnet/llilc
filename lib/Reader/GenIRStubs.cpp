@@ -77,9 +77,7 @@ void irNodeLabelSetMSILOffset(IRNode *Node, uint32_t LabelMSILOffset) {
 }
 
 // TODO: figure out how we're going to communicate this information.
-void irNodeBranchSetMSILOffset(IRNode *BranchNode, uint32_t Offset) {
-  return;
-}
+void irNodeBranchSetMSILOffset(IRNode *BranchNode, uint32_t Offset) { return; }
 
 void irNodeExceptSetMSILOffset(IRNode *BranchNode, uint32_t Offset) {
   throw NotYetImplementedException("irNodeExceptSetMSILOffset");
