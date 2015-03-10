@@ -72,7 +72,8 @@
 [CmdletBinding()]
 Param(
    [string]$Arch="x64",
-   [string]$Build="Debug"
+   [string]$Build="Debug",
+   [switch]$NoTestUpdate
 )
 
 # -------------------------------------------------------------------------
@@ -420,7 +421,9 @@ function CompleteEnvInit
 
   CreateLLVMBuildDirectory
 
-  GetCLRTestAssets
+  if (!$NoTestUpdate) {
+    GetCLRTestAssets
+  }
     
   NuGetCLR
 }
