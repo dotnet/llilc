@@ -756,14 +756,15 @@ function Global:Build([string]$Build="Debug")
 {
   $OutOfTree = Test-Path Env:\LLILCSOURCE
 
-  $LLILCBuild = LLILCBuild
   $TempBat = Join-Path $Env:TEMP "buildllilc.bat"
   $File = "$Env:VS120COMNTOOLS\..\..\VC\vcvarsall.bat"
 
   if ($OutOfTree) {
+    $LLILCBuild = LLILCBuild
     $WhatToBuild = "$LLILCBuild\LLILC.sln"
   }
   else {
+    $LLVMBuild = LLVMBuild
     $WhatToBuild = "/Project llilcjit $LLVMBuild\LLVM.sln"
   }
 
