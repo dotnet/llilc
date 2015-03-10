@@ -114,7 +114,8 @@ def runFormat(args):
   if args.formatall:
     llilcSrc = expandPath(args.llilc_source)
     for dirname,subdir,files in os.walk(llilcSrc):
-      if ".git" in dirname or "clr" in dirname:
+      if ".git" in dirname or "clr" in dirname
+        or "Pal" in dirname:
         continue
       for filename in files:
         if filename.endswith(".c") or filename.endswith(".cpp") or \
