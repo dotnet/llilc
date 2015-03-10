@@ -632,43 +632,161 @@ fgEdgeListGetNextPredecessorActual(FlowGraphEdgeList *FgEdge);
 FlowGraphEdgeList *fgNodeGetSuccessorListActual(FlowGraphNode *Fg);
 FlowGraphEdgeList *fgNodeGetPredecessorListActual(FlowGraphNode *Fg);
 
-// Interface to GenIR defined IRNode structure
-// Implementation Supplied by Jit Client
+/// \name Client IR interface
+/// 
+///@{
 
+/// \brief Iterate forward through the client IR
+///
+/// Within a basic block, the client IR nodes will form a linear sequence.
+/// This method advances from one node to the next in that sequence.
+///
+/// \param Node    The current IR node
+/// \returns       The next IR node
 IRNode *irNodeGetNext(IRNode *Node);
-bool irNodeIsBranch(IRNode *Node);
 
+/// \brief Searching forward, find the first IR node with an MSIL offset 
+/// greater or equal to the indicated offset.
+///
+/// Ask the client to scan forward through the IR starting \p Node, searching
+/// for a Node whose MSIL offset is greater than or equal to the provided 
+/// \p Offset.
+///
+/// \param Node        The starting node for the search
+/// \param Offset      The MSIL offset
+/// \returns           The first IR node that is at/after the indicated offset
 IRNode *irNodeGetInsertPointAfterMSILOffset(IRNode *Node, uint32_t Offset);
+
+/// \brief Searching backwards, find the first IR node with an MSIL offset less 
+/// than the indicated offset.
+///
+/// Ask the client to scan backwards through the IR starting \p Node, searching
+/// for a Node whose MSIL offset is less than the provided \p Offset.
+///
+/// \param Node        The starting node for the search
+/// \param Offset      The MSIL offset
+/// \returns           The first IR node that is before the indicated offset
 IRNode *irNodeGetInsertPointBeforeMSILOffset(IRNode *Node, uint32_t Offset);
+
+/// Get the first IR node in the indicated IR node's block
+///
+/// \param HandlerStartNode   The indicated IR node
+/// \returns                  The first IR node in the same block
 IRNode *
 irNodeGetFirstLabelOrInstrNodeInEnclosingBlock(IRNode *HandlerStartNode);
+
+/// Get the MSIL offset for the indicated IR node
+///
+/// \param Node    The indicated IR node
+/// \returns       MSIL offset for this IR node
 uint32_t irNodeGetMSILOffset(IRNode *Node);
+
+/// Set the MSIL offset for this IR node
+///
+/// \param Node      The node in question
+/// \param Offset    The MSIL offset to use
 void irNodeLabelSetMSILOffset(IRNode *Node, uint32_t Offset);
+
+/// Set the MSIL offset for this branch IR node
+///
+/// \param BranchNode      The node in question
+/// \param Offset          The MSIL offset to use
 void irNodeBranchSetMSILOffset(IRNode *BranchNode, uint32_t Offset);
+
+/// Set the MSIL offset for this exception branch IR node.
+///
+/// \param BranchNode      The node in question
+/// \param Offset          The MSIL offset to use
 void irNodeExceptSetMSILOffset(IRNode *BranchNode, uint32_t Offset);
-void irNodeInsertBefore(IRNode *InsertionPointTuple, IRNode *NewNode);
-void irNodeInsertAfter(IRNode *InsertionPointTuple, IRNode *NewNode);
+
+/// Insert an IR node before another IR node
+///
+/// \param InsertionPoint    Existing IR to use as insertion point
+/// \param NewNode           New IR to insert before \p InsertionPoint
+void irNodeInsertBefore(IRNode *InsertionPoint, IRNode *NewNode);
+
+/// Insert an IR node after another IR node
+///
+/// \param InsertionPoint    Existing IR to use as insertion point
+/// \param NewNode           New IR to insert after \p InsertionPoint
+void irNodeInsertAfter(IRNode *InsertionPoint, IRNode *NewNode);
+
+/// Set the EH region for an IR node
+///
+/// \param Node        The IR node of interest
+/// \param Region      The EH region to associate with the \p Node
 void irNodeSetRegion(IRNode *Node, EHRegion *Region);
+
+/// Get the EH region for an IR node
+///
+/// \param Node       The IR node of interest
+/// \returns          The EH region associated with \p Node
 EHRegion *irNodeGetRegion(IRNode *Node);
+
+/// Get the flow graph node for an IR node
+///
+/// \param Node       The IR node of interest
+/// \returns          The flow graph node containing \p Node
 FlowGraphNode *irNodeGetEnclosingBlock(IRNode *Node);
+
+/// Determine if an IR node is a label
+///
+/// \param Node       The IR node of interest
+/// \returns          True iff \p Node is a label
 bool irNodeIsLabel(IRNode *Node);
+
+/// Determine if this  IR node is a branch
+///
+/// \param Node   The  IR node to examine
+/// \returns      True iff \p Node is a branch
+bool irNodeIsBranch(IRNode *Node);
+
+/// Determine if an IR node is an EH flow annotation
+///
+/// \param Node       The IR node of interest
+/// \returns          True iff \p Node is an EH flow annotation
 bool irNodeIsEHFlowAnnotation(IRNode *Node);
+
+/// Determine if an IR node is an EH handler flow annotation
+///
+/// \param Node       The IR node of interest
+/// \returns          True iff \p Node is an EH handler flow annotation
 bool irNodeIsHandlerFlowAnnotation(IRNode *Node);
 
-// Interface to GenIR defined BranchList structure
-// Implementation Supplied by Jit Client.
+///@}
+
+/// \name Client BranchList interface
+/// Used by \p fgFixRecursiveEdges to undo branches added by the optimistic 
+/// recursive tail call transformation. Implementation supplied by the client.
+///@{
+
+/// Get the next branch list item
+/// 
+/// \param BranchList    Current list item
+/// \returns             Next list item
 BranchList *branchListGetNext(BranchList *BranchList);
+
+/// Get the client IR for a branch list item
+/// 
+/// \param BranchList    Current list item
+/// \returns             Client IR for the item
 IRNode *branchListGetIRNode(BranchList *BranchList);
 
-struct VerificationBranchInfo {
-  uint32_t SrcOffset;
-  uint32_t TargetOffset;
-  IRNode *BranchOp;
-  bool IsLeave;
+///@}
 
-  VerificationBranchInfo *Next;
+/// Record information about a branch for verification
+struct VerificationBranchInfo {
+  uint32_t SrcOffset;           ///< MSIL offset of the branch
+  uint32_t TargetOffset;        ///< MSIL offset of the branch target
+  IRNode *BranchOp;             ///< Client IR for the branch
+  bool IsLeave;                 ///< True if branch is from a leave opcode
+  VerificationBranchInfo *Next; ///< Next branch to verify
 };
 
+/// Translate a call opcode from the general MSIL opcode enumeration into
+/// the call-specific opcode enumeration.
+/// \param Opcode     MSIL opcode
+/// \returns          MSIL call opcode
 ReaderBaseNS::CallOpcode remapCallOpcode(ReaderBaseNS::OPCODE Opcode);
 
 /// \brief Parameters needed for converting MSIL to client IR for
@@ -692,7 +810,7 @@ struct ReadBytesForFlowGraphNodeHelperParam {
                                    ///< an appropriate ending
 };
 
-static const int32_t SizeOfCEECall = 5;
+static const int32_t SizeOfCEECall = 5;  ///< size of MSIL call plus operand
 
 /// \brief \p ReaderBase is an abstract base class for tools that need to 
 /// both model MSIL and interact with the CoreCLR ExecutionEngine or some
