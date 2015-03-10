@@ -110,12 +110,13 @@ def runTidy(args):
 def runFormat(args):
   formatFix = "-i" if args.fix else ""
   returncode = 0
+  llilcSrc = expandPath(args.llilc_source)
 
   if args.formatall:
     llilcSrc = expandPath(args.llilc_source)
     for dirname,subdir,files in os.walk(llilcSrc):
-      if ".git" in dirname or "clr" in dirname
-        or "Pal" in dirname:
+      if ".git" in dirname \
+          or dirname == os.path.join(llilcSrc, "include", "clr"):
         continue
       for filename in files:
         if filename.endswith(".c") or filename.endswith(".cpp") or \
@@ -134,10 +135,12 @@ def runFormat(args):
             diff = difflib.unified_diff(code, formatted_code,
                                         filepath, filepath,
                                         '(before formatting)', '(after formatting)')
-            diff_string = string.join(diff, '')
+            diff_string = string.join(diff, '\n')
             if len(diff_string) > 0:
               # If there was a diff, print out the file name.
               print(filepath)
+              if args.print_diffs:
+                sys.stdout.write(diff_string)
               returncode = -1
   else:
     noindex = ""
@@ -158,6 +161,8 @@ def runFormat(args):
 
     output,error = proc.communicate()
     if output != "":
+      if args.print_diffs:
+        sys.stdout.write(output)
       returncode = -1
 
   if returncode == -1:
@@ -207,16 +212,19 @@ def main(argv):
   parser.add_argument("--checks", default="llvm*,misc*,microsoft*,"\
                       "-llvm-header-guard,-llvm-include-order",
             help="clang-tidy checks to run")
-  parser.add_argument("--base", metavar="BRANCH", default="origin",
+  group = parser.add_mutually_exclusive_group()
+  group.add_argument("--base", metavar="BRANCH", default="origin",
             help="Base for obtaining diffs")
+  group.add_argument("--noindex", action="store_true", default=False,
+            help="Run git diff with --no-index to compare two paths")
   parser.add_argument("--formatall", action="store_true", default=False,
             help="Run clang-format on all files")
-  parser.add_argument("--noindex", action="store_true", default=False,
-            help="Run git diff with --no-index to compare two paths")
   parser.add_argument("--left", default="", 
-      help="Path to compare against, used with --noindex")
+            help="Path to compare against, used with --noindex")
   parser.add_argument("--right", default="", 
-      help="Path to be compared, used with --noindex")
+            help="Path to be compared, used with --noindex")
+  parser.add_argument("--print-diffs", action="store_true", default=False,
+            help="Print formatting diffs if there are diffs")
   args = parser.parse_args(argv)
 
   returncode=0
