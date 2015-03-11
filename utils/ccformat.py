@@ -5,7 +5,7 @@ import argparse
 import os
 import subprocess
 import platform
-import StringIO
+import io
 import string
 import difflib
 
@@ -135,7 +135,7 @@ def runFormat(args):
           if not args.fix:
             with open(filepath) as f:
               code = f.read().splitlines()
-            formatted_code = StringIO.StringIO(output).read().splitlines()
+            formatted_code = io.StringIO(output).read().splitlines()
             diff = difflib.unified_diff(code, formatted_code,
                                         filepath, filepath,
                                         '(before formatting)', '(after formatting)')
