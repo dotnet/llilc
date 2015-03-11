@@ -164,9 +164,9 @@ def runFormat(args):
         "-p1", formatFix]), shell=True, stdout=subprocess.PIPE)
 
     output,error = proc.communicate()
-    if output != "":
+    if output.decode('utf-8') != "":
       if args.print_diffs:
-        sys.stdout.write(output)
+        sys.stdout.write(output.decode('utf-8'))
       returncode = -1
 
   if returncode == -1:
