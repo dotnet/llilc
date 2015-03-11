@@ -518,11 +518,12 @@ function Global:GetCLRTestAssets
     cd $CoreCLRTestAssets\coreclr
     git remote set-url --push origin do_not_push
   }
-  else {
-    Write-Host("Updating CoreCLR Test Assets to latest...")
-    cd $CoreCLRTestAssets\coreclr
-    git pull
-  }
+
+  Write-Host("Updating CoreCLR Test Assets to LKG...")
+  cd $CoreCLRTestAssets\coreclr
+  git checkout -q 1644ae12020a1927bb9b7bb7b162ba8b1e8bc73e
+  git show -s '--format=%h, committed %ci' head
+
   popd
 }
 
