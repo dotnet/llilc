@@ -31,6 +31,8 @@
 #endif
 #include "staticcontract.h"
 
+// clang-format off
+
 // Note: PAL_SEH_RESTORE_GUARD_PAGE is only ever defined in clrex.h, so we only
 // restore guard pages automatically when these macros are used from within the
 // VM.
@@ -776,3 +778,5 @@ struct tagVARIANT {
 #endif // _MSC_VER
 
 #endif // LLILC_PAL
+
+// clang-format on

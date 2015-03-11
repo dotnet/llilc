@@ -23,14 +23,13 @@ class LLILCJitContext;
 namespace llvm {
 
 /// \brief Memory manager for LLILC
-/// 
+///
 /// This class extends \p RTDyldMemoryManager to obtain memory from the
-/// CoreCLR's EE for the persistent jit outputs (code, data, and unwind 
+/// CoreCLR's EE for the persistent jit outputs (code, data, and unwind
 /// information). Each jit request instantiates its own memory manager.
 class EEMemoryManager : public RTDyldMemoryManager {
 
 public:
-
   /// Construct a new \p EEMemoryManager
   /// \param C Jit context for the method being jitted.
   EEMemoryManager(LLILCJitContext *C)
@@ -48,7 +47,7 @@ public:
   ///
   /// \param Size           Size of allocation request in bytes
   /// \param Alignment      Alignment demand for the allocation
-  /// \param SectionID      SectionID for this particular section of code   
+  /// \param SectionID      SectionID for this particular section of code
   /// \param SectionName    Name of the section
   /// \returns Pointer to the newly allocated memory region
   uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
@@ -63,7 +62,7 @@ public:
   ///
   /// \param Size           Size of allocation request in bytes
   /// \param Alignment      Alignment demand for the allocation
-  /// \param SectionID      SectionID for this particular section of code   
+  /// \param SectionID      SectionID for this particular section of code
   /// \param SectionName    Name of the section
   /// \param IsReadOnly     True if this is intended for read-only data
   /// \returns Pointer to the newly allocated memory region
@@ -112,7 +111,7 @@ public:
   /// \param Addr           The address of the data in the pre-loaded image
   /// \param LoadAddr       The address the data will have once loaded
   /// \param Size           Size of the unwind data in bytes
-  /// \note Because we're not relocating data during loading, \p Addr and 
+  /// \note Because we're not relocating data during loading, \p Addr and
   /// \p LoadAddr are currently identical.
   void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
 
