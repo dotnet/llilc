@@ -2059,29 +2059,13 @@ void ReaderBase::setupBlockForEH() {
 }
 
 void ReaderBase::fgFixRecursiveEdges(FlowGraphNode *HeadBlock) {
-  FlowGraphNode *Block, *FallThroughBlock;
-  IRNode *BranchNode, *LabelNode;
-  bool HasFallThrough;
-
-  HasFallThrough = false;
-  FallThroughBlock = nullptr;
-
   // As a special case, localloc is incompatible with the recursive
   // tail call optimization, and any branches that we initially set up
   // for the recursive tail call (before we knew about the localloc)
   // should instead be re-pointed at the fall-through (for tail.call)
   // or the function exit (for jmp).
-  if (HasLocAlloc) {
-    // Revert all recursive branch IR.
-    // For a tail.call, this involves changing to fall-through.
-    // For a jmp, this involves changing to point at the exit label.
-    BranchList *BranchList, *BranchListNext;
-    for (BranchList = fgGetLabelBranchList(entryLabel()); BranchList != nullptr;
-         BranchList = BranchListNext) {
-      BranchListNext = branchListGetNext(BranchList);
-      BranchNode = branchListGetIRNode(BranchList);
-      fgRevertRecursiveBranch(BranchNode);
-    }
+  if (HasLocAlloc && HasOptimisticTailRecursionTransform) {
+    throw NotYetImplementedException("undo optimistic recursive tail calls");
   }
 }
 

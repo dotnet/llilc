@@ -845,9 +845,18 @@ public:
 
   FlowGraphNode *CurrentFgNode;
 
-  bool HasLocAlloc;
-  uint32_t CurrInstrOffset; // current instruction IL offset
-  uint32_t NextInstrOffset; // next instruction IL offset
+  /// True if this method contains the 'localloc' MSIL opcode.
+  bool HasLocAlloc;                          
+
+  /// True if the client has optimistically transformed tail.
+  /// recursion into a branch.
+  bool HasOptimisticTailRecursionTransform;
+
+  /// The current instruction's IL offset.
+  uint32_t CurrInstrOffset;
+
+  /// The next instruction's IL offset.
+  uint32_t NextInstrOffset;
 
 private:
   // Private data (not available to derived client class)
