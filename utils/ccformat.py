@@ -135,16 +135,17 @@ def runFormat(args):
           if not args.fix:
             with open(filepath) as f:
               code = f.read().splitlines()
-            formatted_code = io.StringIO(output).read().splitlines()
+            formatted_code = io.StringIO(output.decode('utf-8')).read().splitlines()
             diff = difflib.unified_diff(code, formatted_code,
                                         filepath, filepath,
                                         '(before formatting)', '(after formatting)')
-            diff_string = string.join(diff, '\n')
+            diff_string = "\n".join(x for x in diff)
             if len(diff_string) > 0:
               # If there was a diff, print out the file name.
               print(filepath)
               if args.print_diffs:
                 sys.stdout.write(diff_string)
+                sys.stdout.write("\n")
               returncode = -1
   else:
     noindex = ""
@@ -167,6 +168,7 @@ def runFormat(args):
     if output.decode('utf-8') != "":
       if args.print_diffs:
         sys.stdout.write(output.decode('utf-8'))
+        sys.stdout.write("\n")
       returncode = -1
 
   if returncode == -1:
