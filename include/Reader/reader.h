@@ -835,7 +835,7 @@ public:
   FlowGraphNode *CurrentFgNode;
 
   /// True if this method contains the 'localloc' MSIL opcode.
-  bool HasLocAlloc;                          
+  bool HasLocAlloc;
 
   /// True if the client has optimistically transformed tail.
   /// recursion into a branch.
