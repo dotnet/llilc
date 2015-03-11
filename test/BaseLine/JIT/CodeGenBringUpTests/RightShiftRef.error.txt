@@ -6585,7 +6585,7 @@ ThrowNullRef18:                                   ; preds = %70
 }
 
 INFO:  jitting method Path::NormalizePath using LLILCJit
-Failed to read Path.NormalizePath[entryLabel]
+Failed to read Path.NormalizePath[BinaryOp Overflow]
 INFO:  jitting method String::TrimHelper using LLILCJit
 Successfully read String.TrimHelper
 
@@ -7562,7 +7562,7 @@ ThrowNullRef4:                                    ; preds = %5
 }
 
 INFO:  jitting method PathHelper::GetFullPathName using LLILCJit
-Failed to read PathHelper.GetFullPathName[entryLabel]
+Failed to read PathHelper.GetFullPathName[BinaryOp Overflow]
 INFO:  jitting method DomainNeutralILStubClass::IL_STUB_PInvoke using LLILCJit
 Failed to read DomainNeutralILStubClass.IL_STUB_PInvoke[publish secret param]
 INFO:  jitting method PathHelper::ToString using LLILCJit
