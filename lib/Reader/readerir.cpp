@@ -1400,6 +1400,7 @@ uint32_t GenIR::stackSize(CorInfoType CorType) {
   case CorInfoType::CORINFO_TYPE_NATIVEUINT:
   case CorInfoType::CORINFO_TYPE_PTR:
   case CorInfoType::CORINFO_TYPE_BYREF:
+  case CorInfoType::CORINFO_TYPE_CLASS:
     return TargetPointerSizeInBits;
 
   default:
@@ -1436,6 +1437,7 @@ uint32_t GenIR::size(CorInfoType CorType) {
   case CorInfoType::CORINFO_TYPE_NATIVEUINT:
   case CorInfoType::CORINFO_TYPE_PTR:
   case CorInfoType::CORINFO_TYPE_BYREF:
+  case CorInfoType::CORINFO_TYPE_CLASS:
     return TargetPointerSizeInBits;
 
   default:
@@ -1459,6 +1461,7 @@ bool GenIR::isSigned(CorInfoType CorType) {
   case CorInfoType::CORINFO_TYPE_NATIVEUINT:
   case CorInfoType::CORINFO_TYPE_PTR:
   case CorInfoType::CORINFO_TYPE_BYREF:
+  case CorInfoType::CORINFO_TYPE_CLASS:
     return false;
 
   case CorInfoType::CORINFO_TYPE_BYTE:
