@@ -26,7 +26,9 @@ helpers, type tests, memory barries, required by the code generator for compilat
 dependency on a partiular version of the common JIT interface provided by the CoreCLR and requires the specific 
 version of the runtime that supports that interface.
 
-
+There are a number of documents in the CoreCLR repo 
+[indexed here](https://github.com/dotnet/coreclr/blob/master/Documentation/index.md) 
+which can give a more complete overview of the CoreCLR.
 
 ####MSIL reader
 
@@ -41,7 +43,15 @@ for generating the actual BitCode.  This seperation of conserns allows for easie
 BitCode creation.
 
 ####LLVM
-	- MCJIT for all targets.
+
+LLVM is a great code generator that supports lots of platforms and CPU targets.  It also has facilities to 
+be used as both a JIT and AOT compiler.  This combination of features, lots of targets, and ability to compile 
+across a spectrum of compile times, attracted us to LLVM.  For our JIT we use the LLVM MCJIT. This infrastructure 
+allows us to use all the different targets supported by the MC infrastructre as a JIT.  This was our quickest path 
+to running code.  We're aware of the ORC JIT infrastructure but as the CoreCLR only notifies the JIT to compile a 
+method one method at a time, we currently would not get any benefit from the particular features of ORC.  (we 
+already compile one method per module today and we don't have to do any of the inter module fixups as that is 
+performed by the runtime)
 
 ####IL Transforms
 
