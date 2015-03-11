@@ -3857,13 +3857,6 @@ IRNode *GenIR::makePtrNode(ReaderPtrType PtrType) { return loadNull(); }
 IRNode *GenIR::derefAddress(IRNode *Address, bool DstIsGCPtr, bool IsConst,
                             bool AddressMayBeNull) {
 
-  // TODO: If IsConst is false, the load could cause a null pointer exception,
-  // so we may need an explicit null check. Not sure if there's a covering
-  // upstream check or not, so be cautious now.
-  if (!IsConst) {
-    throw NotYetImplementedException("non-const derefAddress");
-  }
-
   // We don't know the true referent type so just use a pointer sized
   // integer or GC pointer to i8 for the result.
 
@@ -3890,7 +3883,15 @@ IRNode *GenIR::derefAddress(IRNode *Address, bool DstIsGCPtr, bool IsConst,
     Address = (IRNode *)LLVMBuilder->CreatePointerCast(Address, CastTy);
   }
 
-  Value *Result = makeLoad(Address, false, AddressMayBeNull);
+  LoadInst *Result = makeLoad(Address, false, AddressMayBeNull);
+
+  if (IsConst) {
+    MDNode *EmptyNode =
+        MDNode::get(*JitContext->LLVMContext, ArrayRef<Metadata *>());
+
+    Result->setMetadata(LLVMContext::MD_invariant_load, EmptyNode);
+  }
+
   return (IRNode *)Result;
 }
 
