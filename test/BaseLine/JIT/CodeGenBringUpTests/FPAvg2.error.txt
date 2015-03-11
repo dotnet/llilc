@@ -2283,15 +2283,15 @@ entry:
 
 ; <label>:24                                      ; preds = %20
   %25 = call %System.Globalization.CultureInfo addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.Globalization.CultureInfo addrspace(1)* ()*)()
-  %26 = bitcast %System.Globalization.CultureInfo addrspace(1)* %25 to i64 addrspace(1)*
-  %NullCheck23 = icmp eq i64 addrspace(1)* %26, null
+  %26 = bitcast %System.Globalization.CultureInfo addrspace(1)* %25 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck23 = icmp eq i8 addrspace(1)* addrspace(1)* %26, null
   br i1 %NullCheck23, label %ThrowNullRef24, label %27
 
 ; <label>:27                                      ; preds = %24
-  %28 = load i64, i64 addrspace(1)* %26
-  %29 = add i64 %28, 72
-  %30 = inttoptr i64 %29 to i64*
-  %31 = load i64, i64* %30
+  %28 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %26
+  %29 = getelementptr inbounds i8, i8 addrspace(1)* %28, i32 72
+  %30 = bitcast i8 addrspace(1)* %29 to i64 addrspace(1)*
+  %31 = load i64, i64 addrspace(1)* %30
   %32 = add i64 %31, 16
   %33 = inttoptr i64 %32 to i64*
   %34 = load i64, i64* %33
@@ -2299,15 +2299,15 @@ entry:
   %36 = call %System.Globalization.CompareInfo addrspace(1)* %35(%System.Globalization.CultureInfo addrspace(1)* %25)
   %37 = load %System.String addrspace(1)*, %System.String addrspace(1)** %arg0
   %38 = load %System.String addrspace(1)*, %System.String addrspace(1)** %arg1
-  %39 = bitcast %System.Globalization.CompareInfo addrspace(1)* %36 to i64 addrspace(1)*
-  %NullCheck25 = icmp eq i64 addrspace(1)* %39, null
+  %39 = bitcast %System.Globalization.CompareInfo addrspace(1)* %36 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck25 = icmp eq i8 addrspace(1)* addrspace(1)* %39, null
   br i1 %NullCheck25, label %ThrowNullRef26, label %40
 
 ; <label>:40                                      ; preds = %27
-  %41 = load i64, i64 addrspace(1)* %39
-  %42 = add i64 %41, 64
-  %43 = inttoptr i64 %42 to i64*
-  %44 = load i64, i64* %43
+  %41 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %39
+  %42 = getelementptr inbounds i8, i8 addrspace(1)* %41, i32 64
+  %43 = bitcast i8 addrspace(1)* %42 to i64 addrspace(1)*
+  %44 = load i64, i64 addrspace(1)* %43
   %45 = add i64 %44, 48
   %46 = inttoptr i64 %45 to i64*
   %47 = load i64, i64* %46
@@ -2317,15 +2317,15 @@ entry:
 
 ; <label>:50                                      ; preds = %20
   %51 = call %System.Globalization.CultureInfo addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.Globalization.CultureInfo addrspace(1)* ()*)()
-  %52 = bitcast %System.Globalization.CultureInfo addrspace(1)* %51 to i64 addrspace(1)*
-  %NullCheck19 = icmp eq i64 addrspace(1)* %52, null
+  %52 = bitcast %System.Globalization.CultureInfo addrspace(1)* %51 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck19 = icmp eq i8 addrspace(1)* addrspace(1)* %52, null
   br i1 %NullCheck19, label %ThrowNullRef20, label %53
 
 ; <label>:53                                      ; preds = %50
-  %54 = load i64, i64 addrspace(1)* %52
-  %55 = add i64 %54, 72
-  %56 = inttoptr i64 %55 to i64*
-  %57 = load i64, i64* %56
+  %54 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %52
+  %55 = getelementptr inbounds i8, i8 addrspace(1)* %54, i32 72
+  %56 = bitcast i8 addrspace(1)* %55 to i64 addrspace(1)*
+  %57 = load i64, i64 addrspace(1)* %56
   %58 = add i64 %57, 16
   %59 = inttoptr i64 %58 to i64*
   %60 = load i64, i64* %59
@@ -2333,15 +2333,15 @@ entry:
   %62 = call %System.Globalization.CompareInfo addrspace(1)* %61(%System.Globalization.CultureInfo addrspace(1)* %51)
   %63 = load %System.String addrspace(1)*, %System.String addrspace(1)** %arg0
   %64 = load %System.String addrspace(1)*, %System.String addrspace(1)** %arg1
-  %65 = bitcast %System.Globalization.CompareInfo addrspace(1)* %62 to i64 addrspace(1)*
-  %NullCheck21 = icmp eq i64 addrspace(1)* %65, null
+  %65 = bitcast %System.Globalization.CompareInfo addrspace(1)* %62 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck21 = icmp eq i8 addrspace(1)* addrspace(1)* %65, null
   br i1 %NullCheck21, label %ThrowNullRef22, label %66
 
 ; <label>:66                                      ; preds = %53
-  %67 = load i64, i64 addrspace(1)* %65
-  %68 = add i64 %67, 64
-  %69 = inttoptr i64 %68 to i64*
-  %70 = load i64, i64* %69
+  %67 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %65
+  %68 = getelementptr inbounds i8, i8 addrspace(1)* %67, i32 64
+  %69 = bitcast i8 addrspace(1)* %68 to i64 addrspace(1)*
+  %70 = load i64, i64 addrspace(1)* %69
   %71 = add i64 %70, 48
   %72 = inttoptr i64 %71 to i64*
   %73 = load i64, i64* %72
@@ -2351,15 +2351,15 @@ entry:
 
 ; <label>:76                                      ; preds = %20
   %77 = call %System.Globalization.CultureInfo addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.Globalization.CultureInfo addrspace(1)* ()*)()
-  %78 = bitcast %System.Globalization.CultureInfo addrspace(1)* %77 to i64 addrspace(1)*
-  %NullCheck15 = icmp eq i64 addrspace(1)* %78, null
+  %78 = bitcast %System.Globalization.CultureInfo addrspace(1)* %77 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck15 = icmp eq i8 addrspace(1)* addrspace(1)* %78, null
   br i1 %NullCheck15, label %ThrowNullRef16, label %79
 
 ; <label>:79                                      ; preds = %76
-  %80 = load i64, i64 addrspace(1)* %78
-  %81 = add i64 %80, 72
-  %82 = inttoptr i64 %81 to i64*
-  %83 = load i64, i64* %82
+  %80 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %78
+  %81 = getelementptr inbounds i8, i8 addrspace(1)* %80, i32 72
+  %82 = bitcast i8 addrspace(1)* %81 to i64 addrspace(1)*
+  %83 = load i64, i64 addrspace(1)* %82
   %84 = add i64 %83, 16
   %85 = inttoptr i64 %84 to i64*
   %86 = load i64, i64* %85
@@ -2367,15 +2367,15 @@ entry:
   %88 = call %System.Globalization.CompareInfo addrspace(1)* %87(%System.Globalization.CultureInfo addrspace(1)* %77)
   %89 = load %System.String addrspace(1)*, %System.String addrspace(1)** %arg0
   %90 = load %System.String addrspace(1)*, %System.String addrspace(1)** %arg1
-  %91 = bitcast %System.Globalization.CompareInfo addrspace(1)* %88 to i64 addrspace(1)*
-  %NullCheck17 = icmp eq i64 addrspace(1)* %91, null
+  %91 = bitcast %System.Globalization.CompareInfo addrspace(1)* %88 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck17 = icmp eq i8 addrspace(1)* addrspace(1)* %91, null
   br i1 %NullCheck17, label %ThrowNullRef18, label %92
 
 ; <label>:92                                      ; preds = %79
-  %93 = load i64, i64 addrspace(1)* %91
-  %94 = add i64 %93, 64
-  %95 = inttoptr i64 %94 to i64*
-  %96 = load i64, i64* %95
+  %93 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %91
+  %94 = getelementptr inbounds i8, i8 addrspace(1)* %93, i32 64
+  %95 = bitcast i8 addrspace(1)* %94 to i64 addrspace(1)*
+  %96 = load i64, i64 addrspace(1)* %95
   %97 = add i64 %96, 48
   %98 = inttoptr i64 %97 to i64*
   %99 = load i64, i64* %98
@@ -2385,15 +2385,15 @@ entry:
 
 ; <label>:102                                     ; preds = %20
   %103 = call %System.Globalization.CultureInfo addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.Globalization.CultureInfo addrspace(1)* ()*)()
-  %104 = bitcast %System.Globalization.CultureInfo addrspace(1)* %103 to i64 addrspace(1)*
-  %NullCheck11 = icmp eq i64 addrspace(1)* %104, null
+  %104 = bitcast %System.Globalization.CultureInfo addrspace(1)* %103 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck11 = icmp eq i8 addrspace(1)* addrspace(1)* %104, null
   br i1 %NullCheck11, label %ThrowNullRef12, label %105
 
 ; <label>:105                                     ; preds = %102
-  %106 = load i64, i64 addrspace(1)* %104
-  %107 = add i64 %106, 72
-  %108 = inttoptr i64 %107 to i64*
-  %109 = load i64, i64* %108
+  %106 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %104
+  %107 = getelementptr inbounds i8, i8 addrspace(1)* %106, i32 72
+  %108 = bitcast i8 addrspace(1)* %107 to i64 addrspace(1)*
+  %109 = load i64, i64 addrspace(1)* %108
   %110 = add i64 %109, 16
   %111 = inttoptr i64 %110 to i64*
   %112 = load i64, i64* %111
@@ -2401,15 +2401,15 @@ entry:
   %114 = call %System.Globalization.CompareInfo addrspace(1)* %113(%System.Globalization.CultureInfo addrspace(1)* %103)
   %115 = load %System.String addrspace(1)*, %System.String addrspace(1)** %arg0
   %116 = load %System.String addrspace(1)*, %System.String addrspace(1)** %arg1
-  %117 = bitcast %System.Globalization.CompareInfo addrspace(1)* %114 to i64 addrspace(1)*
-  %NullCheck13 = icmp eq i64 addrspace(1)* %117, null
+  %117 = bitcast %System.Globalization.CompareInfo addrspace(1)* %114 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck13 = icmp eq i8 addrspace(1)* addrspace(1)* %117, null
   br i1 %NullCheck13, label %ThrowNullRef14, label %118
 
 ; <label>:118                                     ; preds = %105
-  %119 = load i64, i64 addrspace(1)* %117
-  %120 = add i64 %119, 64
-  %121 = inttoptr i64 %120 to i64*
-  %122 = load i64, i64* %121
+  %119 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %117
+  %120 = getelementptr inbounds i8, i8 addrspace(1)* %119, i32 64
+  %121 = bitcast i8 addrspace(1)* %120 to i64 addrspace(1)*
+  %122 = load i64, i64 addrspace(1)* %121
   %123 = add i64 %122, 48
   %124 = inttoptr i64 %123 to i64*
   %125 = load i64, i64* %124
@@ -2951,15 +2951,15 @@ entry:
 
 ; <label>:12                                      ; preds = %3
   %13 = load %System.Type addrspace(1)*, %System.Type addrspace(1)** %arg1
-  %14 = bitcast %System.Type addrspace(1)* %13 to i64 addrspace(1)*
-  %NullCheck = icmp eq i64 addrspace(1)* %14, null
+  %14 = bitcast %System.Type addrspace(1)* %13 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck = icmp eq i8 addrspace(1)* addrspace(1)* %14, null
   br i1 %NullCheck, label %ThrowNullRef, label %15
 
 ; <label>:15                                      ; preds = %12
-  %16 = load i64, i64 addrspace(1)* %14
-  %17 = add i64 %16, 152
-  %18 = inttoptr i64 %17 to i64*
-  %19 = load i64, i64* %18
+  %16 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %14
+  %17 = getelementptr inbounds i8, i8 addrspace(1)* %16, i32 152
+  %18 = bitcast i8 addrspace(1)* %17 to i64 addrspace(1)*
+  %19 = load i64, i64 addrspace(1)* %18
   %20 = add i64 %19, 32
   %21 = inttoptr i64 %20 to i64*
   %22 = load i64, i64* %21
@@ -2988,15 +2988,15 @@ entry:
 ; <label>:38                                      ; preds = %34
   %39 = load %System.Type addrspace(1)*, %System.Type addrspace(1)** %arg1
   %40 = load %System.RuntimeType addrspace(1)*, %System.RuntimeType addrspace(1)** %this
-  %41 = bitcast %System.Type addrspace(1)* %39 to i64 addrspace(1)*
-  %NullCheck1 = icmp eq i64 addrspace(1)* %41, null
+  %41 = bitcast %System.Type addrspace(1)* %39 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck1 = icmp eq i8 addrspace(1)* addrspace(1)* %41, null
   br i1 %NullCheck1, label %ThrowNullRef2, label %42
 
 ; <label>:42                                      ; preds = %38
-  %43 = load i64, i64 addrspace(1)* %41
-  %44 = add i64 %43, 152
-  %45 = inttoptr i64 %44 to i64*
-  %46 = load i64, i64* %45
+  %43 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %41
+  %44 = getelementptr inbounds i8, i8 addrspace(1)* %43, i32 152
+  %45 = bitcast i8 addrspace(1)* %44 to i64 addrspace(1)*
+  %46 = load i64, i64 addrspace(1)* %45
   %47 = add i64 %46, 40
   %48 = inttoptr i64 %47 to i64*
   %49 = load i64, i64* %48
@@ -3033,15 +3033,15 @@ entry:
 
 ; <label>:70                                      ; preds = %56
   %71 = load %System.RuntimeType addrspace(1)*, %System.RuntimeType addrspace(1)** %this
-  %72 = bitcast %System.RuntimeType addrspace(1)* %71 to i64 addrspace(1)*
-  %NullCheck5 = icmp eq i64 addrspace(1)* %72, null
+  %72 = bitcast %System.RuntimeType addrspace(1)* %71 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck5 = icmp eq i8 addrspace(1)* addrspace(1)* %72, null
   br i1 %NullCheck5, label %ThrowNullRef6, label %73
 
 ; <label>:73                                      ; preds = %70
-  %74 = load i64, i64 addrspace(1)* %72
-  %75 = add i64 %74, 128
-  %76 = inttoptr i64 %75 to i64*
-  %77 = load i64, i64* %76
+  %74 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %72
+  %75 = getelementptr inbounds i8, i8 addrspace(1)* %74, i32 128
+  %76 = bitcast i8 addrspace(1)* %75 to i64 addrspace(1)*
+  %77 = load i64, i64 addrspace(1)* %76
   %78 = add i64 %77, 0
   %79 = inttoptr i64 %78 to i64*
   %80 = load i64, i64* %79
@@ -3054,15 +3054,15 @@ entry:
 
 ; <label>:86                                      ; preds = %73
   %87 = load %System.RuntimeType addrspace(1)*, %System.RuntimeType addrspace(1)** %this
-  %88 = bitcast %System.RuntimeType addrspace(1)* %87 to i64 addrspace(1)*
-  %NullCheck7 = icmp eq i64 addrspace(1)* %88, null
+  %88 = bitcast %System.RuntimeType addrspace(1)* %87 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck7 = icmp eq i8 addrspace(1)* addrspace(1)* %88, null
   br i1 %NullCheck7, label %ThrowNullRef8, label %89
 
 ; <label>:89                                      ; preds = %86
-  %90 = load i64, i64 addrspace(1)* %88
-  %91 = add i64 %90, 128
-  %92 = inttoptr i64 %91 to i64*
-  %93 = load i64, i64* %92
+  %90 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %88
+  %91 = getelementptr inbounds i8, i8 addrspace(1)* %90, i32 128
+  %92 = bitcast i8 addrspace(1)* %91 to i64 addrspace(1)*
+  %93 = load i64, i64 addrspace(1)* %92
   %94 = add i64 %93, 24
   %95 = inttoptr i64 %94 to i64*
   %96 = load i64, i64* %95
@@ -3091,15 +3091,15 @@ entry:
   %109 = getelementptr inbounds %"System.Type[]", %"System.Type[]" addrspace(1)* %101, i32 0, i32 3, i32 %102
   %110 = load %System.Type addrspace(1)*, %System.Type addrspace(1)* addrspace(1)* %109, align 8
   %111 = load %System.Type addrspace(1)*, %System.Type addrspace(1)** %arg1
-  %112 = bitcast %System.Type addrspace(1)* %110 to i64 addrspace(1)*
-  %NullCheck13 = icmp eq i64 addrspace(1)* %112, null
+  %112 = bitcast %System.Type addrspace(1)* %110 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck13 = icmp eq i8 addrspace(1)* addrspace(1)* %112, null
   br i1 %NullCheck13, label %ThrowNullRef14, label %113
 
 ; <label>:113                                     ; preds = %108
-  %114 = load i64, i64 addrspace(1)* %112
-  %115 = add i64 %114, 152
-  %116 = inttoptr i64 %115 to i64*
-  %117 = load i64, i64* %116
+  %114 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %112
+  %115 = getelementptr inbounds i8, i8 addrspace(1)* %114, i32 152
+  %116 = bitcast i8 addrspace(1)* %115 to i64 addrspace(1)*
+  %117 = load i64, i64 addrspace(1)* %116
   %118 = add i64 %117, 56
   %119 = inttoptr i64 %118 to i64*
   %120 = load i64, i64* %119
@@ -3746,15 +3746,15 @@ entry:
 
 ; <label>:47                                      ; preds = %43
   %48 = load %System.Text.StringBuilder addrspace(1)*, %System.Text.StringBuilder addrspace(1)** %loc0
-  %49 = bitcast %System.Text.StringBuilder addrspace(1)* %48 to i64 addrspace(1)*
-  %NullCheck3 = icmp eq i64 addrspace(1)* %49, null
+  %49 = bitcast %System.Text.StringBuilder addrspace(1)* %48 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck3 = icmp eq i8 addrspace(1)* addrspace(1)* %49, null
   br i1 %NullCheck3, label %ThrowNullRef4, label %50
 
 ; <label>:50                                      ; preds = %47
-  %51 = load i64, i64 addrspace(1)* %49
-  %52 = add i64 %51, 64
-  %53 = inttoptr i64 %52 to i64*
-  %54 = load i64, i64* %53
+  %51 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %49
+  %52 = getelementptr inbounds i8, i8 addrspace(1)* %51, i32 64
+  %53 = bitcast i8 addrspace(1)* %52 to i64 addrspace(1)*
+  %54 = load i64, i64 addrspace(1)* %53
   %55 = add i64 %54, 0
   %56 = inttoptr i64 %55 to i64*
   %57 = load i64, i64* %56
@@ -4563,15 +4563,15 @@ entry:
 
 ; <label>:5                                       ; preds = %3
   %6 = load %System.__Canon addrspace(1)*, %System.__Canon addrspace(1)* addrspace(1)* %4, align 8
-  %7 = bitcast %System.__Canon addrspace(1)* %6 to i64 addrspace(1)*
-  %NullCheck1 = icmp eq i64 addrspace(1)* %7, null
+  %7 = bitcast %System.__Canon addrspace(1)* %6 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck1 = icmp eq i8 addrspace(1)* addrspace(1)* %7, null
   br i1 %NullCheck1, label %ThrowNullRef2, label %8
 
 ; <label>:8                                       ; preds = %5
-  %9 = load i64, i64 addrspace(1)* %7
-  %10 = add i64 %9, 64
-  %11 = inttoptr i64 %10 to i64*
-  %12 = load i64, i64* %11
+  %9 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %7
+  %10 = getelementptr inbounds i8, i8 addrspace(1)* %9, i32 64
+  %11 = bitcast i8 addrspace(1)* %10 to i64 addrspace(1)*
+  %12 = load i64, i64 addrspace(1)* %11
   %13 = add i64 %12, 16
   %14 = inttoptr i64 %13 to i64*
   %15 = load i64, i64* %14
@@ -4734,15 +4734,15 @@ entry:
   store %System.String addrspace(1)* %0, %System.String addrspace(1)** %loc0
   %1 = load %System.String addrspace(1)*, %System.String addrspace(1)** %loc0
   %2 = call %System.Globalization.CultureInfo addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.Globalization.CultureInfo addrspace(1)* ()*)()
-  %3 = bitcast %System.Globalization.CultureInfo addrspace(1)* %2 to i64 addrspace(1)*
-  %NullCheck = icmp eq i64 addrspace(1)* %3, null
+  %3 = bitcast %System.Globalization.CultureInfo addrspace(1)* %2 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck = icmp eq i8 addrspace(1)* addrspace(1)* %3, null
   br i1 %NullCheck, label %ThrowNullRef, label %4
 
 ; <label>:4                                       ; preds = %entry
-  %5 = load i64, i64 addrspace(1)* %3
-  %6 = add i64 %5, 64
-  %7 = inttoptr i64 %6 to i64*
-  %8 = load i64, i64* %7
+  %5 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %3
+  %6 = getelementptr inbounds i8, i8 addrspace(1)* %5, i32 64
+  %7 = bitcast i8 addrspace(1)* %6 to i64 addrspace(1)*
+  %8 = load i64, i64 addrspace(1)* %7
   %9 = add i64 %8, 40
   %10 = inttoptr i64 %9 to i64*
   %11 = load i64, i64* %10
@@ -5239,15 +5239,15 @@ entry:
   call void inttoptr (i64 NORMALIZED_ADDRESS to void (%System.StringComparer addrspace(1)*)*)(%System.StringComparer addrspace(1)* %1)
   %2 = load %System.CultureAwareComparer addrspace(1)*, %System.CultureAwareComparer addrspace(1)** %this
   %3 = load %System.Globalization.CultureInfo addrspace(1)*, %System.Globalization.CultureInfo addrspace(1)** %arg1
-  %4 = bitcast %System.Globalization.CultureInfo addrspace(1)* %3 to i64 addrspace(1)*
-  %NullCheck = icmp eq i64 addrspace(1)* %4, null
+  %4 = bitcast %System.Globalization.CultureInfo addrspace(1)* %3 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck = icmp eq i8 addrspace(1)* addrspace(1)* %4, null
   br i1 %NullCheck, label %ThrowNullRef, label %5
 
 ; <label>:5                                       ; preds = %entry
-  %6 = load i64, i64 addrspace(1)* %4
-  %7 = add i64 %6, 72
-  %8 = inttoptr i64 %7 to i64*
-  %9 = load i64, i64* %8
+  %6 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %4
+  %7 = getelementptr inbounds i8, i8 addrspace(1)* %6, i32 72
+  %8 = bitcast i8 addrspace(1)* %7 to i64 addrspace(1)*
+  %9 = load i64, i64 addrspace(1)* %8
   %10 = add i64 %9, 16
   %11 = inttoptr i64 %10 to i64*
   %12 = load i64, i64* %11
@@ -5337,15 +5337,15 @@ entry:
   %16 = getelementptr inbounds %System.Globalization.CultureInfo, %System.Globalization.CultureInfo addrspace(1)* %14, i32 0, i32 7
   %17 = load %System.String addrspace(1)*, %System.String addrspace(1)* addrspace(1)* %16, align 8
   %18 = call %System.Globalization.CultureInfo addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.Globalization.CultureInfo addrspace(1)* (%System.String addrspace(1)*)*)(%System.String addrspace(1)* %17)
-  %19 = bitcast %System.Globalization.CultureInfo addrspace(1)* %18 to i64 addrspace(1)*
-  %NullCheck5 = icmp eq i64 addrspace(1)* %19, null
+  %19 = bitcast %System.Globalization.CultureInfo addrspace(1)* %18 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck5 = icmp eq i8 addrspace(1)* addrspace(1)* %19, null
   br i1 %NullCheck5, label %ThrowNullRef6, label %20
 
 ; <label>:20                                      ; preds = %15
-  %21 = load i64, i64 addrspace(1)* %19
-  %22 = add i64 %21, 72
-  %23 = inttoptr i64 %22 to i64*
-  %24 = load i64, i64* %23
+  %21 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %19
+  %22 = getelementptr inbounds i8, i8 addrspace(1)* %21, i32 72
+  %23 = bitcast i8 addrspace(1)* %22 to i64 addrspace(1)*
+  %24 = load i64, i64 addrspace(1)* %23
   %25 = add i64 %24, 16
   %26 = inttoptr i64 %25 to i64*
   %27 = load i64, i64* %26
@@ -7396,15 +7396,15 @@ entry:
 ; <label>:76                                      ; preds = %74
   %77 = getelementptr inbounds %System.IO.PathHelper, %System.IO.PathHelper addrspace(1)* %75, i32 0, i32 0
   %78 = load %System.Text.StringBuilder addrspace(1)*, %System.Text.StringBuilder addrspace(1)* addrspace(1)* %77, align 8
-  %79 = bitcast %System.Text.StringBuilder addrspace(1)* %78 to i64 addrspace(1)*
-  %NullCheck19 = icmp eq i64 addrspace(1)* %79, null
+  %79 = bitcast %System.Text.StringBuilder addrspace(1)* %78 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck19 = icmp eq i8 addrspace(1)* addrspace(1)* %79, null
   br i1 %NullCheck19, label %ThrowNullRef20, label %80
 
 ; <label>:80                                      ; preds = %76
-  %81 = load i64, i64 addrspace(1)* %79
-  %82 = add i64 %81, 64
-  %83 = inttoptr i64 %82 to i64*
-  %84 = load i64, i64* %83
+  %81 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %79
+  %82 = getelementptr inbounds i8, i8 addrspace(1)* %81, i32 64
+  %83 = bitcast i8 addrspace(1)* %82 to i64 addrspace(1)*
+  %84 = load i64, i64 addrspace(1)* %83
   %85 = add i64 %84, 0
   %86 = inttoptr i64 %85 to i64*
   %87 = load i64, i64* %86
@@ -7429,15 +7429,15 @@ entry:
 ; <label>:98                                      ; preds = %96
   %99 = getelementptr inbounds %System.IO.PathHelper, %System.IO.PathHelper addrspace(1)* %97, i32 0, i32 0
   %100 = load %System.Text.StringBuilder addrspace(1)*, %System.Text.StringBuilder addrspace(1)* addrspace(1)* %99, align 8
-  %101 = bitcast %System.Text.StringBuilder addrspace(1)* %100 to i64 addrspace(1)*
-  %NullCheck25 = icmp eq i64 addrspace(1)* %101, null
+  %101 = bitcast %System.Text.StringBuilder addrspace(1)* %100 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck25 = icmp eq i8 addrspace(1)* addrspace(1)* %101, null
   br i1 %NullCheck25, label %ThrowNullRef26, label %102
 
 ; <label>:102                                     ; preds = %98
-  %103 = load i64, i64 addrspace(1)* %101
-  %104 = add i64 %103, 64
-  %105 = inttoptr i64 %104 to i64*
-  %106 = load i64, i64* %105
+  %103 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %101
+  %104 = getelementptr inbounds i8, i8 addrspace(1)* %103, i32 64
+  %105 = bitcast i8 addrspace(1)* %104 to i64 addrspace(1)*
+  %106 = load i64, i64 addrspace(1)* %105
   %107 = add i64 %106, 0
   %108 = inttoptr i64 %107 to i64*
   %109 = load i64, i64* %108
@@ -7604,15 +7604,15 @@ entry:
 ; <label>:16                                      ; preds = %14
   %17 = getelementptr inbounds %System.IO.PathHelper, %System.IO.PathHelper addrspace(1)* %15, i32 0, i32 0
   %18 = load %System.Text.StringBuilder addrspace(1)*, %System.Text.StringBuilder addrspace(1)* addrspace(1)* %17, align 8
-  %19 = bitcast %System.Text.StringBuilder addrspace(1)* %18 to i64 addrspace(1)*
-  %NullCheck5 = icmp eq i64 addrspace(1)* %19, null
+  %19 = bitcast %System.Text.StringBuilder addrspace(1)* %18 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck5 = icmp eq i8 addrspace(1)* addrspace(1)* %19, null
   br i1 %NullCheck5, label %ThrowNullRef6, label %20
 
 ; <label>:20                                      ; preds = %16
-  %21 = load i64, i64 addrspace(1)* %19
-  %22 = add i64 %21, 64
-  %23 = inttoptr i64 %22 to i64*
-  %24 = load i64, i64* %23
+  %21 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %19
+  %22 = getelementptr inbounds i8, i8 addrspace(1)* %21, i32 64
+  %23 = bitcast i8 addrspace(1)* %22 to i64 addrspace(1)*
+  %24 = load i64, i64 addrspace(1)* %23
   %25 = add i64 %24, 0
   %26 = inttoptr i64 %25 to i64*
   %27 = load i64, i64* %26
@@ -7826,15 +7826,15 @@ entry:
 
 ; <label>:26                                      ; preds = %22
   %27 = call %System.Globalization.CultureInfo addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.Globalization.CultureInfo addrspace(1)* ()*)()
-  %28 = bitcast %System.Globalization.CultureInfo addrspace(1)* %27 to i64 addrspace(1)*
-  %NullCheck23 = icmp eq i64 addrspace(1)* %28, null
+  %28 = bitcast %System.Globalization.CultureInfo addrspace(1)* %27 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck23 = icmp eq i8 addrspace(1)* addrspace(1)* %28, null
   br i1 %NullCheck23, label %ThrowNullRef24, label %29
 
 ; <label>:29                                      ; preds = %26
-  %30 = load i64, i64 addrspace(1)* %28
-  %31 = add i64 %30, 72
-  %32 = inttoptr i64 %31 to i64*
-  %33 = load i64, i64* %32
+  %30 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %28
+  %31 = getelementptr inbounds i8, i8 addrspace(1)* %30, i32 72
+  %32 = bitcast i8 addrspace(1)* %31 to i64 addrspace(1)*
+  %33 = load i64, i64 addrspace(1)* %32
   %34 = add i64 %33, 16
   %35 = inttoptr i64 %34 to i64*
   %36 = load i64, i64* %35
@@ -7842,15 +7842,15 @@ entry:
   %38 = call %System.Globalization.CompareInfo addrspace(1)* %37(%System.Globalization.CultureInfo addrspace(1)* %27)
   %39 = load %System.String addrspace(1)*, %System.String addrspace(1)** %arg0
   %40 = load %System.String addrspace(1)*, %System.String addrspace(1)** %arg1
-  %41 = bitcast %System.Globalization.CompareInfo addrspace(1)* %38 to i64 addrspace(1)*
-  %NullCheck25 = icmp eq i64 addrspace(1)* %41, null
+  %41 = bitcast %System.Globalization.CompareInfo addrspace(1)* %38 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck25 = icmp eq i8 addrspace(1)* addrspace(1)* %41, null
   br i1 %NullCheck25, label %ThrowNullRef26, label %42
 
 ; <label>:42                                      ; preds = %29
-  %43 = load i64, i64 addrspace(1)* %41
-  %44 = add i64 %43, 64
-  %45 = inttoptr i64 %44 to i64*
-  %46 = load i64, i64* %45
+  %43 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %41
+  %44 = getelementptr inbounds i8, i8 addrspace(1)* %43, i32 64
+  %45 = bitcast i8 addrspace(1)* %44 to i64 addrspace(1)*
+  %46 = load i64, i64 addrspace(1)* %45
   %47 = add i64 %46, 48
   %48 = inttoptr i64 %47 to i64*
   %49 = load i64, i64* %48
@@ -7863,15 +7863,15 @@ entry:
 
 ; <label>:55                                      ; preds = %22
   %56 = call %System.Globalization.CultureInfo addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.Globalization.CultureInfo addrspace(1)* ()*)()
-  %57 = bitcast %System.Globalization.CultureInfo addrspace(1)* %56 to i64 addrspace(1)*
-  %NullCheck19 = icmp eq i64 addrspace(1)* %57, null
+  %57 = bitcast %System.Globalization.CultureInfo addrspace(1)* %56 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck19 = icmp eq i8 addrspace(1)* addrspace(1)* %57, null
   br i1 %NullCheck19, label %ThrowNullRef20, label %58
 
 ; <label>:58                                      ; preds = %55
-  %59 = load i64, i64 addrspace(1)* %57
-  %60 = add i64 %59, 72
-  %61 = inttoptr i64 %60 to i64*
-  %62 = load i64, i64* %61
+  %59 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %57
+  %60 = getelementptr inbounds i8, i8 addrspace(1)* %59, i32 72
+  %61 = bitcast i8 addrspace(1)* %60 to i64 addrspace(1)*
+  %62 = load i64, i64 addrspace(1)* %61
   %63 = add i64 %62, 16
   %64 = inttoptr i64 %63 to i64*
   %65 = load i64, i64* %64
@@ -7879,15 +7879,15 @@ entry:
   %67 = call %System.Globalization.CompareInfo addrspace(1)* %66(%System.Globalization.CultureInfo addrspace(1)* %56)
   %68 = load %System.String addrspace(1)*, %System.String addrspace(1)** %arg0
   %69 = load %System.String addrspace(1)*, %System.String addrspace(1)** %arg1
-  %70 = bitcast %System.Globalization.CompareInfo addrspace(1)* %67 to i64 addrspace(1)*
-  %NullCheck21 = icmp eq i64 addrspace(1)* %70, null
+  %70 = bitcast %System.Globalization.CompareInfo addrspace(1)* %67 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck21 = icmp eq i8 addrspace(1)* addrspace(1)* %70, null
   br i1 %NullCheck21, label %ThrowNullRef22, label %71
 
 ; <label>:71                                      ; preds = %58
-  %72 = load i64, i64 addrspace(1)* %70
-  %73 = add i64 %72, 64
-  %74 = inttoptr i64 %73 to i64*
-  %75 = load i64, i64* %74
+  %72 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %70
+  %73 = getelementptr inbounds i8, i8 addrspace(1)* %72, i32 64
+  %74 = bitcast i8 addrspace(1)* %73 to i64 addrspace(1)*
+  %75 = load i64, i64 addrspace(1)* %74
   %76 = add i64 %75, 48
   %77 = inttoptr i64 %76 to i64*
   %78 = load i64, i64* %77
@@ -7900,15 +7900,15 @@ entry:
 
 ; <label>:84                                      ; preds = %22
   %85 = call %System.Globalization.CultureInfo addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.Globalization.CultureInfo addrspace(1)* ()*)()
-  %86 = bitcast %System.Globalization.CultureInfo addrspace(1)* %85 to i64 addrspace(1)*
-  %NullCheck15 = icmp eq i64 addrspace(1)* %86, null
+  %86 = bitcast %System.Globalization.CultureInfo addrspace(1)* %85 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck15 = icmp eq i8 addrspace(1)* addrspace(1)* %86, null
   br i1 %NullCheck15, label %ThrowNullRef16, label %87
 
 ; <label>:87                                      ; preds = %84
-  %88 = load i64, i64 addrspace(1)* %86
-  %89 = add i64 %88, 72
-  %90 = inttoptr i64 %89 to i64*
-  %91 = load i64, i64* %90
+  %88 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %86
+  %89 = getelementptr inbounds i8, i8 addrspace(1)* %88, i32 72
+  %90 = bitcast i8 addrspace(1)* %89 to i64 addrspace(1)*
+  %91 = load i64, i64 addrspace(1)* %90
   %92 = add i64 %91, 16
   %93 = inttoptr i64 %92 to i64*
   %94 = load i64, i64* %93
@@ -7916,15 +7916,15 @@ entry:
   %96 = call %System.Globalization.CompareInfo addrspace(1)* %95(%System.Globalization.CultureInfo addrspace(1)* %85)
   %97 = load %System.String addrspace(1)*, %System.String addrspace(1)** %arg0
   %98 = load %System.String addrspace(1)*, %System.String addrspace(1)** %arg1
-  %99 = bitcast %System.Globalization.CompareInfo addrspace(1)* %96 to i64 addrspace(1)*
-  %NullCheck17 = icmp eq i64 addrspace(1)* %99, null
+  %99 = bitcast %System.Globalization.CompareInfo addrspace(1)* %96 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck17 = icmp eq i8 addrspace(1)* addrspace(1)* %99, null
   br i1 %NullCheck17, label %ThrowNullRef18, label %100
 
 ; <label>:100                                     ; preds = %87
-  %101 = load i64, i64 addrspace(1)* %99
-  %102 = add i64 %101, 64
-  %103 = inttoptr i64 %102 to i64*
-  %104 = load i64, i64* %103
+  %101 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %99
+  %102 = getelementptr inbounds i8, i8 addrspace(1)* %101, i32 64
+  %103 = bitcast i8 addrspace(1)* %102 to i64 addrspace(1)*
+  %104 = load i64, i64 addrspace(1)* %103
   %105 = add i64 %104, 48
   %106 = inttoptr i64 %105 to i64*
   %107 = load i64, i64* %106
@@ -7937,15 +7937,15 @@ entry:
 
 ; <label>:113                                     ; preds = %22
   %114 = call %System.Globalization.CultureInfo addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.Globalization.CultureInfo addrspace(1)* ()*)()
-  %115 = bitcast %System.Globalization.CultureInfo addrspace(1)* %114 to i64 addrspace(1)*
-  %NullCheck11 = icmp eq i64 addrspace(1)* %115, null
+  %115 = bitcast %System.Globalization.CultureInfo addrspace(1)* %114 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck11 = icmp eq i8 addrspace(1)* addrspace(1)* %115, null
   br i1 %NullCheck11, label %ThrowNullRef12, label %116
 
 ; <label>:116                                     ; preds = %113
-  %117 = load i64, i64 addrspace(1)* %115
-  %118 = add i64 %117, 72
-  %119 = inttoptr i64 %118 to i64*
-  %120 = load i64, i64* %119
+  %117 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %115
+  %118 = getelementptr inbounds i8, i8 addrspace(1)* %117, i32 72
+  %119 = bitcast i8 addrspace(1)* %118 to i64 addrspace(1)*
+  %120 = load i64, i64 addrspace(1)* %119
   %121 = add i64 %120, 16
   %122 = inttoptr i64 %121 to i64*
   %123 = load i64, i64* %122
@@ -7953,15 +7953,15 @@ entry:
   %125 = call %System.Globalization.CompareInfo addrspace(1)* %124(%System.Globalization.CultureInfo addrspace(1)* %114)
   %126 = load %System.String addrspace(1)*, %System.String addrspace(1)** %arg0
   %127 = load %System.String addrspace(1)*, %System.String addrspace(1)** %arg1
-  %128 = bitcast %System.Globalization.CompareInfo addrspace(1)* %125 to i64 addrspace(1)*
-  %NullCheck13 = icmp eq i64 addrspace(1)* %128, null
+  %128 = bitcast %System.Globalization.CompareInfo addrspace(1)* %125 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck13 = icmp eq i8 addrspace(1)* addrspace(1)* %128, null
   br i1 %NullCheck13, label %ThrowNullRef14, label %129
 
 ; <label>:129                                     ; preds = %116
-  %130 = load i64, i64 addrspace(1)* %128
-  %131 = add i64 %130, 64
-  %132 = inttoptr i64 %131 to i64*
-  %133 = load i64, i64* %132
+  %130 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %128
+  %131 = getelementptr inbounds i8, i8 addrspace(1)* %130, i32 64
+  %132 = bitcast i8 addrspace(1)* %131 to i64 addrspace(1)*
+  %133 = load i64, i64 addrspace(1)* %132
   %134 = add i64 %133, 48
   %135 = inttoptr i64 %134 to i64*
   %136 = load i64, i64* %135
@@ -10112,15 +10112,15 @@ entry:
 
 ; <label>:15                                      ; preds = %7
   %16 = load %System.String addrspace(1)*, %System.String addrspace(1)** %arg1
-  %17 = bitcast %System.String addrspace(1)* %16 to i64 addrspace(1)*
-  %NullCheck1 = icmp eq i64 addrspace(1)* %17, null
+  %17 = bitcast %System.String addrspace(1)* %16 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck1 = icmp eq i8 addrspace(1)* addrspace(1)* %17, null
   br i1 %NullCheck1, label %ThrowNullRef2, label %18
 
 ; <label>:18                                      ; preds = %15
-  %19 = load i64, i64 addrspace(1)* %17
-  %20 = add i64 %19, 64
-  %21 = inttoptr i64 %20 to i64*
-  %22 = load i64, i64* %21
+  %19 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %17
+  %20 = getelementptr inbounds i8, i8 addrspace(1)* %19, i32 64
+  %21 = bitcast i8 addrspace(1)* %20 to i64 addrspace(1)*
+  %22 = load i64, i64 addrspace(1)* %21
   %23 = add i64 %22, 16
   %24 = inttoptr i64 %23 to i64*
   %25 = load i64, i64* %24
@@ -11112,15 +11112,15 @@ entry:
 ; <label>:9                                       ; preds = %entry
   %10 = load %System.Security.Policy.PolicyStatement addrspace(1)*, %System.Security.Policy.PolicyStatement addrspace(1)** %this
   %11 = load %System.Security.PermissionSet addrspace(1)*, %System.Security.PermissionSet addrspace(1)** %arg1
-  %12 = bitcast %System.Security.PermissionSet addrspace(1)* %11 to i64 addrspace(1)*
-  %NullCheck3 = icmp eq i64 addrspace(1)* %12, null
+  %12 = bitcast %System.Security.PermissionSet addrspace(1)* %11 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck3 = icmp eq i8 addrspace(1)* addrspace(1)* %12, null
   br i1 %NullCheck3, label %ThrowNullRef4, label %13
 
 ; <label>:13                                      ; preds = %9
-  %14 = load i64, i64 addrspace(1)* %12
-  %15 = add i64 %14, 72
-  %16 = inttoptr i64 %15 to i64*
-  %17 = load i64, i64* %16
+  %14 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %12
+  %15 = getelementptr inbounds i8, i8 addrspace(1)* %14, i32 72
+  %16 = bitcast i8 addrspace(1)* %15 to i64 addrspace(1)*
+  %17 = load i64, i64 addrspace(1)* %16
   %18 = add i64 %17, 32
   %19 = inttoptr i64 %18 to i64*
   %20 = load i64, i64* %19
@@ -11626,15 +11626,15 @@ entry:
 ; <label>:4                                       ; preds = %entry
   %5 = getelementptr inbounds %System.Security.Policy.PolicyStatement, %System.Security.Policy.PolicyStatement addrspace(1)* %3, i32 0, i32 1
   %6 = load %System.Security.PermissionSet addrspace(1)*, %System.Security.PermissionSet addrspace(1)* addrspace(1)* %5, align 8
-  %7 = bitcast %System.Security.PermissionSet addrspace(1)* %6 to i64 addrspace(1)*
-  %NullCheck1 = icmp eq i64 addrspace(1)* %7, null
+  %7 = bitcast %System.Security.PermissionSet addrspace(1)* %6 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck1 = icmp eq i8 addrspace(1)* addrspace(1)* %7, null
   br i1 %NullCheck1, label %ThrowNullRef2, label %8
 
 ; <label>:8                                       ; preds = %4
-  %9 = load i64, i64 addrspace(1)* %7
-  %10 = add i64 %9, 72
-  %11 = inttoptr i64 %10 to i64*
-  %12 = load i64, i64* %11
+  %9 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %7
+  %10 = getelementptr inbounds i8, i8 addrspace(1)* %9, i32 72
+  %11 = bitcast i8 addrspace(1)* %10 to i64 addrspace(1)*
+  %12 = load i64, i64 addrspace(1)* %11
   %13 = add i64 %12, 32
   %14 = inttoptr i64 %13 to i64*
   %15 = load i64, i64* %14
@@ -11770,15 +11770,15 @@ entry:
   store float %param0, float* %arg0
   %0 = call %System.IO.TextWriter addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.IO.TextWriter addrspace(1)* ()*)()
   %1 = load float, float* %arg0
-  %2 = bitcast %System.IO.TextWriter addrspace(1)* %0 to i64 addrspace(1)*
-  %NullCheck = icmp eq i64 addrspace(1)* %2, null
+  %2 = bitcast %System.IO.TextWriter addrspace(1)* %0 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck = icmp eq i8 addrspace(1)* addrspace(1)* %2, null
   br i1 %NullCheck, label %ThrowNullRef, label %3
 
 ; <label>:3                                       ; preds = %entry
-  %4 = load i64, i64 addrspace(1)* %2
-  %5 = add i64 %4, 96
-  %6 = inttoptr i64 %5 to i64*
-  %7 = load i64, i64* %6
+  %4 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %2
+  %5 = getelementptr inbounds i8, i8 addrspace(1)* %4, i32 96
+  %6 = bitcast i8 addrspace(1)* %5 to i64 addrspace(1)*
+  %7 = load i64, i64 addrspace(1)* %6
   %8 = add i64 %7, 48
   %9 = inttoptr i64 %8 to i64*
   %10 = load i64, i64* %9
@@ -12165,15 +12165,15 @@ entry:
   %5 = call %System.Text.Encoding addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.Text.Encoding addrspace(1)* ()*)()
   %6 = call %System.IO.StreamWriter addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.IO.StreamWriter addrspace(1)* (i64)*)(i64 NORMALIZED_ADDRESS)
   call void inttoptr (i64 NORMALIZED_ADDRESS to void (%System.IO.StreamWriter addrspace(1)*, %System.IO.Stream addrspace(1)*, %System.Text.Encoding addrspace(1)*, i32, i8)*)(%System.IO.StreamWriter addrspace(1)* %6, %System.IO.Stream addrspace(1)* %4, %System.Text.Encoding addrspace(1)* %5, i32 256, i8 1)
-  %7 = bitcast %System.IO.StreamWriter addrspace(1)* %6 to i64 addrspace(1)*
-  %NullCheck = icmp eq i64 addrspace(1)* %7, null
+  %7 = bitcast %System.IO.StreamWriter addrspace(1)* %6 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck = icmp eq i8 addrspace(1)* addrspace(1)* %7, null
   br i1 %NullCheck, label %ThrowNullRef, label %8
 
 ; <label>:8                                       ; preds = %3
-  %9 = load i64, i64 addrspace(1)* %7
-  %10 = add i64 %9, 120
-  %11 = inttoptr i64 %10 to i64*
-  %12 = load i64, i64* %11
+  %9 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %7
+  %10 = getelementptr inbounds i8, i8 addrspace(1)* %9, i32 120
+  %11 = bitcast i8 addrspace(1)* %10 to i64 addrspace(1)*
+  %12 = load i64, i64 addrspace(1)* %11
   %13 = add i64 %12, 0
   %14 = inttoptr i64 %13 to i64*
   %15 = load i64, i64* %14
@@ -12324,15 +12324,15 @@ entry:
   store %System.Text.EncodingProvider addrspace(1)* %22, %System.Text.EncodingProvider addrspace(1)** %loc1
   %23 = load %System.Text.EncodingProvider addrspace(1)*, %System.Text.EncodingProvider addrspace(1)** %loc1
   %24 = load i32, i32* %arg0
-  %25 = bitcast %System.Text.EncodingProvider addrspace(1)* %23 to i64 addrspace(1)*
-  %NullCheck3 = icmp eq i64 addrspace(1)* %25, null
+  %25 = bitcast %System.Text.EncodingProvider addrspace(1)* %23 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck3 = icmp eq i8 addrspace(1)* addrspace(1)* %25, null
   br i1 %NullCheck3, label %ThrowNullRef4, label %26
 
 ; <label>:26                                      ; preds = %20
-  %27 = load i64, i64 addrspace(1)* %25
-  %28 = add i64 %27, 64
-  %29 = inttoptr i64 %28 to i64*
-  %30 = load i64, i64* %29
+  %27 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %25
+  %28 = getelementptr inbounds i8, i8 addrspace(1)* %27, i32 64
+  %29 = bitcast i8 addrspace(1)* %28 to i64 addrspace(1)*
+  %30 = load i64, i64 addrspace(1)* %29
   %31 = add i64 %30, 40
   %32 = inttoptr i64 %31 to i64*
   %33 = load i64, i64* %32
@@ -12429,15 +12429,15 @@ entry:
   store i32 addrspace(1)* %param4, i32 addrspace(1)** %arg4
   %0 = load %System.Collections.Hashtable addrspace(1)*, %System.Collections.Hashtable addrspace(1)** %this
   %1 = load %System.Object addrspace(1)*, %System.Object addrspace(1)** %arg1
-  %2 = bitcast %System.Collections.Hashtable addrspace(1)* %0 to i64 addrspace(1)*
-  %NullCheck = icmp eq i64 addrspace(1)* %2, null
+  %2 = bitcast %System.Collections.Hashtable addrspace(1)* %0 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck = icmp eq i8 addrspace(1)* addrspace(1)* %2, null
   br i1 %NullCheck, label %ThrowNullRef, label %3
 
 ; <label>:3                                       ; preds = %entry
-  %4 = load i64, i64 addrspace(1)* %2
-  %5 = add i64 %4, 72
-  %6 = inttoptr i64 %5 to i64*
-  %7 = load i64, i64* %6
+  %4 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %2
+  %5 = getelementptr inbounds i8, i8 addrspace(1)* %4, i32 72
+  %6 = bitcast i8 addrspace(1)* %5 to i64 addrspace(1)*
+  %7 = load i64, i64 addrspace(1)* %6
   %8 = add i64 %7, 40
   %9 = inttoptr i64 %8 to i64*
   %10 = load i64, i64* %9
@@ -12528,15 +12528,15 @@ entry:
 
 ; <label>:15                                      ; preds = %1
   %16 = load %System.Object addrspace(1)*, %System.Object addrspace(1)** %arg1
-  %17 = bitcast %System.Object addrspace(1)* %16 to i64 addrspace(1)*
-  %NullCheck5 = icmp eq i64 addrspace(1)* %17, null
+  %17 = bitcast %System.Object addrspace(1)* %16 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck5 = icmp eq i8 addrspace(1)* addrspace(1)* %17, null
   br i1 %NullCheck5, label %ThrowNullRef6, label %18
 
 ; <label>:18                                      ; preds = %15
-  %19 = load i64, i64 addrspace(1)* %17
-  %20 = add i64 %19, 64
-  %21 = inttoptr i64 %20 to i64*
-  %22 = load i64, i64* %21
+  %19 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %17
+  %20 = getelementptr inbounds i8, i8 addrspace(1)* %19, i32 64
+  %21 = bitcast i8 addrspace(1)* %20 to i64 addrspace(1)*
+  %22 = load i64, i64 addrspace(1)* %21
   %23 = add i64 %22, 16
   %24 = inttoptr i64 %23 to i64*
   %25 = load i64, i64* %24
@@ -12676,15 +12676,15 @@ entry:
 
 ; <label>:20                                      ; preds = %15
   %21 = load %System.Text.UTF8Encoding addrspace(1)*, %System.Text.UTF8Encoding addrspace(1)** %this
-  %22 = bitcast %System.Text.UTF8Encoding addrspace(1)* %21 to i64 addrspace(1)*
-  %NullCheck5 = icmp eq i64 addrspace(1)* %22, null
+  %22 = bitcast %System.Text.UTF8Encoding addrspace(1)* %21 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck5 = icmp eq i8 addrspace(1)* addrspace(1)* %22, null
   br i1 %NullCheck5, label %ThrowNullRef6, label %23
 
 ; <label>:23                                      ; preds = %20
-  %24 = load i64, i64 addrspace(1)* %22
-  %25 = add i64 %24, 64
-  %26 = inttoptr i64 %25 to i64*
-  %27 = load i64, i64* %26
+  %24 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %22
+  %25 = getelementptr inbounds i8, i8 addrspace(1)* %24, i32 64
+  %26 = bitcast i8 addrspace(1)* %25 to i64 addrspace(1)*
+  %27 = load i64, i64 addrspace(1)* %26
   %28 = add i64 %27, 32
   %29 = inttoptr i64 %28 to i64*
   %30 = load i64, i64* %29
@@ -12753,15 +12753,15 @@ entry:
   %14 = getelementptr inbounds %System.Text.Encoding, %System.Text.Encoding addrspace(1)* %11, i32 0, i32 4
   store i32 %12, i32 addrspace(1)* %14
   %15 = load %System.Text.Encoding addrspace(1)*, %System.Text.Encoding addrspace(1)** %this
-  %16 = bitcast %System.Text.Encoding addrspace(1)* %15 to i64 addrspace(1)*
-  %NullCheck3 = icmp eq i64 addrspace(1)* %16, null
+  %16 = bitcast %System.Text.Encoding addrspace(1)* %15 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck3 = icmp eq i8 addrspace(1)* addrspace(1)* %16, null
   br i1 %NullCheck3, label %ThrowNullRef4, label %17
 
 ; <label>:17                                      ; preds = %13
-  %18 = load i64, i64 addrspace(1)* %16
-  %19 = add i64 %18, 64
-  %20 = inttoptr i64 %19 to i64*
-  %21 = load i64, i64* %20
+  %18 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %16
+  %19 = getelementptr inbounds i8, i8 addrspace(1)* %18, i32 64
+  %20 = bitcast i8 addrspace(1)* %19 to i64 addrspace(1)*
+  %21 = load i64, i64 addrspace(1)* %20
   %22 = add i64 %21, 32
   %23 = inttoptr i64 %22 to i64*
   %24 = load i64, i64* %23
@@ -13220,15 +13220,15 @@ entry:
 
 ; <label>:17                                      ; preds = %4
   %18 = load %System.IO.Stream addrspace(1)*, %System.IO.Stream addrspace(1)** %arg1
-  %19 = bitcast %System.IO.Stream addrspace(1)* %18 to i64 addrspace(1)*
-  %NullCheck = icmp eq i64 addrspace(1)* %19, null
+  %19 = bitcast %System.IO.Stream addrspace(1)* %18 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck = icmp eq i8 addrspace(1)* addrspace(1)* %19, null
   br i1 %NullCheck, label %ThrowNullRef, label %20
 
 ; <label>:20                                      ; preds = %17
-  %21 = load i64, i64 addrspace(1)* %19
-  %22 = add i64 %21, 64
-  %23 = inttoptr i64 %22 to i64*
-  %24 = load i64, i64* %23
+  %21 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %19
+  %22 = getelementptr inbounds i8, i8 addrspace(1)* %21, i32 64
+  %23 = bitcast i8 addrspace(1)* %22 to i64 addrspace(1)*
+  %24 = load i64, i64 addrspace(1)* %23
   %25 = add i64 %24, 56
   %26 = inttoptr i64 %25 to i64*
   %27 = load i64, i64* %26
@@ -13340,15 +13340,15 @@ entry:
 ; <label>:10                                      ; preds = %6
   %11 = getelementptr inbounds %System.IO.StreamWriter, %System.IO.StreamWriter addrspace(1)* %9, i32 0, i32 4
   %12 = load %System.Text.Encoding addrspace(1)*, %System.Text.Encoding addrspace(1)* addrspace(1)* %11, align 8
-  %13 = bitcast %System.Text.Encoding addrspace(1)* %12 to i64 addrspace(1)*
-  %NullCheck5 = icmp eq i64 addrspace(1)* %13, null
+  %13 = bitcast %System.Text.Encoding addrspace(1)* %12 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck5 = icmp eq i8 addrspace(1)* addrspace(1)* %13, null
   br i1 %NullCheck5, label %ThrowNullRef6, label %14
 
 ; <label>:14                                      ; preds = %10
-  %15 = load i64, i64 addrspace(1)* %13
-  %16 = add i64 %15, 96
-  %17 = inttoptr i64 %16 to i64*
-  %18 = load i64, i64* %17
+  %15 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %13
+  %16 = getelementptr inbounds i8, i8 addrspace(1)* %15, i32 96
+  %17 = bitcast i8 addrspace(1)* %16 to i64 addrspace(1)*
+  %18 = load i64, i64 addrspace(1)* %17
   %19 = add i64 %18, 8
   %20 = inttoptr i64 %19 to i64*
   %21 = load i64, i64* %20
@@ -13388,15 +13388,15 @@ entry:
   %39 = getelementptr inbounds %System.IO.StreamWriter, %System.IO.StreamWriter addrspace(1)* %37, i32 0, i32 4
   %40 = load %System.Text.Encoding addrspace(1)*, %System.Text.Encoding addrspace(1)* addrspace(1)* %39, align 8
   %41 = load i32, i32* %arg3
-  %42 = bitcast %System.Text.Encoding addrspace(1)* %40 to i64 addrspace(1)*
-  %NullCheck13 = icmp eq i64 addrspace(1)* %42, null
+  %42 = bitcast %System.Text.Encoding addrspace(1)* %40 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck13 = icmp eq i8 addrspace(1)* addrspace(1)* %42, null
   br i1 %NullCheck13, label %ThrowNullRef14, label %43
 
 ; <label>:43                                      ; preds = %38
-  %44 = load i64, i64 addrspace(1)* %42
-  %45 = add i64 %44, 96
-  %46 = inttoptr i64 %45 to i64*
-  %47 = load i64, i64* %46
+  %44 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %42
+  %45 = getelementptr inbounds i8, i8 addrspace(1)* %44, i32 96
+  %46 = bitcast i8 addrspace(1)* %45 to i64 addrspace(1)*
+  %47 = load i64, i64 addrspace(1)* %46
   %48 = add i64 %47, 16
   %49 = inttoptr i64 %48 to i64*
   %50 = load i64, i64* %49
@@ -13425,15 +13425,15 @@ entry:
 ; <label>:62                                      ; preds = %59
   %63 = getelementptr inbounds %System.IO.StreamWriter, %System.IO.StreamWriter addrspace(1)* %61, i32 0, i32 3
   %64 = load %System.IO.Stream addrspace(1)*, %System.IO.Stream addrspace(1)* addrspace(1)* %63, align 8
-  %65 = bitcast %System.IO.Stream addrspace(1)* %64 to i64 addrspace(1)*
-  %NullCheck21 = icmp eq i64 addrspace(1)* %65, null
+  %65 = bitcast %System.IO.Stream addrspace(1)* %64 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck21 = icmp eq i8 addrspace(1)* addrspace(1)* %65, null
   br i1 %NullCheck21, label %ThrowNullRef22, label %66
 
 ; <label>:66                                      ; preds = %62
-  %67 = load i64, i64 addrspace(1)* %65
-  %68 = add i64 %67, 64
-  %69 = inttoptr i64 %68 to i64*
-  %70 = load i64, i64* %69
+  %67 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %65
+  %68 = getelementptr inbounds i8, i8 addrspace(1)* %67, i32 64
+  %69 = bitcast i8 addrspace(1)* %68 to i64 addrspace(1)*
+  %70 = load i64, i64 addrspace(1)* %69
   %71 = add i64 %70, 40
   %72 = inttoptr i64 %71 to i64*
   %73 = load i64, i64* %72
@@ -13451,15 +13451,15 @@ entry:
 ; <label>:80                                      ; preds = %78
   %81 = getelementptr inbounds %System.IO.StreamWriter, %System.IO.StreamWriter addrspace(1)* %79, i32 0, i32 3
   %82 = load %System.IO.Stream addrspace(1)*, %System.IO.Stream addrspace(1)* addrspace(1)* %81, align 8
-  %83 = bitcast %System.IO.Stream addrspace(1)* %82 to i64 addrspace(1)*
-  %NullCheck25 = icmp eq i64 addrspace(1)* %83, null
+  %83 = bitcast %System.IO.Stream addrspace(1)* %82 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck25 = icmp eq i8 addrspace(1)* addrspace(1)* %83, null
   br i1 %NullCheck25, label %ThrowNullRef26, label %84
 
 ; <label>:84                                      ; preds = %80
-  %85 = load i64, i64 addrspace(1)* %83
-  %86 = add i64 %85, 72
-  %87 = inttoptr i64 %86 to i64*
-  %88 = load i64, i64* %87
+  %85 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %83
+  %86 = getelementptr inbounds i8, i8 addrspace(1)* %85, i32 72
+  %87 = bitcast i8 addrspace(1)* %86 to i64 addrspace(1)*
+  %88 = load i64, i64 addrspace(1)* %87
   %89 = add i64 %88, 8
   %90 = inttoptr i64 %89 to i64*
   %91 = load i64, i64* %90
@@ -13572,15 +13572,15 @@ entry:
 ; <label>:1                                       ; preds = %entry
   %2 = getelementptr inbounds %System.Text.ConsoleEncoding, %System.Text.ConsoleEncoding addrspace(1)* %0, i32 0, i32 8
   %3 = load %System.Text.Encoding addrspace(1)*, %System.Text.Encoding addrspace(1)* addrspace(1)* %2, align 8
-  %4 = bitcast %System.Text.Encoding addrspace(1)* %3 to i64 addrspace(1)*
-  %NullCheck1 = icmp eq i64 addrspace(1)* %4, null
+  %4 = bitcast %System.Text.Encoding addrspace(1)* %3 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck1 = icmp eq i8 addrspace(1)* addrspace(1)* %4, null
   br i1 %NullCheck1, label %ThrowNullRef2, label %5
 
 ; <label>:5                                       ; preds = %1
-  %6 = load i64, i64 addrspace(1)* %4
-  %7 = add i64 %6, 96
-  %8 = inttoptr i64 %7 to i64*
-  %9 = load i64, i64* %8
+  %6 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %4
+  %7 = getelementptr inbounds i8, i8 addrspace(1)* %6, i32 96
+  %8 = bitcast i8 addrspace(1)* %7 to i64 addrspace(1)*
+  %9 = load i64, i64 addrspace(1)* %8
   %10 = add i64 %9, 8
   %11 = inttoptr i64 %10 to i64*
   %12 = load i64, i64* %11
@@ -13668,15 +13668,15 @@ entry:
   %14 = getelementptr inbounds %System.Text.EncoderNLS, %System.Text.EncoderNLS addrspace(1)* %6, i32 0, i32 1
   call void inttoptr (i64 NORMALIZED_ADDRESS to void (%System.Text.EncoderFallback addrspace(1)* addrspace(1)*, %System.Text.EncoderFallback addrspace(1)*)*)(%System.Text.EncoderFallback addrspace(1)* addrspace(1)* %14, %System.Text.EncoderFallback addrspace(1)* %12)
   %15 = load %System.Text.EncoderNLS addrspace(1)*, %System.Text.EncoderNLS addrspace(1)** %this
-  %16 = bitcast %System.Text.EncoderNLS addrspace(1)* %15 to i64 addrspace(1)*
-  %NullCheck7 = icmp eq i64 addrspace(1)* %16, null
+  %16 = bitcast %System.Text.EncoderNLS addrspace(1)* %15 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck7 = icmp eq i8 addrspace(1)* addrspace(1)* %16, null
   br i1 %NullCheck7, label %ThrowNullRef8, label %17
 
 ; <label>:17                                      ; preds = %13
-  %18 = load i64, i64 addrspace(1)* %16
-  %19 = add i64 %18, 64
-  %20 = inttoptr i64 %19 to i64*
-  %21 = load i64, i64* %20
+  %18 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %16
+  %19 = getelementptr inbounds i8, i8 addrspace(1)* %18, i32 64
+  %20 = bitcast i8 addrspace(1)* %19 to i64 addrspace(1)*
+  %21 = load i64, i64 addrspace(1)* %20
   %22 = add i64 %21, 32
   %23 = inttoptr i64 %22 to i64*
   %24 = load i64, i64* %23
@@ -13772,15 +13772,15 @@ entry:
 ; <label>:10                                      ; preds = %8
   %11 = getelementptr inbounds %"System.Text.UTF8Encoding+UTF8Encoder", %"System.Text.UTF8Encoding+UTF8Encoder" addrspace(1)* %9, i32 0, i32 2
   %12 = load %System.Text.EncoderFallbackBuffer addrspace(1)*, %System.Text.EncoderFallbackBuffer addrspace(1)* addrspace(1)* %11, align 8
-  %13 = bitcast %System.Text.EncoderFallbackBuffer addrspace(1)* %12 to i64 addrspace(1)*
-  %NullCheck5 = icmp eq i64 addrspace(1)* %13, null
+  %13 = bitcast %System.Text.EncoderFallbackBuffer addrspace(1)* %12 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck5 = icmp eq i8 addrspace(1)* addrspace(1)* %13, null
   br i1 %NullCheck5, label %ThrowNullRef6, label %14
 
 ; <label>:14                                      ; preds = %10
-  %15 = load i64, i64 addrspace(1)* %13
-  %16 = add i64 %15, 72
-  %17 = inttoptr i64 %16 to i64*
-  %18 = load i64, i64* %17
+  %15 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %13
+  %16 = getelementptr inbounds i8, i8 addrspace(1)* %15, i32 72
+  %17 = bitcast i8 addrspace(1)* %16 to i64 addrspace(1)*
+  %18 = load i64, i64 addrspace(1)* %17
   %19 = add i64 %18, 8
   %20 = inttoptr i64 %19 to i64*
   %21 = load i64, i64* %20
@@ -13825,15 +13825,15 @@ entry:
   %2 = getelementptr inbounds %System.Text.ConsoleEncoding, %System.Text.ConsoleEncoding addrspace(1)* %0, i32 0, i32 8
   %3 = load %System.Text.Encoding addrspace(1)*, %System.Text.Encoding addrspace(1)* addrspace(1)* %2, align 8
   %4 = load i32, i32* %arg1
-  %5 = bitcast %System.Text.Encoding addrspace(1)* %3 to i64 addrspace(1)*
-  %NullCheck1 = icmp eq i64 addrspace(1)* %5, null
+  %5 = bitcast %System.Text.Encoding addrspace(1)* %3 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck1 = icmp eq i8 addrspace(1)* addrspace(1)* %5, null
   br i1 %NullCheck1, label %ThrowNullRef2, label %6
 
 ; <label>:6                                       ; preds = %1
-  %7 = load i64, i64 addrspace(1)* %5
-  %8 = add i64 %7, 96
-  %9 = inttoptr i64 %8 to i64*
-  %10 = load i64, i64* %9
+  %7 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %5
+  %8 = getelementptr inbounds i8, i8 addrspace(1)* %7, i32 96
+  %9 = bitcast i8 addrspace(1)* %8 to i64 addrspace(1)*
+  %10 = load i64, i64 addrspace(1)* %9
   %11 = add i64 %10, 16
   %12 = inttoptr i64 %11 to i64*
   %13 = load i64, i64* %12
@@ -13881,15 +13881,15 @@ entry:
   %11 = load %System.Text.UTF8Encoding addrspace(1)*, %System.Text.UTF8Encoding addrspace(1)** %this
   %12 = bitcast %System.Text.UTF8Encoding addrspace(1)* %11 to %System.Text.Encoding addrspace(1)*
   %13 = call %System.Text.EncoderFallback addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.Text.EncoderFallback addrspace(1)* (%System.Text.Encoding addrspace(1)*)*)(%System.Text.Encoding addrspace(1)* %12)
-  %14 = bitcast %System.Text.EncoderFallback addrspace(1)* %13 to i64 addrspace(1)*
-  %NullCheck = icmp eq i64 addrspace(1)* %14, null
+  %14 = bitcast %System.Text.EncoderFallback addrspace(1)* %13 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck = icmp eq i8 addrspace(1)* addrspace(1)* %14, null
   br i1 %NullCheck, label %ThrowNullRef, label %15
 
 ; <label>:15                                      ; preds = %7
-  %16 = load i64, i64 addrspace(1)* %14
-  %17 = add i64 %16, 64
-  %18 = inttoptr i64 %17 to i64*
-  %19 = load i64, i64* %18
+  %16 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %14
+  %17 = getelementptr inbounds i8, i8 addrspace(1)* %16, i32 64
+  %18 = bitcast i8 addrspace(1)* %17 to i64 addrspace(1)*
+  %19 = load i64, i64 addrspace(1)* %18
   %20 = add i64 %19, 40
   %21 = inttoptr i64 %20 to i64*
   %22 = load i64, i64* %21
@@ -13903,15 +13903,15 @@ entry:
   %28 = load %System.Text.UTF8Encoding addrspace(1)*, %System.Text.UTF8Encoding addrspace(1)** %this
   %29 = bitcast %System.Text.UTF8Encoding addrspace(1)* %28 to %System.Text.Encoding addrspace(1)*
   %30 = call %System.Text.EncoderFallback addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.Text.EncoderFallback addrspace(1)* (%System.Text.Encoding addrspace(1)*)*)(%System.Text.Encoding addrspace(1)* %29)
-  %31 = bitcast %System.Text.EncoderFallback addrspace(1)* %30 to i64 addrspace(1)*
-  %NullCheck1 = icmp eq i64 addrspace(1)* %31, null
+  %31 = bitcast %System.Text.EncoderFallback addrspace(1)* %30 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck1 = icmp eq i8 addrspace(1)* addrspace(1)* %31, null
   br i1 %NullCheck1, label %ThrowNullRef2, label %32
 
 ; <label>:32                                      ; preds = %26
-  %33 = load i64, i64 addrspace(1)* %31
-  %34 = add i64 %33, 64
-  %35 = inttoptr i64 %34 to i64*
-  %36 = load i64, i64* %35
+  %33 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %31
+  %34 = getelementptr inbounds i8, i8 addrspace(1)* %33, i32 64
+  %35 = bitcast i8 addrspace(1)* %34 to i64 addrspace(1)*
+  %36 = load i64, i64 addrspace(1)* %35
   %37 = add i64 %36, 40
   %38 = inttoptr i64 %37 to i64*
   %39 = load i64, i64* %38
@@ -14170,15 +14170,15 @@ entry:
 ; <label>:37                                      ; preds = %34
   %38 = getelementptr inbounds %System.IO.StreamWriter, %System.IO.StreamWriter addrspace(1)* %36, i32 0, i32 4
   %39 = load %System.Text.Encoding addrspace(1)*, %System.Text.Encoding addrspace(1)* addrspace(1)* %38, align 8
-  %40 = bitcast %System.Text.Encoding addrspace(1)* %39 to i64 addrspace(1)*
-  %NullCheck9 = icmp eq i64 addrspace(1)* %40, null
+  %40 = bitcast %System.Text.Encoding addrspace(1)* %39 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck9 = icmp eq i8 addrspace(1)* addrspace(1)* %40, null
   br i1 %NullCheck9, label %ThrowNullRef10, label %41
 
 ; <label>:41                                      ; preds = %37
-  %42 = load i64, i64 addrspace(1)* %40
-  %43 = add i64 %42, 64
-  %44 = inttoptr i64 %43 to i64*
-  %45 = load i64, i64* %44
+  %42 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %40
+  %43 = getelementptr inbounds i8, i8 addrspace(1)* %42, i32 64
+  %44 = bitcast i8 addrspace(1)* %43 to i64 addrspace(1)*
+  %45 = load i64, i64 addrspace(1)* %44
   %46 = add i64 %45, 40
   %47 = inttoptr i64 %46 to i64*
   %48 = load i64, i64* %47
@@ -14215,15 +14215,15 @@ entry:
   %67 = load i32, i32 addrspace(1)* %66
   %68 = zext i32 %67 to i64
   %69 = trunc i64 %68 to i32
-  %70 = bitcast %System.IO.Stream addrspace(1)* %62 to i64 addrspace(1)*
-  %NullCheck17 = icmp eq i64 addrspace(1)* %70, null
+  %70 = bitcast %System.IO.Stream addrspace(1)* %62 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck17 = icmp eq i8 addrspace(1)* addrspace(1)* %70, null
   br i1 %NullCheck17, label %ThrowNullRef18, label %71
 
 ; <label>:71                                      ; preds = %65
-  %72 = load i64, i64 addrspace(1)* %70
-  %73 = add i64 %72, 88
-  %74 = inttoptr i64 %73 to i64*
-  %75 = load i64, i64* %74
+  %72 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %70
+  %73 = getelementptr inbounds i8, i8 addrspace(1)* %72, i32 88
+  %74 = bitcast i8 addrspace(1)* %73 to i64 addrspace(1)*
+  %75 = load i64, i64 addrspace(1)* %74
   %76 = add i64 %75, 56
   %77 = inttoptr i64 %76 to i64*
   %78 = load i64, i64* %77
@@ -14262,15 +14262,15 @@ entry:
   %96 = load %"System.Byte[]" addrspace(1)*, %"System.Byte[]" addrspace(1)* addrspace(1)* %95, align 8
   %97 = load i8, i8* %arg2
   %98 = zext i8 %97 to i32
-  %99 = bitcast %System.Text.Encoder addrspace(1)* %84 to i64 addrspace(1)*
-  %NullCheck27 = icmp eq i64 addrspace(1)* %99, null
+  %99 = bitcast %System.Text.Encoder addrspace(1)* %84 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck27 = icmp eq i8 addrspace(1)* addrspace(1)* %99, null
   br i1 %NullCheck27, label %ThrowNullRef28, label %100
 
 ; <label>:100                                     ; preds = %94
-  %101 = load i64, i64 addrspace(1)* %99
-  %102 = add i64 %101, 64
-  %103 = inttoptr i64 %102 to i64*
-  %104 = load i64, i64* %103
+  %101 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %99
+  %102 = getelementptr inbounds i8, i8 addrspace(1)* %101, i32 64
+  %103 = bitcast i8 addrspace(1)* %102 to i64 addrspace(1)*
+  %104 = load i64, i64 addrspace(1)* %103
   %105 = add i64 %104, 56
   %106 = inttoptr i64 %105 to i64*
   %107 = load i64, i64* %106
@@ -14305,15 +14305,15 @@ entry:
   %123 = getelementptr inbounds %System.IO.StreamWriter, %System.IO.StreamWriter addrspace(1)* %121, i32 0, i32 6
   %124 = load %"System.Byte[]" addrspace(1)*, %"System.Byte[]" addrspace(1)* addrspace(1)* %123, align 8
   %125 = load i32, i32* %loc1
-  %126 = bitcast %System.IO.Stream addrspace(1)* %120 to i64 addrspace(1)*
-  %NullCheck35 = icmp eq i64 addrspace(1)* %126, null
+  %126 = bitcast %System.IO.Stream addrspace(1)* %120 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck35 = icmp eq i8 addrspace(1)* addrspace(1)* %126, null
   br i1 %NullCheck35, label %ThrowNullRef36, label %127
 
 ; <label>:127                                     ; preds = %122
-  %128 = load i64, i64 addrspace(1)* %126
-  %129 = add i64 %128, 88
-  %130 = inttoptr i64 %129 to i64*
-  %131 = load i64, i64* %130
+  %128 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %126
+  %129 = getelementptr inbounds i8, i8 addrspace(1)* %128, i32 88
+  %130 = bitcast i8 addrspace(1)* %129 to i64 addrspace(1)*
+  %131 = load i64, i64 addrspace(1)* %130
   %132 = add i64 %131, 56
   %133 = inttoptr i64 %132 to i64*
   %134 = load i64, i64* %133
@@ -14335,15 +14335,15 @@ entry:
 ; <label>:142                                     ; preds = %140
   %143 = getelementptr inbounds %System.IO.StreamWriter, %System.IO.StreamWriter addrspace(1)* %141, i32 0, i32 3
   %144 = load %System.IO.Stream addrspace(1)*, %System.IO.Stream addrspace(1)* addrspace(1)* %143, align 8
-  %145 = bitcast %System.IO.Stream addrspace(1)* %144 to i64 addrspace(1)*
-  %NullCheck39 = icmp eq i64 addrspace(1)* %145, null
+  %145 = bitcast %System.IO.Stream addrspace(1)* %144 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck39 = icmp eq i8 addrspace(1)* addrspace(1)* %145, null
   br i1 %NullCheck39, label %ThrowNullRef40, label %146
 
 ; <label>:146                                     ; preds = %142
-  %147 = load i64, i64 addrspace(1)* %145
-  %148 = add i64 %147, 80
-  %149 = inttoptr i64 %148 to i64*
-  %150 = load i64, i64* %149
+  %147 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %145
+  %148 = getelementptr inbounds i8, i8 addrspace(1)* %147, i32 80
+  %149 = bitcast i8 addrspace(1)* %148 to i64 addrspace(1)*
+  %150 = load i64, i64 addrspace(1)* %149
   %151 = add i64 %150, 24
   %152 = inttoptr i64 %151 to i64*
   %153 = load i64, i64* %152
@@ -14509,15 +14509,15 @@ entry:
   call void inttoptr (i64 NORMALIZED_ADDRESS to void (%System.Object addrspace(1)* addrspace(1)*, %System.Object addrspace(1)*)*)(%System.Object addrspace(1)* addrspace(1)* %3, %System.Object addrspace(1)* %1)
   %4 = load %System.IO.SyncTextWriter addrspace(1)*, %System.IO.SyncTextWriter addrspace(1)** %this
   %5 = load %System.IO.TextWriter addrspace(1)*, %System.IO.TextWriter addrspace(1)** %arg1
-  %6 = bitcast %System.IO.TextWriter addrspace(1)* %5 to i64 addrspace(1)*
-  %NullCheck1 = icmp eq i64 addrspace(1)* %6, null
+  %6 = bitcast %System.IO.TextWriter addrspace(1)* %5 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck1 = icmp eq i8 addrspace(1)* addrspace(1)* %6, null
   br i1 %NullCheck1, label %ThrowNullRef2, label %7
 
 ; <label>:7                                       ; preds = %2
-  %8 = load i64, i64 addrspace(1)* %6
-  %9 = add i64 %8, 64
-  %10 = inttoptr i64 %9 to i64*
-  %11 = load i64, i64* %10
+  %8 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %6
+  %9 = getelementptr inbounds i8, i8 addrspace(1)* %8, i32 64
+  %10 = bitcast i8 addrspace(1)* %9 to i64 addrspace(1)*
+  %11 = load i64, i64 addrspace(1)* %10
   %12 = add i64 %11, 32
   %13 = inttoptr i64 %12 to i64*
   %14 = load i64, i64* %13
@@ -14808,15 +14808,15 @@ entry:
   %8 = getelementptr inbounds %System.IO.SyncTextWriter, %System.IO.SyncTextWriter addrspace(1)* %6, i32 0, i32 4
   %9 = load %System.IO.TextWriter addrspace(1)*, %System.IO.TextWriter addrspace(1)* addrspace(1)* %8, align 8
   %10 = load float, float* %arg1
-  %11 = bitcast %System.IO.TextWriter addrspace(1)* %9 to i64 addrspace(1)*
-  %NullCheck3 = icmp eq i64 addrspace(1)* %11, null
+  %11 = bitcast %System.IO.TextWriter addrspace(1)* %9 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck3 = icmp eq i8 addrspace(1)* addrspace(1)* %11, null
   br i1 %NullCheck3, label %ThrowNullRef4, label %12
 
 ; <label>:12                                      ; preds = %7
-  %13 = load i64, i64 addrspace(1)* %11
-  %14 = add i64 %13, 96
-  %15 = inttoptr i64 %14 to i64*
-  %16 = load i64, i64* %15
+  %13 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %11
+  %14 = getelementptr inbounds i8, i8 addrspace(1)* %13, i32 96
+  %15 = bitcast i8 addrspace(1)* %14 to i64 addrspace(1)*
+  %16 = load i64, i64 addrspace(1)* %15
   %17 = add i64 %16, 48
   %18 = inttoptr i64 %17 to i64*
   %19 = load i64, i64* %18
@@ -14865,30 +14865,30 @@ entry:
   store float %param1, float* %arg1
   %0 = load %System.IO.TextWriter addrspace(1)*, %System.IO.TextWriter addrspace(1)** %this
   %1 = load float, float* %arg1
-  %2 = bitcast %System.IO.TextWriter addrspace(1)* %0 to i64 addrspace(1)*
-  %NullCheck = icmp eq i64 addrspace(1)* %2, null
+  %2 = bitcast %System.IO.TextWriter addrspace(1)* %0 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck = icmp eq i8 addrspace(1)* addrspace(1)* %2, null
   br i1 %NullCheck, label %ThrowNullRef, label %3
 
 ; <label>:3                                       ; preds = %entry
-  %4 = load i64, i64 addrspace(1)* %2
-  %5 = add i64 %4, 80
-  %6 = inttoptr i64 %5 to i64*
-  %7 = load i64, i64* %6
+  %4 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %2
+  %5 = getelementptr inbounds i8, i8 addrspace(1)* %4, i32 80
+  %6 = bitcast i8 addrspace(1)* %5 to i64 addrspace(1)*
+  %7 = load i64, i64 addrspace(1)* %6
   %8 = add i64 %7, 32
   %9 = inttoptr i64 %8 to i64*
   %10 = load i64, i64* %9
   %11 = inttoptr i64 %10 to void (%System.IO.TextWriter addrspace(1)*, float)*
   call void %11(%System.IO.TextWriter addrspace(1)* %0, float %1)
   %12 = load %System.IO.TextWriter addrspace(1)*, %System.IO.TextWriter addrspace(1)** %this
-  %13 = bitcast %System.IO.TextWriter addrspace(1)* %12 to i64 addrspace(1)*
-  %NullCheck1 = icmp eq i64 addrspace(1)* %13, null
+  %13 = bitcast %System.IO.TextWriter addrspace(1)* %12 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck1 = icmp eq i8 addrspace(1)* addrspace(1)* %13, null
   br i1 %NullCheck1, label %ThrowNullRef2, label %14
 
 ; <label>:14                                      ; preds = %3
-  %15 = load i64, i64 addrspace(1)* %13
-  %16 = add i64 %15, 88
-  %17 = inttoptr i64 %16 to i64*
-  %18 = load i64, i64* %17
+  %15 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %13
+  %16 = getelementptr inbounds i8, i8 addrspace(1)* %15, i32 88
+  %17 = bitcast i8 addrspace(1)* %16 to i64 addrspace(1)*
+  %18 = load i64, i64 addrspace(1)* %17
   %19 = add i64 %18, 40
   %20 = inttoptr i64 %19 to i64*
   %21 = load i64, i64* %20
@@ -14917,15 +14917,15 @@ entry:
   %0 = load %System.IO.TextWriter addrspace(1)*, %System.IO.TextWriter addrspace(1)** %this
   %1 = addrspacecast float* %arg1 to float addrspace(1)*
   %2 = load %System.IO.TextWriter addrspace(1)*, %System.IO.TextWriter addrspace(1)** %this
-  %3 = bitcast %System.IO.TextWriter addrspace(1)* %2 to i64 addrspace(1)*
-  %NullCheck = icmp eq i64 addrspace(1)* %3, null
+  %3 = bitcast %System.IO.TextWriter addrspace(1)* %2 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck = icmp eq i8 addrspace(1)* addrspace(1)* %3, null
   br i1 %NullCheck, label %ThrowNullRef, label %4
 
 ; <label>:4                                       ; preds = %entry
-  %5 = load i64, i64 addrspace(1)* %3
-  %6 = add i64 %5, 64
-  %7 = inttoptr i64 %6 to i64*
-  %8 = load i64, i64* %7
+  %5 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %3
+  %6 = getelementptr inbounds i8, i8 addrspace(1)* %5, i32 64
+  %7 = bitcast i8 addrspace(1)* %6 to i64 addrspace(1)*
+  %8 = load i64, i64 addrspace(1)* %7
   %9 = add i64 %8, 32
   %10 = inttoptr i64 %9 to i64*
   %11 = load i64, i64* %10
@@ -14933,15 +14933,15 @@ entry:
   %13 = call %System.IFormatProvider addrspace(1)* %12(%System.IO.TextWriter addrspace(1)* %2)
   %14 = bitcast float addrspace(1)* %1 to %System.Single addrspace(1)*
   %15 = call %System.String addrspace(1)* inttoptr (i64 NORMALIZED_ADDRESS to %System.String addrspace(1)* (%System.Single addrspace(1)*, %System.IFormatProvider addrspace(1)*)*)(%System.Single addrspace(1)* %14, %System.IFormatProvider addrspace(1)* %13)
-  %16 = bitcast %System.IO.TextWriter addrspace(1)* %0 to i64 addrspace(1)*
-  %NullCheck1 = icmp eq i64 addrspace(1)* %16, null
+  %16 = bitcast %System.IO.TextWriter addrspace(1)* %0 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck1 = icmp eq i8 addrspace(1)* addrspace(1)* %16, null
   br i1 %NullCheck1, label %ThrowNullRef2, label %17
 
 ; <label>:17                                      ; preds = %4
-  %18 = load i64, i64 addrspace(1)* %16
-  %19 = add i64 %18, 80
-  %20 = inttoptr i64 %19 to i64*
-  %21 = load i64, i64* %20
+  %18 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %16
+  %19 = getelementptr inbounds i8, i8 addrspace(1)* %18, i32 80
+  %20 = bitcast i8 addrspace(1)* %19 to i64 addrspace(1)*
+  %21 = load i64, i64 addrspace(1)* %20
   %22 = add i64 %21, 56
   %23 = inttoptr i64 %22 to i64*
   %24 = load i64, i64* %23
@@ -17038,15 +17038,15 @@ entry:
   %150 = load i32, i32* %loc0
   %151 = load i8, i8* %arg6
   %152 = zext i8 %151 to i32
-  %153 = bitcast %System.Text.EncoderNLS addrspace(1)* %137 to i64 addrspace(1)*
-  %NullCheck19 = icmp eq i64 addrspace(1)* %153, null
+  %153 = bitcast %System.Text.EncoderNLS addrspace(1)* %137 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck19 = icmp eq i8 addrspace(1)* addrspace(1)* %153, null
   br i1 %NullCheck19, label %ThrowNullRef20, label %154
 
 ; <label>:154                                     ; preds = %136
-  %155 = load i64, i64 addrspace(1)* %153
-  %156 = add i64 %155, 72
-  %157 = inttoptr i64 %156 to i64*
-  %158 = load i64, i64* %157
+  %155 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %153
+  %156 = getelementptr inbounds i8, i8 addrspace(1)* %155, i32 72
+  %157 = bitcast i8 addrspace(1)* %156 to i64 addrspace(1)*
+  %158 = load i64, i64 addrspace(1)* %157
   %159 = add i64 %158, 0
   %160 = inttoptr i64 %159 to i64*
   %161 = load i64, i64* %160
@@ -17225,15 +17225,15 @@ entry:
   %54 = load i8*, i8** %arg3
   %55 = load i32, i32* %arg4
   %56 = load %System.Text.EncoderNLS addrspace(1)*, %System.Text.EncoderNLS addrspace(1)** %this
-  %57 = bitcast %System.Text.Encoding addrspace(1)* %51 to i64 addrspace(1)*
-  %NullCheck5 = icmp eq i64 addrspace(1)* %57, null
+  %57 = bitcast %System.Text.Encoding addrspace(1)* %51 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck5 = icmp eq i8 addrspace(1)* addrspace(1)* %57, null
   br i1 %NullCheck5, label %ThrowNullRef6, label %58
 
 ; <label>:58                                      ; preds = %49
-  %59 = load i64, i64 addrspace(1)* %57
-  %60 = add i64 %59, 80
-  %61 = inttoptr i64 %60 to i64*
-  %62 = load i64, i64* %61
+  %59 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %57
+  %60 = getelementptr inbounds i8, i8 addrspace(1)* %59, i32 80
+  %61 = bitcast i8 addrspace(1)* %60 to i64 addrspace(1)*
+  %62 = load i64, i64 addrspace(1)* %61
   %63 = add i64 %62, 32
   %64 = inttoptr i64 %63 to i64*
   %65 = load i64, i64* %64
@@ -17587,15 +17587,15 @@ entry:
   %this = alloca %System.IO.ConsoleStream addrspace(1)*
   store %System.IO.ConsoleStream addrspace(1)* %param0, %System.IO.ConsoleStream addrspace(1)** %this
   %0 = load %System.IO.ConsoleStream addrspace(1)*, %System.IO.ConsoleStream addrspace(1)** %this
-  %1 = bitcast %System.IO.ConsoleStream addrspace(1)* %0 to i64 addrspace(1)*
-  %NullCheck = icmp eq i64 addrspace(1)* %1, null
+  %1 = bitcast %System.IO.ConsoleStream addrspace(1)* %0 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck = icmp eq i8 addrspace(1)* addrspace(1)* %1, null
   br i1 %NullCheck, label %ThrowNullRef, label %2
 
 ; <label>:2                                       ; preds = %entry
-  %3 = load i64, i64 addrspace(1)* %1
-  %4 = add i64 %3, 64
-  %5 = inttoptr i64 %4 to i64*
-  %6 = load i64, i64* %5
+  %3 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %1
+  %4 = getelementptr inbounds i8, i8 addrspace(1)* %3, i32 64
+  %5 = bitcast i8 addrspace(1)* %4 to i64 addrspace(1)*
+  %6 = load i64, i64 addrspace(1)* %5
   %7 = add i64 %6, 56
   %8 = inttoptr i64 %7 to i64*
   %9 = load i64, i64* %8
@@ -17634,15 +17634,15 @@ entry:
 ; <label>:2                                       ; preds = %entry
   %3 = getelementptr inbounds %System.IO.TextWriter, %System.IO.TextWriter addrspace(1)* %1, i32 0, i32 1
   %4 = load %"System.Char[]" addrspace(1)*, %"System.Char[]" addrspace(1)* addrspace(1)* %3, align 8
-  %5 = bitcast %System.IO.TextWriter addrspace(1)* %0 to i64 addrspace(1)*
-  %NullCheck1 = icmp eq i64 addrspace(1)* %5, null
+  %5 = bitcast %System.IO.TextWriter addrspace(1)* %0 to i8 addrspace(1)* addrspace(1)*
+  %NullCheck1 = icmp eq i8 addrspace(1)* addrspace(1)* %5, null
   br i1 %NullCheck1, label %ThrowNullRef2, label %6
 
 ; <label>:6                                       ; preds = %2
-  %7 = load i64, i64 addrspace(1)* %5
-  %8 = add i64 %7, 72
-  %9 = inttoptr i64 %8 to i64*
-  %10 = load i64, i64* %9
+  %7 = load i8 addrspace(1)*, i8 addrspace(1)* addrspace(1)* %5
+  %8 = getelementptr inbounds i8, i8 addrspace(1)* %7, i32 72
+  %9 = bitcast i8 addrspace(1)* %8 to i64 addrspace(1)*
+  %10 = load i64, i64 addrspace(1)* %9
   %11 = add i64 %10, 40
   %12 = inttoptr i64 %11 to i64*
   %13 = load i64, i64* %12
