@@ -5,7 +5,7 @@ import argparse
 import os
 import subprocess
 import platform
-import StringIO
+import io
 import string
 import difflib
 
@@ -135,7 +135,7 @@ def runFormat(args):
           if not args.fix:
             with open(filepath) as f:
               code = f.read().splitlines()
-            formatted_code = StringIO.StringIO(output).read().splitlines()
+            formatted_code = io.StringIO(output).read().splitlines()
             diff = difflib.unified_diff(code, formatted_code,
                                         filepath, filepath,
                                         '(before formatting)', '(after formatting)')
@@ -164,13 +164,13 @@ def runFormat(args):
         "-p1", formatFix]), shell=True, stdout=subprocess.PIPE)
 
     output,error = proc.communicate()
-    if output != "":
+    if output.decode('utf-8') != "":
       if args.print_diffs:
-        sys.stdout.write(output)
+        sys.stdout.write(output.decode('utf-8'))
       returncode = -1
 
   if returncode == -1:
-    print "There were formatting errors. Rerun with --fix"
+    print("There were formatting errors. Rerun with --fix")
   return returncode
 
 def main(argv):
