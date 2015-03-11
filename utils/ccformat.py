@@ -170,7 +170,7 @@ def runFormat(args):
       returncode = -1
 
   if returncode == -1:
-    print "There were formatting errors. Rerun with --fix"
+    print("There were formatting errors. Rerun with --fix")
   return returncode
 
 def main(argv):
