@@ -3861,34 +3861,28 @@ IRNode *GenIR::derefAddress(IRNode *Address, bool DstIsGCPtr, bool IsConst,
   }
 
   // We don't know the true referent type so just use a pointer sized
-  // integer for the result.
-  Type *ReferentTy =
-      Type::getIntNTy(*JitContext->LLVMContext, TargetPointerSizeInBits);
+  // integer or GC pointer to i8 for the result.
+
+  Type *ReferentTy = DstIsGCPtr
+                         ? (Type *)getManagedPointerType(
+                               Type::getInt8Ty(*JitContext->LLVMContext))
+                         : (Type *)Type::getIntNTy(*JitContext->LLVMContext,
+                                                   TargetPointerSizeInBits);
 
   // Address is a pointer, but since it may come from dereferencing into
   // runtime data structures with unknown field types, we may need a cast here
   // to make it so.
   Type *AddressTy = Address->getType();
-  if (!AddressTy->isPointerTy()) {
-    // Ensure we have a suitable integer value
-    ASSERT(AddressTy->isIntegerTy());
-    ASSERT(AddressTy->getScalarSizeInBits() == TargetPointerSizeInBits);
-    // We should not be trying to cast an integer value to a GC pointer.
-    ASSERT(!DstIsGCPtr);
-    // Cast to get a pointer-sized referent type.
+  PointerType *AddressPointerTy = dyn_cast<PointerType>(AddressTy);
+  if (AddressPointerTy == nullptr) {
+    // Cast the integer to an appropriate unmanaged pointer
     Type *CastTy = getUnmanagedPointerType(ReferentTy);
     Address = (IRNode *)LLVMBuilder->CreateIntToPtr(Address, CastTy);
-  } else if (DstIsGCPtr) {
-    // Verify we have a managed pointer.
-    ASSERT(isManagedPointerType(cast<PointerType>(AddressTy)));
-    // Cast to get a pointer-sized referent type.
-    Type *CastTy = getManagedPointerType(ReferentTy);
-    Address = (IRNode *)LLVMBuilder->CreatePointerCast(Address, CastTy);
-  } else {
-    // Verify we have an unmanaged pointer.
-    ASSERT(!isManagedPointerType(cast<PointerType>(AddressTy)));
-    // Cast to get a pointer-sized referent type.
-    Type *CastTy = getUnmanagedPointerType(ReferentTy);
+  } else if (AddressPointerTy->getElementType() != ReferentTy) {
+    // Cast to the appropriate referent type
+    Type *CastTy = isManagedPointerType(AddressPointerTy)
+                       ? getManagedPointerType(ReferentTy)
+                       : getUnmanagedPointerType(ReferentTy);
     Address = (IRNode *)LLVMBuilder->CreatePointerCast(Address, CastTy);
   }
 
