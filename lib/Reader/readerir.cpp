@@ -1705,7 +1705,16 @@ FlowGraphNode *GenIR::fgSplitBlock(FlowGraphNode *Block, IRNode *Node) {
       BranchInst::Create(NewBlock, TheBasicBlock);
     }
   } else {
-    NewBlock = TheBasicBlock->splitBasicBlock(Inst);
+    if (TheBasicBlock->getTerminator() != nullptr) {
+      NewBlock = TheBasicBlock->splitBasicBlock(Inst);
+    } else {
+      NewBlock = BasicBlock::Create(*JitContext->LLVMContext, "", Function,
+                                    TheBasicBlock->getNextNode());
+      NewBlock->getInstList().splice(NewBlock->end(),
+                                     TheBasicBlock->getInstList(), Inst,
+                                     TheBasicBlock->end());
+      BranchInst::Create(NewBlock, TheBasicBlock);
+    }
   }
   return (FlowGraphNode *)NewBlock;
 }
