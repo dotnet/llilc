@@ -153,6 +153,15 @@ sources.
 
 ### Exterior Pointers
 
+The GC can keep track of starting addresses of all objects such that if you
+point within the object it can find the base address by searching for the
+nearest pointer that represents the start of the object (i.e. the search is only
+in one direction).
+
+In the case of exterior pointers, where the pointer can point to before or after
+the object, to find the base pointer the GC would have to search in two directions
+and without extra information it cannot determine which direction the base pointer lies.
+
 It seems likely that LLVM's optimization passes might create exterior pointers
 in places (e.g. pointing before or after the object). The CoreCLR GC can't
 tolerate these, so we'll need to ensure that no exterior pointer is live at a
