@@ -3051,6 +3051,7 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
   IRNode *Call = nullptr, *ReturnNode = nullptr;
   IRNode *TargetNode = CallTargetInfo->getCallTargetNode();
   CORINFO_SIG_INFO *SigInfo = CallTargetInfo->getSigInfo();
+  CORINFO_CALL_INFO *CallInfo = CallTargetInfo->getCallInfo();
 
   unsigned HiddenMBParamSize = 0;
   GCLayout *GCInfo = nullptr;
@@ -3065,6 +3066,12 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
 
   if (SigInfo->hasTypeArg()) {
     throw NotYetImplementedException("Call HasTypeArg");
+  }
+
+  if ((CallInfo != nullptr) && (CallInfo->kind == CORINFO_VIRTUALCALL_STUB)) {
+    // VSD calls have a special calling convention that requires the pointer
+    // to the stub in a target-specific register.
+    throw NotYetImplementedException("virtual stub dispatch");
   }
 
   // Ask GenIR to create return value.
