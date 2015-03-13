@@ -36,6 +36,15 @@ There are a number of documents in the [CoreCLR](https://github.com/dotnet/corec
 that are [indexed here](https://github.com/dotnet/coreclr/blob/master/Documentation/index.md) 
 which can give a more complete overview of the CoreCLR.
 
+#### Garbage Collector
+
+The CLR relies on a precise, relocating garbage collector.  This garbage collector is used with in CoreCLR 
+for the JIT compliation model, and with in the native runtime for the AOT model.  The types for objects allocated 
+on the heap are used to indentify fields with GC references, and the JIT is required to report stack slots and registers that 
+contain GC references.  This information is used by the garbage collector for updating references when heap objects 
+are reloacted.  A discussion of the garbage collector as used by LLILC is 
+[here](https://github.com/dotnet/llilc/blob/master/Documentation/llilc-gc.md).
+
 ####MSIL reader
 
 The key component needed to start testing code generation out of LLVM and get basic methods working 
@@ -50,22 +59,26 @@ BitCode creation.
 
 ####LLVM
 
-LLVM is a great code generator that supports lots of platforms and CPU targets.  It also has facilities to 
-be used as both a JIT and AOT compiler.  This combination of features, lots of targets, and ability to compile 
-across a spectrum of compile times, attracted us to LLVM.  For our JIT we use the LLVM MCJIT. This infrastructure 
-allows us to use all the different targets supported by the MC infrastructre as a JIT.  This was our quickest path 
-to running code.  We're aware of the ORC JIT infrastructure but as the CoreCLR only notifies the JIT to compile a 
-method one method at a time, we currently would not get any benefit from the particular features of ORC.  (we 
-already compile one method per module today and we don't have to do any of the inter module fixups as that is 
+[LLVM](http://llvm.org/) is a great code generator that supports lots of platforms and CPU targets.  It also has 
+facilities to be used as both a JIT and AOT compiler.  This combination of features, lots of targets, and ability 
+to compile across a spectrum of compile times, attracted us to LLVM.  For our JIT we use the LLVM MCJIT. This 
+infrastructure allows us to use all the different targets supported by the MC infrastructre as a JIT.  This was our 
+quickest path to running code.  We're aware of the ORC JIT infrastructure but as the CoreCLR only notifies the JIT 
+to compile a method one method at a time, we currently would not get any benefit from the particular features of ORC. 
+(we already compile one method per module today and we don't have to do any of the inter module fixups as that is 
 performed by the runtime)
+
+There is a further disussion of how we're modeling the managed code semantics within LLVM in a following 
+[section](##Managed Semantics in LLVM). 
 
 ####IL Transforms
 
-Transforming the incoming MSIL to account for items like delegates, generics, and inter-op thunks simplifies 
-the incoming IL for the code generator.  The intent of the transform phases is to flatten the C# language semantics 
-to allow a more straight forward mapping to BitCode.
+IL Transforms precondition the incoming MSIL to account for items like delegates, generics, and inter-op thunks. 
+The intent of the transform phases is to flatten and simplify the C# language semantics to allow a more straight 
+forward mapping to BitCode.
 
-This area is not defined at this point other than to say that we're evlauating what approches to bring over from Windows.
+This area is not defined at this point other than to say that we're evlauating what approches to bring over from 
+Windows.
 
 ####Type Based Optimizations
 
@@ -75,40 +88,19 @@ locality.  For generic sharing, where posible generic method instances are share
 
 Like the IL transforms this area is not defined.  Further design work is needed for this with in the AOT tool.
 
-####EH conventions
+####Exception Handling Model
 
 The CLR EH model includes features beyond the C++ Exception Handling model.  C# allows try{} and catch(){} clauses like in 
 C++ but also includes finally {} blocks as well.  Additionally there are compiler synthesized exceptions that will be thrown 
 for accessing through a null reference, accessing outside the bounds of a data type, for overflowing arrithmetic, and divide 
-by zero. Different languages on the CLR can implement different subsets of the CLR EH model. For more information refer to 
-the documentation for this is available on MSDN [here](https://msdn.microsoft.com/en-us/library/ms173162.aspx).
-For LLILC we will explicty expand the language required checks in to explicit flow, while for the additional clauses, use 
-the funclet design that is emerging in LLVM to support SEH.  A full description of our EH approch can be found in our 
-documentation [here](https://github.com/dotnet/llilc/blob/master/Documentation/llilc-jit-eh.md).
+by zero. Different languages on the CLR can implement different subsets of the CLR EH model. A general C# introduction to CLR 
+EH can be found [here](https://msdn.microsoft.com/en-us/library/ms173162.aspx). For more specific information refer to 
+the the ECMA spec [here](http://www.ecma-international.org/publications/standards/Ecma-335.htm). 
+In LLILC we will explicty expand the CLR required checks in to explicit flow, while for the additional clauses, use 
+the funclet design that is emerging in LLVM to to support MSVC-compatible EH.  A full description of our EH approch can be 
+found in our documentation [here](https://github.com/dotnet/llilc/blob/master/Documentation/llilc-jit-eh.md).
 
-## Just in Time code generator
-
-![JIT Architecture](./Images/JITArch.png)
-
-## MSIL reader
-- Translation opcodes to bitcode
-- Mapping types into bitcode
-- Early expansion of MSIL semantics
-	- Managed checks
-	- GC safepoints
-
-## CoreCLR Support
-
-####JIT interface
-####GC format
-
-####Dynamic Type System
-
-## Ahead of Time code generator
-
-![AOT Architecture](./Images/AOTArch.png)
-
-#### AOT Driver
+#### Ahead of Time (AOT) Compliation Driver
 
 The Ahead of Time driver is resposible for marshalling resources for compilation.  The driver will load 
 the assemblies being compiled via the Simple Type System (STS) and then for each method invoke the MSIL 
@@ -125,7 +117,24 @@ code generator with an object and type model of the MSIL assembly.
 As mentioned above the DR and Generics support is still being fleshed out.  We don't quite have a stake in the 
 ground here yet.
 
-## Managed sematics in LLVM
+## Just in Time Code Generator
+
+![JIT Architecture](./Images/JITArch.png)
+
+As laid out above the JIT runs with CoreCLR, where the runtime requests compliation from the code generator as it is needed 
+during execution.  This dynamic execution relies on the dynamic type system contained in CoreCLR as well as several utilities 
+provided by the runtime.  All of these facilities that the JIT relies on are exposed to it via the CoreCLR common JIT 
+interface.  This is the a simpler environment for the compiler to work in.  It just needs to service requests and all generic, 
+inter-op, and interface dispatch complexity is resoved by the runtime and provided by query across the JIT interface. This 
+code generator is being brought up first due to it's relative simplicty in getting test cases working and providing a test bed 
+to implement the managed semantics in LLVM.  All of the features required in the JIT will be reused by the AOT framework with 
+addiitonal components added. 
+
+## Ahead of Time code generator
+
+![AOT Architecture](./Images/AOTArch.png)
+
+## Managed Sematics in LLVM
 
 - Managed optimizations
 	- Checks
