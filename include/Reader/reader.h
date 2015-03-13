@@ -2220,9 +2220,11 @@ public:
   virtual void storeArg(uint32_t LocOrdinal, IRNode *Arg1,
                         ReaderAlignType Alignment, bool IsVolatile) = 0;
   virtual void storeElem(ReaderBaseNS::StElemOpcode Opcode,
-                         CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
-                         IRNode *Arg2, IRNode *Arg3) = 0;
-  virtual void storeElemRefAny(IRNode *Value, IRNode *Index, IRNode *Obj);
+                         CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                         IRNode *ValueToStore, IRNode *Index,
+                         IRNode *Array) = 0;
+  virtual void storeElemRefAny(IRNode *ValueToStore, IRNode *Index,
+                               IRNode *Array);
   virtual void storeField(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
                           IRNode *Arg2, ReaderAlignType Alignment,
                           bool IsVolatile) = 0;

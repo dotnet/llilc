@@ -418,10 +418,8 @@ public:
   void storeArg(uint32_t ArgOrdinal, IRNode *Arg1, ReaderAlignType Alignment,
                 bool IsVolatile) override;
   void storeElem(ReaderBaseNS::StElemOpcode Opcode,
-                 CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
-                 IRNode *Arg2, IRNode *Arg3) override {
-    throw NotYetImplementedException("storeElem");
-  };
+                 CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *ValueToStore,
+                 IRNode *Index, IRNode *Array) override;
 
   void storeField(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1,
                   IRNode *Arg2, ReaderAlignType Alignment,
@@ -826,10 +824,10 @@ private:
 
   /// Convert node to the desired type.
   /// May reinterpret, truncate, or extend as needed.
-  /// \p Type - Desired type
-  /// \p Node - Value to be converted
-  /// \p IsSigned - Perform sign extension if necessary, otherwise
-  ///               integral values are zero extended
+  /// \param Type Desired type
+  /// \param Node Value to be converted
+  /// \param IsSigned Perform sign extension if necessary, otherwise
+  /// integral values are zero extended
   IRNode *convert(llvm::Type *Type, llvm::Value *Node, bool IsSigned);
 
   llvm::Type *binaryOpType(llvm::Type *Type1, llvm::Type *Type2);
@@ -849,14 +847,14 @@ private:
   /// Generate instructions for loading value of the specified type at the
   /// specified address.
   ///
-  /// \p Address - Address to load from.
-  /// \p Ty - llvm type of the value to load.
-  /// \p CorType - CorInfoType of the value to load.
-  /// \p ResolvedToken - Resolved token corresponding to the type of the value
-  ///                    to load.
-  /// \p AlignmentPrefix - Alignment of the value.
-  /// \p IsVolatile - true if the load is volatile.
-  /// \p AddressMayBeNull - true if the address may be null.
+  /// \param Address Address to load from.
+  /// \param Ty llvm type of the value to load.
+  /// \param CorType CorInfoType of the value to load.
+  /// \param ResolvedToken Resolved token corresponding to the type of the value
+  /// to load.
+  /// \param AlignmentPrefix Alignment of the value.
+  /// \param IsVolatile true iff the load is volatile.
+  /// \param AddressMayBeNull true iff the address may be null.
   /// \returns Value at the specified address.
   IRNode *loadAtAddress(IRNode *Address, llvm::Type *Ty, CorInfoType CorType,
                         CORINFO_RESOLVED_TOKEN *ResolvedToken,
@@ -872,22 +870,49 @@ private:
                          IsVolatile, false);
   }
 
+  /// Generate instructions for storing value of the specified type at the
+  /// specified address.
+  ///
+  /// \param Address Address to store to.
+  /// \param ValueToStore Value to store.
+  /// \param Ty llvm type of the value to store.
+  /// \param ResolvedToken Resolved token corresponding to the type of the value
+  /// to store.
+  /// \param AlignmentPrefix Alignment of the value.
+  /// \param IsVolatile true iff the store is volatile.
+  /// \param IsField true iff this is a field address.
+  /// \param AddressMayBeNull true iff the address may be null.
+  void storeAtAddress(IRNode *Address, IRNode *ValueToStore, llvm::Type *Ty,
+                      CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                      ReaderAlignType AlignmentPrefix, bool IsVolatile,
+                      bool IsField, bool AddressMayBeNull);
+
+  void storeAtAddressNonNull(IRNode *Address, IRNode *ValueToStore,
+                             llvm::Type *Ty,
+                             CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                             ReaderAlignType AlignmentPrefix, bool IsVolatile,
+                             bool IsField) {
+    return storeAtAddress(Address, ValueToStore, Ty, ResolvedToken,
+                          AlignmentPrefix, IsVolatile, IsField, false);
+
+  }
+
   void classifyCmpType(llvm::Type *Ty, uint32_t &Size, bool &IsPointer,
                        bool &IsFloat);
 
   /// Generate a call to the throw helper if the condition is met.
   ///
-  /// \p Condition - Condition that will trigger the throw.
-  /// \p HelperId - Id of the throw-helper.
-  /// \p ThrowBlockName - Name of the basic block that will contain the throw.
+  /// \param Condition Condition that will trigger the throw.
+  /// \param HelperId Id of the throw-helper.
+  /// \param ThrowBlockName Name of the basic block that will contain the throw.
   void genConditionalThrow(llvm::Value *Condition, CorInfoHelpFunc HelperId,
                            const llvm::Twine &ThrowBlockName);
 
   /// Generate array bounds check.
   ///
-  /// \p Array - Array to be accessed.
-  /// \p Index - Index to be accessed.
-  /// \returns - The input array.
+  /// \param Array Array to be accessed.
+  /// \param Index Index to be accessed.
+  /// \returns The input array.
   IRNode *genBoundsCheck(IRNode *Array, IRNode *Index);
 
   uint32_t size(CorInfoType CorType);
@@ -897,17 +922,17 @@ private:
 
   /// Convert a result to a valid stack type,
   /// generally by either reinterpretation or extension.
-  /// \p Node - Value to be converted
-  /// \p CorType - additional information needed to determine if
-  ///              Node's type is signed or unsigned
+  /// \param Node Value to be converted
+  /// \param CorType additional information needed to determine if
+  /// Node's type is signed or unsigned
   IRNode *convertToStackType(IRNode *Node, CorInfoType CorType);
 
   /// Convert a result from a stack type to the desired type,
   /// generally by either reinterpretation or truncation.
-  /// \p Node - Value to be converted
-  /// \p CorType - additional information needed to determine if
-  ///              ResultTy is signed or unsigned
-  /// \p ResultTy - Desired type
+  /// \param Node Value to be converted
+  /// \param CorType additional information needed to determine if
+  /// ResultTy is signed or unsigned
+  /// \param ResultTy - Desired type
   IRNode *convertFromStackType(IRNode *Node, CorInfoType CorType,
                                llvm::Type *ResultTy);
 
@@ -916,7 +941,7 @@ private:
   /// Create a new temporary variable that can be
   /// used anywhere within the method.
   ///
-  /// \p Ty - Type for the new variable.
+  /// \param Ty Type for the new variable.
   /// \returns Instruction establishing the variable's location.
   llvm::Instruction *createTemporary(llvm::Type *Ty);
 
@@ -948,12 +973,32 @@ private:
 
   /// Get address of the array element.
   ///
-  /// \p Array - Array that the element belongs to.
-  /// \p Index - Index of the element.
-  /// \p ElementTy - Type of the element.
+  /// \param Array Array that the element belongs to.
+  /// \param Index Index of the element.
+  /// \param ElementTy Type of the element.
   /// \returns Value representing the address of the element.
   llvm::Value *genArrayElemAddress(IRNode *Array, IRNode *Index,
                                    llvm::Type *ElementTy);
+
+  /// Convert ReaderAlignType to byte alighnment to byte alignment.
+  ///
+  /// \param ReaderAlignment Reader alignment.
+  /// \returns Alignment in bytes.
+  uint32_t convertReaderAlignment(ReaderAlignType ReaderAlignment);
+
+  /// Get array element type.
+  ///
+  /// \param Array Array node.
+  /// \param ResolvedToken Resolved token from ldelem or stelem instruction.
+  /// \param CorInfoType [IN/OUT] Type of the element (will be resolved for
+  /// CORINFO_TYPE_UNDEF).
+  /// \param Alignment - [IN/OUT] Alignment that will be updated for value
+  /// classes.
+  /// \returns Array element type.
+  llvm::Type *getArrayElementType(IRNode *Array,
+                                  CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                                  CorInfoType *CorType,
+                                  ReaderAlignType *Alignment);
 
 private:
   LLILCJitContext *JitContext;
