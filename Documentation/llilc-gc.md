@@ -151,13 +151,6 @@ Value types in the CLR may contain GC pointer-valued fields. The current
 `Statepoint` proposal does not support reporting GC pointers from non-SSA
 sources.
 
-### Exterior Pointers
-
-It seems likely that LLVM's optimization passes might create exterior pointers
-in places (e.g. pointing before or after the object). The CoreCLR GC can't
-tolerate these, so we'll need to ensure that no exterior pointer is live at a
-safepoint.
-
 ### Interior Pointers
 
 While the use of `addrspace (1)` or similar convention helps locate GC
@@ -175,6 +168,22 @@ way of reporting the base pointer. Furthermore, since the default assumption
 for parameters is that they are object pointers, we'll need some sort of
 metadata or similar to distinguish  cases where they're actually interior
 pointers.
+
+To report interior pointers the GC can keep track of starting addresses of
+all objects such that if you point within an object it can find the base
+address by searching for the nearest pointer that represents the start of
+the object.
+
+### Exterior Pointers
+
+The case of exterior pointers requires additional information to determine
+which object the pointer is pointing to, since if they point into an object
+at a higher address the GC can't tell which object is that pointer's base.
+
+It seems likely that LLVM's optimization passes might create exterior pointers
+in places (e.g. pointing before or after the object). The CoreCLR GC can't
+tolerate these, so we'll need to ensure that no exterior pointer is live at a
+safepoint.
 
 ### Pinned Pointers
 
