@@ -132,6 +132,14 @@ addiitonal components added.
 
 ## Ahead of Time code generator
 
+In our approch the AOT compiler utilizes the JIT code generator by implementing the same common JIT interface that the CoreCLR 
+implements.  But ahead of time, the type system queries are backed by the simplified type system, and the AOT driver does the 
+transitive closure of referenced types and invokes the compiler for all needed methods to translate to BitCode.  Finally all 
+BitCode is compiled together and then linked by the platform linker to the static runtime libs. 
+
+A more complete document specifiing the ahead of time aproach at a deeper level is forth coming and will be linked here when 
+it's available.
+
 ![AOT Architecture](./Images/AOTArch.png)
 
 ## Managed Sematics in LLVM
