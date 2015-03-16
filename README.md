@@ -27,8 +27,8 @@ Supported Platforms
 -------------------
 
 Our initial supported platform is [Windows](https://github.com/dotnet/llilc/wiki/Getting-Started-For-Windows),
-but [Linux](https://github.com/dotnet/llilc/wiki/Getting-Started-For-Linux)
-and Mac OSX support are under development.
+but [Linux and Mac OSX](https://github.com/dotnet/llilc/wiki/Getting-Started-For-Linux-and-OS-X)
+support are under development.
 
 
 Contributions
@@ -36,5 +36,5 @@ Contributions
 
 LLILC is just starting up.  Only a few tests are working and there are lots
 of places where we need help.  Please see our [issues](https://github.com/dotnet/llilc/issues)
-or the [contributing page](https://github.com/dotnet/llilc/wiki/Contributing)
+or the [contributing page](https://github.com/dotnet/llilc/wiki/Areas-To-Contribute)
 for how to pitch in.
