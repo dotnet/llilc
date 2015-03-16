@@ -144,10 +144,33 @@ it's available.
 
 ## Managed Semantics in LLVM
 
-- Managed optimizations
-	- Checks
-	- Interior pointers
+###Managed optimizations
 
-- Supporting GC via Statepoints
-	- Insertion
+#### Managed Checks
+CLR semantics includes checks for certain kind of programing faults in an attempt to avoid certain common programmer errors. 
+These extra checks are implicit in the code and produce catchable exceptions.  The following checks are implemented in MSIL. 
 
+- Null pointer check.  If a null pointer is dereferenced a NullReferenceException is thrown by the program.
+- Bounds check.  If there is an access outside of an object an IndexOutOfRangeException is thrown by the program.
+- Arithmetic overflow check. If the checked keyword is used, or /checked command line option is used, an OverflowException is 
+thrown for any arithmetic overflow in the program.    
+- Division by zero.  A DivisionByZeroException is thrown for any division of an integral or decimal by zero.
+
+These each of these checks, if naively inserted into the code, could cause a great deal over overhead.  For each case above 
+there are optimizations that will either compute that the required invariant is either implied by a prior check or other code, 
+or can synthesize a check that will precondition a number of accesses/operations.  This language specific optimizations will 
+need to be added to LLVM either through extending current passes or the introduction of new passes.   
+
+###Managed pointers
+
+####Supporting GC via Statepoints
+Statepoints will be inserted early during bring up to enforce correctness but we plan to switch to a late insertion scheme 
+to gain more benefit from the mid-level optimizer.
+
+####Interior vs base pointers
+The GC used by the CLR differentiates between reported base pointers and interior pointers (see 
+[Garbage Collection](https://github.com/dotnet/llilc/blob/master/Documentation/llilc-gc.md#interior-pointers) doc for 
+more details).  In simple terms an interior pointer results from an arithmetic operation on a base pointer if the resulting 
+pointer is still contained within the object being referenced. (exterior pointers are not supported) While all pointers can 
+be reported as interior this will increase the overhead of the GC since more checks are required to establish the object 
+from an interior pointer.
