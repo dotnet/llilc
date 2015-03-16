@@ -556,8 +556,8 @@ IRNode *GenIR::instParam() {
 // Convert ReaderAlignType to byte alighnment
 uint32_t GenIR::convertReaderAlignment(ReaderAlignType ReaderAlignment) {
   uint32_t Result = (ReaderAlignment == Reader_AlignNatural)
-    ? TargetPointerSizeInBits / 8
-    : ReaderAlignment;
+                        ? TargetPointerSizeInBits / 8
+                        : ReaderAlignment;
   return Result;
 }
 
@@ -2574,10 +2574,9 @@ void GenIR::storeAtAddress(IRNode *Address, IRNode *ValueToStore, Type *Ty,
   if (Ty->isStructTy()) {
     storeObj(ResolvedToken, ValueToStore, Address, Alignment, IsVolatile,
              IsField, AddressMayBeNull);
-  }
-  else {
-    StoreInst *StoreInst = makeStore(ValueToStore, Address, IsVolatile,
-                                     AddressMayBeNull);
+  } else {
+    StoreInst *StoreInst =
+        makeStore(ValueToStore, Address, IsVolatile, AddressMayBeNull);
     uint32_t Align = convertReaderAlignment(Alignment);
     StoreInst->setAlignment(Align);
   }
@@ -2827,8 +2826,8 @@ IRNode *GenIR::loadElem(ReaderBaseNS::LdElemOpcode Opcode,
   if (Opcode != ReaderBaseNS::Ldelem) {
     ResolvedToken = nullptr;
   }
-  Type *ElementTy = getArrayElementType(Array, ResolvedToken, &CorType,
-                                        &Alignment);
+  Type *ElementTy =
+      getArrayElementType(Array, ResolvedToken, &CorType, &Alignment);
 
   Value *ElementAddress = genArrayElemAddress(Array, Index, ElementTy);
   bool IsVolatile = false;
@@ -2858,18 +2857,18 @@ IRNode *GenIR::loadElemA(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Index,
 }
 
 void GenIR::storeElem(ReaderBaseNS::StElemOpcode Opcode,
-  CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *ValueToStore, IRNode *Index,
-  IRNode *Array) {
+                      CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                      IRNode *ValueToStore, IRNode *Index, IRNode *Array) {
   static const CorInfoType Map[ReaderBaseNS::LastStelemOpcode] = {
-    CorInfoType::CORINFO_TYPE_NATIVEINT, // STELEM_I
-    CorInfoType::CORINFO_TYPE_BYTE,      // STELEM_I1
-    CorInfoType::CORINFO_TYPE_SHORT,     // STELEM_I2
-    CorInfoType::CORINFO_TYPE_INT,       // STELEM_I4
-    CorInfoType::CORINFO_TYPE_LONG,      // STELEM_I8
-    CorInfoType::CORINFO_TYPE_FLOAT,     // STELEM_R4
-    CorInfoType::CORINFO_TYPE_DOUBLE,    // STELEM_R8
-    CorInfoType::CORINFO_TYPE_CLASS,     // STELEM_REF
-    CorInfoType::CORINFO_TYPE_UNDEF      // STELEM
+      CorInfoType::CORINFO_TYPE_NATIVEINT, // STELEM_I
+      CorInfoType::CORINFO_TYPE_BYTE,      // STELEM_I1
+      CorInfoType::CORINFO_TYPE_SHORT,     // STELEM_I2
+      CorInfoType::CORINFO_TYPE_INT,       // STELEM_I4
+      CorInfoType::CORINFO_TYPE_LONG,      // STELEM_I8
+      CorInfoType::CORINFO_TYPE_FLOAT,     // STELEM_R4
+      CorInfoType::CORINFO_TYPE_DOUBLE,    // STELEM_R8
+      CorInfoType::CORINFO_TYPE_CLASS,     // STELEM_REF
+      CorInfoType::CORINFO_TYPE_UNDEF      // STELEM
   };
 
   ASSERTNR(Opcode >= ReaderBaseNS::StelemI &&
@@ -2883,8 +2882,8 @@ void GenIR::storeElem(ReaderBaseNS::StElemOpcode Opcode,
     ResolvedToken = nullptr;
   }
 
-  Type *ElementTy = getArrayElementType(Array, ResolvedToken, &CorType,
-                                        &Alignment);
+  Type *ElementTy =
+      getArrayElementType(Array, ResolvedToken, &CorType, &Alignment);
 
   if (CorType == CorInfoType::CORINFO_TYPE_CLASS) {
     Constant *ConstantValue = dyn_cast<Constant>(ValueToStore);
@@ -2909,11 +2908,9 @@ void GenIR::storeElem(ReaderBaseNS::StElemOpcode Opcode,
     rdrCallWriteBarrierHelper(Array, ValueToStore, Alignment, IsVolatile,
                               ResolvedToken, IsNonValueClass, IsValueIsPointer,
                               IsField, IsUnchecked);
-  }
-  else {
-    storeAtAddressNonNull((IRNode *)ElementAddress, ValueToStore,
-      ElementTy, ResolvedToken, Alignment, IsVolatile,
-      IsField);
+  } else {
+    storeAtAddressNonNull((IRNode *)ElementAddress, ValueToStore, ElementTy,
+                          ResolvedToken, Alignment, IsVolatile, IsField);
   }
 }
 
@@ -2930,10 +2927,10 @@ Type *GenIR::getArrayElementType(IRNode *Array,
     StructType *ReferentTy = cast<StructType>(Ty->getPointerElementType());
     unsigned int NumElements = ReferentTy->getNumElements();
     ArrayType *ArrayTy =
-      cast<ArrayType>(ReferentTy->getElementType(NumElements - 1));
+        cast<ArrayType>(ReferentTy->getElementType(NumElements - 1));
     return ArrayTy->getElementType();
   }
-  
+
   if (ResolvedToken != nullptr) {
     ClassHandle = ResolvedToken->hClass;
     *CorType = JitContext->JitInfo->asCorInfoType(ClassHandle);

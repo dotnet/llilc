@@ -894,7 +894,6 @@ private:
                              bool IsField) {
     return storeAtAddress(Address, ValueToStore, Ty, ResolvedToken,
                           AlignmentPrefix, IsVolatile, IsField, false);
-
   }
 
   void classifyCmpType(llvm::Type *Ty, uint32_t &Size, bool &IsPointer,
