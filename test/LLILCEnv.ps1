@@ -72,7 +72,8 @@
 [CmdletBinding()]
 Param(
    [string]$Arch="x64",
-   [string]$Build="Debug"
+   [string]$Build="Debug",
+   [switch]$NoTestUpdate
 )
 
 # -------------------------------------------------------------------------
@@ -420,7 +421,9 @@ function CompleteEnvInit
 
   CreateLLVMBuildDirectory
 
-  GetCLRTestAssets
+  if (!$NoTestUpdate) {
+    GetCLRTestAssets
+  }
     
   NuGetCLR
 }
@@ -515,11 +518,12 @@ function Global:GetCLRTestAssets
     cd $CoreCLRTestAssets\coreclr
     git remote set-url --push origin do_not_push
   }
-  else {
-    Write-Host("Updating CoreCLR Test Assets to latest...")
-    cd $CoreCLRTestAssets\coreclr
-    git pull
-  }
+
+  Write-Host("Updating CoreCLR Test Assets to LKG...")
+  cd $CoreCLRTestAssets\coreclr
+  git checkout -q 1644ae12020a1927bb9b7bb7b162ba8b1e8bc73e
+  git show -s '--format=%h, committed %ci' head
+
   popd
 }
 
@@ -753,14 +757,15 @@ function Global:Build([string]$Build="Debug")
 {
   $OutOfTree = Test-Path Env:\LLILCSOURCE
 
-  $LLILCBuild = LLILCBuild
   $TempBat = Join-Path $Env:TEMP "buildllilc.bat"
   $File = "$Env:VS120COMNTOOLS\..\..\VC\vcvarsall.bat"
 
   if ($OutOfTree) {
+    $LLILCBuild = LLILCBuild
     $WhatToBuild = "$LLILCBuild\LLILC.sln"
   }
   else {
+    $LLVMBuild = LLVMBuild
     $WhatToBuild = "/Project llilcjit $LLVMBuild\LLVM.sln"
   }
 

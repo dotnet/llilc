@@ -19,7 +19,7 @@
 //
 // __stdcall is X86 specific. MSVC ignores the attribute on other architectures,
 // whereas other compilers complain about the ignored attribute.
-#if !defined(_MSC_VER) && !defined(_HOST_X86_)
+#if (!defined(_MSC_VER) || defined(__clang__)) && !defined(_HOST_X86_)
 #define __stdcall
 #endif // MSC_VER && _HOST_X86
 
@@ -30,6 +30,8 @@
 #include <windows.h> // For UINT
 #endif
 #include "staticcontract.h"
+
+// clang-format off
 
 // Note: PAL_SEH_RESTORE_GUARD_PAGE is only ever defined in clrex.h, so we only
 // restore guard pages automatically when these macros are used from within the
@@ -776,3 +778,5 @@ struct tagVARIANT {
 #endif // _MSC_VER
 
 #endif // LLILC_PAL
+
+// clang-format on
