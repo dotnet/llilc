@@ -36,5 +36,5 @@ Contributions
 
 LLILC is just starting up.  Only a few tests are working and there are lots
 of places where we need help.  Please see our [issues](https://github.com/dotnet/llilc/issues)
-or the [contributing page](https://github.com/dotnet/llilc/wiki/Contributing)
+or the [contributing page](https://github.com/dotnet/llilc/wiki/Areas-To-Contribute)
 for how to pitch in.
