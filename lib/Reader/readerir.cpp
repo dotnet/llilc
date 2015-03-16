@@ -553,6 +553,14 @@ IRNode *GenIR::instParam() {
   return (IRNode *)TypeParameter;
 }
 
+// Convert ReaderAlignType to byte alighnment
+uint32_t GenIR::convertReaderAlignment(ReaderAlignType ReaderAlignment) {
+  uint32_t Result = (ReaderAlignment == Reader_AlignNatural)
+    ? TargetPointerSizeInBits / 8
+    : ReaderAlignment;
+  return Result;
+}
+
 #pragma endregion
 
 #pragma region DIAGNOSTICS
@@ -2547,14 +2555,31 @@ IRNode *GenIR::loadAtAddress(IRNode *Address, Type *Ty, CorInfoType CorType,
                    AddressMayBeNull);
   } else {
     LoadInst *LoadInst = makeLoad(Address, IsVolatile, AddressMayBeNull);
-    uint32_t Align = (AlignmentPrefix == Reader_AlignNatural)
-                         ? TargetPointerSizeInBits / 8
-                         : AlignmentPrefix;
+    uint32_t Align = convertReaderAlignment(AlignmentPrefix);
     LoadInst->setAlignment(Align);
 
     IRNode *Result = convertToStackType((IRNode *)LoadInst, CorType);
 
     return Result;
+  }
+}
+
+// Generate instructions for storing value of the specified type at the
+// specified address.
+void GenIR::storeAtAddress(IRNode *Address, IRNode *ValueToStore, Type *Ty,
+                           CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                           ReaderAlignType Alignment, bool IsVolatile,
+                           bool IsField, bool AddressMayBeNull) {
+  // We do things differently based on whether the field is a value class.
+  if (Ty->isStructTy()) {
+    storeObj(ResolvedToken, ValueToStore, Address, Alignment, IsVolatile,
+             IsField, AddressMayBeNull);
+  }
+  else {
+    StoreInst *StoreInst = makeStore(ValueToStore, Address, IsVolatile,
+                                     AddressMayBeNull);
+    uint32_t Align = convertReaderAlignment(Alignment);
+    StoreInst->setAlignment(Align);
   }
 }
 
@@ -2620,21 +2645,9 @@ void GenIR::storeField(CORINFO_RESOLVED_TOKEN *FieldToken, IRNode *ValueToStore,
     return;
   }
 
-  // We do things differently based on whether the field is a value class.
-  if (!IsStructTy) {
-    makeStore(ValueToStore, Address, IsVolatile, !NullCheckBeforeStore);
-    return;
-  } else {
-    // The WVM lowerer cannot handle multi-byte indirs whose base pointer
-    // is the address of a field.
-    if (FieldCorType == CORINFO_TYPE_VALUECLASS ||
-        FieldCorType == CORINFO_TYPE_REFANY) {
-      Alignment = getMinimumClassAlignment(FieldClassHandle, Alignment);
-    }
-    storeObj(FieldToken, ValueToStore, Address, Alignment, IsVolatile, true,
-             !NullCheckBeforeStore);
-    return;
-  }
+  bool IsField = true;
+  return storeAtAddress(Address, ValueToStore, FieldTy, FieldToken, Alignment,
+                        IsVolatile, IsField, !NullCheckBeforeStore);
 }
 
 void GenIR::storePrimitiveType(IRNode *Value, IRNode *Addr,
@@ -2807,32 +2820,15 @@ IRNode *GenIR::loadElem(ReaderBaseNS::LdElemOpcode Opcode,
   ASSERTNR(Opcode >= ReaderBaseNS::LdelemI1 &&
            Opcode < ReaderBaseNS::LastLdelemOpcode);
 
-  CORINFO_CLASS_HANDLE ClassHandle = nullptr;
-  Type *ElementTy = nullptr;
   CorInfoType CorType = Map[Opcode];
   ReaderAlignType Alignment = Reader_AlignNatural;
 
-  if (CorType == CorInfoType::CORINFO_TYPE_CLASS) {
-    PointerType *Ty = cast<PointerType>(Array->getType());
-    StructType *ReferentTy = cast<StructType>(Ty->getPointerElementType());
-    unsigned int NumElements = ReferentTy->getNumElements();
-    ArrayType *ArrayTy =
-        cast<ArrayType>(ReferentTy->getElementType(NumElements - 1));
-    ElementTy = ArrayTy->getElementType();
-  } else {
-    // The type is either specified via token (for ldelem) or is primitive.
-    if (Opcode == ReaderBaseNS::Ldelem) {
-      ASSERTNR(ResolvedToken != nullptr);
-      ClassHandle = ResolvedToken->hClass;
-
-      CorType = JitContext->JitInfo->asCorInfoType(ClassHandle);
-      if (CorType == CorInfoType::CORINFO_TYPE_VALUECLASS) {
-        Alignment = getMinimumClassAlignment(ClassHandle, Reader_AlignNatural);
-      }
-    }
-    ASSERTNR(CorType != CorInfoType::CORINFO_TYPE_UNDEF);
-    ElementTy = getType(CorType, ClassHandle);
+  // ResolvedToken is only valid for ldelem.
+  if (Opcode != ReaderBaseNS::Ldelem) {
+    ResolvedToken = nullptr;
   }
+  Type *ElementTy = getArrayElementType(Array, ResolvedToken, &CorType,
+                                        &Alignment);
 
   Value *ElementAddress = genArrayElemAddress(Array, Index, ElementTy);
   bool IsVolatile = false;
@@ -2859,6 +2855,95 @@ IRNode *GenIR::loadElemA(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Index,
   }
 
   return (IRNode *)genArrayElemAddress(Array, Index, ElementTy);
+}
+
+void GenIR::storeElem(ReaderBaseNS::StElemOpcode Opcode,
+  CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *ValueToStore, IRNode *Index,
+  IRNode *Array) {
+  static const CorInfoType Map[ReaderBaseNS::LastStelemOpcode] = {
+    CorInfoType::CORINFO_TYPE_NATIVEINT, // STELEM_I
+    CorInfoType::CORINFO_TYPE_BYTE,      // STELEM_I1
+    CorInfoType::CORINFO_TYPE_SHORT,     // STELEM_I2
+    CorInfoType::CORINFO_TYPE_INT,       // STELEM_I4
+    CorInfoType::CORINFO_TYPE_LONG,      // STELEM_I8
+    CorInfoType::CORINFO_TYPE_FLOAT,     // STELEM_R4
+    CorInfoType::CORINFO_TYPE_DOUBLE,    // STELEM_R8
+    CorInfoType::CORINFO_TYPE_CLASS,     // STELEM_REF
+    CorInfoType::CORINFO_TYPE_UNDEF      // STELEM
+  };
+
+  ASSERTNR(Opcode >= ReaderBaseNS::StelemI &&
+           Opcode < ReaderBaseNS::LastStelemOpcode);
+
+  CorInfoType CorType = Map[Opcode];
+  ReaderAlignType Alignment = Reader_AlignNatural;
+
+  // ResolvedToken is only valid for stelem.
+  if (Opcode != ReaderBaseNS::Stelem) {
+    ResolvedToken = nullptr;
+  }
+
+  Type *ElementTy = getArrayElementType(Array, ResolvedToken, &CorType,
+                                        &Alignment);
+
+  if (CorType == CorInfoType::CORINFO_TYPE_CLASS) {
+    Constant *ConstantValue = dyn_cast<Constant>(ValueToStore);
+    if (ConstantValue == nullptr || !ConstantValue->isNullValue()) {
+      // This will call a helper that stores an element of object array with
+      // type checking. It will also call a write barrier if necessary. Storing
+      // null is always legal, doesn't need a write barrier, and thus does not
+      // need a helper call.
+      return storeElemRefAny(ValueToStore, Index, Array);
+    }
+  }
+
+  Value *ElementAddress = genArrayElemAddress(Array, Index, ElementTy);
+  bool IsVolatile = false;
+  bool IsField = false;
+  ValueToStore = convertFromStackType(ValueToStore, CorType, ElementTy);
+  if (ElementTy->isStructTy()) {
+    bool IsNonValueClass = false;
+    bool IsValueIsPointer = false;
+    bool IsUnchecked = false;
+    // Store with a write barrier if the struct has gc pointers.
+    rdrCallWriteBarrierHelper(Array, ValueToStore, Alignment, IsVolatile,
+                              ResolvedToken, IsNonValueClass, IsValueIsPointer,
+                              IsField, IsUnchecked);
+  }
+  else {
+    storeAtAddressNonNull((IRNode *)ElementAddress, ValueToStore,
+      ElementTy, ResolvedToken, Alignment, IsVolatile,
+      IsField);
+  }
+}
+
+// Get array element type.
+Type *GenIR::getArrayElementType(IRNode *Array,
+                                 CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                                 CorInfoType *CorType,
+                                 ReaderAlignType *Alignment) {
+  ASSERTNR(Alignment != nullptr);
+  ASSERTNR(CorType != nullptr);
+  CORINFO_CLASS_HANDLE ClassHandle = nullptr;
+  if (*CorType == CorInfoType::CORINFO_TYPE_CLASS) {
+    PointerType *Ty = cast<PointerType>(Array->getType());
+    StructType *ReferentTy = cast<StructType>(Ty->getPointerElementType());
+    unsigned int NumElements = ReferentTy->getNumElements();
+    ArrayType *ArrayTy =
+      cast<ArrayType>(ReferentTy->getElementType(NumElements - 1));
+    return ArrayTy->getElementType();
+  }
+  
+  if (ResolvedToken != nullptr) {
+    ClassHandle = ResolvedToken->hClass;
+    *CorType = JitContext->JitInfo->asCorInfoType(ClassHandle);
+    if ((*CorType == CorInfoType::CORINFO_TYPE_VALUECLASS) ||
+        (*CorType == CORINFO_TYPE_REFANY)) {
+      *Alignment = getMinimumClassAlignment(ClassHandle, Reader_AlignNatural);
+    }
+  }
+  ASSERTNR(*CorType != CorInfoType::CORINFO_TYPE_UNDEF);
+  return getType(*CorType, ClassHandle);
 }
 
 // Get address of the array element.
@@ -3963,8 +4048,7 @@ IRNode *GenIR::getPrimitiveAddress(IRNode *Addr, CorInfoType CorInfoType,
     }
   }
 
-  *Align = (Alignment == Reader_AlignNatural) ? TargetPointerSizeInBits / 8
-                                              : Alignment;
+  *Align = convertReaderAlignment(Alignment);
   return TypedAddr;
 }
 
