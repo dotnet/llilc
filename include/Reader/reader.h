@@ -2318,8 +2318,7 @@ public:
   virtual void endFlowGraphNode(FlowGraphNode *Fg, uint32_t CurrentOffset) = 0;
 
   // Used to maintain operand stack.
-  virtual void maintainOperandStack(IRNode **Opr1, IRNode **Opr2,
-                                    FlowGraphNode *CurrentBlock) = 0;
+  virtual void maintainOperandStack(FlowGraphNode *CurrentBlock) = 0;
   virtual void assignToSuccessorStackNode(FlowGraphNode *, IRNode *Destination,
                                           IRNode *Source, bool *) = 0;
   virtual bool typesCompatible(IRNode *Src1, IRNode *Src2) = 0;
