@@ -932,27 +932,81 @@ function Global:CheckFailure([string]$Arch="x64", [string]$Build="Release")
 #
 # -------------------------------------------------------------------------
 
-function Global:RunTest([string]$Arch="x64", [string]$Build="Release")
+function Global:RunTest
 {
+  Param(
+  [string]$Arch="x64", 
+  [string]$Build="Release",
+  [string]$Jit="",
+  [string]$Result="",
+  [string]$Dump="NoDump"
+  )
+
   $CoreCLRTestAssets = CoreCLRTestAssets
   $CoreCLRRuntime = CoreCLRRuntime
   $CoreCLRVersion = CoreCLRVersion
   $LLILCTest = LLILCTest
+  $LLILCTestResult = LLILCTestResult
+  $CoreCLRTestTargetBinaries = CoreCLRTestTargetBinaries -Arch $Arch -Build $Build
   
   # Workaround exception handling issue
   chcp 65001 | Out-Null
 
+  # Reserve the old jit and copy in the specified jit.
+  if ($Jit -ne "") {
+    $CoreCLRRuntime = CoreCLRRuntime
+    $CoreCLRVersion = CoreCLRVersion
+    Rename-Item $CoreCLRRuntime\$CoreCLRVersion\bin\LLILCJit.dll $CoreCLRRuntime\$CoreCLRVersion\bin\LLILCJit.dll.backupcopy
+    Copy-Item $Jit $CoreCLRRuntime\$CoreCLRVersion\bin\LLILCJit.dll
+  }
+
+  # Protect old value and set the new value for DUMPLLVMIR
+  $DumpExists = Test-Path Env:\DUMPLLVMIR
+  if ($DumpExists) {
+    $OldDump = $Env:DUMPLLVMIR
+  } 
+  $Env:DUMPLLVMIR = $Dump
+
+  # The set of test cases that are currently ignored
   $Env:SkipTestAssemblies = "Common;Exceptions;GC;Loader;managed;packages;Regressions;runtime;Tests;TestWrappers_x64_release;Threading" 
+
+  # Run the test
   pushd .
   cd $CoreCLRTestAssets\coreclr\tests
   .\runtest $Arch $Build TestEnv $LLILCTest\LLILCTestEnv.cmd $CoreCLRRuntime\$CoreCLRVersion\bin | Write-Host
-  $NumDiff = CheckDiff -Create $True -UseDiffTool $False -Arch $Arch -Build $Build
-  $NumFailures = CheckFailure -Arch $Arch -Build $Build
   popd
 
-  # If there aren't any failures or diffs, return $True to say we passed
+  # Restore old value for DUMPLLVMIR
+  if ($DumpExists) {
+    $Env:DUMPLLVMIR = $OldDump;
+  } 
+
+  # Restore the old jit
+  if ($Jit -ne "") {
+    Remove-Item $CoreCLRRuntime\$CoreCLRVersion\bin\LLILCJit.dll | Out-Null
+    Rename-Item $CoreCLRRuntime\$CoreCLRVersion\bin\LLILCJit.dll.backupcopy $CoreCLRRuntime\$CoreCLRVersion\bin\LLILCJit.dll | Out-Null
+  }
+
+  # Copy out result, normalize it in case of verbose dump.
+  if ($Result -ne "") {
+    $ResultExists = Test-Path $LLILCTestResult\$Result
+    if ($ResuLtExists) {
+      Remove-Item -recurse -force $LLILCTestResult\$Result | Out-Null
+    }
+    New-Item -itemtype directory $LLILCTestResult\$Result | Out-Null
+    Copy-Item -recurse "$CoreCLRTestTargetBinaries\Reports\*" -Destination $LLILCTestResult\$Result
+    Get-ChildItem -recurse -path $LLILCTestResult\$Result | Where {$_.FullName -match "output.txt"} | Remove-Item -force
+    if ($Dump -eq "Verbose") {
+      Write-Host ("Applying filter on verbose LLVM IR dump...")
+      Get-ChildItem -recurse -path $LLILCTestResult\$Result | Where {$_.FullName -match "error.txt"} | ApplyFilterAll
+    }
+  }
+
+  $NumFailures = CheckFailure -Arch $Arch -Build $Build
+
+  # If there aren't any failures, return $True to say we passed
   # Otherwise return false
-  if (($NumDiff -eq 0) -and ($NumFailures -eq 0)) {
+  if ($NumFailures -eq 0) {
     return $True
   }
   else {
@@ -962,116 +1016,112 @@ function Global:RunTest([string]$Arch="x64", [string]$Build="Release")
 
 # -------------------------------------------------------------------------
 #
-# Re-create the base line for all LLILC enabled regression test cases.
-#
-# -------------------------------------------------------------------------
-
-function Global:ReBaseAll([string]$Arch="x64", [string]$Build="Release")
-{
-  $LLILCTest = LLILCTest
-  $CoreCLRTestTargetBinaries = CoreCLRTestTargetBinaries -Arch $Arch -Build $Build
-
-  $BaseLineExists = Test-Path $LLILCTest\BaseLine
-  if ($BaseLineExists) {
-    Remove-Item -recurse -force $LLILCTest\BaseLine | Out-Null
-  }
-  New-Item -itemtype directory $LLILCTest\BaseLine | Out-Null
-
-  Copy-Item -recurse "$CoreCLRTestTargetBinaries\Reports\*" -Destination $LLILCTest\BaseLine
-  Get-ChildItem -recurse -path $LLILCTest\BaseLine | Where {$_.FullName -match "output.txt"} | Remove-Item -force
-  Get-ChildItem -recurse -path $LLILCTest\BaseLine | Where {$_.FullName -match "error.txt"} | ApplyFilterAll
-}
-
-# -------------------------------------------------------------------------
-#
 # Check the LLVM IR dump difference against baseline.
 #
 # -------------------------------------------------------------------------
 
-function Global:CheckDiff([bool]$Create = $false, [bool]$UseDiffTool = $True, [string]$Arch="x64", [string]$Build="Release")
+function Global:CheckDiff
 {
-  $LLILCTest = LLILCTest
-  $LLILCTestResult = LLILCTestResult
-  $CoreCLRTestTargetBinaries = CoreCLRTestTargetBinaries -Arch $Arch -Build $Build
+  Param(
+  [Parameter(Mandatory=$True)][string]$Base,
+  [Parameter(Mandatory=$True)][string]$Diff,
+  [Parameter(Mandatory=$False)][switch]$Summary,
+  [Parameter(Mandatory=$False)][switch]$UseDiffTool
+  )
 
+  $LLILCTestResult = LLILCTestResult
+  
   Write-Host ("Checking diff...")
 
   if ($UseDiffTool) {
-    # Validate Diff Tool
-  
+    # Validate Diff Tool  
     IsOnPath -executable "sgdm.exe" -software "DiffMerge"
   }
 
-  $DiffExists = Test-Path $LLILCTestResult\Diff
-  if ($Create) {
-    if ($DiffExists) {
-      Remove-Item -recurse -force $LLILCTestResult\Diff | Out-Null
-    }
+  $CompareExists = Test-Path $LLILCTestResult\Compare
 
-    New-Item -itemtype directory $LLILCTestResult\Diff | Out-Null
-    New-Item -itemtype directory $LLILCTestResult\Diff\Base | Out-Null
-    New-Item -itemtype directory $LLILCTestResult\Diff\Run | Out-Null
+  # Refresh a new Compare subdirectory
+  if ($CompareExists) {
+    Remove-Item -recurse -force $LLILCTestResult\Compare | Out-Null
+  }
 
+  New-Item -itemtype directory $LLILCTestResult\Compare | Out-Null
+  New-Item -itemtype directory $LLILCTestResult\Compare\$Base | Out-Null
+  New-Item -itemtype directory $LLILCTestResult\Compare\$Diff | Out-Null
+
+  if (!$Summary) {
+    # Deal with verbose LLVM IR comparison
     $TotalCount = 0
     $DiffCount = 0
-    Get-ChildItem -recurse -path $CoreCLRTestTargetBinaries\Reports | Where {$_.FullName -match "error.txt"} | `
+    Get-ChildItem -recurse -path $LLILCTestResult\$Diff | Where {$_.FullName -match "error.txt"} | `
     Foreach-Object {
       $TotalCount = $TotalCount + 1
-      $RunFile = $_.FullName
-      $PartialPathMatch = $_.FullName -match "Reports\\(.*)"
+      $DiffFile = $_.FullName
+      $PartialPathMatch = $_.FullName -match "$Diff\\(.*)"
       $PartialPath = $matches[1]
-      $BaseFile = "$LLILCTest\BaseLine\$PartialPath"
-      copy $RunFile $LLILCTestResult\Diff\Run
-      ApplyFilter("$LLILCTestResult\Diff\Run\$_")
-      $DiffResult = Compare-Object -Ref (Get-Content $BaseFile) -Diff (Get-Content $LLILCTestResult\Diff\Run\$_)
+      $BaseFile = "$LLILCTestResult\$Base\$PartialPath"
+      $DiffResult = Compare-Object -Ref (Get-Content $BaseFile) -Diff (Get-Content $DiffFile)
       if ($DiffResult.Count -ne 0) {
-        copy $BaseFile $LLILCTestResult\Diff\Base
+        Copy-Item $BaseFile $LLILCTestResult\Compare\$Base
+        Copy-Item $DiffFile $LLILCTestResult\Compare\$Diff
         $DiffCount = $DiffCount + 1
       }
-      else {
-        Remove-Item -force $LLILCTestResult\Diff\Run\$_ | Out-Null
+    }
+    if ($DiffCount -eq 0) {
+      Write-Host ("There is no diff.")
+      Remove-Item -recurse -force $LLILCTestResult\Compare | Out-Null
+    }
+    else {
+      Write-Host ("$DiffCount out of $TotalCount have diff.")
+      if ($UseDiffTool) {
+        & sgdm -t1=Base -t2=Diff $LLILCTestResult\Compare\$Base $LLILCTestResult\Compare\$Diff
+      }
+    }
+    return $DiffCount
+  }
+  else {
+    # Deal with summary comparison
+    $TotalCount = 0
+    $DiffCount = 0
+    $NewlyFailedMethods = 0
+    Get-ChildItem -recurse -path $LLILCTestResult\$Diff | Where {$_.FullName -match "error.txt"} | `
+    Foreach-Object {
+      $TotalCount = $TotalCount + 1
+      $DiffFile = $_.FullName
+      $PartialPathMatch = $_.FullName -match "$Diff\\(.*)"
+      $PartialPath = $matches[1]
+      $BaseFile = "$LLILCTestResult\$Base\$PartialPath"
+      $DiffResult = Compare-Object -Ref (Get-Content $BaseFile) -Diff (Get-Content $DiffFile)
+      if ($DiffResult.Count -ne 0) {
+        Copy-Item $BaseFile $LLILCTestResult\Compare\$Base
+        Copy-Item $DiffFile $LLILCTestResult\Compare\$Diff
+        $DiffCount = $DiffCount + 1 
+      }
+      Foreach ($SummaryLine in $DiffResult) {
+        if ($SummaryLine -match 'Successfully(.*)(<=)') {
+          $NewlyFailedMethods++
+        }
       }
     }
 
     if ($DiffCount -eq 0) {
       Write-Host ("There is no diff.")
-      Remove-Item -recurse -force $LLILCTestResult\Diff | Out-Null
+      Remove-Item -recurse -force $LLILCTestResult\Compare | Out-Null
     }
     else {
       Write-Host ("$DiffCount out of $TotalCount have diff.")
-      if ($UseDiffTool) {
-        & sgdm -t1=Base -t2=Run $LLILCTestResult\Diff\Base $LLILCTestResult\Diff\Run
-      }
-    }
-
-    return $DiffCount
-  }
-  else {
-    if (!$DiffExists) {
-      Write-Host ("There is no diff.")
-      return 0
-    }
-    else {
-      if ($UseDiffTool) {
-        & sgdm -t1=Base -t2=Run $LLILCTestResult\Diff\Base $LLILCTestResult\Diff\Run
-        return 0
+      if ($NewlyFailedMethods -eq 0) {
+        Write-Host ("All previously successfully jitted methods passed jitting with diff jit.")
+        Write-Host ("More methods passed jitting in diff jit than in base jit.")
       }
       else {
-        $TotalCount = 0
-        $DiffCount = 0
-        Get-ChildItem -recurse -path $CoreCLRTestTargetBinaries\Reports | Where {$_.FullName -match "error.txt"} | `
-        Foreach-Object {
-          $TotalCount = $TotalCount + 1
-        }
-
-        Get-ChildItem -recurse -path $LLILCTestResult\Diff\Run | Where {$_.FullName -match "error.txt"} | `
-        Foreach-Object {
-          $DiffCount = $DiffCount + 1
-        }
-        Write-Host ("$DiffCount out of $TotalCount have diff.")
-        return $DiffCount
+        Write-Host ("$NewlyFailedMethods methods successfully jitted by base jit now FAILED in diff jit.")
+      }
+      if ($UseDiffTool) {
+        & sgdm -t1=Base -t2=Diff $LLILCTestResult\Compare\$Base $LLILCTestResult\Compare\$Diff
       }
     }
+    return $NewlyFailedMethods
   }
 }
 
@@ -1109,8 +1159,8 @@ function Global:llilc([string]$Command="")
   }
 
   if ($ListAll -Or ($Command -eq "CheckDiff")) {
-    Write-Output("CheckDiff         - Check the LLVM IR dump diff between run and baseline.")
-    Write-Output("                    Example: CheckDiff -Create `$False -UseDiffTool `$True -Arch x64 -Build Release")
+    Write-Output("CheckDiff         - Check the LLVM IR dump or summary diff between run and baseline.")
+    Write-Output("                    Example: CheckDiff -Base BaseResultName -Diff DiffResultName -Summary -UseDiffTool")
   }
 
   if ($ListAll -Or ($Command -eq "CheckEnv")) {
@@ -1128,14 +1178,9 @@ function Global:llilc([string]$Command="")
     Write-Output("                    Example: llilc RunTest")
   }
 
-  if ($ListAll -Or ($Command -eq "ReBaseAll")) {
-    Write-Output("ReBaseAll         - Re-create the base line for all regression test cases.")
-    Write-Output("                    Example: ReBaseAll -Arch x64 -Build Release")
-  }
-
   if ($ListAll -Or ($Command -eq "RunTest")) {
     Write-Output("RunTest           - Run LLILC enabled CoreCLR regression tests.")
-    Write-Output("                    Example: RunTest -Arch x64 -Build Release")
+    Write-Output("                    Example: RunTest -Arch x64 -Build Release -Jit FullPathToJit -Result ResultName -Dump Summary")
   }
 }
 

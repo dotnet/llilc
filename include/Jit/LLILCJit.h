@@ -22,6 +22,13 @@
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/ThreadLocal.h"
 
+/// \brief Enum for LLVM IR Dump Level
+enum LLVMDumpLevel {
+  NODUMP,  ///< Do not dump any LLVM IR or summary
+  SUMMARY, ///< Only dump one line summary per method
+  VERBOSE  ///< Dump full LLVM IR and method summary
+};
+
 struct LLILCJitPerThreadState;
 
 /// \brief This struct holds per-jit request state.
