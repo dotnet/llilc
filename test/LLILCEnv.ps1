@@ -1150,7 +1150,7 @@ function Global:llilc([string]$Command="")
 
   if ($ListAll -Or ($Command -eq "BuildAll")) {
     Write-Output("BuildAll          - Configure and Build LLVM including LLILC JIT.")
-    Write-Output("                    Example: BuildLLVM -Arch x64 -Build Debug -Parallel `$True")
+    Write-Output("                    Example: BuildAll -Arch x64 -Build Debug -Parallel `$True")
   }
 
   if ($ListAll -Or ($Command -eq "BuildTest")) {
