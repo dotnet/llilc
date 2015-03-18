@@ -39,6 +39,24 @@
 
 using namespace llvm;
 
+// Get the LLVM IR dump level. For now this is done by directly
+// accessing environment variable. When CLR config support is
+// included, update it here.
+LLVMDumpLevel dumpLevel() {
+  const char *LevelCStr = getenv("DUMPLLVMIR");
+  if (LevelCStr) {
+    std::string Level = LevelCStr;
+    std::transform(Level.begin(), Level.end(), Level.begin(), ::toupper);
+    if (Level.compare("VERBOSE") == 0) {
+      return VERBOSE;
+    }
+    if (Level.compare("SUMMARY") == 0) {
+      return SUMMARY;
+    }
+  }
+  return NODUMP;
+}
+
 // The one and only Jit Object.
 LLILCJit *LLILCJit::TheJit = nullptr;
 
@@ -177,7 +195,9 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
 
   // Now jit the method.
   CorJitResult Result = CORJIT_INTERNALERROR;
-  Context.outputDebugMethodName();
+  if (dumpLevel() == VERBOSE) {
+    Context.outputDebugMethodName();
+  }
   bool HasMethod = this->readMethod(&Context);
 
   if (HasMethod) {
@@ -261,6 +281,8 @@ bool LLILCJit::readMethod(LLILCJitContext *JitContext) {
     return true;
   }
 
+  LLVMDumpLevel DumpLevel = dumpLevel();
+
   LLILCJitPerThreadState *PerThreadState = State.get();
   GenIR Reader(JitContext, &PerThreadState->ClassTypeMap,
                &PerThreadState->ArrayTypeMap, &PerThreadState->FieldIndexMap);
@@ -270,7 +292,9 @@ bool LLILCJit::readMethod(LLILCJitContext *JitContext) {
   try {
     Reader.msilToIR();
   } catch (NotYetImplementedException &Nyi) {
-    errs() << "Failed to read " << FuncName << '[' << Nyi.reason() << "]\n";
+    if (DumpLevel >= SUMMARY) {
+      errs() << "Failed to read " << FuncName << '[' << Nyi.reason() << "]\n";
+    }
     return false;
   }
 
@@ -278,12 +302,18 @@ bool LLILCJit::readMethod(LLILCJitContext *JitContext) {
   bool IsOk = !verifyFunction(*Func, &dbgs());
 
   if (IsOk) {
-    errs() << "Successfully read " << FuncName << '\n';
+    if (DumpLevel >= SUMMARY) {
+      errs() << "Successfully read " << FuncName << '\n';
+    }
   } else {
-    errs() << "Read " << FuncName << " but failed verification\n";
+    if (DumpLevel >= SUMMARY) {
+      errs() << "Read " << FuncName << " but failed verification\n";
+    }
   }
 
-  Func->dump();
+  if (DumpLevel == VERBOSE) {
+    Func->dump();
+  }
 
   JitContext->MethodName = FuncName;
 
