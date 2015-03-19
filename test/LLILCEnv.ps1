@@ -58,6 +58,10 @@
     be downloaded and put in a default location. You can override
     the location by specifying environment variable LLILCTESTRESULT.
 
+    As of now, only release version of CoreCLR Runtime is available.
+    Debug version of CoreCLR Runtime support will be added when it
+    is available.
+
 .PARAMETER Arch
     Target Architecture
 
@@ -894,6 +898,12 @@ function Global:ExcludeTest([string]$Arch="x64", [string]$Build="Release")
 
 function Global:BuildTest([string]$Arch="x64", [string]$Build="Release")
 {
+  if ($Build -eq "Debug") {
+    Write-Warning ("Only Release CoreCLR Runtime available at this point.")
+    Write-Warning ("BuildTest cannot be performed with Debug CoreCLR Runtime yet.")
+    return
+  }
+
   $CoreCLRTestAssets = CoreCLRTestAssets
 
   pushd .
@@ -941,6 +951,12 @@ function Global:RunTest
   [string]$Result="",
   [string]$Dump="NoDump"
   )
+
+  if ($Build -eq "Debug") {
+    Write-Warning ("Only Release CoreCLR Runtime available at this point.")
+    Write-Warning ("RunTest cannot be performed with Debug CoreCLR Runtime yet.")
+    return $False
+  }
 
   $CoreCLRTestAssets = CoreCLRTestAssets
   $CoreCLRRuntime = CoreCLRRuntime
