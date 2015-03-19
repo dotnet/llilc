@@ -269,8 +269,12 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
     ASSERTNR(UNREACHED);
   }
 
+  const uint32_t JitFlags = JitContext->Flags;
+
+  HasSecretParameter = (JitFlags & CORJIT_FLG_PUBLISH_SECRET_PARAM) != 0;
+
   CORINFO_METHOD_HANDLE MethodHandle = JitContext->MethodInfo->ftn;
-  Function = getFunction(MethodHandle);
+  Function = getFunction(MethodHandle, HasSecretParameter);
 
   // Capture low-level info about the return type for use in Return.
   CORINFO_SIG_INFO Sig;
@@ -300,7 +304,7 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   KeepGenericContextAlive = false;
   UnreachableContinuationBlock = nullptr;
 
-  initParamsAndAutos(NumArgs, NumLocals);
+  initParamsAndAutos(NumArgs, NumLocals, HasSecretParameter);
 
   // Take note of the current insertion point in case we need
   // to add more allocas later.
@@ -326,7 +330,6 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
 
   // Check for special cases where the Jit needs to do extra work.
   const uint32_t MethodFlags = getCurrentMethodAttribs();
-  const uint32_t JitFlags = JitContext->Flags;
 
   // TODO: support for synchronized methods
   if (MethodFlags & CORINFO_FLG_SYNCH) {
@@ -343,12 +346,6 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
     if (DebugHandle != nullptr) {
       throw NotYetImplementedException("just my code hook");
     }
-  }
-
-  // TODO: support for secret parameter for shared IL stubs
-  if ((JitFlags & CORJIT_FLG_IL_STUB) &&
-      (JitFlags & CORJIT_FLG_PUBLISH_SECRET_PARAM)) {
-    throw NotYetImplementedException("publish secret param");
   }
 
   // TODO: Insert class initialization check if necessary
@@ -495,9 +492,10 @@ void GenIR::createSym(uint32_t Num, bool IsAuto, CorInfoType CorType,
   }
 }
 
-Function *GenIR::getFunction(CORINFO_METHOD_HANDLE MethodHandle) {
+Function *GenIR::getFunction(CORINFO_METHOD_HANDLE MethodHandle,
+                             bool HasSecretParameter) {
   Module *M = JitContext->CurrentModule;
-  FunctionType *Ty = getFunctionType(MethodHandle);
+  FunctionType *Ty = getFunctionType(MethodHandle, HasSecretParameter);
   llvm::Function *F = Function::Create(Ty, Function::ExternalLinkage,
                                        M->getModuleIdentifier(), M);
 
@@ -509,6 +507,17 @@ Function *GenIR::getFunction(CORINFO_METHOD_HANDLE MethodHandle) {
   for (Function::arg_iterator Args = F->arg_begin(); Args != F->arg_end();
        Args++) {
     Args->setName(Twine("param") + Twine(N++));
+  }
+
+  if (HasSecretParameter) {
+    ASSERT((--F->arg_end())->getType() ==
+           getType(CORINFO_TYPE_NATIVEINT, nullptr));
+
+    LLVMContext &Context = *JitContext->LLVMContext;
+    AttributeSet Attrs = F->getAttributes();
+    F->setAttributes(
+        Attrs.addAttribute(Context, F->arg_size(), "CLR_SecretParameter"));
+    F->setCallingConv(CallingConv::CLR_SecretParameter);
   }
 
   return F;
@@ -550,6 +559,14 @@ IRNode *GenIR::thisObj() {
   Function::arg_iterator Args = Function->arg_begin();
   Value *UnmodifiedThis = Args++;
   return (IRNode *)UnmodifiedThis;
+}
+
+// Get the value of the secret parameter to an IL stub.
+IRNode *GenIR::secretParam() {
+  ASSERT(HasSecretParameter);
+  Function::arg_iterator Args = Function->arg_end();
+  Value *SecretParameter = --Args;
+  return (IRNode *)SecretParameter;
 }
 
 // Get the value of the varargs token (aka argList).
@@ -1305,11 +1322,12 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
 }
 
 // Obtain an LLVM function type from a method handle.
-FunctionType *GenIR::getFunctionType(CORINFO_METHOD_HANDLE Method) {
+FunctionType *GenIR::getFunctionType(CORINFO_METHOD_HANDLE Method,
+                                     bool HasSecretParameter) {
   CORINFO_SIG_INFO Sig;
   getMethodSig(Method, &Sig);
   CORINFO_CLASS_HANDLE Class = getMethodClass(Method);
-  FunctionType *Result = getFunctionType(Sig, Class);
+  FunctionType *Result = getFunctionType(Sig, Class, HasSecretParameter);
   return Result;
 }
 
@@ -1318,7 +1336,8 @@ FunctionType *GenIR::getFunctionType(CORINFO_METHOD_HANDLE Method) {
 // If the signature has an implicit 'this' parameter,
 // ThisClass must be passed in as the appropriate class handle.
 FunctionType *GenIR::getFunctionType(CORINFO_SIG_INFO &Sig,
-                                     CORINFO_CLASS_HANDLE ThisClass) {
+                                     CORINFO_CLASS_HANDLE ThisClass,
+                                     bool HasSecretParameter) {
   CorInfoType ReturnType = Sig.retType;
   CORINFO_CLASS_HANDLE ReturnClass = Sig.retTypeClass;
   Type *LLVMReturnType = this->getType(ReturnType, ReturnClass);
@@ -1355,9 +1374,8 @@ FunctionType *GenIR::getFunctionType(CORINFO_SIG_INFO &Sig,
   bool HasTypeArg = Sig.hasTypeArg();
 
   if (HasTypeArg) {
-    CORINFO_CLASS_HANDLE Class = 0;
+    CORINFO_CLASS_HANDLE Class = nullptr;
     Type *TypeArgType = getType(CORINFO_TYPE_NATIVEINT, Class);
-
     Arguments.push_back(TypeArgType);
   }
 
@@ -1369,6 +1387,12 @@ FunctionType *GenIR::getFunctionType(CORINFO_SIG_INFO &Sig,
     NextArg = this->argListNext(NextArg, &Sig, &ArgType, &Class);
     Type *LLVMArgType = this->getType(ArgType, Class);
     Arguments.push_back(LLVMArgType);
+  }
+
+  if (HasSecretParameter) {
+    CORINFO_CLASS_HANDLE Class = nullptr;
+    Type *SecretParameterType = getType(CORINFO_TYPE_NATIVEINT, Class);
+    Arguments.push_back(SecretParameterType);
   }
 
   FunctionType *FunctionType =
@@ -3259,6 +3283,8 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
   IRNode *TargetNode = CallTargetInfo->getCallTargetNode();
   CORINFO_SIG_INFO *SigInfo = CallTargetInfo->getSigInfo();
   CORINFO_CALL_INFO *CallInfo = CallTargetInfo->getCallInfo();
+  bool IsStubCall =
+      (CallInfo != nullptr) && (CallInfo->kind == CORINFO_VIRTUALCALL_STUB);
 
   unsigned HiddenMBParamSize = 0;
   GCLayout *GCInfo = nullptr;
@@ -3269,12 +3295,6 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
     if (!CallTargetInfo->isUnmarkedTailCall()) {
       throw NotYetImplementedException("Tail call");
     }
-  }
-
-  if ((CallInfo != nullptr) && (CallInfo->kind == CORINFO_VIRTUALCALL_STUB)) {
-    // VSD calls have a special calling convention that requires the pointer
-    // to the stub in a target-specific register.
-    throw NotYetImplementedException("virtual stub dispatch");
   }
 
   // Ask GenIR to create return value.
@@ -3338,8 +3358,8 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
   }
 
   CallInst *CallInst = LLVMBuilder->CreateCall(TargetNode, Arguments);
-  CorInfoIntrinsics IntrinsicID = CallTargetInfo->getCorInstrinsic();
 
+  CorInfoIntrinsics IntrinsicID = CallTargetInfo->getCorInstrinsic();
   if ((0 <= IntrinsicID) && (IntrinsicID < CORINFO_INTRINSIC_Count)) {
     throw NotYetImplementedException("Call intrinsic");
   }
@@ -3361,6 +3381,10 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
     if (callIsCorVarArgs(Call)) {
       canonVarargsCall(Call, CallTargetInfo);
     }
+  }
+
+  if (IsStubCall) {
+    Call = canonStubCall(Call, CallTargetInfo);
   }
 
   if (ReturnNode != nullptr) {
@@ -3401,7 +3425,7 @@ bool GenIR::canonNewObjCall(IRNode *CallNode,
   if (IsArray) {
     // Zero-based, one-dimensional arrays are allocated via newarr;
     // all other arrays are allocated via newobj
-    canonNewArrayCall(CallNode, CallTargetData, OutResult);
+    *OutResult = canonNewArrayCall(CallNode, CallTargetData);
     LLVMBuilder->SetInsertPoint(CurrentBlock, SavedInsertPoint);
     DoneBeingProcessed = true;
   } else if (IsVarObjSize) {
@@ -3415,12 +3439,11 @@ bool GenIR::canonNewObjCall(IRNode *CallNode,
 
     // Change the type of the called function and
     // the type of the CallInstruction.
-    CallInst *CallInstruction = dyn_cast<CallInst>(CallNode);
+    CallInst *CallInstruction = cast<CallInst>(CallNode);
     Value *CalledValue = CallInstruction->getCalledValue();
-    PointerType *CalledValueType =
-        dyn_cast<PointerType>(CalledValue->getType());
+    PointerType *CalledValueType = cast<PointerType>(CalledValue->getType());
     FunctionType *FuncType =
-        dyn_cast<FunctionType>(CalledValueType->getElementType());
+        cast<FunctionType>(CalledValueType->getElementType());
 
     // Construct the new function type.
     std::vector<Type *> Arguments;
@@ -3488,9 +3511,8 @@ bool GenIR::canonNewObjCall(IRNode *CallNode,
   return DoneBeingProcessed;
 }
 
-void GenIR::canonNewArrayCall(IRNode *Call,
-                              ReaderCallTargetData *CallTargetData,
-                              IRNode **OutResult) {
+IRNode *GenIR::canonNewArrayCall(IRNode *Call,
+                                 ReaderCallTargetData *CallTargetData) {
   CallInst *CallInstruction = dyn_cast<CallInst>(Call);
   Value *CalledValue = CallInstruction->getCalledValue();
   PointerType *CalledValueType = dyn_cast<PointerType>(CalledValue->getType());
@@ -3543,16 +3565,61 @@ void GenIR::canonNewArrayCall(IRNode *Call,
       LLVMBuilder->CreateCall(NewCalledValue, NewArguments);
   CallInstruction->eraseFromParent();
 
-  *OutResult = (IRNode *)NewCallInstruction;
-
-  return;
+  return (IRNode *)NewCallInstruction;
 }
 
 bool GenIR::callIsCorVarArgs(IRNode *CallNode) {
-  CallInst *CallInstruction = dyn_cast<CallInst>(CallNode);
+  CallInst *CallInstruction = cast<CallInst>(CallNode);
   Value *CalledValue = CallInstruction->getCalledValue();
   PointerType *CalledValueType = dyn_cast<PointerType>(CalledValue->getType());
   return dyn_cast<FunctionType>(CalledValueType->getElementType())->isVarArg();
+}
+
+IRNode *GenIR::canonStubCall(IRNode *CallNode,
+                             ReaderCallTargetData *CallTargetData) {
+  assert(CallTargetData != nullptr);
+  assert(CallTargetData->getCallInfo() != nullptr &&
+         CallTargetData->getCallInfo()->kind == CORINFO_VIRTUALCALL_STUB);
+
+  CallInst *Call = cast<CallInst>(CallNode);
+  BasicBlock *CurrentBlock = Call->getParent();
+
+  BasicBlock::iterator SavedInsertPoint = LLVMBuilder->GetInsertPoint();
+  LLVMBuilder->SetInsertPoint(Call);
+
+  Value *Target = Call->getCalledValue();
+  PointerType *TargetType = cast<PointerType>(Target->getType());
+  FunctionType *TargetFuncType =
+      cast<FunctionType>(TargetType->getElementType());
+
+  // Construct the new function type.
+  std::vector<Type *> ArgumentTypes;
+  std::vector<Value *> Arguments;
+
+  Value *IndirectionCell = (Value *)CallTargetData->getIndirectionCellNode();
+  assert(IndirectionCell != nullptr);
+
+  ArgumentTypes.push_back(IndirectionCell->getType());
+  Arguments.push_back(IndirectionCell);
+
+  for (unsigned I = 0; I < TargetFuncType->getNumParams(); ++I) {
+    ArgumentTypes.push_back(TargetFuncType->getParamType(I));
+    Arguments.push_back(Call->getArgOperand(I));
+  }
+
+  FunctionType *FuncType =
+      FunctionType::get(TargetFuncType->getReturnType(), ArgumentTypes,
+                        TargetFuncType->isVarArg());
+
+  Value *NewTarget =
+      LLVMBuilder->CreatePointerCast(Target, getUnmanagedPointerType(FuncType));
+
+  CallInst *NewCall = LLVMBuilder->CreateCall(NewTarget, Arguments);
+  NewCall->setCallingConv(CallingConv::CLR_VirtualDispatchStub);
+  Call->eraseFromParent();
+
+  LLVMBuilder->SetInsertPoint(CurrentBlock, SavedInsertPoint);
+  return (IRNode *)NewCall;
 }
 
 IRNode *GenIR::conv(ReaderBaseNS::ConvOpcode Opcode, IRNode *Arg1) {

@@ -279,9 +279,7 @@ public:
   IRNode *argList() override;
   IRNode *instParam() override;
 
-  IRNode *secretParam() override {
-    throw NotYetImplementedException("secretParam");
-  };
+  IRNode *secretParam() override;
   IRNode *thisObj() override;
 
   void boolBranch(ReaderBaseNS::BoolBranchOpcode Opcode, IRNode *Arg1) override;
@@ -805,8 +803,11 @@ public:
   // newobj
   bool canonNewObjCall(IRNode *CallNode, ReaderCallTargetData *CallTargetData,
                        IRNode **OutResult);
-  void canonNewArrayCall(IRNode *CallNode, ReaderCallTargetData *CallTargetData,
-                         IRNode **OutResult);
+  IRNode *canonNewArrayCall(IRNode *CallNode,
+                            ReaderCallTargetData *CallTargetData);
+
+  // stubs
+  IRNode *canonStubCall(IRNode *CallNode, ReaderCallTargetData *CallTargetData);
 #endif
 
   // Used to expand multidimensional array access intrinsics
@@ -837,11 +838,14 @@ private:
   llvm::Type *getType(CorInfoType Type, CORINFO_CLASS_HANDLE ClassHandle,
                       bool GetRefClassFields = true);
 
-  llvm::Function *getFunction(CORINFO_METHOD_HANDLE Method);
+  llvm::Function *getFunction(CORINFO_METHOD_HANDLE Method,
+                              bool HasSecretParameter);
 
-  llvm::FunctionType *getFunctionType(CORINFO_METHOD_HANDLE Method);
+  llvm::FunctionType *getFunctionType(CORINFO_METHOD_HANDLE Method,
+                                      bool HasSecretParameter = false);
   llvm::FunctionType *getFunctionType(CORINFO_SIG_INFO &Sig,
-                                      CORINFO_CLASS_HANDLE ThisClass);
+                                      CORINFO_CLASS_HANDLE ThisClass,
+                                      bool HasSecretParameter = false);
 
   llvm::Type *getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
                            bool GetRefClassFields);
@@ -1101,6 +1105,7 @@ private:
   bool HasThis;
   bool HasTypeParameter;
   bool HasVarargsToken;
+  bool HasSecretParameter;
   bool KeepGenericContextAlive;
   llvm::BasicBlock *EntryBlock;
   llvm::Instruction *TempInsertionPoint;
