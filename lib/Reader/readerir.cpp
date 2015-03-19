@@ -1913,6 +1913,17 @@ void GenIR::fgNodeSetVisited(FlowGraphNode *Fg, bool Visited) {
   FlowGraphInfoMap[Fg].IsVisited = Visited;
 }
 
+// Check whether this node propagates operand stack.
+bool GenIR::fgNodePropagatesOperandStack(FlowGraphNode *Fg) {
+  return FlowGraphInfoMap[Fg].PropagatesOperandStack;
+}
+
+// Set whether this node propagates operand stack.
+void GenIR::fgNodeSetPropagatesOperandStack(FlowGraphNode *Fg,
+                                            bool PropagatesOperandStack) {
+  FlowGraphInfoMap[Fg].PropagatesOperandStack = PropagatesOperandStack;
+}
+
 FlowGraphNode *GenIR::fgNodeGetNext(FlowGraphNode *FgNode) {
   if (FgNode == &(Function->getBasicBlockList().back())) {
     return nullptr;
@@ -2886,8 +2897,7 @@ void GenIR::storeElem(ReaderBaseNS::StElemOpcode Opcode,
       getArrayElementType(Array, ResolvedToken, &CorType, &Alignment);
 
   if (CorType == CorInfoType::CORINFO_TYPE_CLASS) {
-    Constant *ConstantValue = dyn_cast<Constant>(ValueToStore);
-    if (ConstantValue == nullptr || !ConstantValue->isNullValue()) {
+    if (!isConstantNull(ValueToStore)) {
       // This will call a helper that stores an element of object array with
       // type checking. It will also call a write barrier if necessary. Storing
       // null is always legal, doesn't need a write barrier, and thus does not
@@ -3107,6 +3117,44 @@ IRNode *GenIR::getHelperCallAddress(CorInfoHelpFunc HelperId) {
   return handleToIRNode((mdToken)(mdtJitHelper | HelperId), Descriptor, 0,
                         IsIndirect, IsIndirect, true, false);
 }
+
+// Generate special generics helper that might need to insert flow.
+IRNode *GenIR::callRuntimeHandleHelper(CorInfoHelpFunc Helper, IRNode *Arg1,
+                                       IRNode *Arg2, IRNode *NullCheckArg) {
+
+  Type *ReturnType =
+      Type::getIntNTy(*JitContext->LLVMContext, TargetPointerSizeInBits);
+
+  // Call the helper unconditionally if NullCheckArg is null.
+  if ((NullCheckArg == nullptr) || isConstantNull(NullCheckArg)) {
+    return callHelperImpl(Helper, ReturnType, Arg1, Arg2);
+  }
+
+  BasicBlock *SaveBlock = LLVMBuilder->GetInsertBlock();
+
+  // Insert the compare against null.
+  Value *Compare = LLVMBuilder->CreateIsNull(NullCheckArg, "NullCheck");
+
+  // Generate conditional helper call.
+  bool CallReturns = true;
+  CallInst *HelperCall =
+      genConditionalHelperCall(Compare, Helper, ReturnType, Arg1, Arg2,
+                               CallReturns, "RuntimeHandleHelperCall");
+
+  // The result is a PHI of NullCheckArg and the generated call.
+  // The generated code is equivalent to
+  // x = NullCheckArg;
+  // if (NullCheckArg == nullptr) {
+  //   x = callhelper(Arg1, Arg2);
+  // }
+  // return x;
+  BasicBlock *CallBlock = HelperCall->getParent();
+  BasicBlock *CurrentBlock = LLVMBuilder->GetInsertBlock();
+  PHINode *PHI = createPHINode(CurrentBlock, ReturnType, 2, "RuntimeHandle");
+  PHI->addIncoming(NullCheckArg, SaveBlock);
+  PHI->addIncoming(HelperCall, CallBlock);
+  return (IRNode *)PHI;
+};
 
 bool GenIR::canMakeDirectCall(ReaderCallTargetData *CallTargetData) {
   return !CallTargetData->isJmp();
@@ -3769,23 +3817,26 @@ void GenIR::throwOpcode(IRNode *Arg1) {
   ThrowCall->setDoesNotReturn();
 }
 
-// Generate a call to the throw helper if the condition is met.
-void GenIR::genConditionalThrow(Value *Condition, CorInfoHelpFunc HelperId,
-                                const Twine &ThrowBlockName) {
+CallInst *GenIR::genConditionalHelperCall(Value *Condition,
+                                          CorInfoHelpFunc HelperId,
+                                          Type *ReturnType, IRNode *Arg1,
+                                          IRNode *Arg2, bool CallReturns,
+                                          const Twine &CallBlockName) {
   BasicBlock *CheckBlock = LLVMBuilder->GetInsertBlock();
   BasicBlock::iterator InsertPoint = LLVMBuilder->GetInsertPoint();
   Instruction *NextInstruction =
       (InsertPoint == CheckBlock->end() ? nullptr : (Instruction *)InsertPoint);
 
-  // Create the throw block so we can reference it later.
-  // Note: we could generate much smaller IR by reusing the same throw block for
-  // all throws of the same kind, but at the cost of not being able to tell in a
-  // debugger which check caused the exception.  The current strategy is to
-  // favor debuggability.
+  // Create the call block so we can reference it later.
+  // Note: when using this helper to generate conditional throw
+  // (CallReturns==false) we could generate much smaller IR by reusing the same
+  // throw block for all throws of the same kind, but at the cost of not being
+  // able to tell in a debugger which check caused the exception.  The current
+  // strategy is to favor debuggability.
   // TODO: Find a way to annotate the throw blocks as cold so they get laid out
   // out-of-line.
-  BasicBlock *ThrowBlock =
-      BasicBlock::Create(*JitContext->LLVMContext, ThrowBlockName, Function);
+  BasicBlock *CallBlock =
+      BasicBlock::Create(*JitContext->LLVMContext, CallBlockName, Function);
 
   // Split the block.  This creates a goto connecting the blocks that we'll
   // replace with the conditional branch.
@@ -3800,22 +3851,30 @@ void GenIR::genConditionalThrow(Value *Condition, CorInfoHelpFunc HelperId,
   // Swap the conditional branch in place of the goto.
   LLVMBuilder->SetInsertPoint(Goto);
   BranchInst *Branch =
-      LLVMBuilder->CreateCondBr(Condition, ThrowBlock, ContinueBlock);
+      LLVMBuilder->CreateCondBr(Condition, CallBlock, ContinueBlock);
   Goto->eraseFromParent();
 
-  // FIll in the throw block.
-  LLVMBuilder->SetInsertPoint(ThrowBlock);
-  CallInst *ThrowCall = (CallInst *)callHelper(HelperId, nullptr);
-  ThrowCall->setDoesNotReturn();
-  LLVMBuilder->CreateUnreachable();
+  // Fill in the call block.
+  LLVMBuilder->SetInsertPoint(CallBlock);
+  CallInst *HelperCall =
+      (CallInst *)callHelperImpl(HelperId, ReturnType, Arg1, Arg2);
+  if (CallReturns) {
+    LLVMBuilder->CreateBr(ContinueBlock);
+  } else {
+    HelperCall->setDoesNotReturn();
+    LLVMBuilder->CreateUnreachable();
+  }
 
-  // Give the throw block equal start and end offsets so subsequent processing
+  // Give the call block equal start and end offsets so subsequent processing
   // won't try to translate MSIL into it.
-  fgNodeSetStartMSILOffset((FlowGraphNode *)ThrowBlock, CurrInstrOffset);
-  fgNodeSetEndMSILOffset((FlowGraphNode *)ThrowBlock, CurrInstrOffset);
+  FlowGraphNode *CallFlowGraphNode = (FlowGraphNode *)CallBlock;
+  fgNodeSetStartMSILOffset(CallFlowGraphNode, CurrInstrOffset);
+  fgNodeSetEndMSILOffset(CallFlowGraphNode, CurrInstrOffset);
 
-  // Null out the throw block operand stack.
-  fgNodeSetOperandStack((FlowGraphNode *)ThrowBlock, nullptr);
+  // CallBlock doesn't need an operand stack: it doesn't have any MSIL and
+  // its successor block (if there is one) will get the stack propagated from
+  // the check block.
+  fgNodeSetPropagatesOperandStack(CallFlowGraphNode, false);
 
   // Move the insert point back to the first instruction in the non-null path.
   if (NextInstruction == nullptr) {
@@ -3823,6 +3882,18 @@ void GenIR::genConditionalThrow(Value *Condition, CorInfoHelpFunc HelperId,
   } else {
     LLVMBuilder->SetInsertPoint(ContinueBlock->getFirstInsertionPt());
   }
+
+  return HelperCall;
+}
+
+// Generate a call to the throw helper if the condition is met.
+void GenIR::genConditionalThrow(Value *Condition, CorInfoHelpFunc HelperId,
+                                const Twine &ThrowBlockName) {
+  IRNode *Arg1 = nullptr, *Arg2 = nullptr;
+  Type *ReturnType = Type::getVoidTy(*JitContext->LLVMContext);
+  bool CallReturns = false;
+  genConditionalHelperCall(Condition, HelperId, ReturnType, Arg1, Arg2,
+                           CallReturns, ThrowBlockName);
 }
 
 IRNode *GenIR::genNullCheck(IRNode *Node) {
@@ -4467,8 +4538,7 @@ void GenIR::removeStackInterferenceForLocalStore(uint32_t Opcode,
   return;
 }
 
-void GenIR::maintainOperandStack(IRNode **Opr1, IRNode **Opr2,
-                                 FlowGraphNode *CurrentBlock) {
+void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
 
   if (ReaderOperandStack->size() == 0) {
     return;
@@ -4484,22 +4554,33 @@ void GenIR::maintainOperandStack(IRNode **Opr1, IRNode **Opr2,
   while (SuccessorList != nullptr) {
     FlowGraphNode *SuccessorBlock = fgEdgeListGetSink(SuccessorList);
 
-    FlowGraphEdgeList *SuccessorPredecessorList =
-        fgNodeGetPredecessorListActual(SuccessorBlock);
+    int NumberOfPredecessorsPropagatingStack = 0;
+    for (FlowGraphEdgeList *SuccessorPredecessorList =
+             fgNodeGetPredecessorListActual(SuccessorBlock);
+         SuccessorPredecessorList != nullptr;
+         SuccessorPredecessorList =
+             fgEdgeListGetNextPredecessorActual(SuccessorPredecessorList)) {
+      FlowGraphNode *SuccessorPredecessorNode =
+          fgEdgeListGetSource(SuccessorPredecessorList);
+      if (fgNodePropagatesOperandStack(SuccessorPredecessorNode)) {
+        ++NumberOfPredecessorsPropagatingStack;
+        // We don't need the exact number of predecessors propagating operand
+        // stack; we are only interested if there are more than one.
+        if (NumberOfPredecessorsPropagatingStack > 1) {
+          break;
+        }
+      }
+    }
 
-    FlowGraphEdgeList *SuccessorPredecessorListNext =
-        fgEdgeListGetNextPredecessorActual(SuccessorPredecessorList);
-
-    if (SuccessorPredecessorListNext == nullptr) {
-      // The current node is the only predecessor of this Successor. We need to
-      // create a stack for the Successor and copy the items from the current
-      // stack.
-      if ((fgNodeGetStartMSILOffset(SuccessorBlock) ==
-           fgNodeGetEndMSILOffset(SuccessorBlock)) &&
-          (fgNodeGetSuccessorListActual(SuccessorBlock) == nullptr)) {
-        // There is no MSIL for this block and it has no successors, so no need
-        // to propagate the stack.  This is a common case for implicit exception
-        // throw blocks.
+    ASSERTNR(NumberOfPredecessorsPropagatingStack >= 1);
+    if (NumberOfPredecessorsPropagatingStack == 1) {
+      // The current node is the only relevant predecessor of this Successor.
+      ASSERTNR(fgNodePropagatesOperandStack(CurrentBlock));
+      // We need to create a stack for the Successor and copy the items from the
+      // current stack.
+      if (!fgNodePropagatesOperandStack(SuccessorBlock)) {
+        // This successor block doesn't need a stack. This is a common case for
+        // implicit exception throw blocks or conditional helper calls.
       } else {
         fgNodeSetOperandStack(SuccessorBlock, ReaderOperandStack->copy());
       }
@@ -4519,30 +4600,24 @@ void GenIR::maintainOperandStack(IRNode **Opr1, IRNode **Opr2,
       }
 
       Instruction *CurrentInst = SuccessorBlock->begin();
-      PHINode *Phi = nullptr;
+      PHINode *PHI = nullptr;
       for (IRNode *Current : *ReaderOperandStack) {
         Value *CurrentValue = (Value *)Current;
         if (CreatePHIs) {
           // The Successor has at least 2 predecessors so we use 2 as the
           // hint for the number of PHI sources.
-          TerminatorInst *TermInst = SuccessorBlock->getTerminator();
-          if (TermInst != nullptr) {
-            Phi = PHINode::Create(CurrentValue->getType(), 2, "", TermInst);
-          } else {
-            Phi =
-                PHINode::Create(CurrentValue->getType(), 2, "", SuccessorBlock);
-          }
+          PHI = createPHINode(SuccessorBlock, CurrentValue->getType(), 2, "");
         } else {
           // PHI instructions should have been inserted already
-          Phi = cast<PHINode>(CurrentInst);
+          PHI = cast<PHINode>(CurrentInst);
           CurrentInst = CurrentInst->getNextNode();
         }
-        if (Phi->getType() != CurrentValue->getType()) {
-          throw NotYetImplementedException("Phi type mismatch");
+        if (PHI->getType() != CurrentValue->getType()) {
+          throw NotYetImplementedException("PHI type mismatch");
         }
-        Phi->addIncoming(CurrentValue, (BasicBlock *)CurrentBlock);
+        PHI->addIncoming(CurrentValue, (BasicBlock *)CurrentBlock);
         if (CreatePHIs) {
-          SuccessorStack->push((IRNode *)Phi);
+          SuccessorStack->push((IRNode *)PHI);
         }
       }
 
@@ -4554,6 +4629,24 @@ void GenIR::maintainOperandStack(IRNode **Opr1, IRNode **Opr2,
   }
 
   clearStack();
+}
+
+// Create a PHI node in a block that may or may not have a terminator.
+PHINode *GenIR::createPHINode(BasicBlock *Block, Type *Ty,
+                              unsigned int NumReservedValues,
+                              const Twine &NameStr) {
+  TerminatorInst *TermInst = Block->getTerminator();
+  if (TermInst != nullptr) {
+    return PHINode::Create(Ty, NumReservedValues, NameStr, TermInst);
+  } else {
+    return PHINode::Create(Ty, NumReservedValues, NameStr, Block);
+  }
+}
+
+// Check whether the node is constant null.
+bool GenIR::isConstantNull(IRNode *Node) {
+  Constant *ConstantValue = dyn_cast<Constant>(Node);
+  return (ConstantValue != nullptr) && ConstantValue->isNullValue();
 }
 
 #pragma endregion
