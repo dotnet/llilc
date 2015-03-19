@@ -236,6 +236,10 @@ public:
 };
 
 class GenIR : public ReaderBase {
+private:
+  struct TargetInfo;
+  struct TargetInfoX86;
+  struct TargetInfoX86_64;
 
 public:
   GenIR(LLILCJitContext *JitContext,
@@ -249,7 +253,10 @@ public:
     this->ClassTypeMap = ClassTypeMap;
     this->ArrayTypeMap = ArrayTypeMap;
     this->FieldIndexMap = FieldIndexMap;
+    this->TheTargetInfo = makeTargetInfo(*JitContext);
   }
+
+  static TargetInfo *makeTargetInfo(LLILCJitContext &JitContext);
 
   static bool isValidStackType(IRNode *Node);
 
@@ -264,7 +271,13 @@ public:
   // MSIL Routines - client defined routines that are invoked by the reader.
   //                 One will be called for each msil opcode.
 
-  uint32_t getPointerByteSize() override { return TargetPointerSizeInBits / 8; }
+  uint32_t getTargetPointerSizeInBits() {
+    return TheTargetInfo->getTargetPointerSizeInBits();
+  }
+
+  uint32_t getPointerByteSize() override {
+    return getTargetPointerSizeInBits() / 8;
+  }
 
   void opcodeDebugPrint(uint8_t *Buf, unsigned StartOffset,
                         unsigned EndOffset) override {
@@ -800,6 +813,9 @@ public:
                        IRNode **OutResult);
   void canonNewArrayCall(IRNode *CallNode, ReaderCallTargetData *CallTargetData,
                          IRNode **OutResult);
+
+  // stubs
+  IRNode *canonStubCall(IRNode *CallNode, ReaderCallTargetData *CallTargetData);
 #endif
 
   // Used to expand multidimensional array access intrinsics
@@ -1065,6 +1081,11 @@ private:
   bool isConstantNull(IRNode *Node);
 
 private:
+  struct TargetInfo {
+    virtual uint32_t getTargetPointerSizeInBits() = 0;
+    virtual llvm::StringRef getVirtualStubParamConstraints() = 0;
+  };
+
   LLILCJitContext *JitContext;
   llvm::Function *Function;
   llvm::IRBuilder<> *LLVMBuilder;
@@ -1084,7 +1105,7 @@ private:
   bool KeepGenericContextAlive;
   llvm::BasicBlock *EntryBlock;
   llvm::Instruction *TempInsertionPoint;
-  uint32_t TargetPointerSizeInBits;
+  TargetInfo *TheTargetInfo;
   const uint32_t UnmanagedAddressSpace = 0;
   const uint32_t ManagedAddressSpace = 1;
 };
