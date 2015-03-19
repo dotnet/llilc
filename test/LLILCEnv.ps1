@@ -823,51 +823,16 @@ function Global:ApplyFilterAll{
 # -------------------------------------------------------------------------
 #
 # Filter to suppress allowable LLVM IR difference
+# Using python script applyfilter.py for filtering
 #
 # -------------------------------------------------------------------------
 
 function Global:ApplyFilter([string]$File)
-{
-  # Suppress address difference from run to run
-  # Assume the address is at least 10-digit number
-  # 
-  # Example 1:
-  # 
-  # Normalize
-  # %2 = call i64 inttoptr (i64 140704958972024 to i64 (i64)*)(i64 140704956891884)
-  # to
-  # %2 = call i64 inttoptr (i64 NORMALIZED_ADDRESS to i64 (i64)*)(i64 NORMALIZED_ADDRESS)
-  #
-  # Example 2:
-  #
-  # Normalize
-  # %3 = icmp eq i64 140704956891886, %2
-  # to
-  # %3 = icmp eq i64 NORMALIZED_ADDRESS, %2
-
-  (Get-Content $File) -replace 'i64 \d{10}\d*', 'i64 NORMALIZED_ADDRESS' | Out-File $File -Encoding ascii
-
-  # Suppress type id difference from run to run
-  #
-  # Example 1:
-  # 
-  # Normalize
-  # %3 = load %System.AppDomainSetup.239 addrspace(1)** %1
-  # to
-  # %3 = load %System.AppDomainSetup.NORMALIZED_TYPEID addrspace(1)** %1
-  #
-  # Example 2:
-  #
-  # Normalize
-  # %0 = alloca %AppDomain.24 addrspace(1)*
-  # to
-  # %0 = alloca %AppDomain.NORMALIZED_TYPEID addrspace(1)*
-  
-  (Get-Content $File) -replace '%(.*?)\.\d+ addrspace', '%$1.NORMALIZED_TYPEID addrspace' | Out-File $File -Encoding ascii
-
-  # Suppress type id difference from run to run, string name with double quotes
-
-  (Get-Content $File) -replace '%"(.*?)\.\d+" addrspace', '%"$1.NORMALIZED_TYPEID" addrspace' | Out-File $File -Encoding ascii
+{ 
+  $LLILCTest = LLILCTest
+  & $LLILCTest\applyfilter.py $File "$File.tmp"
+  Remove-Item -force $File | Out-Null
+  Rename-Item "$File.tmp" $File | Out-Null   
 }
 
 # -------------------------------------------------------------------------
