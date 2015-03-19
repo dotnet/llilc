@@ -1084,6 +1084,7 @@ function Global:CheckDiff
     $TotalCount = 0
     $DiffCount = 0
     $NewlyFailedMethods = 0
+    $NewlyPassedMethods = 0
     Get-ChildItem -recurse -path $LLILCTestResult\$Diff | Where {$_.FullName -match "error.txt"} | `
     Foreach-Object {
       $TotalCount = $TotalCount + 1
@@ -1101,6 +1102,9 @@ function Global:CheckDiff
         if ($SummaryLine -match 'Successfully(.*)(<=)') {
           $NewlyFailedMethods++
         }
+        if ($SummaryLine -match 'Successfully(.*)(=>)') {
+          $NewlyPassedMethods++
+        }
       }
     }
 
@@ -1112,11 +1116,13 @@ function Global:CheckDiff
       Write-Host ("$DiffCount out of $TotalCount have diff.")
       if ($NewlyFailedMethods -eq 0) {
         Write-Host ("All previously successfully jitted methods passed jitting with diff jit.")
-        Write-Host ("More methods passed jitting in diff jit than in base jit.")
       }
       else {
         Write-Host ("$NewlyFailedMethods methods successfully jitted by base jit now FAILED in diff jit.")
       }
+      
+      Write-Host ("$NewlyPassedMethods methods now successfully jitted in diff jit.")
+      
       if ($UseDiffTool) {
         & sgdm -t1=Base -t2=Diff $LLILCTestResult\Compare\$Base $LLILCTestResult\Compare\$Diff
       }
