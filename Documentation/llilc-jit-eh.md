@@ -498,17 +498,12 @@ function correctly.  Thus, in order to unblock progress in other areas of
 LLILC during bring-up, initially the EH support will be stubbed out, with
 just enough functionality for such test programs to pass.  In particular,
 code with EH constructs is expected to compile cleanly, but it is only
-expected to behave correctly if it does not attempt to raise exceptions or
-make nontrivial finally clause invocations at runtime.  To avoid silent bad
-code generation, any nontrivial finally clause invocations (i.e. invocations
-where control upon exit from the finally needs to be transferred anywhere
-other than the MSIL immediately following the finally handler) will be
-detected and rejected at compile-time.  The throw operator and the explicit
-test/throw sequences for implicit MSIL exceptions will be implemented on top
-of the stub support (with throws using `call` rather than `invoke`), to
-reflect correct program semantics and allow compilation of code with
-conditional exceptions that will execute correctly if the exception
-conditions don't arise at run-time.
+expected to behave correctly if it does not attempt to raise exceptions at
+runtime.  The throw operator and the explicit test/throw sequences for
+implicit MSIL exceptions will be implemented on top of the stub support
+(with throws using `call` rather than `invoke`), to reflect correct program
+semantics and allow compilation of code with conditional exceptions that
+will execute correctly if the exception conditions don't arise at run-time.
 
 Once the stub support (with explicit and implicit exceptions) is in place,
 the next steps will be to translate handlers in the reader and generate EH
@@ -529,8 +524,9 @@ for explicit throws and some but not all implicit exceptions.
 
 In summary, the plan/status is:
  1. [ ] Stub EH support
-   - [x] Reader discards handlers
+   - [x] Reader discards catch/filter/fault handlers
    - [x] Explicit throw becomes helper call
+   - [x] Continuation passing for finally handlers invoked by `leave`
    - [ ] Implicit exceptions expanded to explicit test/throw sequences
      - [x] Null dereference
      - [ ] Divide by zero

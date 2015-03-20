@@ -2635,6 +2635,58 @@ void ReaderBase::fgInsertEHAnnotations(EHRegion *Region) {
   }
 }
 
+EHRegion *ReaderBase::getInnermostFinallyRegion(uint32_t Offset) {
+  EHRegion *FinallyRegion = nullptr;
+  // Walk from outer to inner regions
+  for (EHRegion *TestRegion = EhRegionTree; TestRegion != nullptr;
+       TestRegion = getInnerEnclosingRegion(TestRegion, Offset)) {
+    // TestRegion encloses Offset
+    if (rgnGetRegionType(TestRegion) == ReaderBaseNS::RGN_Finally) {
+      // Found a finally region nested inside our previous best
+      FinallyRegion = TestRegion;
+    }
+  }
+
+  return FinallyRegion;
+}
+
+EHRegion *ReaderBase::getInnerEnclosingRegion(EHRegion *OuterRegion,
+                                              uint32_t Offset) {
+  // Search the immediate children of the given region
+  for (EHRegionList *ChildNode = rgnGetChildList(OuterRegion); ChildNode;
+       ChildNode = rgnListGetNext(ChildNode)) {
+
+    EHRegion *Child = rgnListGetRgn(ChildNode);
+
+    if ((Offset < rgnGetEndMSILOffset(Child)) &&
+        (Offset >= rgnGetStartMSILOffset(Child))) {
+      // This offset is in this child region.
+      return Child;
+    }
+
+    if (rgnGetRegionType(Child) == ReaderBaseNS::RegionKind::RGN_Try) {
+      // A handler region for the try is a child of it in the tree but follows
+      // it in the IR, so we explicitly have to check for grandchildren in this
+      // case (the current offset falls in the grandchild's range but not the
+      // child's range).
+      for (EHRegionList *GrandchildNode = rgnGetChildList(Child);
+           GrandchildNode; GrandchildNode = rgnListGetNext(GrandchildNode)) {
+
+        EHRegion *Grandchild = rgnListGetRgn(GrandchildNode);
+
+        if ((Offset < rgnGetEndMSILOffset(Grandchild)) &&
+            (Offset >= rgnGetStartMSILOffset(Grandchild))) {
+          // This offset is in this grandchild region
+          return Grandchild;
+        }
+      }
+    }
+  }
+
+  // No inner region encloses this offset
+  return nullptr;
+}
+
 IRNode *ReaderBase::fgAddCaseToCaseListHelper(IRNode *SwitchNode,
                                               IRNode *LabelNode,
                                               uint32_t Element) {
@@ -2658,11 +2710,11 @@ IRNode *ReaderBase::fgMakeBranchHelper(IRNode *LabelNode, IRNode *BlockNode,
 }
 
 IRNode *ReaderBase::fgMakeEndFinallyHelper(IRNode *BlockNode,
-                                           uint32_t CurrentOffset,
-                                           bool IsLexicalEnd) {
+                                           EHRegion *FinallyRegion,
+                                           uint32_t CurrentOffset) {
   IRNode *EndFinallyNode;
 
-  EndFinallyNode = fgMakeEndFinally(BlockNode, CurrentOffset, IsLexicalEnd);
+  EndFinallyNode = fgMakeEndFinally(BlockNode, FinallyRegion, CurrentOffset);
   irNodeSetRegion(EndFinallyNode, fgGetRegionFromMSILOffset(CurrentOffset));
   return EndFinallyNode;
 }
@@ -2800,66 +2852,6 @@ EHRegion *getFinallyRegion(EHRegion *TryRegion) {
   return nullptr;
 }
 
-// If this is a trivial leave (i.e. if it can be implemented as a
-// simple branch), return the offset that it should branch to.
-// Otherwise, reject it.
-//
-// TODO: This method should go away when we have EH
-// flow modeled properly; it's a placeholder to get clean
-// compilation and correct execution for programs with EH constructs
-// but that don't actually throw exceptions at runtime.
-uint32_t updateLeaveOffset(EHRegion *Region, uint32_t LeaveOffset,
-                           uint32_t TargetOffset, const char **FailReason) {
-  if (rgnGetRegionType(Region) == ReaderBaseNS::RegionKind::RGN_Try) {
-    // See if this is a try region we are leaving.
-    if ((TargetOffset < rgnGetStartMSILOffset(Region)) ||
-        (TargetOffset >= rgnGetEndMSILOffset(Region))) {
-      // We are leaving this try.  See if there is a finally to invoke.
-      EHRegion *FinallyRegion = getFinallyRegion(Region);
-      if (FinallyRegion) {
-        // There is a finally.
-        if (TargetOffset == rgnGetEndMSILOffset(FinallyRegion)) {
-          // The target of the leave is the code immediately after the
-          // finally.  Redirect it to simply goto the finally code.
-          TargetOffset = rgnGetStartMSILOffset(FinallyRegion);
-        } else {
-          // Invoking this finally would require cloning it or passing
-          // it a continuation.  This is NYI.
-          *FailReason = "Leave: nontrivial finally invocation";
-          return TargetOffset;
-        }
-      }
-    }
-  }
-
-  // Check if this leave exits any nested regions.
-  for (EHRegionList *ChildNode = rgnGetChildList(Region); ChildNode;
-       ChildNode = rgnListGetNext(ChildNode)) {
-    EHRegion *Child = rgnListGetRgn(ChildNode);
-    if ((LeaveOffset < rgnGetEndMSILOffset(Child)) &&
-        (LeaveOffset >= rgnGetStartMSILOffset(Child))) {
-      return updateLeaveOffset(Child, LeaveOffset, TargetOffset, FailReason);
-    }
-    if (rgnGetRegionType(Child) == ReaderBaseNS::RegionKind::RGN_Try) {
-      // A handler region for the try is a child of it in the tree but follows
-      // it in the IR, so we explicitly have to check for grandchildren in this
-      // case (the current offset falls in the grandchild's range but not the
-      // child's range).
-      for (EHRegionList *GrandchildNode = rgnGetChildList(Child);
-           GrandchildNode; GrandchildNode = rgnListGetNext(GrandchildNode)) {
-        EHRegion *Grandchild = rgnListGetRgn(GrandchildNode);
-        if ((LeaveOffset < rgnGetEndMSILOffset(Grandchild)) &&
-            (LeaveOffset >= rgnGetStartMSILOffset(Grandchild))) {
-          return updateLeaveOffset(Grandchild, LeaveOffset, TargetOffset,
-                                   FailReason);
-        }
-      }
-    }
-  }
-
-  return TargetOffset;
-}
-
 #define CHECKTARGET(TargetOffset, BufSize)                                     \
   {                                                                            \
     if (TargetOffset < 0 || TargetOffset >= BufSize)                           \
@@ -2878,9 +2870,8 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
   IRNode *BranchNode, *BlockNode, *TheExitLabel;
   FlowGraphNode *GraphNode;
   uint32_t CurrentOffset, BranchOffset, TargetOffset, NextOffset, NumCases;
-  EHRegion *Region;
+  EHRegion *Region, *FinallyRegion;
   bool IsShortInstr, IsConditional, IsTailCall, IsReadOnly, PreviousWasPrefix;
-  bool IsLexicalEnd;
   bool LoadFtnToken;
   mdToken TokenConstrained;
   uint32_t StackOffset = 0;
@@ -2991,23 +2982,10 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
       TargetOffset = NextOffset + BranchOffset;
       CHECKTARGET(TargetOffset, ILInputSize);
 
-      // A leave requires more processing if it's within
-      // a protected region. If it's outside of a region
-      // it acts like a branch.
-      if ((Opcode == ReaderBaseNS::CEE_LEAVE ||
-           Opcode == ReaderBaseNS::CEE_LEAVE_S) &&
-          (EhRegionTree != nullptr)) {
-        const char *FailReason = nullptr;
-        TargetOffset = updateLeaveOffset(EhRegionTree, CurrentOffset,
-                                         TargetOffset, &FailReason);
-        if (FailReason != nullptr) {
-          // Record that we can't handle this leave instruction.
-          // Don't abort now, beause it may prove unreachable
-          // (e.g. if it is in a catch, it will appear unreachable,
-          // because EH flow is not yet modeled); defer aborting until
-          // we see a reachable unhandled leave in Pass 2.
-          NyiLeaveMap[CurrentOffset] = FailReason;
-        }
+      if (Opcode == ReaderBaseNS::CEE_LEAVE ||
+          Opcode == ReaderBaseNS::CEE_LEAVE_S) {
+        TargetOffset =
+            updateLeaveOffset(CurrentOffset, NextOffset, Block, TargetOffset);
       }
 
       GraphNode = nullptr;
@@ -3098,51 +3076,23 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
       //
       // if this endfinally is not in a finally don't do anything
       // verification will catch it later and insert throw
-      Region = fgGetRegionFromMSILOffset(CurrentOffset);
+      FinallyRegion = getInnermostFinallyRegion(CurrentOffset);
 
       // note endfinally is same instruction as endfault
-      if (Region == nullptr ||
-          (rgnGetRegionType(Region) != ReaderBaseNS::RGN_Finally &&
-           rgnGetRegionType(Region) != ReaderBaseNS::RGN_Fault)) {
+      if (FinallyRegion == nullptr ||
+          (rgnGetRegionType(FinallyRegion) != ReaderBaseNS::RGN_Finally &&
+           rgnGetRegionType(FinallyRegion) != ReaderBaseNS::RGN_Fault)) {
         BADCODE(MVER_E_ENDFINALLY);
       }
-
-      // We want to consider it equivalent to branching to the end of
-      // the FINALLY.
-      //
-      // It is *not* easy, however to simply insert a label at the end
-      // of the Region and branch to it in our reader framework.  Why?
-      // Because our framework is based on offsets and what we want in
-      // this case is a label which is after every instruction in the
-      // region, but still in this region... We really need something
-      // like rgnGetEndMSILOffset(Region) - 0.5 !  A reworking of this
-      // aspect of the reader would be nice, but in the meantime we
-      // simply insert an end finally here, and let a post-pass insert
-      // the label in the precise location and convert the end finally
-      // to a goto.
-      //
-      // Also note that we don't *need* an end finally if it appears
-      // at the lexical end of the finally region (afterall, we're
-      // simply going to turn them into GOTOs to that point).
-      // However, we insert them there for 2 reasons: (1) ease of
-      // debugging; (2) our reader API's don't give us a good way to
-      // split blocks at the current block insertion point, w/o
-      // actually adding something at the insertion point.  If our end
-      // finally is at the lexical end of the region, though, we pass
-      // that info.  on to the client, so that they can cache it away
-      // for later (in our canon phase, for example, we don't insert
-      // the GOTO if this bit is set).
-      IsLexicalEnd = (NextOffset == rgnGetEndMSILOffset(Region));
 
       // Make/insert end finally
       BlockNode = fgNodeGetStartIRNode(Block);
       BranchNode =
-          fgMakeEndFinallyHelper(BlockNode, CurrentOffset, IsLexicalEnd);
+          fgMakeEndFinallyHelper(BlockNode, FinallyRegion, CurrentOffset);
 
       // And split the block
       fgNodeSetEndMSILOffset(Block, NextOffset);
-      Block = fgSplitBlock(Block, NextOffset,
-                           findBlockSplitPointAfterNode(BranchNode));
+      Block = fgSplitBlock(Block, NextOffset, nullptr);
       break;
 
     case ReaderBaseNS::CEE_JMP:
@@ -7144,14 +7094,6 @@ void ReaderBase::readBytesForFlowGraphNodeHelper(
 
       {
         bool NonLocal, EndsWithNonLocalGoto;
-
-        std::map<uint32_t, const char *>::iterator NyiIter =
-            NyiLeaveMap.find(CurrentOffset);
-        if (NyiIter != NyiLeaveMap.end()) {
-          // Support for this type of leave instruction is not yet implemented.
-          // Throw an appropriate exception.
-          throw NotYetImplementedException(NyiIter->second);
-        }
 
         clearStack();
         NonLocal = fgLeaveIsNonLocal(Fg, NextOffset, TargetOffset,
