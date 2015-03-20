@@ -35,6 +35,15 @@ class FlowGraphNode : public llvm::BasicBlock {};
 /// positions in the IL and the state of the operand stack.
 struct FlowGraphNodeInfo {
 public:
+  /// Constructor
+  FlowGraphNodeInfo() {
+    StartMSILOffset = 0;
+    EndMSILOffset = 0;
+    IsVisited = false;
+    TheReaderStack = nullptr;
+    PropagatesOperandStack = true;
+  };
+
   /// Byte Offset in the MSIL instruction stream to the first instruction
   /// in this basic block.
   uint32_t StartMSILOffset;
@@ -49,6 +58,10 @@ public:
 
   /// Used to track what is on the operand stack on entry to the basic block.
   ReaderStack *TheReaderStack;
+
+  /// true iff this basic block uses an operand stack and propagates it to the
+  /// block's successors when it's not empty on exit.
+  bool PropagatesOperandStack;
 };
 
 /// \brief Represent a node in the LLILC compiler intermediate representation.
@@ -502,8 +515,7 @@ public:
   void endFlowGraphNode(FlowGraphNode *Fg, uint32_t CurrOffset) override;
 
   // Used to maintain operand stack.
-  void maintainOperandStack(IRNode **Opr1, IRNode **Opr2,
-                            FlowGraphNode *CurrentBlock) override;
+  void maintainOperandStack(FlowGraphNode *CurrentBlock) override;
   void assignToSuccessorStackNode(FlowGraphNode *, IRNode *Dst, IRNode *Src,
 
                                   bool *IsMultiByteAssign) override {
@@ -710,11 +722,18 @@ public:
                          bool IsVolatile = false, bool NoCtor = false,
                          bool CanMoveUp = false);
 
-  // Generate special generics helper that might need to insert flow
+  /// Generate special generics helper that might need to insert flow. The
+  /// helper is called if NullCheckArg is null at compile-time or if it
+  /// evaluates to null at run-time.
+  ///
+  /// \param Helper Id of the call helper.
+  /// \param Arg1 First helper argument.
+  /// \param Arg2 Second helper argument.
+  /// \param NullCheckArg Argument to check for null.
+  /// \returns Generated call instruction if NullCheckArg is null; otherwise,
+  /// PHI of NullCheckArg and the generated call instruction.
   IRNode *callRuntimeHandleHelper(CorInfoHelpFunc Helper, IRNode *Arg1,
-                                  IRNode *Arg2, IRNode *NullCheckArg) override {
-    throw NotYetImplementedException("callRuntimeHandleHelper");
-  };
+                                  IRNode *Arg2, IRNode *NullCheckArg);
 
   IRNode *convertToHelperArgumentType(IRNode *Opr,
                                       uint32_t DestinationSize) override {
@@ -899,6 +918,22 @@ private:
   void classifyCmpType(llvm::Type *Ty, uint32_t &Size, bool &IsPointer,
                        bool &IsFloat);
 
+  /// Generate a call to the helper if the condition is met.
+  ///
+  /// \param Condition Condition that will trigger the call.
+  /// \param HelperId Id of the call helper.
+  /// \param ReturnType Return type of the call helper.
+  /// \param Arg1 First helper argument.
+  /// \param Arg2 Second helper argument.
+  /// \param CallReturns true iff the helper call returns.
+  /// \param CallBlockName Name of the basic block that will contain the call.
+  /// \returns Generated call instruction.
+  llvm::CallInst *genConditionalHelperCall(llvm::Value *Condition,
+                                           CorInfoHelpFunc HelperId,
+                                           llvm::Type *ReturnType, IRNode *Arg1,
+                                           IRNode *Arg2, bool CallReturns,
+                                           const llvm::Twine &CallBlockName);
+
   /// Generate a call to the throw helper if the condition is met.
   ///
   /// \param Condition Condition that will trigger the throw.
@@ -998,6 +1033,38 @@ private:
                                   CORINFO_RESOLVED_TOKEN *ResolvedToken,
                                   CorInfoType *CorType,
                                   ReaderAlignType *Alignment);
+
+  /// Create a PHI node in a block that may or may not have a terminator.
+  ///
+  /// \param Block Block to create the PHI node in.
+  /// \param Ty Type of the PHI values.
+  /// \param NumReservedValues Hint for the number of incoming edges that this
+  //  PHI node will have.
+  /// \param NameStr Name of the PHI node.
+  /// \returns Created PHI node.
+  llvm::PHINode *createPHINode(llvm::BasicBlock *Block, llvm::Type *Ty,
+                               unsigned int NumReservedValues,
+                               const llvm::Twine &NameStr);
+
+  /// Check whether this node propagates operand stack.
+  ///
+  /// \param Fg Flow graph node.
+  /// \returns true iff this flow graph node propagates operand stack.
+  bool fgNodePropagatesOperandStack(FlowGraphNode *Fg);
+
+  /// Set whether this node propagates operand stack.
+  ///
+  /// \param Fg Flow graph node.
+  /// \param PropagatesOperandStack true iff this flow graph node propagates
+  /// operand stack.
+  void fgNodeSetPropagatesOperandStack(FlowGraphNode *Fg,
+                                       bool PropagatesOperandStack);
+
+  /// Check whether the node is constant null.
+  ///
+  /// \param Node Node to check.
+  /// \returns true iff this node is constant null.
+  bool isConstantNull(IRNode *Node);
 
 private:
   LLILCJitContext *JitContext;

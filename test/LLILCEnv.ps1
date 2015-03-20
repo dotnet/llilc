@@ -58,6 +58,10 @@
     be downloaded and put in a default location. You can override
     the location by specifying environment variable LLILCTESTRESULT.
 
+    As of now, only release version of CoreCLR Runtime is available.
+    Debug version of CoreCLR Runtime support will be added when it
+    is available.
+
 .PARAMETER Arch
     Target Architecture
 
@@ -823,51 +827,16 @@ function Global:ApplyFilterAll{
 # -------------------------------------------------------------------------
 #
 # Filter to suppress allowable LLVM IR difference
+# Using python script applyfilter.py for filtering
 #
 # -------------------------------------------------------------------------
 
 function Global:ApplyFilter([string]$File)
-{
-  # Suppress address difference from run to run
-  # Assume the address is at least 10-digit number
-  # 
-  # Example 1:
-  # 
-  # Normalize
-  # %2 = call i64 inttoptr (i64 140704958972024 to i64 (i64)*)(i64 140704956891884)
-  # to
-  # %2 = call i64 inttoptr (i64 NORMALIZED_ADDRESS to i64 (i64)*)(i64 NORMALIZED_ADDRESS)
-  #
-  # Example 2:
-  #
-  # Normalize
-  # %3 = icmp eq i64 140704956891886, %2
-  # to
-  # %3 = icmp eq i64 NORMALIZED_ADDRESS, %2
-
-  (Get-Content $File) -replace 'i64 \d{10}\d*', 'i64 NORMALIZED_ADDRESS' | Out-File $File -Encoding ascii
-
-  # Suppress type id difference from run to run
-  #
-  # Example 1:
-  # 
-  # Normalize
-  # %3 = load %System.AppDomainSetup.239 addrspace(1)** %1
-  # to
-  # %3 = load %System.AppDomainSetup.NORMALIZED_TYPEID addrspace(1)** %1
-  #
-  # Example 2:
-  #
-  # Normalize
-  # %0 = alloca %AppDomain.24 addrspace(1)*
-  # to
-  # %0 = alloca %AppDomain.NORMALIZED_TYPEID addrspace(1)*
-  
-  (Get-Content $File) -replace '%(.*?)\.\d+ addrspace', '%$1.NORMALIZED_TYPEID addrspace' | Out-File $File -Encoding ascii
-
-  # Suppress type id difference from run to run, string name with double quotes
-
-  (Get-Content $File) -replace '%"(.*?)\.\d+" addrspace', '%"$1.NORMALIZED_TYPEID" addrspace' | Out-File $File -Encoding ascii
+{ 
+  $LLILCTest = LLILCTest
+  & $LLILCTest\applyfilter.py $File "$File.tmp"
+  Remove-Item -force $File | Out-Null
+  Rename-Item "$File.tmp" $File | Out-Null   
 }
 
 # -------------------------------------------------------------------------
@@ -894,6 +863,12 @@ function Global:ExcludeTest([string]$Arch="x64", [string]$Build="Release")
 
 function Global:BuildTest([string]$Arch="x64", [string]$Build="Release")
 {
+  if ($Build -eq "Debug") {
+    Write-Warning ("Only Release CoreCLR Runtime available at this point.")
+    Write-Warning ("BuildTest cannot be performed with Debug CoreCLR Runtime yet.")
+    return
+  }
+
   $CoreCLRTestAssets = CoreCLRTestAssets
 
   pushd .
@@ -941,6 +916,12 @@ function Global:RunTest
   [string]$Result="",
   [string]$Dump="NoDump"
   )
+
+  if ($Build -eq "Debug") {
+    Write-Warning ("Only Release CoreCLR Runtime available at this point.")
+    Write-Warning ("RunTest cannot be performed with Debug CoreCLR Runtime yet.")
+    return $False
+  }
 
   $CoreCLRTestAssets = CoreCLRTestAssets
   $CoreCLRRuntime = CoreCLRRuntime
@@ -1084,6 +1065,7 @@ function Global:CheckDiff
     $TotalCount = 0
     $DiffCount = 0
     $NewlyFailedMethods = 0
+    $NewlyPassedMethods = 0
     Get-ChildItem -recurse -path $LLILCTestResult\$Diff | Where {$_.FullName -match "error.txt"} | `
     Foreach-Object {
       $TotalCount = $TotalCount + 1
@@ -1101,6 +1083,9 @@ function Global:CheckDiff
         if ($SummaryLine -match 'Successfully(.*)(<=)') {
           $NewlyFailedMethods++
         }
+        if ($SummaryLine -match 'Successfully(.*)(=>)') {
+          $NewlyPassedMethods++
+        }
       }
     }
 
@@ -1112,11 +1097,13 @@ function Global:CheckDiff
       Write-Host ("$DiffCount out of $TotalCount have diff.")
       if ($NewlyFailedMethods -eq 0) {
         Write-Host ("All previously successfully jitted methods passed jitting with diff jit.")
-        Write-Host ("More methods passed jitting in diff jit than in base jit.")
       }
       else {
         Write-Host ("$NewlyFailedMethods methods successfully jitted by base jit now FAILED in diff jit.")
       }
+      
+      Write-Host ("$NewlyPassedMethods methods now successfully jitted in diff jit.")
+      
       if ($UseDiffTool) {
         & sgdm -t1=Base -t2=Diff $LLILCTestResult\Compare\$Base $LLILCTestResult\Compare\$Diff
       }

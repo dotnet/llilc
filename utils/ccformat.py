@@ -116,60 +116,36 @@ def runFormat(args):
   returncode = 0
   llilcSrc = expandPath(args.llilc_source)
 
-  if args.formatall:
-    llilcSrc = expandPath(args.llilc_source)
-    for dirname,subdir,files in os.walk(llilcSrc):
-      if ".git" in dirname \
-          or dirname == os.path.join(llilcSrc, "include", "clr"):
-        continue
-      for filename in files:
-        if filename.endswith(".c") or filename.endswith(".cpp") or \
-          filename.endswith(".h"):
-          filepath=os.path.join(dirname, filename)
-          proc = subprocess.Popen(" ".join([args.clang_format, filepath, 
-              formatFix, "2>" + os.devnull]), shell=True, stdout=subprocess.PIPE)
-            
-          output,error = proc.communicate()
-          
-          # Compute the diff if not fixing
-          if not args.fix:
-            with open(filepath) as f:
-              code = f.read().splitlines()
-            formatted_code = io.StringIO(output.decode('utf-8')).read().splitlines()
-            diff = difflib.unified_diff(code, formatted_code,
-                                        filepath, filepath,
-                                        '(before formatting)', '(after formatting)')
-            diff_string = "\n".join(x for x in diff)
-            if len(diff_string) > 0:
-              # If there was a diff, print out the file name.
-              print(filepath)
-              if args.print_diffs:
-                sys.stdout.write(diff_string)
-                sys.stdout.write("\n")
-              returncode = -1
-  else:
-    noindex = ""
+  llilcSrc = expandPath(args.llilc_source)
+  for dirname,subdir,files in os.walk(llilcSrc):
+    if ".git" in dirname \
+        or dirname == os.path.join(llilcSrc, "include", "clr"):
+      continue
+    for filename in files:
+      if filename.endswith(".c") or filename.endswith(".cpp") or \
+        filename.endswith(".h"):
+        filepath=os.path.join(dirname, filename)
+        proc = subprocess.Popen(" ".join([args.clang_format, filepath, 
+            formatFix, "2>" + os.devnull]), shell=True, stdout=subprocess.PIPE)
 
-    # base and no-index are mutually exclusive
-    base = "" if args.noindex else args.base
-    
-    if args.noindex:
-      noindex = "--no-index"
-      if args.left == "" or args.right == "":
-        print("User must specify paths to repositories to be diffed with --no-index")
-        print("usage: ccformat.py --no-index --left <path to left> --right <path to right>")
-        return -2
+        output,error = proc.communicate()
 
-    proc = subprocess.Popen(" ".join(["git", "diff", base, "-U0", noindex,
-        args.left, args.right, "2>" + os.devnull, "|", args.clang_format_diff, 
-        "-p1", formatFix]), shell=True, stdout=subprocess.PIPE)
-
-    output,error = proc.communicate()
-    if output.decode('utf-8') != "":
-      if args.print_diffs:
-        sys.stdout.write(output.decode('utf-8'))
-        sys.stdout.write("\n")
-      returncode = -1
+        # Compute the diff if not fixing
+        if not args.fix:
+          with open(filepath) as f:
+            code = f.read().splitlines()
+          formatted_code = io.StringIO(output.decode('utf-8')).read().splitlines()
+          diff = difflib.unified_diff(code, formatted_code,
+                                      filepath, filepath,
+                                      '(before formatting)', '(after formatting)')
+          diff_string = "\n".join(x for x in diff)
+          if len(diff_string) > 0:
+            # If there was a diff, print out the file name.
+            print(filepath)
+            if not args.hide_diffs:
+              sys.stdout.write(diff_string)
+              sys.stdout.write("\n")
+            returncode = -1
 
   if returncode == -1:
     print("There were formatting errors. Rerun with --fix")
@@ -183,9 +159,6 @@ def main(argv):
                    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   parser.add_argument("--clang-tidy", metavar="PATH",
             default="clang-tidy", help="path to clang-tidy binary")
-  parser.add_argument("--clang-format-diff", metavar="PATH",
-            default="clang-format-diff.py",
-            help="path to clang-format-diff tool")
   parser.add_argument("--clang-format", metavar="PATH",
             default="clang-format", help="path to clang-format binary")
   parser.add_argument("--compile-commands", metavar="PATH",
@@ -211,30 +184,24 @@ def main(argv):
             help="path to LLILC sources")
   parser.add_argument("--fix", action="store_true", default=False,
             help="fix failures when possible")
-  parser.add_argument("--untidy", action="store_true", default=False,
-            help="Don\'t run clang-tidy")
+  parser.add_argument("--tidy", action="store_true", default=False,
+            help="Run clang-tidy")
   parser.add_argument("--noformat", action="store_true", default=False,
             help="Don\'t run clang-format-diff")
   parser.add_argument("--checks", default="llvm*,misc*,microsoft*,"\
                       "-llvm-header-guard,-llvm-include-order",
             help="clang-tidy checks to run")
   group = parser.add_mutually_exclusive_group()
-  group.add_argument("--base", metavar="BRANCH", default="origin",
-            help="Base for obtaining diffs")
-  group.add_argument("--noindex", action="store_true", default=False,
-            help="Run git diff with --no-index to compare two paths")
-  parser.add_argument("--formatall", action="store_true", default=False,
-            help="Run clang-format on all files")
-  parser.add_argument("--left", default="", 
-            help="Path to compare against, used with --noindex")
-  parser.add_argument("--right", default="", 
-            help="Path to be compared, used with --noindex")
-  parser.add_argument("--print-diffs", action="store_true", default=False,
-            help="Print formatting diffs if there are diffs")
-  args = parser.parse_args(argv)
-
+  parser.add_argument("--hide-diffs", action="store_true", default=False,
+            help="Don't print formatting diffs (when not automatically fixed)")
+  args,unknown = parser.parse_known_args(argv)
+  
+  if unknown:
+    print("Unknown argument(s): ", ", ".join(unknown))
+    return -2
+  
   returncode=0
-  if not args.untidy:
+  if args.tidy:
     returncode = runTidy(args)
     if returncode != 0:
       return returncode
