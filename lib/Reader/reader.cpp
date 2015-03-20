@@ -4356,10 +4356,11 @@ ReaderBase::rdrGetStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
       //
       // Again, we happen to know that the results of these helper calls should
       // be interpreted as interior GC pointers.
-      SharedStaticsBaseNode = makePtrNode(Reader_PtrGcInterior);
+      IRNode *TempNode = makePtrNode(Reader_PtrGcInterior);
 
       // Now make the call and attach the arguments.
-      callHelper(FieldInfo->helper, SharedStaticsBaseNode, ClassHandleNode);
+      SharedStaticsBaseNode =
+          callHelper(FieldInfo->helper, TempNode, ClassHandleNode);
     } else {
       CorInfoHelpFunc HelperId = FieldInfo->helper;
       CORINFO_CLASS_HANDLE Class = ResolvedToken->hClass;
