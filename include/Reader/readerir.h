@@ -977,7 +977,8 @@ private:
   ///
   /// \param Ty Type for the new variable.
   /// \returns Instruction establishing the variable's location.
-  llvm::Instruction *createTemporary(llvm::Type *Ty);
+  llvm::Instruction *createTemporary(llvm::Type *Ty,
+                                     const llvm::Twine &Name = "");
 
   IRNode *
   loadManagedAddress(const std::vector<llvm::Value *> &UnmanagedAddresses,

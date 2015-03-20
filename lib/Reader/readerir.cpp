@@ -496,7 +496,7 @@ Function *GenIR::getFunction(CORINFO_METHOD_HANDLE MethodHandle) {
 bool GenIR::objIsThis(IRNode *Obj) { return false; }
 
 // Create a new temporary with the indicated type.
-Instruction *GenIR::createTemporary(Type *Ty) {
+Instruction *GenIR::createTemporary(Type *Ty, const Twine &Name) {
   // Put the alloca for this temporary into the entry block so
   // the temporary uses can appear anywhere.
   IRBuilder<>::InsertPoint IP = LLVMBuilder->saveIP();
@@ -512,7 +512,7 @@ Instruction *GenIR::createTemporary(Type *Ty) {
     LLVMBuilder->SetInsertPoint(TempInsertionPoint->getNextNode());
   }
 
-  AllocaInst *AllocaInst = LLVMBuilder->CreateAlloca(Ty);
+  AllocaInst *AllocaInst = LLVMBuilder->CreateAlloca(Ty, nullptr, Name);
   // Update the end of the alloca range.
   TempInsertionPoint = AllocaInst;
   LLVMBuilder->restoreIP(IP);
