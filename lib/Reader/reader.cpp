@@ -4819,14 +4819,14 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
   IRNode *ReturnNode;
   CallArgTriple *ArgArray;
   uint32_t NumArgs;
-  int FirstArgNum;
-  int TypeArgNum;
-  int VarArgNum;
+  uint32_t FirstArgNum;
+  int32_t TypeArgNum;
+  int32_t VarArgNum;
   bool HasThis;
   bool IsVarArg;
   bool HasTypeArg;
   uint32_t TotalArgs;
-  int Index;
+  uint32_t Index;
   CORINFO_CALL_INFO *CallInfo = Data->getCallInfo();
 
   // Tail call is only permitted for call, calli and callvirt.
