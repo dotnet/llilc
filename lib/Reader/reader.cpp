@@ -4819,9 +4819,15 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
   IRNode *ReturnNode;
   CallArgTriple *ArgArray;
   uint32_t NumArgs;
-  uint32_t FirstArgNum;
+  int32_t FirstArgNum;
+  int32_t TypeArgNum;
+  int32_t VarArgNum;
   bool HasThis;
-  int Index;
+  bool IsVarArg;
+  bool HasTypeArg;
+  uint32_t TotalArgs;
+  int32_t Index;
+  CORINFO_CALL_INFO *CallInfo = Data->getCallInfo();
 
   // Tail call is only permitted for call, calli and callvirt.
   ASSERTNR(!Data->isTailCall() || (Opcode == ReaderBaseNS::Call) ||
@@ -4853,8 +4859,8 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
   if (ReaderBaseNS::Calli == Opcode) {
     Data->CallTargetNode = ReaderOperandStack->pop();
   } else {
-    handleMemberAccess(Data->getCallInfo()->accessAllowed,
-                       Data->getCallInfo()->callsiteCalloutHelper);
+    handleMemberAccess(CallInfo->accessAllowed,
+                       CallInfo->callsiteCalloutHelper);
 
     // If the current method calls a method which needs a security
     // check, we need to reserve a slot for the security object in
@@ -4869,7 +4875,7 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
         // if we're going to have to mess around with Args don't bother
         &&
         (!Data->hasThis() ||
-         Data->getCallInfo()->thisTransform == CORINFO_NO_THIS_TRANSFORM)) {
+         CallInfo->thisTransform == CORINFO_NO_THIS_TRANSFORM)) {
       // assert(!(mflags & CORINFO_FLG_VIRTUAL) ||
       //        (mflags & CORINFO_FLG_FINAL) ||
       //        (clsFlags & CORINFO_FLG_FINAL));
@@ -4887,8 +4893,8 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
           IntrinsicArg1 = (IRNode *)ReaderOperandStack->pop();
           IntrinsicArg2 = (IRNode *)ReaderOperandStack->pop();
 
-          IntrinsicRet = arrayGetDimLength(IntrinsicArg1, IntrinsicArg2,
-                                           Data->getCallInfo());
+          IntrinsicRet =
+              arrayGetDimLength(IntrinsicArg1, IntrinsicArg2, CallInfo);
           if (IntrinsicRet) {
             return IntrinsicRet;
           }
@@ -5079,7 +5085,6 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
 
           CORINFO_CLASS_HANDLE Class = Data->getClassHandle();
           CORINFO_METHOD_HANDLE Method = Data->getMethodHandle();
-          CORINFO_CALL_INFO *CallInfo = Data->getCallInfo();
           ASSERTNR(CallInfo);
 
 #ifdef FEATURE_CORECLR
@@ -5145,6 +5150,28 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
   // Get the number of arguments to this method.
   NumArgs = (uint32_t)SigInfo->numArgs;
   HasThis = Data->hasThis();
+  IsVarArg = SigInfo->isVarArg();
+
+  // Extra argument containing instantiation information is passed in the
+  // following circumstances:
+  // (a) To the AddressAt method on array classes; the extra parameter is the
+  //     array's type handle (a TypeDesc)
+  // (b) To shared-code instance methods in generic structs; the extra parameter
+  //     is the struct's type handle (a vtable ptr)
+  // (c) To shared-code per-instantiation non-generic static methods in generic
+  //     classes and structs; the extra parameter is the type handle
+  // (d) To shared-code generic methods; the extra parameter is an
+  //     exact-instantiation MethodDesc
+  //
+  // For shared instance target, we must add the instantiation parameter
+  // as an argument.  It is ordered after the vararg cookie and before the
+  // regular arguments.
+  // However, if a helper call provides the function address, it always gives us
+  // an instantiating stub, so don't add an instantiation parameter.
+  HasTypeArg = SigInfo->hasTypeArg() &&
+               (CallInfo->kind != CORINFO_VIRTUALCALL_LDVIRTFTN);
+  TotalArgs =
+      (HasThis ? 1 : 0) + (IsVarArg ? 1 : 0) + (HasTypeArg ? 1 : 0) + NumArgs;
 
   // Special case for newobj, currently the first
   // argument is handled/appended in CanonNewObj.
@@ -5155,6 +5182,9 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
     ASSERTNR(HasThis); // new obj better have "this"
     FirstArgNum = 1;
   }
+
+  VarArgNum = IsVarArg ? (HasThis ? 1 : 0) : -1;
+  TypeArgNum = HasTypeArg ? ((HasThis ? 1 : 0) + (IsVarArg ? 1 : 0)) : -1;
 
   // Create arg array and populate with stack arguments.
   //   - struct return pointer does not live on arg array,
@@ -5169,15 +5199,14 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
   // First populate ArgType, argClass fields.
   ArgArray = nullptr;
 
-  if ((HasThis + NumArgs) > 0) {
+  if (TotalArgs > 0) {
     CORINFO_ARG_LIST_HANDLE Args;
     CorInfoType CorType;
     CORINFO_CLASS_HANDLE ArgType, Class;
 
-    ArgArray =
-        (CallArgTriple *)_alloca(sizeof(CallArgTriple) * (NumArgs + HasThis));
+    ArgArray = (CallArgTriple *)_alloca(sizeof(CallArgTriple) * TotalArgs);
 #if !defined(NODEBUG)
-    memset(ArgArray, 0, sizeof(CallArgTriple) * (NumArgs + HasThis));
+    memset(ArgArray, 0, sizeof(CallArgTriple) * TotalArgs);
 #endif
     Args = SigInfo->args;
     Index = 0;
@@ -5194,8 +5223,20 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
       Index++;
     }
 
+    if (IsVarArg) {
+      // TODO: we'll need to handle varargs here.
+      Index++;
+    }
+
+    // If this call has a type arg, then it's right before fixed params.
+    if (HasTypeArg) {
+      ArgArray[Index].ArgType = CORINFO_TYPE_NATIVEINT;
+      ArgArray[Index].ArgClass = 0;
+      Index++;
+    }
+
     // Populate remaining argument list
-    for (; Index < (int)(NumArgs + HasThis); Index++) {
+    for (; Index < (int)TotalArgs; Index++) {
       CorType = strip(JitInfo->getArgType(SigInfo, Args, &ArgType));
       ASSERTNR(CorType != CORINFO_TYPE_VAR); // common generics trouble
 
@@ -5230,8 +5271,18 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
     // Now pop args from argument stack (including this)
     // - populating argument list in reverse order.
     // For newobj the this pointer is not yet on the stack
-    // so don't pop it!
-    for (Index = NumArgs + HasThis - 1; Index >= (int)FirstArgNum; Index--) {
+    // so don't pop it! Type arg and vararg cookie are not on the stack either.
+    for (Index = TotalArgs - 1; Index >= FirstArgNum; Index--) {
+      if (Index == VarArgNum) {
+        // TODO: we'll need to handle varargs here.
+        continue;
+      }
+      if (Index == TypeArgNum) {
+        ArgArray[Index].ArgNode = Data->getTypeContextNode();
+        ASSERTNR(ArgArray[Index].ArgNode != NULL);
+        ASSERTMNR(!Data->isCallI(), "CALLI on parameterized type");
+        continue;
+      }
       ArgArray[Index].ArgNode = (IRNode *)ReaderOperandStack->pop();
     }
 
@@ -5267,7 +5318,7 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
   }
 
   // Ask GenIR to emit call, returns a ReturnNode.
-  ReturnNode = genCall(Data, ArgArray, NumArgs + HasThis, CallNode);
+  ReturnNode = genCall(Data, ArgArray, TotalArgs, CallNode);
   return ReturnNode;
 }
 
@@ -5755,10 +5806,8 @@ void ReaderBase::buildUpParams(uint32_t NumParams) {
     // comes instParam (typeArg cookie)
     if (HasTypeArg) {
       // this is not a real arg.  we do not record it for verification
-      // maybe not the right type... it may not matter.
-      CORINFO_CLASS_HANDLE Class =
-          getBuiltinClass(CorInfoClassId::CLASSID_TYPE_HANDLE);
-      createSym(ParamIndex, false, CORINFO_TYPE_PTR, Class, false,
+      CORINFO_CLASS_HANDLE Class = 0;
+      createSym(ParamIndex, false, CORINFO_TYPE_NATIVEINT, Class, false,
                 ReaderSpecialSymbolType::Reader_InstParam);
       ParamIndex++;
     }
