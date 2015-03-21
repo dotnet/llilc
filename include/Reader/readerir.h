@@ -274,9 +274,7 @@ public:
   // Used for testing, client can force verification.
   bool verForceVerification(void) override { return false; };
 
-  bool abs(IRNode *Arg1, IRNode **RetVal) override {
-    throw NotYetImplementedException("abs");
-  };
+  bool abs(IRNode *Arg1, IRNode **RetVal) override;
 
   IRNode *argList() override;
   IRNode *instParam() override;

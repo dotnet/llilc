@@ -4518,6 +4518,28 @@ bool GenIR::disableCastClassOptimization() {
   return true;
 }
 
+/// Optionally generate inline code for the \p abs opcode
+///
+/// \param Argument      input value for abs
+/// \param Result [out]  resulting absolute value, if we decided to expand
+/// \returns             true if Result represents the absolute value.
+bool GenIR::abs(IRNode *Argument, IRNode **Result) {
+  Type *Ty = Argument->getType();
+
+  // Only the floating point cases of System.Math.Abs are implemented via
+  // 'internallcall'.
+  if (Ty->isFloatingPointTy()) {
+    Type *Types[] = {Ty};
+    Value *FAbs = Intrinsic::getDeclaration(JitContext->CurrentModule,
+                                            Intrinsic::fabs, Types);
+    Value *Abs = LLVMBuilder->CreateCall(FAbs, Argument);
+    *Result = (IRNode *)Abs;
+    return true;
+  }
+
+  return false;
+}
+
 #pragma endregion
 
 #pragma region STACK MAINTENANCE

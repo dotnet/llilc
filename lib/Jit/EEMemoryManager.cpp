@@ -50,10 +50,21 @@ uint8_t *EEMemoryManager::allocateDataSection(uintptr_t Size,
   // We don't expect to see RW data requests.
   assert(IsReadOnly);
 
+  // Pad for alignment needs.
+  unsigned int Offset = ((uint64_t)ReadOnlyDataUnallocated) % Alignment;
+  if (Offset > 0) {
+    ReadOnlyDataUnallocated += Alignment - Offset;
+  }
+  assert((((uint64_t)ReadOnlyDataUnallocated) % Alignment) == 0);
+
   // There are multiple read-only sections, so we need to keep
   // track of the current allocation point in the read-only memory region.
   uint8_t *Result = ReadOnlyDataUnallocated;
   ReadOnlyDataUnallocated += Size;
+
+  // Make sure we are not allocating more than we expected to.
+  assert(ReadOnlyDataUnallocated <=
+         (ReadOnlyDataBlock + this->Context->ReadOnlyDataSize));
 
   return Result;
 }
