@@ -356,7 +356,7 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
       initClass(nullptr, getCurrentMethodHandle(), getCurrentContext());
   const bool InitClass = InitResult & CORINFO_INITCLASS_USE_HELPER;
   if (InitClass) {
-    throw NotYetImplementedException("init class");
+    insertClassConstructor();
   }
 }
 
