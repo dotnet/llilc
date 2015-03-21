@@ -1331,11 +1331,9 @@ FunctionType *GenIR::getFunctionType(CORINFO_SIG_INFO &Sig,
   bool HasTypeArg = Sig.hasTypeArg();
 
   if (HasTypeArg) {
-    // maybe not the right type... for now just match what we pick in
-    // ReaderBase::buildUpParams
-    CORINFO_CLASS_HANDLE Class =
-        getBuiltinClass(CorInfoClassId::CLASSID_TYPE_HANDLE);
-    Type *TypeArgType = getType(CORINFO_TYPE_PTR, Class);
+    CORINFO_CLASS_HANDLE Class = 0;
+    Type *TypeArgType = getType(CORINFO_TYPE_NATIVEINT, Class);
+
     Arguments.push_back(TypeArgType);
   }
 
@@ -3192,10 +3190,6 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
     if (!CallTargetInfo->isUnmarkedTailCall()) {
       throw NotYetImplementedException("Tail call");
     }
-  }
-
-  if (SigInfo->hasTypeArg()) {
-    throw NotYetImplementedException("Call HasTypeArg");
   }
 
   if ((CallInfo != nullptr) && (CallInfo->kind == CORINFO_VIRTUALCALL_STUB)) {
