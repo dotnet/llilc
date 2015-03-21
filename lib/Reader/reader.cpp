@@ -2760,8 +2760,8 @@ void ReaderBase::getMSILInstrStackDelta(ReaderBaseNS::OPCODE Opcode,
       getCallSiteSignature(Handle, Token, &Sig, &HasThis);
       ReturnsVoid = (Sig.retType == CORINFO_TYPE_VOID);
 
-      NumPop += (Sig.numArgs + (int)HasThis);
-      NumPush = (int)!ReturnsVoid;
+      NumPop += (Sig.numArgs + (HasThis ? 1 : 0));
+      NumPush = (ReturnsVoid ? 0 : 1);
     } else {
       // "bad token" error will show up later, global verify
       // should not complain.
@@ -2773,7 +2773,7 @@ void ReaderBase::getMSILInstrStackDelta(ReaderBaseNS::OPCODE Opcode,
     CORINFO_SIG_INFO Sig;
 
     JitInfo->getMethodSig(getCurrentMethodHandle(), &Sig);
-    NumPop = (int)(Sig.retType != CORINFO_TYPE_VOID);
+    NumPop = ((Sig.retType == CORINFO_TYPE_VOID) ? 0 : 1);
     NumPush = 0;
   } break;
   default:
@@ -3402,7 +3402,7 @@ void ReaderBase::fgAttachGlobalVerifyData(FlowGraphNode *HeadBlock) {
     //
     // Note that EH funclet has the exception object
     // already placed on the stack.
-    Current = (int)isRegionStartBlock(Block);
+    Current = isRegionStartBlock(Block) ? 1 : 0;
     Min = Current;
     Max = Current;
     Start = fgNodeGetStartMSILOffset(Block);
@@ -5170,8 +5170,8 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
   // an instantiating stub, so don't add an instantiation parameter.
   HasTypeArg = SigInfo->hasTypeArg() &&
                (CallInfo->kind != CORINFO_VIRTUALCALL_LDVIRTFTN);
-  TotalArgs = (uint32_t)HasThis + (uint32_t)IsVarArg + (uint32_t)HasTypeArg +
-              (uint32_t)NumArgs;
+  TotalArgs = (HasThis ? 1 : 0) + (IsVarArg ? 1 : 0) + (HasTypeArg ? 1 : 0) +
+              NumArgs;
 
   // Special case for newobj, currently the first
   // argument is handled/appended in CanonNewObj.
@@ -5183,8 +5183,8 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
     FirstArgNum = 1;
   }
 
-  VarArgNum = IsVarArg ? (int)HasThis : -1;
-  TypeArgNum = HasTypeArg ? (int)HasThis + (int)IsVarArg : -1;
+  VarArgNum = IsVarArg ? (HasThis ? 1 : 0) : -1;
+  TypeArgNum = HasTypeArg ? ((HasThis ? 1 : 0) + (IsVarArg ? 1 : 0)) : -1;
 
   // Create arg array and populate with stack arguments.
   //   - struct return pointer does not live on arg array,
