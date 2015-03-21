@@ -583,6 +583,12 @@ void rgnSetCatchTryRegion(EHRegion *CatchRegion, EHRegion *TryRegion);
 mdToken rgnGetCatchClassToken(EHRegion *CatchRegion);
 void rgnSetCatchClassToken(EHRegion *CatchRegion, mdToken Token);
 
+/// Get the finally region attached to the given \p TryRegion, if any.
+///
+/// \param TryRegion   Try region to check for finally handler
+/// \returns The finally protecting this try if it exists; else nullptr
+EHRegion *getFinallyRegion(EHRegion *TryRegion);
+
 // Interface to GenIR defined Flow Graph structures.
 // Implementation Supplied by Jit Client
 EHRegion *fgNodeGetRegion(FlowGraphNode *FgNode);
@@ -595,11 +601,6 @@ IRNode *fgNodeGetStartIRNode(FlowGraphNode *FgNode);
 
 // Get the first non-placekeeping node in block
 IRNode *fgNodeGetStartInsertIRNode(FlowGraphNode *FgNode);
-
-// Get the last non-placekeeping node in block
-IRNode *fgNodeGetEndInsertIRNode(FlowGraphNode *FgNode);
-
-IRNode *fgNodeGetEndIRInsertionPoint(FlowGraphNode *FgNode);
 
 GlobalVerifyData *fgNodeGetGlobalVerifyData(FlowGraphNode *Fg);
 void fgNodeSetGlobalVerifyData(FlowGraphNode *Fg, GlobalVerifyData *GvData);
@@ -855,11 +856,6 @@ private:
   // SEQUENCE POINT Info
   ReaderBitVector *CustomSequencePoints;
 
-  // EH Info
-  CORINFO_EH_CLAUSE *EhClauseInfo; // raw eh clause info
-  EHRegion *EhRegionTree;
-  EHRegionList *AllRegionList;
-
   // Fg Info - unused after fg is built
 
   // NodeOffsetListArray is an ordered array of FlowGraphNodeOffsetList*.
@@ -877,6 +873,11 @@ private:
 
 protected:
   uint32_t CurrentBranchDepth;
+
+  // EH Info
+  CORINFO_EH_CLAUSE *EhClauseInfo; // raw eh clause info
+  EHRegion *EhRegionTree;
+  EHRegionList *AllRegionList;
 
   // \brief Indicates that null checks use explicit compare+branch IR sequences
   //
@@ -1117,6 +1118,36 @@ private:
   void
   readBytesForFlowGraphNodeHelper(ReadBytesForFlowGraphNodeHelperParam *Param);
 
+protected:
+  /// \brief Create or return a flow graph node for the indicated offset
+  ///
+  /// This method sees if there is an existing flow graph node that begins at
+  /// the indicated target. If so, \p Node is set to this block. If not, a
+  /// temporary block is allocated to use as a target, and an entry is added
+  /// to the \p NodeOffsetListArray so a subsequent pass can update the
+  /// temporary target blocks to real target blocks.
+  ///
+  /// \param Node [out]          Node to use as the branch target
+  /// \param TargetOffset        MSIL offset of the branch target
+  /// \returns                   List node of target in offset list
+  FlowGraphNodeOffsetList *fgAddNodeMSILOffset(FlowGraphNode **Node,
+                                               uint32_t TargetOffset);
+
+  /// Get the innermost finally region enclosing the given \p Offset
+  ///
+  /// \param Offset  MSIL offset of interest
+  /// \returns The innermost finally region enclosing \p Offset if one exists;
+  ///          nullptr otherwise
+  EHRegion *getInnermostFinallyRegion(uint32_t Offset);
+
+  /// Find the next-innermost region enclosing the given \p Offset
+  ///
+  /// \param OuterRegion Limit search to regions nested inside OuterRegion
+  /// \param Offset      Limit search to regions enclosing Offset
+  /// \returns The outermost region that is nested inside \p OuterRegion and
+  ///          that includes \p Offset, if such a region exists; else nullptr
+  EHRegion *getInnerEnclosingRegion(EHRegion *OuterRegion, uint32_t Offset);
+
 private:
   /// \brief Perform special processing for blocks that start EH regions.
   ///
@@ -1300,10 +1331,11 @@ private:
   /// there can be more than one of these in a finally region.
   ///
   /// \param BlockNode     the block that is the end of the finally
-  /// \param CurentOffset  msil offset for the endfinally instruction
-  /// \param IsLexicalEnd  true if the endfinally is at the end of the finally
-  IRNode *fgMakeEndFinallyHelper(IRNode *BlockNode, uint32_t Offset,
-                                 bool IsLexicalEnd);
+  /// \param FinallyRegion the finally region being ended
+  /// \param Offset        msil offset for the endfinally instruction
+  /// \returns the branch generated to terminate the block for this endfinally
+  IRNode *fgMakeEndFinallyHelper(IRNode *BlockNode, EHRegion *FinallyRegion,
+                                 uint32_t Offset);
 
   /// \brief Remove all unreachable blocks
   ///
@@ -1324,20 +1356,6 @@ private:
   /// Buffer used by \p fgGetRegionCanonicalExitOffset for cases where
   /// there are large amounts of MSIL for the method.
   int32_t *FgGetRegionCanonicalExitOffsetBuff;
-
-  /// \brief Create or return a flow graph node for the indicated offset
-  ///
-  /// This method sees if there is an existing flow graph node that begins at
-  /// the indicated target. If so, \p Node is set to this block. If not, a
-  /// temporary block is allocated to use as a target, and an entry is added
-  /// to the \p NodeOffsetListArray so a subsequent pass can update the
-  /// temporary target blocks to real target blocks.
-  ///
-  /// \param Node [out]          Node to use as the branch target
-  /// \param TargetOffset        MSIL offset of the branch target
-  /// \returns                   List node of target in offset list
-  FlowGraphNodeOffsetList *fgAddNodeMSILOffset(FlowGraphNode **Node,
-                                               uint32_t TargetOffset);
 
   /// Determine if a leave exits the enclosing EH region in a non-local manner.
   ///
@@ -2116,6 +2134,9 @@ public:
   virtual void jmp(ReaderBaseNS::CallOpcode Opcode, mdToken Token, bool HasThis,
                    bool HasVarArg) = 0;
 
+  virtual uint32_t updateLeaveOffset(uint32_t LeaveOffset, uint32_t NextOffset,
+                                     FlowGraphNode *LeaveBlock,
+                                     uint32_t TargetOffset) = 0;
   virtual void leave(uint32_t TargetOffset, bool IsNonLocal,
                      bool EndsWithNonLocalGoto) = 0;
   virtual IRNode *loadArg(uint32_t ArgOrdinal, bool IsJmp) = 0;
@@ -2380,6 +2401,7 @@ public:
   virtual void fgDeleteBlock(FlowGraphNode *Block) = 0;
   virtual void fgDeleteEdge(FlowGraphEdgeList *Arc) = 0;
   virtual void fgDeleteNodesFromBlock(FlowGraphNode *Block) = 0;
+  virtual IRNode *fgNodeGetEndInsertIRNode(FlowGraphNode *FgNode) = 0;
 
   // Returns true iff client considers the JMP recursive and wants a
   // loop back-edge rather than a forward edge to the exit label.
@@ -2400,8 +2422,8 @@ public:
   virtual IRNode *fgMakeBranch(IRNode *LabelNode, IRNode *BlockNode,
                                uint32_t CurrentOffset, bool IsConditional,
                                bool IsNominal) = 0;
-  virtual IRNode *fgMakeEndFinally(IRNode *BlockNode, uint32_t CurrentOffset,
-                                   bool IsLexicalEnd) = 0;
+  virtual IRNode *fgMakeEndFinally(IRNode *BlockNode, EHRegion *FinallyRegion,
+                                   uint32_t CurrentOffset) = 0;
 
   // turns an unconditional branch to the entry label into a fall-through
   // or a branch to the exit label, depending on whether it was a recursive
@@ -2562,9 +2584,6 @@ private:
   char DummyLastBaseField;
   // Fields after this one will not be initialized in the constructor.
   ///////////////////////////////////////////////////////////////////////
-
-  // Deferred NYI map for Leave instructions (temporary)
-  std::map<uint32_t, const char *> NyiLeaveMap;
 };
 
 /// \brief The exception that is thrown when a particular operation is not yet

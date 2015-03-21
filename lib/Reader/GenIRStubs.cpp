@@ -26,8 +26,6 @@ IRNode *fgNodeGetStartInsertIRNode(FlowGraphNode *FgNode) {
   return fgNodeGetStartIRNode(FgNode);
 }
 
-IRNode *fgNodeGetEndIRInsertionPoint(FlowGraphNode *FgNode) { return nullptr; }
-
 GlobalVerifyData *fgNodeGetGlobalVerifyData(FlowGraphNode *Fg) {
   throw NotYetImplementedException("fgNodeGetGlobalVerifyData");
 }

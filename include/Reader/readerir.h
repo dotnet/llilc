@@ -331,6 +331,12 @@ public:
     throw NotYetImplementedException("jmp");
   };
 
+  virtual uint32_t updateLeaveOffset(uint32_t LeaveOffset, uint32_t NextOffset,
+                                     FlowGraphNode *LeaveBlock,
+                                     uint32_t TargetOffset) override;
+  uint32_t updateLeaveOffset(EHRegion *Region, uint32_t LeaveOffset,
+                             uint32_t NextOffset, FlowGraphNode *LeaveBlock,
+                             uint32_t TargetOffset, bool &IsInHandler);
   void leave(uint32_t TargetOffset, bool IsNonLocal,
              bool EndsWithNonLocalGoto) override;
   IRNode *loadArg(uint32_t ArgOrdinal, bool IsJmp) override;
@@ -579,6 +585,7 @@ public:
     throw NotYetImplementedException("fgDeleteEdge");
   };
   void fgDeleteNodesFromBlock(FlowGraphNode *Block) override;
+  IRNode *fgNodeGetEndInsertIRNode(FlowGraphNode *FgNode) override;
 
   bool commonTailCallChecks(CORINFO_METHOD_HANDLE DeclaredMethod,
                             CORINFO_METHOD_HANDLE ExactMethod,
@@ -609,8 +616,8 @@ public:
   IRNode *fgMakeBranch(IRNode *LabelNode, IRNode *InsertNode,
                        uint32_t CurrentOffset, bool IsConditional,
                        bool IsNominal) override;
-  IRNode *fgMakeEndFinally(IRNode *InsertNode, uint32_t CurrentOffset,
-                           bool IsLexicalEnd) override;
+  IRNode *fgMakeEndFinally(IRNode *InsertNode, EHRegion *FinallyRegion,
+                           uint32_t CurrentOffset) override;
 
   // turns an unconditional branch to the entry label into a fall-through
   // or a branch to the exit label, depending on whether it was a recursive
@@ -974,8 +981,10 @@ private:
   /// used anywhere within the method.
   ///
   /// \param Ty Type for the new variable.
+  /// \param Name Optional name for the new variable.
   /// \returns Instruction establishing the variable's location.
-  llvm::Instruction *createTemporary(llvm::Type *Ty);
+  llvm::Instruction *createTemporary(llvm::Type *Ty,
+                                     const llvm::Twine &Name = "");
 
   IRNode *
   loadManagedAddress(const std::vector<llvm::Value *> &UnmanagedAddresses,
@@ -1067,6 +1076,15 @@ private:
 private:
   LLILCJitContext *JitContext;
   llvm::Function *Function;
+  // The LLVMBuilder has a notion of a current insertion point.  During the
+  // first-pass flow-graph construction, each method sets the insertion point
+  // explicitly before inserting IR (the fg- methods typically take an
+  // InsertNode parameter indicating where to set it).  During the second pass
+  // translation of the non-flow instructions, the insertion point is
+  // explicitly set at the start of each block (in beginFlowGraphNode), and
+  // translation methods assume that the builder's current insertion point is
+  // where they should be inserted (the gen- methods do not take explicit
+  // insertion point parameters).
   llvm::IRBuilder<> *LLVMBuilder;
   std::map<CORINFO_CLASS_HANDLE, llvm::Type *> *ClassTypeMap;
   std::map<std::tuple<CorInfoType, CORINFO_CLASS_HANDLE, uint32_t>,
@@ -1077,6 +1095,8 @@ private:
   std::vector<CorInfoType> LocalVarCorTypes;
   std::vector<llvm::Value *> Arguments;
   std::vector<CorInfoType> ArgumentCorTypes;
+  llvm::DenseMap<uint32_t, llvm::StoreInst *> ContinuationStoreMap;
+  llvm::BasicBlock *UnreachableContinuationBlock;
   CorInfoType ReturnCorType;
   bool HasThis;
   bool HasTypeParameter;

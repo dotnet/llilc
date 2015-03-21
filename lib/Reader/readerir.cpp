@@ -103,6 +103,7 @@ public:
   uint32_t StartMsilOffset;
   uint32_t EndMsilOffset;
   ReaderBaseNS::RegionKind Kind;
+  llvm::SwitchInst *EndFinallySwitch;
 };
 
 struct EHRegionList {
@@ -297,6 +298,7 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   HasTypeParameter = JitContext->MethodInfo->args.hasTypeArg();
   HasVarargsToken = JitContext->MethodInfo->args.isVarArg();
   KeepGenericContextAlive = false;
+  UnreachableContinuationBlock = nullptr;
 
   initParamsAndAutos(NumArgs, NumLocals);
 
@@ -496,7 +498,7 @@ Function *GenIR::getFunction(CORINFO_METHOD_HANDLE MethodHandle) {
 bool GenIR::objIsThis(IRNode *Obj) { return false; }
 
 // Create a new temporary with the indicated type.
-Instruction *GenIR::createTemporary(Type *Ty) {
+Instruction *GenIR::createTemporary(Type *Ty, const Twine &Name) {
   // Put the alloca for this temporary into the entry block so
   // the temporary uses can appear anywhere.
   IRBuilder<>::InsertPoint IP = LLVMBuilder->saveIP();
@@ -512,7 +514,7 @@ Instruction *GenIR::createTemporary(Type *Ty) {
     LLVMBuilder->SetInsertPoint(TempInsertionPoint->getNextNode());
   }
 
-  AllocaInst *AllocaInst = LLVMBuilder->CreateAlloca(Ty);
+  AllocaInst *AllocaInst = LLVMBuilder->CreateAlloca(Ty, nullptr, Name);
   // Update the end of the alloca range.
   TempInsertionPoint = AllocaInst;
   LLVMBuilder->restoreIP(IP);
@@ -1773,20 +1775,47 @@ IRNode *GenIR::fgMakeThrow(IRNode *Insert) {
   return (IRNode *)Unreachable;
 }
 
-IRNode *GenIR::fgMakeEndFinally(IRNode *InsertNode, uint32_t CurrentOffset,
-                                bool IsLexicalEnd) {
-  // TODO: figure out what (if any) marker we need to generate here
-  return nullptr;
+IRNode *GenIR::fgMakeEndFinally(IRNode *InsertNode, EHRegion *FinallyRegion,
+                                uint32_t CurrentOffset) {
+  BasicBlock *Block = (BasicBlock *)InsertNode;
+  SwitchInst *Switch = FinallyRegion->EndFinallySwitch;
+  if (Switch == nullptr) {
+    // This finally is never invoked.
+    LLVMBuilder->SetInsertPoint(Block);
+    return (IRNode *)LLVMBuilder->CreateUnreachable();
+  }
+
+  BasicBlock *TargetBlock = Switch->getParent();
+  if (TargetBlock == nullptr) {
+    // This is the first endfinally for this finally.  Generate a block to
+    // hold the switch.
+    TargetBlock = BasicBlock::Create(*JitContext->LLVMContext, "endfinally",
+                                     Function, Block->getNextNode());
+    LLVMBuilder->SetInsertPoint(TargetBlock);
+
+    // Insert the load of the selector variable and the switch.
+    LLVMBuilder->Insert((LoadInst *)Switch->getCondition());
+    LLVMBuilder->Insert(Switch);
+
+    // Use the finally end offset as the switch block's begin/end.
+    FlowGraphNode *TargetNode = (FlowGraphNode *)TargetBlock;
+    uint32_t EndOffset = FinallyRegion->EndMsilOffset;
+    fgNodeSetStartMSILOffset(TargetNode, EndOffset);
+    fgNodeSetEndMSILOffset(TargetNode, EndOffset);
+  }
+
+  // Generate and return branch to the block that holds the switch
+  LLVMBuilder->SetInsertPoint(Block);
+  return (IRNode *)LLVMBuilder->CreateBr(TargetBlock);
 }
 
 void GenIR::beginFlowGraphNode(FlowGraphNode *Fg, uint32_t CurrOffset,
                                bool IsVerifyOnly) {
-  BasicBlock *Block = (BasicBlock *)Fg;
-  TerminatorInst *TermInst = Block->getTerminator();
-  if (TermInst != nullptr) {
-    LLVMBuilder->SetInsertPoint(TermInst);
+  IRNode *InsertInst = fgNodeGetEndInsertIRNode(Fg);
+  if (InsertInst != nullptr) {
+    LLVMBuilder->SetInsertPoint((Instruction *)InsertInst);
   } else {
-    LLVMBuilder->SetInsertPoint(Block);
+    LLVMBuilder->SetInsertPoint(Fg);
   }
 }
 
@@ -1800,13 +1829,14 @@ IRNode *GenIR::findBlockSplitPointAfterNode(IRNode *Node) {
 }
 
 // Get the last non-placekeeping node in block
-IRNode *fgNodeGetEndInsertIRNode(FlowGraphNode *FgNode) {
+IRNode *GenIR::fgNodeGetEndInsertIRNode(FlowGraphNode *FgNode) {
   BasicBlock *Block = (BasicBlock *)FgNode;
-  if (Block->empty()) {
-    return nullptr;
-  } else {
-    return (IRNode *)&(((BasicBlock *)FgNode)->back());
+  uint32_t EndOffset = fgNodeGetEndMSILOffset(FgNode);
+  Instruction *InsertInst = ContinuationStoreMap.lookup(EndOffset);
+  if (InsertInst == nullptr) {
+    InsertInst = Block->getTerminator();
   }
+  return (IRNode *)InsertInst;
 }
 
 void GenIR::replaceFlowGraphNodeUses(FlowGraphNode *OldNode,
@@ -3927,11 +3957,175 @@ IRNode *GenIR::genBoundsCheck(IRNode *Array, IRNode *Index) {
   return Array;
 };
 
+/// \brief Get the immediate target (innermost exited finally) for this leave.
+///
+/// Also create any IR and reader state needed to pass the appropriate
+/// continuation for this leave to the finallies being exited, and for the
+/// finallies to respect the passed continuations.
+///
+/// \param LeaveOffset  MSIL offset of the leave instruction
+/// \param NextOffset   MSIL offset immediately after the leave instruction
+/// \param LeaveBlock   Block containing the leave instruction
+/// \param TargetOffset Ultimate target of the leave instruction
+/// \returns Immediate target of the leave instruction: start of innermost
+//           exited finally if any exists, \p TargetOffset otherwise
+uint32_t GenIR::updateLeaveOffset(uint32_t LeaveOffset, uint32_t NextOffset,
+                                  FlowGraphNode *LeaveBlock,
+                                  uint32_t TargetOffset) {
+  EHRegion *RootRegion = EhRegionTree;
+  if (RootRegion == nullptr) {
+    // Leave outside of a protected region is treated like a goto.
+    return TargetOffset;
+  }
+  bool IsInHandler = false;
+  return updateLeaveOffset(RootRegion, LeaveOffset, NextOffset, LeaveBlock,
+                           TargetOffset, IsInHandler);
+}
+
+/// \brief Get the immediate target (innermost exited finally) for this leave.
+///
+/// Also create any necessary selector variables, finally-exiting switch
+/// instructions, and selector variable stores.  Selector variable stores are
+/// inserted at the leave location (and \p ContinuationStoreMap is updated so
+/// subsequent reader passes will know where to insert IR).  Switch insertion
+/// is deferred until the first endfinally for the affected finally is
+/// processed.
+///
+/// \param Region               Current region to process, which contains the
+///                             leave instruction.  Inner regions are processed
+///                             recursively.
+/// \param LeaveOffset          MSIL offset of the leave instruction
+/// \param NextOffset           MSIL offset immediately after the leave
+///                             instruction
+/// \param LeaveBlock           Block containing the leave instruction
+/// \param TargetOffset         Ultimate target of the leave instruction
+/// \param IsInHandler [in/out] Support for dynamic exceptions is NYI; if this
+///                             method finds that the leave is in a handler
+///                             which can only be entered by an exception,
+///                             IsInHandler is set to true and processing is
+///                             aborted (no IR is inserted and the original
+///                             \p TargetOffset is returned).  Initial caller
+///                             must pass false.
+/// \returns Immediate target of the leave instruction: start of innermost
+//           exited finally if any exists, \p TargetOffset otherwise
+uint32_t GenIR::updateLeaveOffset(EHRegion *Region, uint32_t LeaveOffset,
+                                  uint32_t NextOffset,
+                                  FlowGraphNode *LeaveBlock,
+                                  uint32_t TargetOffset, bool &IsInHandler) {
+  ReaderBaseNS::RegionKind RegionKind = rgnGetRegionType(Region);
+
+  if ((RegionKind == ReaderBaseNS::RegionKind::RGN_MCatch) ||
+      (RegionKind == ReaderBaseNS::RegionKind::RGN_Fault) ||
+      (RegionKind == ReaderBaseNS::RegionKind::RGN_Filter) ||
+      (RegionKind == ReaderBaseNS::RegionKind::RGN_MExcept)) {
+    // This leave is in an exception handler.  Dynamic exceptions are not
+    // currently supported, so skip the update for this leave.
+
+    IsInHandler = true;
+    return TargetOffset;
+  }
+
+  EHRegion *FinallyRegion = nullptr;
+  uint32_t ChildTargetOffset = TargetOffset;
+
+  if ((RegionKind == ReaderBaseNS::RegionKind::RGN_Try) &&
+      ((TargetOffset < rgnGetStartMSILOffset(Region)) ||
+       (TargetOffset >= rgnGetEndMSILOffset(Region)))) {
+    // We are leaving this try.  See if there is a finally to invoke.
+    FinallyRegion = getFinallyRegion(Region);
+    if (FinallyRegion) {
+      // There is a finally.  Update ChildTargetOffset so that recursive
+      // processing for inner regions will know to target this finally.
+      ChildTargetOffset = rgnGetStartMSILOffset(FinallyRegion);
+    }
+  }
+
+  uint32_t InnermostTargetOffset = ChildTargetOffset;
+
+  // Check if this leave exits any nested regions.
+  if (EHRegion *ChildRegion = getInnerEnclosingRegion(Region, LeaveOffset)) {
+    InnermostTargetOffset =
+        updateLeaveOffset(ChildRegion, LeaveOffset, NextOffset, LeaveBlock,
+                          ChildTargetOffset, IsInHandler);
+
+    if (IsInHandler) {
+      // Skip processing for this leave
+      return TargetOffset;
+    }
+  }
+
+  if (FinallyRegion != nullptr) {
+    // Generate the code to set the continuation for the finally we are leaving
+    // First, get a pointer to the continuation block.
+    FlowGraphNode *TargetNode = nullptr;
+    fgAddNodeMSILOffset(&TargetNode, TargetOffset);
+    BasicBlock *TargetBlock = (BasicBlock *)TargetNode;
+
+    // Get or create the switch that terminates the finally.
+    LLVMContext &Context = *JitContext->LLVMContext;
+    SwitchInst *Switch = FinallyRegion->EndFinallySwitch;
+    IntegerType *SelectorType;
+    Value *SelectorAddr;
+    ConstantInt *SelectorValue;
+
+    if (Switch == nullptr) {
+      // First leave exiting this finally; generate a new switch.
+      SelectorType = IntegerType::getInt32Ty(Context);
+      SelectorAddr = createTemporary(SelectorType, "finally_cont");
+      SelectorValue = nullptr;
+
+      if (UnreachableContinuationBlock == nullptr) {
+        // First finally for this function; generate an unreachable block
+        // that can be used as the default switch target.
+        UnreachableContinuationBlock =
+            BasicBlock::Create(Context, "NullDefault", Function);
+        new UnreachableInst(Context, UnreachableContinuationBlock);
+      }
+
+      LoadInst *Load = new LoadInst(SelectorAddr);
+      FinallyRegion->EndFinallySwitch = Switch =
+          SwitchInst::Create(Load, UnreachableContinuationBlock, 4);
+    } else {
+      // This finally already has a switch.  See if it already has a case for
+      // this target continuation.
+      LoadInst *Load = (LoadInst *)Switch->getCondition();
+      SelectorAddr = Load->getPointerOperand();
+      SelectorType = (IntegerType *)Load->getType();
+      SelectorValue = Switch->findCaseDest(TargetBlock);
+    }
+
+    if (SelectorValue == nullptr) {
+      // The switch doesn't have a case for this target continuation yet;
+      // add one.
+      SelectorValue =
+          ConstantInt::get(SelectorType, Switch->getNumCases() + 1U);
+      Switch->addCase(SelectorValue, TargetBlock);
+    }
+
+    // Create the store instruction to set this continuation selector for
+    // this leave across this finally.
+    LLVMBuilder->SetInsertPoint(LeaveBlock);
+    StoreInst *Store = LLVMBuilder->CreateStore(SelectorValue, SelectorAddr);
+
+    if (InnermostTargetOffset == ChildTargetOffset) {
+      // This is the innermost finally being exited (no child region updated
+      // InnermostTargetOffset).
+      // Record the first continuation selector store in this block so that
+      // the 2nd pass will know to insert code before them rather than after
+      // them.
+      ContinuationStoreMap.insert(std::make_pair(NextOffset, Store));
+
+      // Update InnermostTargetOffset.
+      InnermostTargetOffset = FinallyRegion->StartMsilOffset;
+    }
+  }
+
+  return InnermostTargetOffset;
+}
+
 void GenIR::leave(uint32_t TargetOffset, bool IsNonLocal,
                   bool EndsWithNonLocalGoto) {
-  // TODO: handle exiting through nested finallies
-  // currently FG-building phase 1 generates an appropriate
-  // branch instruction for trivial leaves and rejects others
+  // TODO: handle leaves from handler regions
   return;
 }
 
@@ -4651,12 +4845,21 @@ void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
 PHINode *GenIR::createPHINode(BasicBlock *Block, Type *Ty,
                               unsigned int NumReservedValues,
                               const Twine &NameStr) {
-  TerminatorInst *TermInst = Block->getTerminator();
-  if (TermInst != nullptr) {
-    return PHINode::Create(Ty, NumReservedValues, NameStr, TermInst);
-  } else {
-    return PHINode::Create(Ty, NumReservedValues, NameStr, Block);
+  // Put this new PHI after any existing PHIs but before anything else.
+  BasicBlock::iterator I = Block->begin();
+  BasicBlock::iterator IE = Block->end();
+  while ((I != IE) && isa<PHINode>(I)) {
+    ++I;
   }
+
+  PHINode *Result;
+  if (I == IE) {
+    Result = PHINode::Create(Ty, NumReservedValues, NameStr, Block);
+  } else {
+    Result = PHINode::Create(Ty, NumReservedValues, NameStr, I);
+  }
+
+  return Result;
 }
 
 // Check whether the node is constant null.
