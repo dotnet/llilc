@@ -5170,8 +5170,8 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
   // an instantiating stub, so don't add an instantiation parameter.
   HasTypeArg = SigInfo->hasTypeArg() &&
                (CallInfo->kind != CORINFO_VIRTUALCALL_LDVIRTFTN);
-  TotalArgs = (HasThis ? 1 : 0) + (IsVarArg ? 1 : 0) + (HasTypeArg ? 1 : 0) +
-              NumArgs;
+  TotalArgs =
+      (HasThis ? 1 : 0) + (IsVarArg ? 1 : 0) + (HasTypeArg ? 1 : 0) + NumArgs;
 
   // Special case for newobj, currently the first
   // argument is handled/appended in CanonNewObj.
@@ -5816,8 +5816,8 @@ void ReaderBase::buildUpParams(uint32_t NumParams) {
     for (; ParamIndex < NumParams; ParamIndex++) {
 
       if (VerificationNeeded) {
-        verifyRecordParamType(ParamIndex - (uint32_t)IsVarArg -
-                                  (uint32_t)HasTypeArg,
+        verifyRecordParamType(ParamIndex - (IsVarArg ? 1 : 0) -
+                                  (HasTypeArg ? 1 : 0),
                               &(MethodInfo->args), Locs);
       }
 
