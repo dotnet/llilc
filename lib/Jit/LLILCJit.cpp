@@ -179,7 +179,7 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
     Builder.setOptLevel(CodeGenOpt::Level::Default);
   } else {
     Builder.setOptLevel(CodeGenOpt::Level::None);
-    Options.NoFramePointerElim = 1;
+    Options.NoFramePointerElim = true;
   }
 
   Builder.setTargetOptions(Options);
