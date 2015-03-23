@@ -2161,47 +2161,66 @@ IRNode *GenIR::binaryOp(ReaderBaseNS::BinaryOpcode Opcode, IRNode *Arg1,
                         IRNode *Arg2) {
 
   struct BinaryTriple {
-    Instruction::BinaryOps Opcode;
+    union {
+      Instruction::BinaryOps Opcode;
+      Intrinsic::ID Intrinsic;
+    } Op;
     bool IsOverflow;
     bool IsUnsigned;
+
+    // Constructor for operations that map to LLVM opcodes
+    BinaryTriple(Instruction::BinaryOps Opcode, bool IsOverflow,
+                 bool IsUnsigned)
+        : IsOverflow(IsOverflow), IsUnsigned(IsUnsigned) {
+      Op.Opcode = Opcode;
+    }
+
+    // Constructor for operations that map to LLVM intrinsics
+    BinaryTriple(Intrinsic::ID Intrinsic, bool IsOverflow, bool IsUnsigned)
+        : IsOverflow(IsOverflow), IsUnsigned(IsUnsigned) {
+      Op.Intrinsic = Intrinsic;
+    }
+
+    // Default constructor for invalid cases
+    BinaryTriple() {}
   };
 
   static const BinaryTriple IntMap[ReaderBaseNS::LastBinaryOpcode] = {
       {Instruction::BinaryOps::Add, false, false},  // ADD
-      {Instruction::BinaryOps::Add, true, false},   // ADD_OVF
-      {Instruction::BinaryOps::Add, true, true},    // ADD_OVF_UN
+      {Intrinsic::sadd_with_overflow, true, false}, // ADD_OVF
+      {Intrinsic::uadd_with_overflow, true, true},  // ADD_OVF_UN
       {Instruction::BinaryOps::And, false, false},  // AND
       {Instruction::BinaryOps::SDiv, false, false}, // DIV
       {Instruction::BinaryOps::UDiv, false, true},  // DIV_UN
       {Instruction::BinaryOps::Mul, false, false},  // MUL
-      {Instruction::BinaryOps::Mul, true, false},   // MUL_OVF
-      {Instruction::BinaryOps::Mul, true, true},    // MUL_OVF_UN
+      {Intrinsic::smul_with_overflow, true, false}, // MUL_OVF
+      {Intrinsic::umul_with_overflow, true, true},  // MUL_OVF_UN
       {Instruction::BinaryOps::Or, false, false},   // OR
       {Instruction::BinaryOps::SRem, false, false}, // REM
       {Instruction::BinaryOps::URem, false, true},  // REM_UN
       {Instruction::BinaryOps::Sub, false, false},  // SUB
-      {Instruction::BinaryOps::Sub, true, false},   // SUB_OVF
-      {Instruction::BinaryOps::Sub, true, true},    // SUB_OVF_UN
+      {Intrinsic::ssub_with_overflow, true, false}, // SUB_OVF
+      {Intrinsic::usub_with_overflow, true, true},  // SUB_OVF_UN
       {Instruction::BinaryOps::Xor, false, false}   // XOR
   };
 
   static const BinaryTriple FloatMap[ReaderBaseNS::LastBinaryOpcode] = {
       {Instruction::BinaryOps::FAdd, false, false}, // ADD
-      {Instruction::BinaryOps::FAdd, true, false},  // ADD_OVF
-      {Instruction::BinaryOps::FAdd, true, true},   // ADD_OVF_UN
-      {Instruction::BinaryOps::And, false, false},  // AND
+      {},                                           // ADD_OVF (invalid)
+      {},                                           // ADD_OVF_UN (invalid)
+      {},                                           // AND (invalid)
       {Instruction::BinaryOps::FDiv, false, false}, // DIV
-      {Instruction::BinaryOps::FDiv, false, true},  // DIV_UN
+      {},                                           // DIV_UN (invalid)
       {Instruction::BinaryOps::FMul, false, false}, // MUL
-      {Instruction::BinaryOps::FMul, true, false},  // MUL_OVF
-      {Instruction::BinaryOps::FMul, true, true},   // MUL_OVF_UN
-      {Instruction::BinaryOps::Or, false, false},   // OR
+      {},                                           // MUL_OVF (invalid)
+      {},                                           // MUL_OVF_UN (invalid)
+      {},                                           // OR (invalid)
       {Instruction::BinaryOps::FRem, false, false}, // REM
-      {Instruction::BinaryOps::FRem, false, true},  // REM_UN
+      {},                                           // REM_UN (invalid)
       {Instruction::BinaryOps::FSub, false, false}, // SUB
-      {Instruction::BinaryOps::FSub, true, false},  // SUB_OVF
-      {Instruction::BinaryOps::FSub, true, true},   // SUB_OVF_UN
-      {Instruction::BinaryOps::Xor, false, false}   // XOR
+      {},                                           // SUB_OVF (invalid)
+      {},                                           // SUB_OVF_UN (invalid)
+      {},                                           // XOR (invalid)
   };
 
   Type *Type1 = Arg1->getType();
@@ -2228,14 +2247,7 @@ IRNode *GenIR::binaryOp(ReaderBaseNS::BinaryOpcode Opcode, IRNode *Arg1,
   const BinaryTriple *Triple = IsFloat ? FloatMap : IntMap;
 
   bool IsOverflow = Triple[Opcode].IsOverflow;
-
-  if (IsOverflow) {
-    throw NotYetImplementedException("BinaryOp Overflow");
-  }
-
   bool IsUnsigned = Triple[Opcode].IsUnsigned;
-
-  Instruction::BinaryOps Op = Triple[Opcode].Opcode;
 
   if (Type1 != ResultType) {
     Arg1 = convert(ResultType, Arg1, !IsUnsigned);
@@ -2246,7 +2258,7 @@ IRNode *GenIR::binaryOp(ReaderBaseNS::BinaryOpcode Opcode, IRNode *Arg1,
   }
 
   IRNode *Result;
-  if (IsFloat && Op == Instruction::BinaryOps::FRem) {
+  if (IsFloat && Opcode == ReaderBaseNS::BinaryOpcode::Rem) {
     // FRem must be lowered to a JIT helper call to avoid undefined symbols
     // during emit.
     //
@@ -2262,7 +2274,22 @@ IRNode *GenIR::binaryOp(ReaderBaseNS::BinaryOpcode Opcode, IRNode *Arg1,
     }
 
     Result = callHelperImpl(Helper, ResultType, Arg1, Arg2);
+  } else if (IsOverflow) {
+    // Call the appropriate intrinsic.  Its result is a pair of the arithmetic
+    // result and a bool indicating whether the operation overflows.
+    Value *Intrinsic = Intrinsic::getDeclaration(
+        JitContext->CurrentModule, Triple[Opcode].Op.Intrinsic, ResultType);
+    Value *Pair = LLVMBuilder->CreateCall2(Intrinsic, Arg1, Arg2);
+
+    // Extract the bool and raise an overflow exception if set.
+    Value *OvfBool = LLVMBuilder->CreateExtractValue(Pair, 1, "Ovf");
+    genConditionalThrow(OvfBool, CORINFO_HELP_OVERFLOW, "ThrowOverflow");
+
+    // Extract the result.
+    Result = (IRNode *)LLVMBuilder->CreateExtractValue(Pair, 0);
   } else {
+    // Create a simple binary operation.
+    Instruction::BinaryOps Op = Triple[Opcode].Op.Opcode;
     Result = (IRNode *)LLVMBuilder->CreateBinOp(Op, Arg1, Arg2);
   }
   return Result;

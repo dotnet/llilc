@@ -530,7 +530,7 @@ In summary, the plan/status is:
    - [ ] Implicit exceptions expanded to explicit test/throw sequences
      - [x] Null dereference
      - [ ] Divide by zero
-     - [ ] Arithmetic overflow
+     - [x] Arithmetic overflow
      - [ ] Convert with overflow
      - [x] Array bounds checks
      - [x] Array store checks
