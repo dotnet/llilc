@@ -191,7 +191,6 @@ def main(argv):
   parser.add_argument("--checks", default="llvm*,misc*,microsoft*,"\
                       "-llvm-header-guard,-llvm-include-order",
             help="clang-tidy checks to run")
-  group = parser.add_mutually_exclusive_group()
   parser.add_argument("--hide-diffs", action="store_true", default=False,
             help="Don't print formatting diffs (when not automatically fixed)")
   args,unknown = parser.parse_known_args(argv)
