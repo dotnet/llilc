@@ -532,8 +532,8 @@ In summary, the plan/status is:
      - [ ] Divide by zero
      - [ ] Arithmetic overflow
      - [ ] Convert with overflow
-     - [ ] Array bounds checks
-     - [ ] Array store checks
+     - [x] Array bounds checks
+     - [x] Array store checks
  2. [ ] Handler bring-up in EH branch
    - [ ] Catch handler support
      - [ ] In reader (includes updating throws to use `invoke` rather than
