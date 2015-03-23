@@ -530,10 +530,10 @@ In summary, the plan/status is:
    - [ ] Implicit exceptions expanded to explicit test/throw sequences
      - [x] Null dereference
      - [ ] Divide by zero
-     - [ ] Arithmetic overflow
+     - [x] Arithmetic overflow
      - [ ] Convert with overflow
-     - [ ] Array bounds checks
-     - [ ] Array store checks
+     - [x] Array bounds checks
+     - [x] Array store checks
  2. [ ] Handler bring-up in EH branch
    - [ ] Catch handler support
      - [ ] In reader (includes updating throws to use `invoke` rather than
