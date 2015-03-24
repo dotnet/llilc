@@ -1,7 +1,7 @@
 # If we are not building as a part of LLVM, build LLILCJit as an
 # standalone project, using LLVM as an external library:
 if( CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
-  cmake_minimum_required(VERSION 2.8.8)
+  cmake_minimum_required(VERSION 2.8.12)
 
   project(LLILC)
   if( APPLE )
