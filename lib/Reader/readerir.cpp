@@ -18,6 +18,7 @@
 #include "newvstate.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/IR/Intrinsics.h"
+#include "llvm/IR/InlineAsm.h"
 #include "llvm/Support/Debug.h"       // for dbgs()
 #include "llvm/Support/raw_ostream.h" // for errs()
 #include "llvm/Support/ConvertUTF.h"  // for ConvertUTF16toUTF8
@@ -232,6 +233,40 @@ void rgnSetCatchClassToken(EHRegion *CatchRegion, mdToken Token) { return; }
 
 #pragma endregion
 
+#pragma region TARGET INFO
+
+class GenIR::TargetInfoX86 : public GenIR::TargetInfo {
+public:
+  uint32_t getTargetPointerSizeInBits() override { return 32; }
+
+  StringRef getVirtualStubParamConstraints() override { return "=r,{eax},0"; }
+};
+
+class GenIR::TargetInfoX86_64 : public GenIR::TargetInfo {
+public:
+  uint32_t getTargetPointerSizeInBits() override { return 64; }
+
+  StringRef getVirtualStubParamConstraints() override { return "=r,{r11},0"; }
+};
+
+GenIR::TargetInfo *GenIR::makeTargetInfo(LLILCJitContext &JitContext) {
+  Triple TargetTriple(JitContext.CurrentModule->getTargetTriple());
+
+  switch (TargetTriple.getArch()) {
+  case Triple::ArchType::x86:
+    return new TargetInfoX86();
+
+  case Triple::ArchType::x86_64:
+    return new TargetInfoX86_64();
+
+  default:
+    ASSERTNR(UNREACHED);
+    return nullptr;
+  }
+}
+
+#pragma endregion
+
 #pragma region MEMORY ALLOCATION
 
 //===----------------------------------------------------------------------===//
@@ -258,17 +293,6 @@ void *GenIR::getProcMemory(size_t NumBytes) { return calloc(1, NumBytes); }
 //===----------------------------------------------------------------------===//
 
 void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
-  Triple PT(Triple::normalize(LLVM_DEFAULT_TARGET_TRIPLE));
-  if (PT.isArch16Bit()) {
-    TargetPointerSizeInBits = 16;
-  } else if (PT.isArch32Bit()) {
-    TargetPointerSizeInBits = 32;
-  } else if (PT.isArch64Bit()) {
-    TargetPointerSizeInBits = 64;
-  } else {
-    ASSERTNR(UNREACHED);
-  }
-
   CORINFO_METHOD_HANDLE MethodHandle = JitContext->MethodInfo->ftn;
   Function = getFunction(MethodHandle);
 
@@ -580,7 +604,7 @@ IRNode *GenIR::instParam() {
 // Convert ReaderAlignType to byte alighnment
 uint32_t GenIR::convertReaderAlignment(ReaderAlignType ReaderAlignment) {
   uint32_t Result = (ReaderAlignment == Reader_AlignNatural)
-                        ? TargetPointerSizeInBits / 8
+                        ? getTargetPointerSizeInBits() / 8
                         : ReaderAlignment;
   return Result;
 }
@@ -778,7 +802,7 @@ Type *GenIR::getType(CorInfoType CorType, CORINFO_CLASS_HANDLE ClassHandle,
 
   case CorInfoType::CORINFO_TYPE_NATIVEINT:
   case CorInfoType::CORINFO_TYPE_NATIVEUINT:
-    return Type::getIntNTy(LLVMContext, TargetPointerSizeInBits);
+    return Type::getIntNTy(LLVMContext, getTargetPointerSizeInBits());
 
   case CorInfoType::CORINFO_TYPE_FLOAT:
     return Type::getFloatTy(LLVMContext);
@@ -1026,7 +1050,7 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
     ASSERT(IsRefClass);
     // Vtable is an array of pointer-sized things.
     Type *VtableSlotTy =
-        Type::getIntNPtrTy(LLVMContext, TargetPointerSizeInBits);
+        Type::getIntNPtrTy(LLVMContext, getTargetPointerSizeInBits());
     Type *VtableTy = ArrayType::get(VtableSlotTy, 0);
     Type *VtablePtrTy = VtableTy->getPointerTo();
     Fields.push_back(VtablePtrTy);
@@ -1430,7 +1454,7 @@ uint32_t GenIR::stackSize(CorInfoType CorType) {
   case CorInfoType::CORINFO_TYPE_PTR:
   case CorInfoType::CORINFO_TYPE_BYREF:
   case CorInfoType::CORINFO_TYPE_CLASS:
-    return TargetPointerSizeInBits;
+    return getTargetPointerSizeInBits();
 
   default:
     ASSERT(UNREACHED);
@@ -1467,7 +1491,7 @@ uint32_t GenIR::size(CorInfoType CorType) {
   case CorInfoType::CORINFO_TYPE_PTR:
   case CorInfoType::CORINFO_TYPE_BYREF:
   case CorInfoType::CORINFO_TYPE_CLASS:
-    return TargetPointerSizeInBits;
+    return getTargetPointerSizeInBits();
 
   default:
     ASSERT(UNREACHED);
@@ -2023,7 +2047,7 @@ IRNode *GenIR::loadConstantI8(int64_t Constant) {
 }
 
 IRNode *GenIR::loadConstantI(size_t Constant) {
-  uint32_t NumBits = TargetPointerSizeInBits;
+  uint32_t NumBits = getTargetPointerSizeInBits();
   bool IsSigned = true;
   return (IRNode *)ConstantInt::get(*JitContext->LLVMContext,
                                     APInt(NumBits, Constant, IsSigned));
@@ -2299,7 +2323,7 @@ Type *GenIR::binaryOpType(Type *Type1, Type *Type2) {
   if (Type1->isPointerTy()) {
     if (Type2->isPointerTy()) {
       return Type::getIntNTy(*this->JitContext->LLVMContext,
-                             TargetPointerSizeInBits);
+                             getTargetPointerSizeInBits());
     }
     ASSERTNR(!Type2->isFloatingPointTy());
     return Type1;
@@ -3200,7 +3224,7 @@ IRNode *GenIR::callRuntimeHandleHelper(CorInfoHelpFunc Helper, IRNode *Arg1,
                                        IRNode *Arg2, IRNode *NullCheckArg) {
 
   Type *ReturnType =
-      Type::getIntNTy(*JitContext->LLVMContext, TargetPointerSizeInBits);
+      Type::getIntNTy(*JitContext->LLVMContext, getTargetPointerSizeInBits());
 
   // Call the helper unconditionally if NullCheckArg is null.
   if ((NullCheckArg == nullptr) || isConstantNull(NullCheckArg)) {
@@ -3239,7 +3263,7 @@ bool GenIR::canMakeDirectCall(ReaderCallTargetData *CallTargetData) {
 
 IRNode *GenIR::makeDirectCallTargetNode(CORINFO_METHOD_HANDLE Method,
                                         void *CodeAddr) {
-  uint32_t NumBits = TargetPointerSizeInBits;
+  uint32_t NumBits = getTargetPointerSizeInBits();
   bool IsSigned = false;
 
   ConstantInt *CodeAddrValue = ConstantInt::get(
@@ -3259,6 +3283,8 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
   IRNode *TargetNode = CallTargetInfo->getCallTargetNode();
   CORINFO_SIG_INFO *SigInfo = CallTargetInfo->getSigInfo();
   CORINFO_CALL_INFO *CallInfo = CallTargetInfo->getCallInfo();
+  bool IsStubCall =
+      (CallInfo != nullptr) && (CallInfo->kind == CORINFO_VIRTUALCALL_STUB);
 
   unsigned HiddenMBParamSize = 0;
   GCLayout *GCInfo = nullptr;
@@ -3269,12 +3295,6 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
     if (!CallTargetInfo->isUnmarkedTailCall()) {
       throw NotYetImplementedException("Tail call");
     }
-  }
-
-  if ((CallInfo != nullptr) && (CallInfo->kind == CORINFO_VIRTUALCALL_STUB)) {
-    // VSD calls have a special calling convention that requires the pointer
-    // to the stub in a target-specific register.
-    throw NotYetImplementedException("virtual stub dispatch");
   }
 
   // Ask GenIR to create return value.
@@ -3338,8 +3358,8 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
   }
 
   CallInst *CallInst = LLVMBuilder->CreateCall(TargetNode, Arguments);
-  CorInfoIntrinsics IntrinsicID = CallTargetInfo->getCorInstrinsic();
 
+  CorInfoIntrinsics IntrinsicID = CallTargetInfo->getCorInstrinsic();
   if ((0 <= IntrinsicID) && (IntrinsicID < CORINFO_INTRINSIC_Count)) {
     throw NotYetImplementedException("Call intrinsic");
   }
@@ -3361,6 +3381,10 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
     if (callIsCorVarArgs(Call)) {
       canonVarargsCall(Call, CallTargetInfo);
     }
+  }
+
+  if (IsStubCall) {
+    Call = canonStubCall(Call, CallTargetInfo);
   }
 
   if (ReturnNode != nullptr) {
@@ -3415,12 +3439,11 @@ bool GenIR::canonNewObjCall(IRNode *CallNode,
 
     // Change the type of the called function and
     // the type of the CallInstruction.
-    CallInst *CallInstruction = dyn_cast<CallInst>(CallNode);
+    CallInst *CallInstruction = cast<CallInst>(CallNode);
     Value *CalledValue = CallInstruction->getCalledValue();
-    PointerType *CalledValueType =
-        dyn_cast<PointerType>(CalledValue->getType());
+    PointerType *CalledValueType = cast<PointerType>(CalledValue->getType());
     FunctionType *FuncType =
-        dyn_cast<FunctionType>(CalledValueType->getElementType());
+        cast<FunctionType>(CalledValueType->getElementType());
 
     // Construct the new function type.
     std::vector<Type *> Arguments;
@@ -3549,10 +3572,40 @@ void GenIR::canonNewArrayCall(IRNode *Call,
 }
 
 bool GenIR::callIsCorVarArgs(IRNode *CallNode) {
-  CallInst *CallInstruction = dyn_cast<CallInst>(CallNode);
+  CallInst *CallInstruction = cast<CallInst>(CallNode);
   Value *CalledValue = CallInstruction->getCalledValue();
   PointerType *CalledValueType = dyn_cast<PointerType>(CalledValue->getType());
   return dyn_cast<FunctionType>(CalledValueType->getElementType())->isVarArg();
+}
+
+IRNode *GenIR::canonStubCall(IRNode *CallNode,
+                             ReaderCallTargetData *CallTargetData) {
+  assert(CallTargetData != nullptr);
+  assert(CallTargetData->getCallInfo() != nullptr &&
+         CallTargetData->getCallInfo()->kind == CORINFO_VIRTUALCALL_STUB);
+
+  CallInst *Call = cast<CallInst>(CallNode);
+
+  IRBuilder<>::InsertPoint SavedInsertPoint = LLVMBuilder->saveIP();
+  LLVMBuilder->SetInsertPoint(Call);
+
+  Value *IndirectionCell = (Value *)CallTargetData->getIndirectionCellNode();
+  assert(IndirectionCell != nullptr);
+  Value *Target = Call->getCalledValue();
+
+  Type *ArgumentTypes[] = {IndirectionCell->getType(), Target->getType()};
+  Value *Arguments[] = {IndirectionCell, Target};
+
+  FunctionType *AsmType =
+      FunctionType::get(ArgumentTypes[1], ArgumentTypes, false);
+
+  StringRef Constraints = TheTargetInfo->getVirtualStubParamConstraints();
+  Value *Asm = InlineAsm::get(AsmType, "", Constraints, true);
+  CallInst *AsmCall = LLVMBuilder->CreateCall(Asm, Arguments);
+
+  Call->setCalledFunction(AsmCall);
+  LLVMBuilder->restoreIP(SavedInsertPoint);
+  return (IRNode *)Call;
 }
 
 IRNode *GenIR::conv(ReaderBaseNS::ConvOpcode Opcode, IRNode *Arg1) {
@@ -4235,7 +4288,7 @@ IRNode *GenIR::handleToIRNode(mdToken Token, void *EmbHandle, void *RealHandle,
   // TODO: There is more work for ngen scenario here. We are ignoring
   // fRelocatable and realHandle for now.
 
-  uint32_t NumBits = TargetPointerSizeInBits;
+  uint32_t NumBits = getTargetPointerSizeInBits();
   bool IsSigned = false;
 
   ConstantInt *HandleValue = ConstantInt::get(
@@ -4257,11 +4310,11 @@ IRNode *GenIR::derefAddress(IRNode *Address, bool DstIsGCPtr, bool IsConst,
   // We don't know the true referent type so just use a pointer sized
   // integer or GC pointer to i8 for the result.
 
-  Type *ReferentTy = DstIsGCPtr
-                         ? (Type *)getManagedPointerType(
-                               Type::getInt8Ty(*JitContext->LLVMContext))
-                         : (Type *)Type::getIntNTy(*JitContext->LLVMContext,
-                                                   TargetPointerSizeInBits);
+  Type *ReferentTy =
+      DstIsGCPtr ? (Type *)getManagedPointerType(
+                       Type::getInt8Ty(*JitContext->LLVMContext))
+                 : (Type *)Type::getIntNTy(*JitContext->LLVMContext,
+                                           getTargetPointerSizeInBits());
 
   // Address is a pointer, but since it may come from dereferencing into
   // runtime data structures with unknown field types, we may need a cast here
@@ -4297,8 +4350,8 @@ IRNode *GenIR::loadVirtFunc(IRNode *Arg1, CORINFO_RESOLVED_TOKEN *ResolvedToken,
   IRNode *TypeToken = genericTokenToNode(ResolvedToken, true);
   IRNode *MethodToken = genericTokenToNode(ResolvedToken);
 
-  Type *Ty =
-      Type::getIntNTy(*this->JitContext->LLVMContext, TargetPointerSizeInBits);
+  Type *Ty = Type::getIntNTy(*this->JitContext->LLVMContext,
+                             getTargetPointerSizeInBits());
   IRNode *CodeAddress = callHelperImpl(CORINFO_HELP_VIRTUAL_FUNC_PTR, Ty, Arg1,
                                        TypeToken, MethodToken);
 
@@ -4375,7 +4428,7 @@ void GenIR::classifyCmpType(Type *Ty, uint32_t &Size, bool &IsPointer,
     Size = Ty->getIntegerBitWidth();
     break;
   case Type::TypeID::PointerTyID:
-    Size = TargetPointerSizeInBits;
+    Size = getTargetPointerSizeInBits();
     IsPointer = true;
     break;
   case Type::TypeID::FloatTyID:
@@ -4676,8 +4729,8 @@ IRNode *GenIR::newArr(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1) {
   // The second argument to the helper is the number of elements in the array.
   // Create the second argument, the number of elements in the array.
   // This needs to be of type native int.
-  Type *NumOfElementsType =
-      Type::getIntNTy(*this->JitContext->LLVMContext, TargetPointerSizeInBits);
+  Type *NumOfElementsType = Type::getIntNTy(*this->JitContext->LLVMContext,
+                                            getTargetPointerSizeInBits());
   IRNode *NumOfElements =
       convertToStackType(Arg1, CorInfoType::CORINFO_TYPE_NATIVEINT);
 

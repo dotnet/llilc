@@ -17,6 +17,7 @@
 #include "LLILCJit.h"
 #include "readerir.h"
 #include "EEMemoryManager.h"
+#include "llvm/ADT/Triple.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/MCJIT.h"
 #include "llvm/ExecutionEngine/SectionMemoryManager.h"
@@ -267,9 +268,10 @@ LLILCJitContext::getModuleForMethod(CORINFO_METHOD_INFO *MethodInfo) {
   }
 
   if (!this->HasLoadedBitCode) {
-    M = std::unique_ptr<Module>(new Module(ModName, *this->LLVMContext));
+    M = llvm::make_unique<Module>(ModName, *this->LLVMContext);
   }
 
+  M->setTargetTriple(Triple::normalize(LLVM_DEFAULT_TARGET_TRIPLE));
   return std::move(M);
 }
 
