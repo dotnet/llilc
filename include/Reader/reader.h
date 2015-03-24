@@ -395,54 +395,82 @@ public:
 
 #pragma endregion
 
+/// \brief Information about a specific call site.
+///
+/// Code generation for calls must take into account many different factors.
+/// The \p ReaderCallTargetData class encapsulates the relevant data that a
+/// JIT or related client must consider when generating code for a particular
+/// call site.
+///
+/// Note that calls may arise both from call opcodes and from other MSIL
+/// opcodes that imply or are translated into calls (eg \p newobj
+/// or \p ldelema).
 class ReaderCallTargetData {
   friend class ReaderBase;
 
 private:
-  ReaderBase *Reader;
-  mdToken LoadFtnToken;
-  bool HasThisPtr;
-  bool IsJmp;
-  bool IsTailCall;
-  bool IsRecursiveTailCall;
-  bool IsUnmarkedTailCall;
-  bool AreClassAttribsValid;
-  bool IsCallInfoValid;
-  bool IsCallVirt;
-  bool IsCallI;
-  bool IsIndirect;
-  bool IsNewObj;
-  bool NeedsNullCheck;
-  bool UsesMethodDesc;
-  bool IsOptimizedDelegateCtor;
-  bool IsReadonlyCall;
-
-  CorInfoIntrinsics CorIntrinsicId;
-  uint32_t TargetMethodAttribs;
-  uint32_t TargetClassAttribs;
-  CORINFO_METHOD_HANDLE TargetMethodHandle;
-  CORINFO_CLASS_HANDLE TargetClassHandle;
-  CORINFO_SIG_INFO SigInfo;
-  CORINFO_RESOLVED_TOKEN ResolvedToken;
-  CORINFO_RESOLVED_TOKEN ResolvedConstraintToken;
-  CORINFO_CALL_INFO CallInfo;
-  DelegateCtorArgs *CtorArgs;
-
-  IRNode *TargetMethodHandleNode;
-  IRNode *TargetClassHandleNode;
-  IRNode *IndirectionCellNode;
-  IRNode *CallTargetNode;
-
+  ReaderBase *Reader;                             ///< Associated reader.
+  mdToken LoadFtnToken;                           ///< Method token for
+                                                  ///< delegate constructor
+                                                  ///< pattern.
+  bool HasThisPtr;                                ///< Is there a \p this
+                                                  ///< argument passed to the
+                                                  ///< call.
+  bool IsJmp;                                     ///< Is this from \p jmp.
+  bool IsTailCall;                                ///< Is this a tail call
+                                                  ///< candidate.
+  bool IsRecursiveTailCall;                       ///< Is this a recursive tail
+                                                  ///< call candidate.
+  bool IsUnmarkedTailCall;                        ///< Is this a tail call w/o
+                                                  ///< tail prefix.
+  bool AreClassAttribsValid;                      ///< Are class attribs valid.
+  bool IsCallInfoValid;                           ///< Is call info valid.
+  bool IsCallVirt;                                ///< Is this from
+                                                  /// \p callvirt.
+  bool IsCallI;                                   ///< Is this from \p calli.
+  bool IsIndirect;                                ///< Is this call indirect.
+  bool IsNewObj;                                  ///< Is this from \p newobj.
+  bool NeedsNullCheck;                            ///< Is a null check needed.
+  bool IsOptimizedDelegateCtor;                   ///< Is this an optimized.
+                                                  ///< delegate constructor.
+  bool IsReadonlyCall;                            ///< Is there a readonly
+                                                  ///< prefix.
+  CorInfoIntrinsics CorIntrinsicId;               ///< Intrinsic ID for method
+  uint32_t TargetMethodAttribs;                   ///< Attributes for method,
+                                                  ///< \see CorInfoFlag
+  uint32_t TargetClassAttribs;                    ///< Attributes for method's
+                                                  ///< class, \see CorInfoFlag
+  CORINFO_METHOD_HANDLE TargetMethodHandle;       ///< Handle for target method
+  CORINFO_CLASS_HANDLE TargetClassHandle;         ///< Handle for method class
+  CORINFO_SIG_INFO SigInfo;                       ///< Info on the method sig
+  CORINFO_RESOLVED_TOKEN ResolvedToken;           ///< Info on the method token
+  CORINFO_RESOLVED_TOKEN ResolvedConstraintToken; ///< Info on constraints
+  CORINFO_CALL_INFO CallInfo;                     ///< Info from the EE
+  DelegateCtorArgs *CtorArgs;                     ///< Args to pass to delegate
+                                                  ///< ctor when optimized.
+  IRNode *TargetMethodHandleNode;                 ///< Client IR for target
+                                                  ///< method handle.
+  IRNode *TargetClassHandleNode;                  ///< Client IR for target
+                                                  ///< method's class handle.
+  IRNode *IndirectionCellNode;                    ///< Client IR for the
+                                                  ///< secret parameter.
+  IRNode *CallTargetNode;                         ///< Client IR for the call
+                                                  ///< target.
 #if defined(_DEBUG)
-  char TargetName[MAX_CLASSNAME_LENGTH];
+  char TargetName[MAX_CLASSNAME_LENGTH]; ///< Name of the call target.
 #endif
 
+  /// Set the secret parameter passed to a stub dispatch call.
+  /// \param Node     Client IR node for the secret parameter.
   void setIndirectionCellNode(IRNode *Node) { IndirectionCellNode = Node; }
+
+  /// Fill in basic information about the call target.
   void fillTargetInfo(mdToken TargetToken, mdToken ConstraintToken,
                       CORINFO_CONTEXT_HANDLE Context,
                       CORINFO_MODULE_HANDLE Scope, CORINFO_METHOD_HANDLE Caller,
                       uint32_t MsilOffset);
 
+  /// Initialize the fields of this \p ReaderCallTargetData object.
   void init(ReaderBase *Reader, mdToken TargetToken, mdToken ConstraintToken,
             mdToken LoadFtnToken, bool IsTailCall, bool IsUnmarkedTailCall,
             bool IsReadonlyCall, ReaderBaseNS::CallOpcode Opcode,
@@ -450,60 +478,273 @@ private:
             CORINFO_MODULE_HANDLE Scope, CORINFO_METHOD_HANDLE Caller);
 
 public:
+  /// Get the resolved token for the call target method.
+  /// \returns     The resolved token info for the call target method.
   CORINFO_RESOLVED_TOKEN *getResolvedToken() { return &ResolvedToken; }
+
+  /// Get the token for the call target method.
+  /// \returns     The token info for the call target method.
   mdToken getMethodToken() { return ResolvedToken.token; }
+
+  /// Get the constraint token for the call target method.
+  /// \returns     The constraint token info for the call target method.
   mdToken getConstraintToken() { return ResolvedConstraintToken.token; }
+
+  /// Get the resolved constraint token for the call target method.
+  /// \returns     The resolved constraint token info for the call target.
+  ///              method
   CORINFO_RESOLVED_TOKEN *getResolvedConstraintToken() {
     return &ResolvedConstraintToken;
   }
+
+  /// Get the method handle for the call target method.
+  /// \returns     The method handle info for the call target method.
   CORINFO_METHOD_HANDLE getMethodHandle() { return TargetMethodHandle; }
-  uint32_t getMethodAttribs() { return TargetMethodAttribs; };
-  CORINFO_SIG_INFO *getSigInfo() { return &SigInfo; };
+
+  /// Get the method attributes for the call target method.
+  ///
+  /// Gets the target method's attributes as reported by the CoreCLR EE.
+  /// Possible values are described by \p CorInfoFlag. Generally only valid
+  /// when the target method is known (that is, the call is not indirect).
+  ///
+  /// \returns     The method attributes for the call target method.
+  uint32_t getMethodAttribs() { return TargetMethodAttribs; }
+
+  /// Get the signature info for the call target method.
+  /// \returns     The signature info for the call target method.
+  CORINFO_SIG_INFO *getSigInfo() { return &SigInfo; }
+
+  /// Get the call info for the call target method.
+  /// \returns     The call info for the call target method.
   CORINFO_CALL_INFO *getCallInfo() {
     return IsCallInfoValid ? &CallInfo : nullptr;
   }
+
+  /// \brief Get the client IR for the secret parameter to a stub dispatch
+  /// call.
+  ///
+  /// Methods invoked via stub dispatch use specialized calling conventions
+  /// that require the \p IndirectionCellNode to be passed in a particular
+  /// register.
+  ///
+  /// \returns      Client IR node for the secret parameter.
   IRNode *getIndirectionCellNode() { return IndirectionCellNode; }
+
+  /// \brief Get the client IR for the call target.
+  ///
+  /// This method returns the client IR that provides the address of the method
+  /// to call.
+  ///
+  /// \returns      Client IR node for the call target.
   IRNode *getCallTargetNode() { return CallTargetNode; }
 
+  /// \brief Get the class attributes for the call target method's class.
+  ///
+  /// Gets the target method's class attributes as reported by the CoreCLR EE.
+  /// Possible values are described by \p CorInfoFlag.
+  ///
+  /// \returns      The class attributes for the call target method's class.
   uint32_t getClassAttribs();
+
+  /// Get the class handle for the call target method's class.
+  /// \returns      The class handle for the call target method's class.
   CORINFO_CLASS_HANDLE getClassHandle();
 
+  /// Get the exact context for this call.
+  /// \returns      The exact context for this call.
   CORINFO_CONTEXT_HANDLE getExactContext();
+
+  /// Check if accessing the class handle requires runtime lookup.
+  /// \returns      True if accessing the class handle requires runtime lookup.
   bool getClassHandleNodeRequiresRuntimeLookup();
+
+  /// Check if accessing the type context requires runtime lookup.
+  /// \returns      True if accessing the type context requires runtime lookup.
   bool getTypeContextNodeRequiresRuntimeLookup();
+
+  /// Check if accessing the method handle requires runtime lookup.
+  /// \returns      True if accessing the method handle requires runtime lookup
   bool getMethodHandleNodeRequiresRuntimeLookup();
+
+  /// Check if accessing the call target requires runtime lookup.
+  /// \returns      True if accessing the call target requires runtime lookup.
   bool getCallTargetNodeRequiresRuntimeLookup();
 
+  /// Get the client IR for the method handle.
+  /// \returns      Specified client IR, or nullptr if none.
   IRNode *getMethodHandleNode();
+
+  /// Get the client IR for the class handle.
+  /// \returns      Specified client IR, or nullptr if none.
   IRNode *getClassHandleNode();
+
+  /// Get the client IR for the type context.
+  /// \returns      Specified client IR, or nullptr if none.
   IRNode *getTypeContextNode();
 
+  /// \brief Modify the \p this parameter as necessary at the call site.
+  ///
+  /// Certain calls may require indirection or boxing to obtain the proper
+  /// value of \p this to pass to the call. This method takes the original
+  /// \p this value and returns updated client IR to reflect the proper value
+  /// to pass.
+  /// \param    ThisIR     Initial client IR for the \p this parameter.
+  /// \returns             Updated client IR for the \p this parameter.
   IRNode *applyThisTransform(IRNode *ThisIR);
 
+  /// Check if this call has a \p this parameter.
+  ///
+  /// \returns     True if this call has a \p this parameter.
   bool hasThis() { return HasThisPtr; }
+
+  /// \brief Check if this is call from a \p jmp opcode.
+  ///
+  /// The MSIL \p jmp opcode allows one method to branch directly to the start
+  /// of another. Implementation of \p jmp is similar in some respects to calls
+  /// so the \p ReaderCallTargetData is used for jmps as well.
+  ///
+  /// \returns     True if this call is from a \p jmp opcode.
   bool isJmp() { return IsJmp; }
+
+  /// \brief Check if this call is a tail call candidate.
+  ///
+  /// True if this call is a candiate for tail call optimization. Note the
+  /// value returned by this method may change over time as the reader does
+  /// more in-depth checking.
+  ///
+  /// \returns     True if this call is currently a tail call candidate.
   bool isTailCall() { return IsTailCall; }
+
+  /// \brief Check if this call is a recursive tail call candidate.
+  ///
+  /// A recursive tail call is a recursive call that is followed immediately
+  /// by a \p ret (possibly allowing for \p nop or similar in between). It may
+  /// or may not be marked with the \p tail prefix. If this method returns true
+  /// then the current call site is a recursive tail call candidate. Note the
+  /// value returned by this method may change over time as the reader does
+  /// more in-depth checking.
+  ///
+  /// \returns     True if this call is a recurisve tail call candidate.
   bool isRecursiveTailCall() { return IsRecursiveTailCall; }
+
+  /// \brief Check if this call is an unmarked tail call candidate.
+  ///
+  /// An unmarked tail call is a compatible call that is followed immediately
+  /// by a \p ret (possibly allowing for \p nop or similar in between) that was
+  /// not preceded by the \p tail prefix. Note the value returned by this
+  /// method may change over time as the reader does more in-depth checking.
+  ///
+  /// \returns     True if this call is an unmarked tail call candidate.
   bool isUnmarkedTailCall() { return IsUnmarkedTailCall; }
+
+  /// \brief Check if this call is a stub dispatch.
+  ///
+  /// Methods invoked via stub dispatch use specialized calling conventions
+  /// that require the \p IndirectionCellNode to be passed in a particular
+  /// register.
+  ///
+  /// \returns     True if this call is a stub dispatch.
   bool isStubDispatch() { return IndirectionCellNode ? true : false; }
+
+  /// \brief Check if this call is indirect.
+  ///
+  /// Return true if this call originated from a \p calli opcode or a call
+  /// requiring equivalent treatement.
+  ///
+  /// \returns    True if this call is an indirect call.
   bool isIndirect() { return IsIndirect; }
+
+  /// \brief Check if this call is from a \p calli opcode.
+  ///
+  /// Return true if this call originated from a \p calli opcode.
+  ///
+  /// \returns    True if this call is from a \p calli opcode.
   bool isCallI() { return IsCallI; }
+
+  /// Check if this call is a true direct call.
+  ///
+  /// A true direct call identified by the call info kind from the EE.
+  ///
+  /// \returns            True if the call is a true direct call.
   bool isTrueDirect() { return getCallInfo()->kind == CORINFO_CALL; }
+
+  /// Check if this call is from \p newobj.
+  /// \returns           True if so, false otherwise.
   bool isNewObj() { return IsNewObj; }
+
+  /// Check if this call is from \p callvirt.
+  /// \returns           True if so, false otherwise.
   bool isCallVirt() { return IsCallVirt; }
+
+  /// \brief Check if this call requires a null check.
+  ///
+  /// There are a number of cases where the \p this parameter or similar
+  /// must be null checked before a call. For example instance method calls
+  /// made via \p CallVirt require \p this to be null checked even if the
+  /// targeted method is not virtual.
+  ///
+  /// If the reader knows that some upstream computation that is part of the
+  /// call sequence has already performed the necessary check, this method will
+  /// return false even though the call considered as a whole requires a null
+  /// check.
+  ///
+  /// \returns           True if null checks are required.
   bool needsNullCheck() { return NeedsNullCheck; }
-  bool usesMethodDesc() { return UsesMethodDesc; }
+
+  /// Check if this call target is an optimized delegate constructor.
+  /// \returns           True if so, false otherwise.
   bool isOptimizedDelegateCtor() { return IsOptimizedDelegateCtor; }
+
+  /// \brief Check if this call had a readonly prefix.
+  ///
+  /// The \p ldelema opcode may be implemented via a helper call. It can
+  /// also be preceded by the readonly prefix (see Ecma III.2.3). Return
+  /// true if this call target is a readonly ldelema.
+  ///
+  /// \returns   True if this is a readonly array address computation call.
   bool isReadOnlyCall() { return IsReadonlyCall; }
 
+  /// Get the token for the delegate constructor when the reader has detected
+  /// the ldftn/newobj delegate construction pattern.
+  ///
+  /// \returns    Token for the delegate constructor.
   mdToken getLoadFtnToken() { return LoadFtnToken; }
+
+  /// Set the token for the delegate constructor when the reader has detected
+  /// the ldftn/newobj delegate construction pattern.
+  ///
+  /// \param Token    Token for the delegate constructor.
   void setLoadFtnToken(mdToken Token) { LoadFtnToken = Token; }
 
+  /// \brief Check if this is a basic call to the target.
+  ///
+  /// If the client knows that this call is a direct call to the target
+  /// it may be able to perform certain optimizations, like recognizing the
+  /// target as an intrinsic and expanding it inline.
+  ///
+  /// \returns   True if the call that the client might want to optimize.
   bool isBasicCall() {
     return !IsIndirect && !IsNewObj && !isJmp() && isTrueDirect();
   }
+
+  /// \brief Return the intrinsic ID, if any.
+  ///
+  /// Certain calls may be expanded inline into known instruction sequences or
+  /// translated into calls to specific helper routines. This method returns
+  /// the intrinsic ID in cases where this is possible, and
+  /// \p CORINFO_INTRINSIC_Illegal if not.
+  ///
+  /// \returns Intrinsic ID or \p CORINFO_INTRINSIC_Illegal.
   CorInfoIntrinsics getCorInstrinsic() { return CorIntrinsicId; }
 
+  /// \brief Record the result of the common tail call checks.
+  ///
+  /// This method takes as input the return value from \p commonTailCallChecks
+  /// and updates the call target data appropriately if tail calls are not
+  /// possible.
+  ///
+  /// \param CanTailCall      true if a tail call is still possible.
+  /// \returns                true if a tail call is still possible.
   bool recordCommonTailCallChecks(bool CanTailCall) {
     if (!CanTailCall) {
       IsTailCall = false;
@@ -514,20 +755,28 @@ public:
     return true;
   }
 
-  // Return nullptr if we either can't know the call target statically, and if
-  // we have a method handle it is only representative.  Otherwise it returns
-  // the same as getMethodHandle.  Think of a virtual call, where we have the
-  // baseclass or interface method handle, *NOT* the actual target.
+  /// \brief Return method handle, if known exactly.
+  ///
+  /// Returns nullptr if we either can't know the call target statically or if
+  /// we have a method handle it is only representative. Think of a virtual
+  /// call, where the target is the baseclass or interface method handle, *NOT*
+  /// the actual target. Otherwise it returns the same result as
+  /// \p getMethodHandle.
+  ///
+  /// \returns Method handle for the call target, or nullptr.
   CORINFO_METHOD_HANDLE getKnownMethodHandle() {
     if (IsCallI || !IsCallInfoValid || (CallInfo.kind != CORINFO_CALL))
       return nullptr;
     return TargetMethodHandle;
   }
 
+  /// \brief Record that there is an optimized ctor for this delegate.
+  ///
+  /// In some cases the EE may provide an alternate, optimized constructor
+  /// for a delegate. This method records the handle for that constructor.
+  ///
+  /// \param NewTargetMethodHandle    Method handle for the optimized ctor.
   void setOptimizedDelegateCtor(CORINFO_METHOD_HANDLE NewTargetMethodHandle);
-  DelegateCtorArgs *getDelegateCtorData() { return CtorArgs; }
-
-  void resetReader(ReaderBase *Reader);
 };
 
 // Interface to GenIR defined EHRegion structure
@@ -1765,7 +2014,7 @@ private:
 
   IRNode *rdrGetDirectCallTarget(CORINFO_METHOD_HANDLE Method,
                                  mdToken MethodToken, bool NeedsNullCheck,
-                                 bool CanMakeDirectCall, bool &UsesMethodDesc);
+                                 bool CanMakeDirectCall);
   IRNode *
   rdrGetCodePointerLookupCallTarget(ReaderCallTargetData *CallTargetData);
 
