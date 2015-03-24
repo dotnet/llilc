@@ -5609,7 +5609,8 @@ void ReaderBase::clearStack() {
   }
 }
 
-void ReaderBase::initParamsAndAutos(uint32_t NumParam, uint32_t NumAuto) {
+void ReaderBase::initParamsAndAutos(uint32_t NumParam, uint32_t NumAuto,
+                                    bool HasSecretParameter) {
   // Init verification maps
   if (VerificationNeeded) {
     NumVerifyParams = NumParam;
@@ -5626,7 +5627,7 @@ void ReaderBase::initParamsAndAutos(uint32_t NumParam, uint32_t NumAuto) {
     NumVerifyAutos = 0;
   }
 
-  buildUpParams(NumParam);
+  buildUpParams(NumParam, HasSecretParameter);
   buildUpAutos(NumAuto);
 }
 
@@ -5690,7 +5691,7 @@ void ReaderBase::buildUpAutos(uint32_t NumAutos) {
 // Note there is parallel logic in GenIR::GetFunctionType.
 // It must be kept in sync with the logic in this method.
 // We possibly should merge these two.
-void ReaderBase::buildUpParams(uint32_t NumParams) {
+void ReaderBase::buildUpParams(uint32_t NumParams, bool HasSecretParameter) {
   if (NumParams > 0) {
     CORINFO_ARG_LIST_HANDLE NextLoc, Locs;
     CORINFO_CLASS_HANDLE Class;
@@ -5752,8 +5753,10 @@ void ReaderBase::buildUpParams(uint32_t NumParams) {
       ParamIndex++;
     }
 
+    uint32_t NumRealParams = HasSecretParameter ? NumParams - 1 : NumParams;
+
     // Get the types of all of the parameters.
-    for (; ParamIndex < NumParams; ParamIndex++) {
+    for (; ParamIndex < NumRealParams; ParamIndex++) {
 
       if (VerificationNeeded) {
         verifyRecordParamType(ParamIndex - (IsVarArg ? 1 : 0) -
@@ -5764,6 +5767,14 @@ void ReaderBase::buildUpParams(uint32_t NumParams) {
       NextLoc = argListNext(Locs, &(MethodInfo->args), &CorType, &Class);
       createSym(ParamIndex, false, CorType, Class, false);
       Locs = NextLoc;
+    }
+
+    if (HasSecretParameter) {
+      ASSERT(ParamIndex == NumParams - 1);
+
+      CORINFO_CLASS_HANDLE Class = 0;
+      createSym(ParamIndex, false, CORINFO_TYPE_NATIVEINT, Class, false,
+                ReaderSpecialSymbolType::Reader_SecretParam);
     }
   }
 }

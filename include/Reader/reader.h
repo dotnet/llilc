@@ -281,6 +281,7 @@ enum ReaderSpecialSymbolType {
   Reader_UnmodifiedThisPtr,    ///< This pointer param passed to method
   Reader_VarArgsToken,         ///< Special param for varargs support
   Reader_InstParam,            ///< Special param for shared generics
+  Reader_SecretParam,          ///< Special param for IL stubs
   Reader_SecurityObject,       ///< Local used for security checking
   Reader_GenericsContext       ///< Local holding shared generics context
 };
@@ -1212,26 +1213,34 @@ public:
   /// direct client processing for the method parameters and the local
   /// variables of the method.
   ///
-  /// \params NumParams   Number of parameters to the method. Note this may
-  ///                     include implicit parameters like the this pointer.
-  /// \params NumAutos    Number of locals described in the local signature.
-  void initParamsAndAutos(uint32_t NumParam, uint32_t NumAuto);
+  /// \param NumParams           Number of parameters to the method. Note this
+  ///                            includes implicit parameters like the this
+  ///                            pointer.
+  /// \param NumAutos            Number of locals described in the local
+  ///                            signature.
+  /// \param HasSecretParameter  Indicates whether or not the terminal parameter
+  ///                            is the secret parameter of an IL stub.
+  void initParamsAndAutos(uint32_t NumParam, uint32_t NumAuto,
+                          bool HasSecretParameter);
 
   /// \brief Set up parameters
   ///
   /// Uses the method signature and information from the EE to direct the
   /// client to set up processing for method parameters.
   ///
-  /// \params NumParams   Number of parameters to the method. Note this may
-  ///                     include implicit parameters like the this pointer.
-  void buildUpParams(uint32_t NumParams);
+  /// \param NumParams           Number of parameters to the method. Note this
+  ///                            includes implicit parameters like the this
+  ///                            pointer.
+  /// \param HasSecretParameter  Indicates whether or not the terminal parameter
+  ///                            is the secret parameter of an IL stub.
+  void buildUpParams(uint32_t NumParams, bool HasSecretParameter);
 
   /// \brief Set up locals (autos)
   ///
   /// Uses the local signature to direct the client to set up processing
   /// for local variables in the method.
   ///
-  /// \params NumAutos   Number of locals described in the signature.
+  /// \param NumAutos   Number of locals described in the signature.
   void buildUpAutos(uint32_t NumAutos);
 
   /// \brief Process the next element (argument or local) in a signature
@@ -1240,7 +1249,7 @@ public:
   /// through a signature and obtain more detailed information about each
   /// element.
   ///
-  /// \params ArgListHandle  Handle for the current element of the signature
+  /// \param ArgListHandle   Handle for the current element of the signature
   /// \param Sig             The signature being iterated over.
   /// \param CorType [out]   Optional; the CorInfoType of the current element.
   /// \param Class [out]     Optional; the class handle of the current element.
@@ -2763,8 +2772,8 @@ public:
             ReaderSpecialSymbolType Type = Reader_NotSpecialSymbol) = 0;
 
   virtual IRNode *derefAddress(IRNode *Address, bool DestIsGCPtr, bool IsConst,
-
                                bool AddressMayBeNull = true) = 0;
+
   IRNode *derefAddressNonNull(IRNode *Address, bool DestIsGCPtr, bool IsConst) {
     return derefAddress(Address, DestIsGCPtr, IsConst, false);
   }
