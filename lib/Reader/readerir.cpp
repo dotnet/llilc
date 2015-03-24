@@ -3361,7 +3361,21 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
 
   CorInfoIntrinsics IntrinsicID = CallTargetInfo->getCorInstrinsic();
   if ((0 <= IntrinsicID) && (IntrinsicID < CORINFO_INTRINSIC_Count)) {
-    throw NotYetImplementedException("Call intrinsic");
+    switch (IntrinsicID) {
+    case CORINFO_INTRINSIC_Object_GetType: {
+      // TODO: note that this method has well known semantics that the jit can
+      // use to optimize in some cases.
+      //
+      // For now just treat as a normal call.
+      break;
+    }
+    case CORINFO_INTRINSIC_GetCurrentManagedThread: {
+      // For now just treat as a normal call.
+      break;
+    }
+    default:
+      throw NotYetImplementedException("Call intrinsic");
+    }
   }
 
   // TODO: deal with PInvokes and var args.
