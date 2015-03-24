@@ -531,7 +531,7 @@ In summary, the plan/status is:
      - [x] Null dereference
      - [ ] Divide by zero
      - [x] Arithmetic overflow
-     - [ ] Convert with overflow
+     - [x] Convert with overflow
      - [x] Array bounds checks
      - [x] Array store checks
  2. [ ] Handler bring-up in EH branch

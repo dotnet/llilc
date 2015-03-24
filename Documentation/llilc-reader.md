@@ -190,6 +190,8 @@ The instructions currently implemented:
 
 -   Conversion instructions (conv variants)
 
+-   Overflow conversion instructions (conv.ovf variants)
+
 -   Logical condition check instructions (ceq, cgt, clt and their
     variants)
 
@@ -220,8 +222,6 @@ The instructions currently implemented:
 -   Stack manipulation (nop, dup, pop)
 
 <a name="Not implemented"></a>The instructions not yet implemented:
-
--   Overflow conversion instructions (conv.ovf variants)
 
 -   Local block allocation (localloc)
 
