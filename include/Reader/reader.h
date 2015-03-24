@@ -436,8 +436,10 @@ private:
   bool IsReadonlyCall;                            ///< Is there a readonly
                                                   ///< prefix.
   CorInfoIntrinsics CorIntrinsicId;               ///< Intrinsic ID for method
-  uint32_t TargetMethodAttribs;                   ///< Attribs for method
-  uint32_t TargetClassAttribs;                    ///< Attribs for method class
+  uint32_t TargetMethodAttribs;                   ///< Attributes for method,
+                                                  ///< \see CorInfoFlag
+  uint32_t TargetClassAttribs;                    ///< Attributes for method's
+                                                  ///< class, \see CorInfoFlag
   CORINFO_METHOD_HANDLE TargetMethodHandle;       ///< Handle for target method
   CORINFO_CLASS_HANDLE TargetClassHandle;         ///< Handle for method class
   CORINFO_SIG_INFO SigInfo;                       ///< Info on the method sig
@@ -500,10 +502,15 @@ public:
   CORINFO_METHOD_HANDLE getMethodHandle() { return TargetMethodHandle; }
 
   /// Get the method attributes for the call target method.
+  ///
+  /// Gets the target method's attributes as reported by the CoreCLR EE.
+  /// Possible values are described by \p CorInfoFlag. Generally only valid
+  /// when the target method is known (that is, the call is not indirect).
+  ///
   /// \returns     The method attributes for the call target method.
   uint32_t getMethodAttribs() { return TargetMethodAttribs; }
 
-  /// Get the signature infos for the call target method.
+  /// Get the signature info for the call target method.
   /// \returns     The signature info for the call target method.
   CORINFO_SIG_INFO *getSigInfo() { return &SigInfo; }
 
@@ -531,7 +538,11 @@ public:
   /// \returns      Client IR node for the call target.
   IRNode *getCallTargetNode() { return CallTargetNode; }
 
-  /// Get the class attributes for the call target method's class.
+  /// \brief Get the class attributes for the call target method's class.
+  ///
+  /// Gets the target method's class attributes as reported by the CoreCLR EE.
+  /// Possible values are described by \p CorInfoFlag.
+  ///
   /// \returns      The class attributes for the call target method's class.
   uint32_t getClassAttribs();
 
@@ -595,31 +606,33 @@ public:
   /// \returns     True if this call is from a \p jmp opcode.
   bool isJmp() { return IsJmp; }
 
-  /// \brief Check if this is call is a tail call candidate.
+  /// \brief Check if this call is a tail call candidate.
   ///
   /// True if this call is a candiate for tail call optimization. Note the
-  /// value may change over time as the reader does more in-depth checking.
+  /// value returned by this method may change over time as the reader does
+  /// more in-depth checking.
   ///
   /// \returns     True if this call is currently a tail call candidate.
   bool isTailCall() { return IsTailCall; }
 
-  /// \brief Check if this is a recursive tail call candidate.
+  /// \brief Check if this call is a recursive tail call candidate.
   ///
   /// A recursive tail call is a recursive call that is followed immediately
   /// by a \p ret (possibly allowing for \p nop or similar in between). It may
   /// or may not be marked with the \p tail prefix. If this method returns true
   /// then the current call site is a recursive tail call candidate. Note the
-  /// value may change over time as the reader does more in-depth checking.
+  /// value returned by this method may change over time as the reader does
+  /// more in-depth checking.
   ///
   /// \returns     True if this call is a recurisve tail call candidate.
   bool isRecursiveTailCall() { return IsRecursiveTailCall; }
 
-  /// \brief Check if this is an unmarked tail call candidate.
+  /// \brief Check if this call is an unmarked tail call candidate.
   ///
-  /// A unmarked tail call is a compatible call that is followed immediately
+  /// An unmarked tail call is a compatible call that is followed immediately
   /// by a \p ret (possibly allowing for \p nop or similar in between) that was
-  /// not preceeded by the \p tail prefix. Note the value may change over time
-  /// as the reader does more in-depth checking.
+  /// not preceded by the \p tail prefix. Note the value returned by this
+  /// method may change over time as the reader does more in-depth checking.
   ///
   /// \returns     True if this call is an unmarked tail call candidate.
   bool isUnmarkedTailCall() { return IsUnmarkedTailCall; }
