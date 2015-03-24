@@ -38,13 +38,22 @@ if (WIN32)
     ${LLILCJIT_EXPORTS_DEF_TEMP} ${LLILCJIT_EXPORTS_DEF})
 
   set(SHARED_LIB_SOURCES ${SOURCES} ${LLILCJIT_EXPORTS_DEF})
+
+  # For windows we need to specify the CoreCLR environment
+  set(LLILC_TARGET_TRIPLE "${LLVM_DEFAULT_TARGET_TRIPLE}-coreclr")
 else()
   if (UNIX)
     set(LLILCJIT_LINK_LIBRARIES ${LLILCJIT_LINK_LIBRARIES} coreclrpal)
   endif()
 
   set(SHARED_LIB_SOURCES ${SOURCES})
+
+  # For non-windows we can use the default triple for now
+  set(LLILC_TARGET_TRIPLE "${LLVM_DEFAULT_TARGET_TRIPLE}")
 endif()
+
+message(STATUS "LLILC_TARGET_TRIPLE is ${LLILC_TARGET_TRIPLE}")
+add_definitions(-DLLILC_TARGET_TRIPLE="${LLILC_TARGET_TRIPLE}")
 
 set(LLVM_EXPORTED_SYMBOL_FILE ${LLILCJIT_EXPORTS_DEF})
 

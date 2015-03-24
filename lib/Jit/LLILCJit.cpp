@@ -170,7 +170,7 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
   Context.LLVMContext = &PerThreadState->LLVMContext;
   std::unique_ptr<Module> M = Context.getModuleForMethod(MethodInfo);
   Context.CurrentModule = M.get();
-  Context.CurrentModule->setTargetTriple(LLVM_DEFAULT_TARGET_TRIPLE);
+  Context.CurrentModule->setTargetTriple(LLILC_TARGET_TRIPLE);
   Context.TheABIInfo = ABIInfo::get(*Context.CurrentModule);
 
   // Initialize per invocation JIT options. This should be done after the
