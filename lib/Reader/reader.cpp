@@ -5354,8 +5354,7 @@ ReaderBase::rdrMakeLdFtnTargetNode(CORINFO_RESOLVED_TOKEN *ResolvedToken,
   case CORINFO_CALL:
     // Direct Call
     return rdrGetDirectCallTarget(CallInfo->hMethod, ResolvedToken->token,
-                                  CallInfo->nullInstanceCheck == TRUE, true,
-                                  Unused);
+                                  CallInfo->nullInstanceCheck == TRUE, true);
   case CORINFO_CALL_CODE_POINTER:
     // Runtime lookup required (code sharing w/o using inst param)
     return rdrGetCodePointerLookupCallTarget(CallInfo, Unused);
@@ -5370,8 +5369,7 @@ IRNode *
 ReaderBase::rdrGetDirectCallTarget(ReaderCallTargetData *CallTargetData) {
   return rdrGetDirectCallTarget(
       CallTargetData->getMethodHandle(), CallTargetData->getMethodToken(),
-      CallTargetData->NeedsNullCheck, canMakeDirectCall(CallTargetData),
-      CallTargetData->UsesMethodDesc);
+      CallTargetData->NeedsNullCheck, canMakeDirectCall(CallTargetData));
 }
 
 // Generate the target for a direct call. "Direct call" can either be
@@ -5380,8 +5378,7 @@ ReaderBase::rdrGetDirectCallTarget(ReaderCallTargetData *CallTargetData) {
 IRNode *ReaderBase::rdrGetDirectCallTarget(CORINFO_METHOD_HANDLE Method,
                                            mdToken MethodToken,
                                            bool NeedsNullCheck,
-                                           bool CanMakeDirectCall,
-                                           bool &UsesMethodDesc) {
+                                           bool CanMakeDirectCall) {
   CORINFO_CONST_LOOKUP AddressInfo;
   getFunctionEntryPoint(Method, &AddressInfo, NeedsNullCheck
                                                   ? CORINFO_ACCESS_NONNULL
@@ -5400,7 +5397,6 @@ IRNode *ReaderBase::rdrGetDirectCallTarget(CORINFO_METHOD_HANDLE Method,
     if (AddressInfo.accessType == IAT_PPVALUE) {
       TargetNode = derefAddressNonNull(TargetNode, false, true);
     }
-    UsesMethodDesc = true;
   }
 
   return TargetNode;
@@ -5518,10 +5514,6 @@ ReaderBase::rdrGetVirtualTableCallTarget(ReaderCallTargetData *CallTargetData,
   // We need to make a copy because the "this" pointer
   IRNode *ThisPtrCopy;
   dup(*ThisPtr, &ThisPtrCopy, ThisPtr);
-
-  // VTable call uses method desc
-  CallTargetData->UsesMethodDesc = true;
-
   IRNode *VTableAddress = derefAddress(ThisPtrCopy, true, true);
 
   // Get the VTable offset of the method.
@@ -5552,9 +5544,6 @@ ReaderBase::rdrGetDelegateInvokeTarget(ReaderCallTargetData *CallTargetData,
 
   IRNode *ThisPtrCopy, *AddressNode;
   dup(*ThisPtr, &ThisPtrCopy, ThisPtr);
-
-  // Delegate invoke uses method desc
-  CallTargetData->UsesMethodDesc = true;
 
   CORINFO_EE_INFO EEInfo;
   JitInfo->getEEInfo(&EEInfo);
@@ -8054,38 +8043,12 @@ bool ReaderBase::rdrIsMethodVirtual(uint32_t MethodAttribs) {
   if ((MethodAttribs & CORINFO_FLG_STATIC) != 0)
     return false;
 
-  // methods not explicitly marked as virtual are not virutal
+  // methods not explicitly marked as virtual are not virtual
   if ((MethodAttribs & CORINFO_FLG_VIRTUAL) == 0)
     return false;
 
   // assume all other methods are virtual
   return true;
-}
-
-// ReaderCallTargetData Object
-//
-// This object encapsulates information about a call target. Some of
-// this information is hidden from the client but can be accessed by
-// the common reader.
-//
-// The class acts like a hash, generating information the first time
-// it is requested, and then using the cached information for later
-// requests.
-void ReaderCallTargetData::resetReader(ReaderBase *Reader) {
-  this->Reader = Reader;
-
-  // Now flush all of the cached IRNodes!
-  TargetMethodHandleNode = nullptr;
-  TargetClassHandleNode = nullptr;
-
-  CallTargetNode = nullptr;
-  IndirectionCellNode = nullptr;
-
-  // Reset some stuff
-  IsIndirect = IsCallI;
-
-  // Don't know how to undo this yet
-  ASSERTNR(!IsOptimizedDelegateCtor);
 }
 
 uint32_t ReaderCallTargetData::getClassAttribs() {
@@ -8339,7 +8302,6 @@ void ReaderCallTargetData::init(
   this->IsCallInfoValid = false;
   this->NeedsNullCheck = false;
   this->CorIntrinsicId = CORINFO_INTRINSIC_Count;
-  this->UsesMethodDesc = false;
   this->IsOptimizedDelegateCtor = false;
   this->CtorArgs = nullptr;
   this->TargetClassHandle = nullptr;
