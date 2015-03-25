@@ -3256,11 +3256,11 @@ IRNode *GenIR::callRuntimeHandleHelper(CorInfoHelpFunc Helper, IRNode *Arg1,
   //   x = callhelper(Arg1, Arg2);
   // }
   // return x;
-  BasicBlock *CallBlock = HelperCall->getParent();
   BasicBlock *CurrentBlock = LLVMBuilder->GetInsertBlock();
-  PHINode *PHI = createPHINode(CurrentBlock, ReturnType, 2, "RuntimeHandle");
-  PHI->addIncoming(NullCheckArg, SaveBlock);
-  PHI->addIncoming(HelperCall, CallBlock);
+  BasicBlock *CallBlock = HelperCall->getParent();
+  PHINode *PHI =
+      mergeConditionalResults(CurrentBlock, NullCheckArg, SaveBlock, HelperCall,
+                              CallBlock, "RuntimeHandle");
   return (IRNode *)PHI;
 };
 
@@ -3983,67 +3983,22 @@ CallInst *GenIR::genConditionalHelperCall(Value *Condition,
                                           Type *ReturnType, IRNode *Arg1,
                                           IRNode *Arg2, bool CallReturns,
                                           const Twine &CallBlockName) {
-  BasicBlock *CheckBlock = LLVMBuilder->GetInsertBlock();
-  BasicBlock::iterator InsertPoint = LLVMBuilder->GetInsertPoint();
-  Instruction *NextInstruction =
-      (InsertPoint == CheckBlock->end() ? nullptr : (Instruction *)InsertPoint);
-
-  // Create the call block so we can reference it later.
-  // Note: when using this helper to generate conditional throw
-  // (CallReturns==false) we could generate much smaller IR by reusing the same
-  // throw block for all throws of the same kind, but at the cost of not being
-  // able to tell in a debugger which check caused the exception.  The current
-  // strategy is to favor debuggability.
-  // TODO: Find a way to annotate the throw blocks as cold so they get laid out
-  // out-of-line.
-  BasicBlock *CallBlock =
-      BasicBlock::Create(*JitContext->LLVMContext, CallBlockName, Function);
-
-  // Split the block.  This creates a goto connecting the blocks that we'll
-  // replace with the conditional branch.
-  // Note that we split at offset NextInstrOffset rather than CurrInstrOffset.
-  // We're already generating the IR for the instr at CurrInstrOffset, and using
-  // NextInstrOffset here ensures that we won't redundantly try to add this
-  // instruction again when processing moves to the new ContinueBlock.
-  BasicBlock *ContinueBlock = ReaderBase::fgSplitBlock(
-      (FlowGraphNode *)CheckBlock, NextInstrOffset, (IRNode *)NextInstruction);
-  TerminatorInst *Goto = CheckBlock->getTerminator();
-
-  // Swap the conditional branch in place of the goto.
-  LLVMBuilder->SetInsertPoint(Goto);
-  BranchInst *Branch =
-      LLVMBuilder->CreateCondBr(Condition, CallBlock, ContinueBlock);
-  Goto->eraseFromParent();
-
-  // Fill in the call block.
+  // Create the call block and fill it in.
+  BasicBlock *CallBlock = createPointBlock(CallBlockName);
+  IRBuilder<>::InsertPoint SavedInsertPoint = LLVMBuilder->saveIP();
   LLVMBuilder->SetInsertPoint(CallBlock);
   CallInst *HelperCall =
       (CallInst *)callHelperImpl(HelperId, ReturnType, Arg1, Arg2);
-  if (CallReturns) {
-    LLVMBuilder->CreateBr(ContinueBlock);
-  } else {
+  if (!CallReturns) {
     HelperCall->setDoesNotReturn();
     LLVMBuilder->CreateUnreachable();
   }
+  LLVMBuilder->restoreIP(SavedInsertPoint);
 
-  // Give the call block equal start and end offsets so subsequent processing
-  // won't try to translate MSIL into it.
-  FlowGraphNode *CallFlowGraphNode = (FlowGraphNode *)CallBlock;
-  fgNodeSetStartMSILOffset(CallFlowGraphNode, CurrInstrOffset);
-  fgNodeSetEndMSILOffset(CallFlowGraphNode, CurrInstrOffset);
+  // Splice it into the flow.
+  insertConditionalPointBlock(Condition, CallBlock, CallReturns);
 
-  // CallBlock doesn't need an operand stack: it doesn't have any MSIL and
-  // its successor block (if there is one) will get the stack propagated from
-  // the check block.
-  fgNodeSetPropagatesOperandStack(CallFlowGraphNode, false);
-
-  // Move the insert point back to the first instruction in the non-null path.
-  if (NextInstruction == nullptr) {
-    LLVMBuilder->SetInsertPoint(ContinueBlock);
-  } else {
-    LLVMBuilder->SetInsertPoint(ContinueBlock->getFirstInsertionPt());
-  }
-
+  // Return the the call.
   return HelperCall;
 }
 
@@ -4380,6 +4335,118 @@ IRNode *GenIR::derefAddress(IRNode *Address, bool DstIsGCPtr, bool IsConst,
   return (IRNode *)Result;
 }
 
+// Create an empty block to hold IR for some conditional instructions at a
+// particular point in the MSIL (conditional LLVM instructions that are part
+// of the expansion of a single MSIL instruction)
+BasicBlock *GenIR::createPointBlock(const Twine &BlockName) {
+  BasicBlock *Block =
+      BasicBlock::Create(*JitContext->LLVMContext, BlockName, Function);
+
+  // Give the call block equal start and end offsets so subsequent processing
+  // won't try to translate MSIL into it.
+  FlowGraphNode *CallFlowGraphNode = (FlowGraphNode *)Block;
+  fgNodeSetStartMSILOffset(CallFlowGraphNode, CurrInstrOffset);
+  fgNodeSetEndMSILOffset(CallFlowGraphNode, CurrInstrOffset);
+
+  // Point blocks don't need an operand stack: they don't have any MSIL and
+  // any successor block will get the stack propagated from the other
+  // predecessor.
+  fgNodeSetPropagatesOperandStack(CallFlowGraphNode, false);
+
+  return Block;
+}
+
+// Split the current block, inserting a conditional branch to the PointBlock
+// based on Condition, and branch back from the PointBlock to the continuation
+// if Rejoin is true. Return the continuation.
+BasicBlock *GenIR::insertConditionalPointBlock(Value *Condition,
+                                               BasicBlock *PointBlock,
+                                               bool Rejoin) {
+  BasicBlock *CurrentBlock = LLVMBuilder->GetInsertBlock();
+  BasicBlock::iterator InsertPoint = LLVMBuilder->GetInsertPoint();
+  Instruction *NextInstruction =
+      (InsertPoint == CurrentBlock->end() ? nullptr
+                                          : (Instruction *)InsertPoint);
+
+  // Split the current block.  This creates a goto connecting the blocks that
+  // we'll replace with the conditional branch.
+  // Note that we split at offset NextInstrOffset rather than CurrInstrOffset.
+  // We're already generating the IR for the instr at CurrInstrOffset, and using
+  // NextInstrOffset here ensures that we won't redundantly try to add this
+  // instruction again when processing moves to the new ContinueBlock.
+  BasicBlock *ContinueBlock =
+      ReaderBase::fgSplitBlock((FlowGraphNode *)CurrentBlock, NextInstrOffset,
+                               (IRNode *)NextInstruction);
+  TerminatorInst *Goto = CurrentBlock->getTerminator();
+  LLVMBuilder->SetInsertPoint(Goto);
+  BranchInst *Branch =
+      LLVMBuilder->CreateCondBr(Condition, PointBlock, ContinueBlock);
+  Goto->eraseFromParent();
+
+  if (Rejoin) {
+    ASSERT(PointBlock->getTerminator() == nullptr);
+    LLVMBuilder->SetInsertPoint(PointBlock);
+    LLVMBuilder->CreateBr(ContinueBlock);
+  }
+
+  // Move the insert point to the first instruction in the continuation.
+  if (NextInstruction == nullptr) {
+    LLVMBuilder->SetInsertPoint(ContinueBlock);
+  } else {
+    LLVMBuilder->SetInsertPoint(ContinueBlock->getFirstInsertionPt());
+  }
+
+  return ContinueBlock;
+}
+
+// Add a PHI at the start of the JoinBlock to merge the two results.
+PHINode *GenIR::mergeConditionalResults(BasicBlock *JoinBlock, Value *Arg1,
+                                        BasicBlock *Block1, Value *Arg2,
+                                        BasicBlock *Block2,
+                                        const Twine &NameStr) {
+  PHINode *PHI = createPHINode(JoinBlock, Arg1->getType(), 2, NameStr);
+  PHI->addIncoming(Arg1, Block1);
+  PHI->addIncoming(Arg2, Block2);
+  return PHI;
+}
+
+// Handle case of an indirection from CORINFO_RUNTIME_LOOKUP where
+// testForFixup was true.
+//
+// If lowest bit of Address is set, clear it and dereference to obtain the
+// result. If not, just set the result to Address.
+IRNode *GenIR::conditionalDerefAddress(IRNode *Address) {
+  // Build up the initial bit test
+  BasicBlock *TestBlock = LLVMBuilder->GetInsertBlock();
+  Type *AddressTy = Address->getType();
+  Type *IntPtrTy = getType(CorInfoType::CORINFO_TYPE_NATIVEINT, nullptr);
+  Value *AddressAsInt = LLVMBuilder->CreatePtrToInt(Address, IntPtrTy);
+  Value *One = loadConstantI(1);
+  Value *TestValue = LLVMBuilder->CreateAnd(AddressAsInt, One);
+  Value *TestPredicate = LLVMBuilder->CreateICmpEQ(TestValue, One);
+
+  // Allocate the indirection block and fill it in.
+  BasicBlock *IndirectionBlock = createPointBlock("CondDerefAddr");
+  IRBuilder<>::InsertPoint SavedInsertPoint = LLVMBuilder->saveIP();
+  LLVMBuilder->SetInsertPoint(IndirectionBlock);
+  Value *Mask = LLVMBuilder->CreateNot(One);
+  Value *ConditionalAddressAsInt = LLVMBuilder->CreateAnd(AddressAsInt, Mask);
+  Value *ConditionalAddress = LLVMBuilder->CreateIntToPtr(
+      ConditionalAddressAsInt, AddressTy->getPointerTo());
+  Value *UpdatedAddress = LLVMBuilder->CreateLoad(ConditionalAddress);
+  LLVMBuilder->restoreIP(SavedInsertPoint);
+
+  // Splice the indirection block in.
+  BasicBlock *ContinueBlock =
+      insertConditionalPointBlock(TestPredicate, IndirectionBlock, true);
+
+  // Merge the two addresses and return the result.
+  PHINode *Result = mergeConditionalResults(ContinueBlock, Address, TestBlock,
+                                            UpdatedAddress, ContinueBlock);
+
+  return (IRNode *)Result;
+}
+
 IRNode *GenIR::loadVirtFunc(IRNode *Arg1, CORINFO_RESOLVED_TOKEN *ResolvedToken,
                             CORINFO_CALL_INFO *CallInfo) {
   IRNode *TypeToken = genericTokenToNode(ResolvedToken, true);
@@ -4394,6 +4461,7 @@ IRNode *GenIR::loadVirtFunc(IRNode *Arg1, CORINFO_RESOLVED_TOKEN *ResolvedToken,
   return (IRNode *)LLVMBuilder->CreateIntToPtr(
       CodeAddress, getUnmanagedPointerType(FunctionType));
 }
+
 IRNode *GenIR::getPrimitiveAddress(IRNode *Addr, CorInfoType CorInfoType,
                                    ReaderAlignType Alignment, uint32_t *Align) {
   ASSERTNR(isPrimitiveType(CorInfoType) || CorInfoType == CORINFO_TYPE_REFANY);
