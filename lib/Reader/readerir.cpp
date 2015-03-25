@@ -364,16 +364,23 @@ void GenIR::readerPostPass(bool IsImportOnly) {
   // If the generic context must be kept live,
   // insert the necessary code to make it so.
   if (KeepGenericContextAlive) {
+    IRBuilder<>::InsertPoint SavedInsertPoint = LLVMBuilder->saveIP();
     Value *ContextLocalAddress = nullptr;
     CorInfoOptions Options = JitContext->MethodInfo->options;
+    Instruction *InsertPoint = TempInsertionPoint;
+    ASSERT(InsertPoint != nullptr);
 
     if (Options & CORINFO_GENERICS_CTXT_FROM_THIS) {
       // The this argument might be modified in the method body, so
       // make a copy of the incoming this in a scratch local.
       ASSERT(HasThis);
       Value *This = thisObj();
-      ContextLocalAddress = createTemporary(This->getType());
-      makeStoreNonNull(This, ContextLocalAddress, false);
+      Instruction *ScratchLocalAlloca = createTemporary(This->getType());
+      // Put the store just after the newly added alloca.
+      LLVMBuilder->SetInsertPoint(ScratchLocalAlloca->getNextNode());
+      InsertPoint = makeStoreNonNull(This, ScratchLocalAlloca, false);
+      // The scratch local's address is the saved context address.
+      ContextLocalAddress = ScratchLocalAlloca;
     } else {
       // We know the type arg is unmodified so we can use its initial
       // spilled value location for reporting.
@@ -384,15 +391,15 @@ void GenIR::readerPostPass(bool IsImportOnly) {
     }
 
     // Indicate that the context location's address escapes by inserting a call
-    // to llvm.frameescape at the end of the allocas in the entry block.
-    IRBuilder<>::InsertPoint InsertPt = LLVMBuilder->saveIP();
-    LLVMBuilder->SetInsertPoint(TempInsertionPoint->getNextNode());
+    // to llvm.frameescape. Put that call just after the last alloca or the
+    // store to the scratch local.
+    LLVMBuilder->SetInsertPoint(InsertPoint->getNextNode());
     Value *FrameEscape = Intrinsic::getDeclaration(JitContext->CurrentModule,
                                                    Intrinsic::frameescape);
     Value *Args[] = {ContextLocalAddress};
     LLVMBuilder->CreateCall(FrameEscape, Args);
     // Don't move TempInsertionPoint up since what we added was not an alloca
-    LLVMBuilder->restoreIP(InsertPt);
+    LLVMBuilder->restoreIP(SavedInsertPoint);
 
     // This method now requires a frame pointer.
     TargetMachine *TM = JitContext->EE->getTargetMachine();
