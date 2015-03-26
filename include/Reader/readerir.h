@@ -753,9 +753,7 @@ public:
   IRNode *derefAddress(IRNode *Address, bool DstIsGCPtr, bool IsConst,
                        bool AddressMayBeNull = true) override;
 
-  IRNode *conditionalDerefAddress(IRNode *Address) override {
-    throw NotYetImplementedException("conditionalDerefAddress");
-  };
+  IRNode *conditionalDerefAddress(IRNode *Address) override;
 
   IRNode *getHelperCallAddress(CorInfoHelpFunc HelperId) override;
 
@@ -926,6 +924,65 @@ private:
 
   void classifyCmpType(llvm::Type *Ty, uint32_t &Size, bool &IsPointer,
                        bool &IsFloat);
+
+  /// \brief Create a basic block for use when expanding a single MSIL
+  /// instruction.
+  ///
+  /// Use this method to create a block when expanding a single MSIL
+  /// instruction into an instruction sequence with control flow. Give the
+  /// block the current MSIL offset at both begin and end since it represents
+  /// code at a single point in the IL stream. Mark the block as not
+  /// contributing an operand stack to any subsequent join.
+  ///
+  /// \param BlockName         Optional name for the new block.
+  /// \returns                 Newly allocated block.
+  llvm::BasicBlock *createPointBlock(const llvm::Twine &BlockName = "");
+
+  /// \brief Insert a conditional branch to a point block.
+  ///
+  /// Split the current block after the current instruction, creating a
+  /// continuation block. Insert a conditional branch to \p PointBlock if
+  /// \p Condition is true. Insert an unconditional branch into \p PointBlock
+  /// to the contiuation if \p Rejoin is true. Leave the insertion point in
+  /// the continuation at the same logical point it was before the split.
+  ///
+  /// \param Condition       Predicate condition to use in the branch.
+  /// \param PointBlock      Block to branch to when \p Condition is true. If
+  ///                        \p Rejoin is true, \p PointBlock must not have a
+  ///                        terminator, and this method will add one. If \p
+  ///                        Rejoin is false, \p PointBlock is left unmodified.
+  /// \param Rejoin          If true, insert a branch into \p PointBlock back
+  ///                        to the continuation.
+  ///
+  /// \returns               The continuation block. Insertion point is left
+  ///                        within this block at the instruction after the
+  ///                        original split point.
+  llvm::BasicBlock *insertConditionalPointBlock(llvm::Value *Condition,
+                                                llvm::BasicBlock *PointBlock,
+                                                bool Rejoin);
+
+  /// \brief Insert a PHI to merge two values
+  ///
+  /// Create a \p PHINode in \p JoinBlock to merge \p Arg1 and \p Arg2.
+  /// Insert the new PHINode after any existing PHINodes in the block.
+  /// Return the new PHINode. Insertion point is unaffected.
+  ///
+  /// \param JoinBlock            Block to insert the PHI node.
+  /// \param Arg1                 First value to join.
+  /// \param Block1               Predecessor block for \p JoinBlock that
+  ///                             brings in \p Arg1.
+  /// \param Arg2                 Second value to join.
+  /// \param Block2               Predecessor block for \p JoinBlock that
+  ///                             brings in \p Arg2.
+  /// \param NameStr              Optional name for the resulting PHI.
+  ///
+  /// \returns                    The PHINode that was inserted.
+  llvm::PHINode *mergeConditionalResults(llvm::BasicBlock *JoinBlock,
+                                         llvm::Value *Arg1,
+                                         llvm::BasicBlock *Block1,
+                                         llvm::Value *Arg2,
+                                         llvm::BasicBlock *Block2,
+                                         const llvm::Twine &NameStr = "");
 
   /// Generate a call to the helper if the condition is met.
   ///
