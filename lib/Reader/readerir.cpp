@@ -4093,6 +4093,45 @@ void GenIR::nop() {
   }
 }
 
+IRNode *GenIR::unbox(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Object,
+                     bool AndLoad, ReaderAlignType Alignment, bool IsVolatile) {
+  // Ensure that this method can access the the unbox type.
+  CORINFO_HELPER_DESC ThrowHelper;
+  CorInfoIsAccessAllowedResult ClassAccessAllowed =
+      canAccessClass(ResolvedToken, getCurrentMethodHandle(), &ThrowHelper);
+  handleMemberAccess(ClassAccessAllowed, ThrowHelper);
+
+  // Unboxing uses a helper call. Figure out which one.
+  CORINFO_CLASS_HANDLE ClassHandle = ResolvedToken->hClass;
+  CorInfoHelpFunc HelperId = getUnBoxHelper(ClassHandle);
+
+  // The first helper argument is the class handle for the type to unbox to.
+  IRNode *ClassHandleArgument = genericTokenToNode(ResolvedToken);
+
+  // The normal Unboxing helper returns a pointer into the boxed object
+  // But the unbox nullable helper takes a pointer to write into and
+  // returns void, so we need to shift the arguments and create a temp
+  // to write the output into
+  if (HelperId == CORINFO_HELP_UNBOX_NULLABLE) {
+    throw NotYetImplementedException("unbox nullable");
+  }
+
+  ASSERTNR(HelperId == CORINFO_HELP_UNBOX);
+
+  // Call helper to do the type check and get the address of the unbox payload.
+  Type *PtrTy = getType(CorInfoType::CORINFO_TYPE_BYREF, ClassHandle);
+  IRNode *Result = callHelperImpl(HelperId, PtrTy, ClassHandleArgument, Object);
+
+  // If requested, load the object onto the evaluation stack.
+  if (AndLoad) {
+    // Result was null checked by the helper, so is non-null here.
+    Result =
+        loadObjNonNull(ResolvedToken, Result, Alignment, IsVolatile, false);
+  }
+
+  return Result;
+}
+
 void GenIR::pop(IRNode *Opr) {
   // No actions needed.
 }

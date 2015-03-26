@@ -473,9 +473,7 @@ public:
   IRNode *unaryOp(ReaderBaseNS::UnaryOpcode Opcode, IRNode *Arg1) override;
   IRNode *unbox(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg2,
                 bool AndLoad, ReaderAlignType Alignment,
-                bool IsVolatile) override {
-    throw NotYetImplementedException("unbox");
-  };
+                bool IsVolatile) override;
 
   void nop() override;
 
@@ -764,8 +762,9 @@ public:
 
   // Create an operand that will be used to hold a pointer.
   IRNode *makePtrDstGCOperand(bool IsInteriorGC) override {
-    throw NotYetImplementedException("makePtrDstGCOperand");
-  };
+    return makePtrNode(IsInteriorGC ? Reader_PtrGcInterior : Reader_PtrGcBase);
+  }
+
   IRNode *makePtrNode(ReaderPtrType PtrType = Reader_PtrNotGc) override;
 
   IRNode *makeStackTypeNode(IRNode *Node) override {
