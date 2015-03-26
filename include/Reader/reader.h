@@ -2761,8 +2761,13 @@ public:
                                           IRNode *Arg2,
                                           IRNode *NullCheckArg) = 0;
 
-  virtual IRNode *convertToHelperArgumentType(IRNode *Opr,
-                                              uint32_t DestinationSize) = 0;
+  /// Converts the operand to an argument type understood by the boxing helper
+  ///
+  /// \param Opr Operand
+  /// \param CorType CorInfoType of the operand.
+  /// \returns Converted operand
+  virtual IRNode *convertToBoxHelperArgumentType(IRNode *Opr,
+                                                 CorInfoType CorType) = 0;
 
   virtual IRNode *genNullCheck(IRNode *Node) = 0;
 
@@ -2792,7 +2797,12 @@ public:
                                  bool IsCallTarget,
                                  bool IsFrozenObject = false) = 0;
 
-  // Create an operand that will be used to hold a pointer.
+  /// Create an operand that will be used to pass to the boxing helper
+  ///
+  /// \param Class CORINFO_CLASS_HANDLE of the type to be boxed
+  /// \returns Operand
+  virtual IRNode *makeBoxDstOperand(CORINFO_CLASS_HANDLE Class) = 0;
+
   virtual IRNode *makePtrDstGCOperand(bool IsInteriorGC) = 0;
   virtual IRNode *makePtrNode(ReaderPtrType PointerType = Reader_PtrNotGc) = 0;
   virtual IRNode *makeStackTypeNode(IRNode *Node) = 0;

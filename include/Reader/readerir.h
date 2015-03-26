@@ -738,10 +738,10 @@ public:
   IRNode *callRuntimeHandleHelper(CorInfoHelpFunc Helper, IRNode *Arg1,
                                   IRNode *Arg2, IRNode *NullCheckArg);
 
-  IRNode *convertToHelperArgumentType(IRNode *Opr,
-                                      uint32_t DestinationSize) override {
-    throw NotYetImplementedException("convertToHelperArgumentType");
-  };
+  IRNode *convertToBoxHelperArgumentType(IRNode *Opr,
+                                         CorInfoType CorType) override;
+
+  IRNode *makeBoxDstOperand(CORINFO_CLASS_HANDLE Class) override;
 
   IRNode *genNullCheck(IRNode *Node) override;
 

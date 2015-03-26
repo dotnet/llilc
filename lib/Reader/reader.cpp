@@ -1090,6 +1090,10 @@ CorInfoHelpFunc ReaderBase::getSharedCCtorHelper(CORINFO_CLASS_HANDLE Class) {
   return JitInfo->getSharedCCtorHelper(Class);
 }
 
+CORINFO_CLASS_HANDLE ReaderBase::getTypeForBox(CORINFO_CLASS_HANDLE Class) {
+  return JitInfo->getTypeForBox(Class);
+}
+
 CorInfoHelpFunc ReaderBase::getBoxHelper(CORINFO_CLASS_HANDLE Class) {
   return JitInfo->getBoxHelper(Class);
 }
@@ -3714,33 +3718,32 @@ void ReaderBase::initObj(CORINFO_RESOLVED_TOKEN *ResolvedToken,
 // Box - Default reader processing for CEE_BOX.
 IRNode *ReaderBase::box(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg2,
                         uint32_t *NextOffset, VerificationState *VState) {
-  IRNode *Dst, *Arg1;
+  IRNode *Dst, *RetVal, *Arg1;
   CORINFO_CLASS_HANDLE Class = ResolvedToken->hClass;
 
-  if (getClassAttribs(Class) & CORINFO_FLG_VALUECLASS) {
-    // Ensure that operand from operand stack has type that is
-    // compatible with box destination, then get the (possibly
-    // converted) operand's address.
-    Arg2 = convertToHelperArgumentType(Arg2, getClassSize(Class));
-
-    // Use address of value here, this helps to prevent user-syms from
-    // being aliased.
-    Arg2 = addressOfValue(Arg2);
-
-    // Pointer operand to hold result of call to box.
-    Dst = makePtrDstGCOperand(false);
-
-    // The first arg for the helper is the class handle. Derive it
-    // from the token.
-    Arg1 = genericTokenToNode(ResolvedToken, true);
-
-    Dst = callHelper(getBoxHelper(Class), Dst, Arg1, Arg2);
-
-    return Dst;
-  } else {
+  if ((getClassAttribs(Class) & CORINFO_FLG_VALUECLASS) == 0) {
     // We allow box of reference types.  box of reference type -> NOP
     return Arg2;
   }
+
+  // Ensure that operand from operand stack has type that is
+  // compatible with box destination, then get the (possibly
+  // converted) operand's address.
+  Arg2 = convertToBoxHelperArgumentType(Arg2, getClassType(Class));
+
+  Dst = makeBoxDstOperand(Class);
+
+  // Use address of value here, this helps to prevent user-syms from
+  // being aliased.
+  Arg2 = addressOfValue(Arg2);
+
+  // The first arg for the helper is the class handle. Derive it
+  // from the token.
+  Arg1 = genericTokenToNode(ResolvedToken, true);
+
+  RetVal = callHelper(getBoxHelper(Class), Dst, Arg1, Arg2);
+
+  return RetVal;
 }
 
 // CastClass - Generate a simple helper call for the cast class.

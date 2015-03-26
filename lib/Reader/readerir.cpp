@@ -1048,6 +1048,7 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
   if (IsObject) {
     ASSERT(NumFields == 0);
     ASSERT(IsRefClass);
+
     // Vtable is an array of pointer-sized things.
     Type *VtableSlotTy =
         Type::getIntNPtrTy(LLVMContext, TargetPointerSizeInBits);
@@ -2910,7 +2911,29 @@ IRNode *GenIR::loadStaticField(CORINFO_RESOLVED_TOKEN *FieldToken,
 }
 
 IRNode *GenIR::addressOfValue(IRNode *Leaf) {
-  throw NotYetImplementedException("AddressOfValue");
+  Type *LeafTy = Leaf->getType();
+
+  switch (LeafTy->getTypeID()) {
+  case Type::TypeID::IntegerTyID:
+  case Type::TypeID::FloatTyID:
+  case Type::TypeID::DoubleTyID:
+  case Type::TypeID::StructTyID: {
+    Instruction *Alloc = createTemporary(LeafTy);
+    StoreInst *Store = LLVMBuilder->CreateStore(Leaf, Alloc);
+    return (IRNode *)Alloc;
+  }
+  default:
+    ASSERTNR(UNREACHED);
+    return nullptr;
+  }
+}
+
+IRNode *GenIR::makeBoxDstOperand(CORINFO_CLASS_HANDLE Class) {
+  const bool IsRefClass = false;
+  const bool GetRefClassFields = false;
+  Type *Ty = getClassType(getTypeForBox(Class), IsRefClass, GetRefClassFields);
+  Value *Ptr = llvm::Constant::getNullValue(getManagedPointerType(Ty));
+  return (IRNode *)Ptr;
 }
 
 IRNode *GenIR::addressOfLeaf(IRNode *Leaf) {
@@ -3587,6 +3610,39 @@ IRNode *GenIR::canonNewArrayCall(IRNode *Call,
   CallInstruction->eraseFromParent();
 
   return (IRNode *)NewCallInstruction;
+}
+
+IRNode *GenIR::convertToBoxHelperArgumentType(IRNode *Opr,
+                                              CorInfoType DestType) {
+  Type *Ty = Opr->getType();
+  switch (Ty->getTypeID()) {
+  case Type::TypeID::IntegerTyID: {
+    // CLR box helper will only accept 4 byte or 8 byte integers. The value on
+    // the stack should already have the right size.
+    const uint32_t Size = Ty->getIntegerBitWidth();
+    ASSERT((Size == 32) || (Size == 64));
+
+    // If Size were smaller than DestinationSize the boxing helper would grab
+    // data from outside the smaller datatype.
+    ASSERT(size(DestType) <= Size);
+    break;
+  }
+  // If the data type is a float64 and we want to box it to a
+  // float32 then also have to do an explict conversion.
+  // Otherwise, the boxing helper will grab the wrong bits out of the float64
+  // and
+  // destroy the value.
+  case Type::TypeID::FloatTyID:
+  case Type::TypeID::DoubleTyID:
+    if (Ty->getPrimitiveSizeInBits() > size(DestType)) {
+      Opr = (IRNode *)LLVMBuilder->CreateFPCast(Opr, Ty);
+    }
+    break;
+  default:
+    break;
+  }
+
+  return Opr;
 }
 
 bool GenIR::callIsCorVarArgs(IRNode *CallNode) {
