@@ -527,6 +527,8 @@ Function *GenIR::getFunction(CORINFO_METHOD_HANDLE MethodHandle,
     F->setCallingConv(CallingConv::CLR_SecretParameter);
   }
 
+  F->setGC("statepoint-example");
+
   return F;
 }
 

@@ -10,6 +10,7 @@ set(LLVM_LINK_COMPONENTS
   CodeGen
   Core
   ExecutionEngine
+  IPO
   IRReader
   MCJIT
   MC
