@@ -80,6 +80,11 @@ public:
   std::string MethodName;          ///< Name of the method (for diagnostics).
   //@}
 
+  /// \name CoreCLR GC information
+  //@{
+  bool ShouldUseConservativeGC; ///< Whether the GC is conservative/precise
+  //@}
+
   /// \name LLVM information
   //@{
   llvm::LLVMContext *LLVMContext; ///< LLVM context for types and similar.
@@ -229,6 +234,12 @@ private:
   /// \param JitContext Context record for the method's jit request.
   /// \returns \p true if GC info was successfully reported.
   bool outputGCInfo(LLILCJitContext *JitContext);
+
+  /// Insert the @gc.safepoint_poll() method
+  /// Inserts the @gc.safepoint_poll() method into the current module.
+  /// This helper is required by the LLVM GC-Statepoint insertion phase.
+  /// \param Context JitContext Context record for the current jit request.
+  void insertSafepointPoll(LLILCJitContext *Context);
 
 public:
   /// A pointer to the singleton jit instance.

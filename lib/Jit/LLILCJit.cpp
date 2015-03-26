@@ -17,6 +17,7 @@
 #include "LLILCJit.h"
 #include "readerir.h"
 #include "EEMemoryManager.h"
+#include "llvm/CodeGen/GCs.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/MCJIT.h"
 #include "llvm/ExecutionEngine/SectionMemoryManager.h"
@@ -24,6 +25,7 @@
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IRReader/IRReader.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Verifier.h"
@@ -35,6 +37,8 @@
 #include "llvm/Support/Format.h"
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include <string>
 
 using namespace llvm;
@@ -55,6 +59,20 @@ LLVMDumpLevel dumpLevel() {
     }
   }
   return NODUMP;
+}
+
+// Get the GC-Scheme used by the runtime -- conservative/precise
+// For now this is done by directly accessing environment variable.
+// When CLR config support is included, update it here.
+bool shouldUseConservativeGC() {
+  const char *LevelCStr = getenv("COMPLUS_GCCONSERVATIVE");
+  if (LevelCStr) {
+    std::string Level = LevelCStr;
+    if (Level.compare("1") == 0) {
+      return true;
+    }
+  }
+  return false;
 }
 
 // The one and only Jit Object.
@@ -86,6 +104,7 @@ LLILCJit::LLILCJit() {
   InitializeNativeTarget();
   InitializeNativeTargetAsmPrinter();
   InitializeNativeTargetAsmParser();
+  llvm::linkStatepointExampleGC();
 }
 
 #ifdef LLVM_ON_WIN32
@@ -163,6 +182,11 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
   Context.LLVMContext = &PerThreadState->LLVMContext;
   std::unique_ptr<Module> M = Context.getModuleForMethod(MethodInfo);
   Context.CurrentModule = M.get();
+  Context.ShouldUseConservativeGC = shouldUseConservativeGC();
+
+  if (!Context.ShouldUseConservativeGC) {
+    insertSafepointPoll(&Context);
+  }
 
   EngineBuilder Builder(std::move(M));
   std::string ErrStr;
@@ -173,7 +197,8 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
 
   TargetOptions Options;
 
-  Options.EnableFastISel = true;
+  // Statepoint GC does not support FastIsel yet.
+  Options.EnableFastISel = Context.ShouldUseConservativeGC;
 
   if ((Flags & CORJIT_FLG_DEBUG_CODE) == 0) {
     Builder.setOptLevel(CodeGenOpt::Level::Default);
@@ -201,6 +226,22 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
   bool HasMethod = this->readMethod(&Context);
 
   if (HasMethod) {
+
+    if (!Context.ShouldUseConservativeGC) {
+      // If using Precise GC, run the GC-Safepoint insertion
+      // and lowering passes before generating code.
+      legacy::PassManager Passes;
+      Passes.add(createPlaceSafepointsPass());
+
+      PassManagerBuilder PMBuilder;
+      PMBuilder.OptLevel = 0;  // Set optimization level to -O0
+      PMBuilder.SizeLevel = 0; // so that no additional phases are run.
+      PMBuilder.populateModulePassManager(Passes);
+
+      Passes.add(createRewriteStatepointsForGCPass());
+      Passes.run(*Context.CurrentModule);
+    }
+
     Context.EE->generateCodeForModule(Context.CurrentModule);
 
     // You need to pick up the COFFDyld changes from the MS branch of LLVM
@@ -231,6 +272,28 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
   Context.EE = nullptr;
 
   return Result;
+}
+
+// This is the method invoked by the EE to Jit code.
+void LLILCJit::insertSafepointPoll(LLILCJitContext *Context) {
+  Module *M = Context->CurrentModule;
+
+  FunctionType *VoidFnType =
+      FunctionType::get(Type::getVoidTy(M->getContext()), false);
+
+  Function *SafepointPoll = dyn_cast<Function>(
+      M->getOrInsertFunction("gc.safepoint_poll", VoidFnType));
+
+  assert(SafepointPoll->empty());
+
+  Function *Safepoint =
+      dyn_cast<Function>(M->getOrInsertFunction("do_safepoint", VoidFnType));
+
+  llvm::BasicBlock *EntryBlock =
+      BasicBlock::Create(*Context->LLVMContext, "entry", SafepointPoll);
+
+  CallInst::Create(Safepoint, "", EntryBlock);
+  ReturnInst::Create(*Context->LLVMContext, EntryBlock);
 }
 
 std::unique_ptr<Module>
