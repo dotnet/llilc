@@ -2321,6 +2321,21 @@ IRNode *GenIR::binaryOp(ReaderBaseNS::BinaryOpcode Opcode, IRNode *Arg1,
   } else {
     // Create a simple binary operation.
     Instruction::BinaryOps Op = Triple[Opcode].Op.Opcode;
+
+    if ((Op == Instruction::BinaryOps::SDiv) ||
+        (Op == Instruction::BinaryOps::UDiv)) {
+      // Integer divide throws a DivideByZeroException on 0 denominator
+      if (UseExplicitZeroDivideChecks) {
+        Value *IsZero = LLVMBuilder->CreateIsNull(Arg2);
+        genConditionalThrow(IsZero, CORINFO_HELP_THROWDIVZERO,
+                            "ThrowDivideByZero");
+      } else {
+        // This configuration isn't really supported.  To support it we'd
+        // need to annotate the divide we're about to generate as possibly
+        // throwing an exception (that would be raised from a machine trap).
+      }
+    }
+
     Result = (IRNode *)LLVMBuilder->CreateBinOp(Op, Arg1, Arg2);
   }
   return Result;
