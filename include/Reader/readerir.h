@@ -304,7 +304,7 @@ public:
               IRNode *Arg2) override;
   void condBranch(ReaderBaseNS::CondBranchOpcode Opcode, IRNode *Arg1,
                   IRNode *Arg2) override;
-  IRNode *conv(ReaderBaseNS::ConvOpcode Opcode, IRNode *Arg1) override;
+  IRNode *conv(ReaderBaseNS::ConvOpcode Opcode, IRNode *Source) override;
 
   void dup(IRNode *Opr, IRNode **Result1, IRNode **Result2) override;
   void endFilter(IRNode *Arg1) override {
@@ -957,6 +957,27 @@ private:
   /// \param Index Index to be accessed.
   /// \returns The input array.
   IRNode *genBoundsCheck(IRNode *Array, IRNode *Index);
+
+  /// \brief Generate conditional throw for conv.ovf.
+  ///
+  /// As part of the overflow test sequence, this method may generate code that
+  /// produces an intermediate result (specifically, the overflow tests for a
+  /// conversion from floating-point to narrow int produces an intermediate
+  /// wide int).  The value returned is the value to convert, and
+  /// \p SourceIsSigned will be updated to reflect the new source if necessary.
+  ///
+  /// \param Source         Source of the conv.ovf
+  /// \param TargetTy       LLVM type being converted to
+  /// \param SourceIsSigned [in/out] Indicates whether an integer source should
+  ///                       be considered signed; meaningless for non-integer
+  ///                       sources
+  /// \param DestIsSigned   Indicates whether the target type should be
+  ///                       interpreted as signed
+  /// \returns The value to convert to the destination.  May be the original
+  ///          \p Source or may be a new intermediate value of another type.
+  llvm::Value *genConvertOverflowCheck(llvm::Value *Source,
+                                       llvm::IntegerType *TargetTy,
+                                       bool &SourceIsSigned, bool DestIsSigned);
 
   uint32_t size(CorInfoType CorType);
   uint32_t stackSize(CorInfoType CorType);

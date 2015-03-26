@@ -3643,7 +3643,157 @@ IRNode *GenIR::canonStubCall(IRNode *CallNode,
   return (IRNode *)NewCall;
 }
 
-IRNode *GenIR::conv(ReaderBaseNS::ConvOpcode Opcode, IRNode *Arg1) {
+Value *GenIR::genConvertOverflowCheck(Value *Source, IntegerType *TargetTy,
+                                      bool &SourceIsSigned, bool DestIsSigned) {
+  Type *SourceTy = Source->getType();
+  unsigned TargetBitWidth = TargetTy->getBitWidth();
+
+  if (SourceTy->isFloatingPointTy()) {
+    // Overflow-checking conversions from floating-point call runtime helpers.
+    // Find the appropriate helper.  Available helpers convert from double to
+    // either signed or unsigned int32 or int64.
+    CorInfoHelpFunc Helper;
+    Type *HelperResultTy;
+
+    if (TargetBitWidth == 64) {
+      // Convert to 64-bit result
+      HelperResultTy = Type::getInt64Ty(*JitContext->LLVMContext);
+      if (DestIsSigned) {
+        Helper = CORINFO_HELP_DBL2LNG_OVF;
+      } else {
+        Helper = CORINFO_HELP_DBL2ULNG_OVF;
+      }
+    } else {
+      // All other cases, use the helper that converts to 32-bit int.  If the
+      // target type is less than 32 bits, the helper call will be followed
+      // by an explicit checked integer narrowing.
+      HelperResultTy = Type::getInt32Ty(*JitContext->LLVMContext);
+      if (DestIsSigned) {
+        Helper = CORINFO_HELP_DBL2INT_OVF;
+      } else {
+        Helper = CORINFO_HELP_DBL2UINT_OVF;
+      }
+    }
+
+    if (SourceTy->isFloatTy()) {
+      // The helper takes a double, so up-convert the float before invoking it.
+      Type *DoubleTy = Type::getDoubleTy(*JitContext->LLVMContext);
+      Source = LLVMBuilder->CreateFPCast(Source, DoubleTy);
+      SourceTy = DoubleTy;
+    } else {
+      assert(SourceTy->isDoubleTy() && "unexpected floating-point type");
+    }
+
+    // Call the helper to convert to int.
+    Source = callHelperImpl(Helper, HelperResultTy, (IRNode *)Source);
+    SourceTy = HelperResultTy;
+
+    // The result of the helper call already has the requested signedness.
+    SourceIsSigned = DestIsSigned;
+
+    // It's possible that the integer result of the helper call still needs
+    // truncation with overflow checking (converting e.g. from double to i8
+    // uses a double->i32 helper followed by i32->i8 truncation), so continue
+    // on to the integer conversion handling.
+  }
+
+  assert(Source->getType() == SourceTy);
+  assert(SourceTy->isIntegerTy());
+
+  unsigned SourceBitWidth = cast<IntegerType>(SourceTy)->getBitWidth();
+
+  if (TargetBitWidth > SourceBitWidth) {
+    // Widening integer conversion.
+    if (SourceIsSigned && !DestIsSigned) {
+      // Signed -> Unsigned widening conversion overflows iff source is
+      // negative.
+
+      Constant *Zero = Constant::getNullValue(SourceTy);
+      Value *Ovf = LLVMBuilder->CreateICmpSLT(Source, Zero, "Ovf");
+      genConditionalThrow(Ovf, CORINFO_HELP_OVERFLOW, "ThrowOverflow");
+    } else {
+      // Signed -> Signed widening conversion never overflows
+      // Unsigned -> Unsigned widening conversion never overflows
+      // Unsigned -> Signed widening conversion never overflows
+    }
+  } else if (TargetBitWidth == SourceBitWidth) {
+    // Same-size integer conversion
+    if (SourceIsSigned != DestIsSigned) {
+      // Signed -> Unsigned same-size conversion overflows iff source is
+      // negative.
+      // Unsigned -> Signed same-size conversion overflows iff source is
+      // signed-less-than zero.
+      // The code for these cases is identical.
+
+      Constant *Zero = Constant::getNullValue(SourceTy);
+      Value *Ovf = LLVMBuilder->CreateICmpSLT(Source, Zero, "Ovf");
+      genConditionalThrow(Ovf, CORINFO_HELP_OVERFLOW, "ThrowOverflow");
+    } else {
+      // Identity conversion never overflows
+    }
+  } else {
+    // Narrowing integer conversion
+    if (DestIsSigned) {
+      if (SourceIsSigned) {
+        // Signed -> Signed narrowing conversion overflows iff
+        //   (source is less than sext(signedMinValue(TargetBitWidth)) or
+        //    source is greater than ext(signedMaxValue(TargetBitWidth)))
+        // Use two comparisons (rather than a subtract and single compare) to
+        // make the IR more straightforward for downstream analysis (range
+        // propagation won't have to rewind through the subtract).  With throw
+        // block sharing, subsequent optimization should be able to rewrite
+        // the two-compare sequence to subtract-compare.
+
+        APInt MinSmallInt =
+            APInt::getSignedMinValue(TargetBitWidth).sext(SourceBitWidth);
+        ConstantInt *MinConstant =
+            ConstantInt::get(*JitContext->LLVMContext, MinSmallInt);
+        Value *TooSmall =
+            LLVMBuilder->CreateICmpSLT(Source, MinConstant, "Ovf");
+
+        genConditionalThrow(TooSmall, CORINFO_HELP_OVERFLOW, "ThrowOverflow");
+
+        APInt MaxSmallInt =
+            APInt::getSignedMaxValue(TargetBitWidth).sext(SourceBitWidth);
+        ConstantInt *MaxConstant =
+            ConstantInt::get(*JitContext->LLVMContext, MaxSmallInt);
+        Value *TooBig = LLVMBuilder->CreateICmpSGT(Source, MaxConstant, "Ovf");
+
+        genConditionalThrow(TooBig, CORINFO_HELP_OVERFLOW, "ThrowOverflow");
+      } else {
+        // Unsigned -> Signed narrowing conversion overflows iff source is
+        // unsigned-greater-than zext(signedMaxValue(TargetBitWidth))
+        // This catches cases where truncation would discard set bits and cases
+        // where truncation would produce a negative number when interpreted
+        // as signed.
+
+        APInt MaxSmallInt =
+            APInt::getSignedMaxValue(TargetBitWidth).zext(SourceBitWidth);
+        ConstantInt *MaxConstant =
+            ConstantInt::get(*JitContext->LLVMContext, MaxSmallInt);
+        Value *Ovf = LLVMBuilder->CreateICmpUGT(Source, MaxConstant, "Ovf");
+
+        genConditionalThrow(Ovf, CORINFO_HELP_OVERFLOW, "ThrowOverflow");
+      }
+    } else {
+      // Signed -> Unsigned narrowing conversion or
+      // Unsigned -> Unsigned narrowing conversion: both overflow iff source
+      // is unsigned-greater-than zext(unsignedMaxValue(TargetBitWidth))
+
+      APInt MaxSmallInt =
+          APInt::getMaxValue(TargetBitWidth).zext(SourceBitWidth);
+      ConstantInt *MaxConstant =
+          ConstantInt::get(*JitContext->LLVMContext, MaxSmallInt);
+      Value *Ovf = LLVMBuilder->CreateICmpUGT(Source, MaxConstant, "Ovf");
+
+      genConditionalThrow(Ovf, CORINFO_HELP_OVERFLOW, "ThrowOverflow");
+    }
+  }
+
+  return Source;
+}
+
+IRNode *GenIR::conv(ReaderBaseNS::ConvOpcode Opcode, IRNode *Source) {
 
   struct ConvertInfo {
     CorInfoType CorType;
@@ -3689,30 +3839,35 @@ IRNode *GenIR::conv(ReaderBaseNS::ConvOpcode Opcode, IRNode *Arg1) {
 
   ConvertInfo Info = Map[Opcode];
 
-  if (Info.CheckForOverflow) {
-    throw NotYetImplementedException("Convert Overflow");
-  }
-
-  Type *SourceTy = Arg1->getType();
   Type *TargetTy = getType(Info.CorType, nullptr);
-  const bool SourceIsSigned = !Info.SourceIsUnsigned;
+  bool SourceIsSigned = !Info.SourceIsUnsigned;
   const bool DestIsSigned = TargetTy->isIntegerTy() && isSigned(Info.CorType);
   Value *Conversion = nullptr;
 
+  if (Info.CheckForOverflow) {
+    assert(TargetTy->isIntegerTy() &&
+           "No conv.ovf forms target floating-point");
+
+    Source = (IRNode *)genConvertOverflowCheck(
+        Source, cast<IntegerType>(TargetTy), SourceIsSigned, DestIsSigned);
+  }
+
+  Type *SourceTy = Source->getType();
+
   if (SourceTy == TargetTy) {
-    Conversion = Arg1;
+    Conversion = Source;
   } else if (SourceTy->isIntegerTy() && TargetTy->isIntegerTy()) {
-    Conversion = LLVMBuilder->CreateIntCast(Arg1, TargetTy, DestIsSigned);
+    Conversion = LLVMBuilder->CreateIntCast(Source, TargetTy, DestIsSigned);
   } else if (SourceTy->isPointerTy() && TargetTy->isIntegerTy()) {
-    Conversion = LLVMBuilder->CreatePtrToInt(Arg1, TargetTy);
+    Conversion = LLVMBuilder->CreatePtrToInt(Source, TargetTy);
   } else if (SourceTy->isIntegerTy() && TargetTy->isFloatingPointTy()) {
-    Conversion = SourceIsSigned ? LLVMBuilder->CreateSIToFP(Arg1, TargetTy)
-                                : LLVMBuilder->CreateUIToFP(Arg1, TargetTy);
+    Conversion = SourceIsSigned ? LLVMBuilder->CreateSIToFP(Source, TargetTy)
+                                : LLVMBuilder->CreateUIToFP(Source, TargetTy);
   } else if (SourceTy->isFloatingPointTy() && TargetTy->isIntegerTy()) {
-    Conversion = DestIsSigned ? LLVMBuilder->CreateFPToSI(Arg1, TargetTy)
-                              : LLVMBuilder->CreateFPToUI(Arg1, TargetTy);
+    Conversion = DestIsSigned ? LLVMBuilder->CreateFPToSI(Source, TargetTy)
+                              : LLVMBuilder->CreateFPToUI(Source, TargetTy);
   } else if (SourceTy->isFloatingPointTy() && TargetTy->isFloatingPointTy()) {
-    Conversion = LLVMBuilder->CreateFPCast(Arg1, TargetTy);
+    Conversion = LLVMBuilder->CreateFPCast(Source, TargetTy);
   } else {
     ASSERT(UNREACHED);
   }

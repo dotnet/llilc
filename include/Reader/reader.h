@@ -2361,7 +2361,7 @@ public:
                       IRNode *Arg2) = 0;
   virtual void condBranch(ReaderBaseNS::CondBranchOpcode Opcode, IRNode *Arg1,
                           IRNode *Arg2) = 0;
-  virtual IRNode *conv(ReaderBaseNS::ConvOpcode Opcode, IRNode *Arg1) = 0;
+  virtual IRNode *conv(ReaderBaseNS::ConvOpcode Opcode, IRNode *Source) = 0;
   virtual void cpBlk(IRNode *ByteCount, IRNode *SourceAddress,
                      IRNode *DestinationAddress, ReaderAlignType Alignment,
                      bool IsVolatile);
