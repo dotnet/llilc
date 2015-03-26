@@ -1137,6 +1137,14 @@ protected:
   // could look like with null checks folded onto loads/stores.
   static const bool UseExplicitNullChecks = true;
 
+  // \brief Indicates that divide-by-zero checks use explicit compare+branch IR
+  //
+  // Compiling with this set to false isn't really supported (the generated IR
+  // would not have sufficient EH annotations), but it is provided as a mock
+  // configuration flag to facilitate experimenting with what the IR/codegen
+  // could look like with divide-by-zero checks folded onto divides.
+  static const bool UseExplicitZeroDivideChecks = true;
+
   // Verification Info
 public:
   bool VerificationNeeded;

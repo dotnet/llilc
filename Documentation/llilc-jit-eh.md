@@ -520,16 +520,16 @@ Once correct EH support is enabled and pushed back up to the master branch,
 EH-centric optimizations and support for other targets will follow.
 
 The current status is that the stub EH support is implemented with support
-for explicit throws and some but not all implicit exceptions.
+for both explicit throws and implicit exceptions.
 
 In summary, the plan/status is:
- 1. [ ] Stub EH support
+ 1. [x] Stub EH support
    - [x] Reader discards catch/filter/fault handlers
    - [x] Explicit throw becomes helper call
    - [x] Continuation passing for finally handlers invoked by `leave`
-   - [ ] Implicit exceptions expanded to explicit test/throw sequences
+   - [x] Implicit exceptions expanded to explicit test/throw sequences
      - [x] Null dereference
-     - [ ] Divide by zero
+     - [x] Divide by zero
      - [x] Arithmetic overflow
      - [x] Convert with overflow
      - [x] Array bounds checks
