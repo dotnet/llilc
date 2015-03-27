@@ -3319,6 +3319,16 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
     }
   }
 
+  if (CallTargetInfo->isIndirect()) {
+    CorInfoCallConv Conv = SigInfo->getCallConv();
+    if (Conv == CORINFO_CALLCONV_STDCALL || Conv == CORINFO_CALLCONV_C ||
+        Conv == CORINFO_CALLCONV_THISCALL ||
+        Conv == CORINFO_CALLCONV_FASTCALL ||
+        Conv == CORINFO_CALLCONV_NATIVEVARARG) {
+      throw NotYetImplementedException("PInvoke call");
+    }
+  }
+
   // Ask GenIR to create return value.
   if (!CallTargetInfo->isNewObj()) {
     ReturnNode = makeCallReturnNode(SigInfo, &HiddenMBParamSize, &GCInfo);
@@ -3399,8 +3409,6 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
       throw NotYetImplementedException("Call intrinsic");
     }
   }
-
-  // TODO: deal with PInvokes and var args.
 
   Call = (IRNode *)CallInst;
 
