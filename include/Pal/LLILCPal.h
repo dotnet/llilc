@@ -29,7 +29,6 @@
 #if defined(_DEBUG)
 #include <windows.h> // For UINT
 #endif
-#include "staticcontract.h"
 
 // clang-format off
 
@@ -44,15 +43,12 @@
     __exHandled = false;                                                       \
     DWORD __exCode;                                                            \
     __exCode = 0;                                                              \
-    SCAN_EHMARKER();                                                           \
-    __try {                                                                    \
-      SCAN_EHMARKER_TRY();
+    __try {
 
 #define PAL_EXCEPT_NAKED(Disposition)                                          \
   }                                                                            \
   __except (__exCode = GetExceptionCode(), Disposition) {                      \
     __exHandled = true;                                                        \
-    SCAN_EHMARKER_CATCH();                                                     \
   PAL_SEH_RESTORE_GUARD_PAGE
 
 #define PAL_EXCEPT_FILTER_NAKED(pfnFilter, param)                              \
@@ -60,7 +56,6 @@
   __except (__exCode = GetExceptionCode(),                                     \
             pfnFilter(GetExceptionInformation(), param)) {                     \
     __exHandled = true;                                                        \
-    SCAN_EHMARKER_CATCH();                                                     \
   PAL_SEH_RESTORE_GUARD_PAGE
 
 #define PAL_FINALLY_NAKED                                                      \
@@ -69,7 +64,6 @@
 
 #define PAL_ENDTRY_NAKED                                                       \
   }                                                                            \
-  PAL_ENDTRY_NAKED_DBG                                                         \
   }
 
 #if defined(_DEBUG) && !defined(DACCESS_COMPILE)
@@ -84,11 +78,9 @@
     __ParamType __paramToPassToFilter = __paramRef;                            \
     class __Body {                                                             \
     public:                                                                    \
-      static void run(__ParamType __paramDef) {                                \
-      PAL_TRY_HANDLER_DBG_BEGIN
+      static void run(__ParamType __paramDef) {
 
 #define PAL_EXCEPT(Disposition)                                                \
-  PAL_TRY_HANDLER_DBG_END                                                      \
   }                                                                            \
   }                                                                            \
   ;                                                                            \
@@ -97,7 +89,6 @@
   PAL_EXCEPT_NAKED(Disposition)
 
 #define PAL_EXCEPT_FILTER(pfnFilter)                                           \
-  PAL_TRY_HANDLER_DBG_END                                                      \
   }                                                                            \
   }                                                                            \
   ;                                                                            \
@@ -106,7 +97,6 @@
   PAL_EXCEPT_FILTER_NAKED(pfnFilter, __paramToPassToFilter)
 
 #define PAL_FINALLY                                                            \
-  PAL_TRY_HANDLER_DBG_END                                                      \
   }                                                                            \
   }                                                                            \
   ;                                                                            \
@@ -124,19 +114,15 @@
   {                                                                            \
     __ParamType __param = __paramRef;                                          \
     __ParamType __paramDef = __param;                                          \
-    PAL_TRY_NAKED                                                              \
-  PAL_TRY_HANDLER_DBG_BEGIN
+    PAL_TRY_NAKED
 
 #define PAL_EXCEPT(Disposition)                                                \
-  PAL_TRY_HANDLER_DBG_END                                                      \
   PAL_EXCEPT_NAKED(Disposition)
 
 #define PAL_EXCEPT_FILTER(pfnFilter)                                           \
-  PAL_TRY_HANDLER_DBG_END                                                      \
   PAL_EXCEPT_FILTER_NAKED(pfnFilter, __param)
 
 #define PAL_FINALLY                                                            \
-  PAL_TRY_HANDLER_DBG_END                                                      \
   PAL_FINALLY_NAKED
 
 #define PAL_ENDTRY                                                             \
@@ -144,11 +130,6 @@
   }
 
 #endif // _DEBUG
-
-#define PAL_TRY_HANDLER_DBG_BEGIN ANNOTATION_TRY_BEGIN;
-#define PAL_TRY_HANDLER_DBG_BEGIN_DLLMAIN(_reason) ANNOTATION_TRY_BEGIN;
-#define PAL_TRY_HANDLER_DBG_END ANNOTATION_TRY_END;
-#define PAL_ENDTRY_NAKED_DBG
 
 #else // defined(_MSC_VER)
 
@@ -361,61 +342,6 @@ typedef struct _EXCEPTION_POINTERS {
 
 #define GetExceptionCode (DWORD) __exception_code
 #define GetExceptionInformation (PEXCEPTION_POINTERS) __exception_info
-
-#define METHOD_CANNOT_BE_FOLDED_DEBUG
-
-#define ANNOTATION_TRY_BEGIN                                                   \
-  {}
-#define ANNOTATION_TRY_END                                                     \
-  {}
-#define ANNOTATION_FN_THROWS                                                   \
-  {}
-#define ANNOTATION_FN_GC_NOTRIGGER                                             \
-  {}
-#define ANNOTATION_FN_SO_TOLERANT                                              \
-  {}
-
-#define STATIC_CONTRACT_THROWS ANNOTATION_FN_THROWS
-#define STATIC_CONTRACT_GC_NOTRIGGER ANNOTATION_FN_GC_NOTRIGGER
-#define STATIC_CONTRACT_SO_TOLERANT ANNOTATION_FN_SO_TOLERANT
-
-namespace StaticContract {
-struct ScanThrowMarkerStandard {
-  __attribute__((noinline)) ScanThrowMarkerStandard() {
-    METHOD_CANNOT_BE_FOLDED_DEBUG;
-    STATIC_CONTRACT_THROWS;
-    STATIC_CONTRACT_GC_NOTRIGGER;
-    STATIC_CONTRACT_SO_TOLERANT;
-  }
-};
-
-struct ScanThrowMarkerTerminal {
-  __attribute__((noinline)) ScanThrowMarkerTerminal() {
-    METHOD_CANNOT_BE_FOLDED_DEBUG;
-  }
-};
-
-struct ScanThrowMarkerIgnore {
-  __attribute__((noinline)) ScanThrowMarkerIgnore() {
-    METHOD_CANNOT_BE_FOLDED_DEBUG;
-  }
-};
-}
-typedef StaticContract::ScanThrowMarkerStandard ScanThrowMarker;
-
-// This is used to annotate code as throwing a terminal exception, and should
-// be used immediately before the throw so that infer that it can be inferred
-// that the block in which this annotation appears throws unconditionally.
-#define SCAN_THROW_MARKER                                                      \
-  do {                                                                         \
-    ScanThrowMarker __throw_marker;                                            \
-  } while (0)
-
-#define SCAN_EHMARKER()
-#define SCAN_EHMARKER_TRY()
-#define SCAN_EHMARKER_END_TRY()
-#define SCAN_EHMARKER_CATCH()
-#define SCAN_EHMARKER_END_CATCH()
 
 #if defined(__cplusplus)
 extern "C" {

@@ -95,17 +95,60 @@ if( CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
   endif ()
 endif()
 
+set(WITH_CORECLR  "" CACHE PATH "Path to the directory where CoreCLR was built or installed.")
+set(CORECLR_SEARCH_PATHS "")
+set(CORECLR_INCLUDE "")
+
+if( NOT WITH_CORECLR STREQUAL "" )
+  get_filename_component(WITH_CORECLR_ABS "${WITH_CORECLR}" ABSOLUTE)
+  list(APPEND CORECLR_SEARCH_PATHS "${WITH_CORECLR_ABS}")
+  set(CORECLR_INCLUDE "${WITH_CORECLR_ABS}/inc")
+endif()
+
+message(STATUS " ${CORECLR_INCLUDE}")
+
+# Check for CoreCLR headers
+find_path(CORINFO_H "corinfo.h" HINTS "${CORECLR_INCLUDE}")
+if(CORINFO_H STREQUAL CORINFO_H-NOTFOUND)
+  message(FATAL_ERROR "Cannot find corinfo.h. Please set WITH_CORECLR to a directory where CoreCLR was built or installed.")
+  unset(WITH_CORECLR CACHE)
+endif()
+
+get_filename_component(CORECLR_INCLUDE "${CORECLR_INCLUDE}" DIRECTORY CACHE)
+
+find_path(CORJIT_H "corjit.h" PATHS "${CORECLR_INCLUDE}" NO_DEFAULT_PATH)
+if(CORJIT_H STREQUAL CORJIT_H-NOTFOUND)
+  message(FATAL_ERROR "Cannot find corjit.h. Please set WITH_CORECLR to a directory where CoreCLR was built or installed.")
+endif()
+
+find_path(CORERROR_H "corerror.h" PATHS "${CORECLR_INCLUDE}" NO_DEFAULT_PATH)
+if(CORERROR_H STREQUAL CORERROR_H-NOTFOUND)
+  message(FATAL_ERROR "Cannot find corerror.h. Please set WITH_CORECLR to a directory where CoreCLR was built or installed.")
+endif()
+
+find_path(CORHDR_H "corhdr.h" PATHS "${CORECLR_INCLUDE}" NO_DEFAULT_PATH)
+if(CORHDR_H STREQUAL CORHDR_H-NOTFOUND)
+  message(FATAL_ERROR "Cannot find corhdr.h. Please set WITH_CORECLR to a directory where CoreCLR was built or installed.")
+endif()
+
+find_path(COR_H "cor.h" PATHS "${CORECLR_INCLUDE}" NO_DEFAULT_PATH)
+if(COR_H STREQUAL COR_H-NOTFOUND)
+  message(FATAL_ERROR "Cannot find cor.h. Please set WITH_CORECLR to a directory where CoreCLR was built or installed.")
+endif()
+
+find_path(OPCODE_DEF "opcode.def" PATHS "${CORECLR_INCLUDE}" NO_DEFAULT_PATH)
+if(OPCODE_DEF STREQUAL OPCODE_DEF-NOTFOUND)
+  message(FATAL_ERROR "Cannot find opcode.def. Please set WITH_CORECLR to a directory where CoreCLR was built or installed.")
+endif()
+
+find_path(OPENUM_H "openum.h" PATHS "${CORECLR_INCLUDE}" NO_DEFAULT_PATH)
+if(OPENUM_H STREQUAL OPENUM_H-NOTFOUND)
+  message(FATAL_ERROR "Cannot find openum.h. Please set WITH_CORECLR to a directory where CoreCLR was built or installed.")
+endif()
+
+include_directories("${CORECLR_INCLUDE}")
+
 if( UNIX )
-  set(WITH_CORECLR  "" CACHE PATH "Path to the directory where CoreCLR was built or installed.")
-
-  set(CORECLR_SEARCH_PATHS "")
-
-  if( NOT WITH_CORECLR STREQUAL "" )
-    get_filename_component(WITH_CORECLR_ABS "${WITH_CORECLR}" ABSOLUTE CACHE)
-
-    list(APPEND CORECLR_SEARCH_PATHS "${WITH_CORECLR_ABS}")
-  endif()
-
   find_library(CORECLR_PATH "coreclr"
     HINTS ${CORECLR_SEARCH_PATHS}
     DOC "Path to libcoreclr"
