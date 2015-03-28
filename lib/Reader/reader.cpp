@@ -4636,7 +4636,7 @@ IRNode *ReaderBase::rdrGetFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
 }
 
 IRNode *ReaderBase::loadToken(CORINFO_RESOLVED_TOKEN *ResolvedToken) {
-  CORINFO_GENERIC_HANDLE CompileTimeHandleValue = 0;
+  CORINFO_GENERIC_HANDLE CompileTimeHandleValue = nullptr;
   bool RequiresRuntimeLookup = true;
   IRNode *GetTokenNumericNode =
       genericTokenToNode(ResolvedToken, false, true, &CompileTimeHandleValue,
@@ -4726,6 +4726,41 @@ void ReaderBase::getCallSiteSignature(CORINFO_METHOD_HANDLE Method,
 #endif // CC_PEVERIFY
 }
 
+IRNode *ReaderBase::rdrMakeNewObjThisArg(ReaderCallTargetData *CallTargetData,
+                                         CorInfoType CorType,
+                                         CORINFO_CLASS_HANDLE Class) {
+  uint32_t ClassAttribs = CallTargetData->getClassAttribs();
+
+  bool IsMDArray = ((ClassAttribs & CORINFO_FLG_ARRAY) != 0);
+  if (IsMDArray) {
+    // Storage for MDArrays is allocated by the callee; these do not take a this
+    // argument.
+    return nullptr;
+  }
+
+  return genNewObjThisArg(CallTargetData, CorType, Class);
+}
+
+IRNode *
+ReaderBase::rdrMakeNewObjReturnNode(ReaderCallTargetData *CallTargetData,
+                                    IRNode *ThisArg, IRNode *CallReturnNode) {
+  uint32_t ClassAttribs = CallTargetData->getClassAttribs();
+
+  bool IsMDArray = ((ClassAttribs & CORINFO_FLG_ARRAY) != 0);
+  bool IsVarObjSize = ((ClassAttribs & CORINFO_FLG_VAROBJSIZE) != 0);
+
+  // MDArrays should already have been taken care of.
+  ASSERT(!IsMDArray);
+
+  if (IsVarObjSize) {
+    // Storage for variably-sized objects is allocated by the callee; the result
+    // of the call is already correct.
+    return CallReturnNode;
+  }
+
+  return genNewObjReturnNode(CallTargetData, ThisArg);
+}
+
 // Constraint calls in generic code.  Constraint calls are operations on generic
 // type variables,
 // e.g. "x.Incr()" where "x" has type "T" in generic code and where "T" supports
@@ -4771,7 +4806,6 @@ IRNode *
 ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
                     IRNode **CallNode) { // out param is defined by GenCall
   IRNode *ReturnNode;
-  CallArgTriple *ArgArray;
   uint32_t NumArgs;
   int32_t FirstArgNum;
   int32_t TypeArgNum;
@@ -5101,6 +5135,9 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
 
   CORINFO_SIG_INFO *SigInfo = Data->getSigInfo();
 
+  // Set the calling convention.
+  Data->CallTargetSignature.CallingConvention = SigInfo->getCallConv();
+
   // Get the number of arguments to this method.
   NumArgs = (uint32_t)SigInfo->numArgs;
   HasThis = Data->hasThis();
@@ -5127,12 +5164,11 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
   TotalArgs =
       (HasThis ? 1 : 0) + (IsVarArg ? 1 : 0) + (HasTypeArg ? 1 : 0) + NumArgs;
 
-  // Special case for newobj, currently the first
-  // argument is handled/appended in CanonNewObj.
-  // For this reason we don't need to record any
-  // information about that argument.
   FirstArgNum = 0;
-  if (Opcode == ReaderBaseNS::NewObj) {
+
+  // Special case for newobj: the first argument is not on the stack.
+  IRNode *NewObjThisArg = nullptr;
+  if (Data->isNewObj()) {
     ASSERTNR(HasThis); // new obj better have "this"
     FirstArgNum = 1;
   }
@@ -5140,38 +5176,37 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
   VarArgNum = IsVarArg ? (HasThis ? 1 : 0) : -1;
   TypeArgNum = HasTypeArg ? ((HasThis ? 1 : 0) + (IsVarArg ? 1 : 0)) : -1;
 
+  // Create return info.
+  Data->CallTargetSignature.ResultType = {SigInfo->retType,
+                                          SigInfo->retTypeClass};
+
   // Create arg array and populate with stack arguments.
-  //   - struct return pointer does not live on arg array,
-  //     it is passed to GenIR as destination.
-  //   - this pointer is also not present in array.
+  //
+  // Note that array is populated with two loops: the first traverses the EE's
+  // argument list, the second pops arguments from the stack. Two loops are
+  // clearer because the data is stored with opposite orderings.
 
-  // Note that array is populated with two loops, the first
-  // traverses the ee's argument list, the second pops
-  // arguments from the stack. Two loops are needed because
-  // the Data is stored with opposite orderings.
+  std::vector<CallArgType> &ArgumentTypes =
+      Data->CallTargetSignature.ArgumentTypes;
+  new (&ArgumentTypes) std::vector<CallArgType>(TotalArgs);
+  std::vector<IRNode *> Arguments(TotalArgs);
 
-  // First populate ArgType, argClass fields.
-  ArgArray = nullptr;
-
+  // First populate argument type information.
   if (TotalArgs > 0) {
     CORINFO_ARG_LIST_HANDLE Args;
     CorInfoType CorType;
     CORINFO_CLASS_HANDLE ArgType, Class;
 
-    ArgArray = (CallArgTriple *)_alloca(sizeof(CallArgTriple) * TotalArgs);
-#if !defined(NODEBUG)
-    memset(ArgArray, 0, sizeof(CallArgTriple) * TotalArgs);
-#endif
     Args = SigInfo->args;
     Index = 0;
 
     // If this call passes a this ptr, then it is first in array.
     if (HasThis) {
-      ArgArray[Index].ArgType = CORINFO_TYPE_BYREF;
-      ArgArray[Index].ArgClass = Data->getClassHandle();
+      ArgumentTypes[Index].CorType = CORINFO_TYPE_BYREF;
+      ArgumentTypes[Index].Class = Data->getClassHandle();
       if (Data->getMethodHandle() != nullptr) {
         if ((Data->getClassAttribs() & CORINFO_FLG_VALUECLASS) == 0) {
-          ArgArray[Index].ArgType = CORINFO_TYPE_CLASS;
+          ArgumentTypes[Index].CorType = CORINFO_TYPE_CLASS;
         }
       }
       Index++;
@@ -5184,8 +5219,8 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
 
     // If this call has a type arg, then it's right before fixed params.
     if (HasTypeArg) {
-      ArgArray[Index].ArgType = CORINFO_TYPE_NATIVEINT;
-      ArgArray[Index].ArgClass = 0;
+      ArgumentTypes[Index].CorType = CORINFO_TYPE_NATIVEINT;
+      ArgumentTypes[Index].Class = nullptr;
       Index++;
     }
 
@@ -5217,8 +5252,8 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
       }
 #endif // CC_PEVERIFY
 
-      ArgArray[Index].ArgType = CorType;
-      ArgArray[Index].ArgClass = Class;
+      ArgumentTypes[Index].CorType = CorType;
+      ArgumentTypes[Index].Class = Class;
       Args = JitInfo->getArgNext(Args);
     }
 
@@ -5232,22 +5267,23 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
         continue;
       }
       if (Index == TypeArgNum) {
-        ArgArray[Index].ArgNode = Data->getTypeContextNode();
-        ASSERTNR(ArgArray[Index].ArgNode != NULL);
+        Arguments[Index] = Data->getTypeContextNode();
+        ASSERTNR(Arguments[Index] != nullptr);
         ASSERTMNR(!Data->isCallI(), "CALLI on parameterized type");
         continue;
       }
-      ArgArray[Index].ArgNode = (IRNode *)ReaderOperandStack->pop();
+      Arguments[Index] = (IRNode *)ReaderOperandStack->pop();
     }
 
     // this-pointer specific stuff
     if (HasThis) {
-      if (Opcode == ReaderBaseNS::NewObj) {
-        // First argument to newobj has complete type info, but no argument
-        // node.
-        ArgArray[0].ArgNode = nullptr;
+      if (Data->isNewObj()) {
+        // Create the this argument for newobj now.
+        NewObjThisArg = rdrMakeNewObjThisArg(Data, ArgumentTypes[0].CorType,
+                                             ArgumentTypes[0].Class);
+        Arguments[0] = NewObjThisArg;
       } else {
-        ArgArray[0].ArgNode = Data->applyThisTransform(ArgArray[0].ArgNode);
+        Arguments[0] = Data->applyThisTransform(Arguments[0]);
       }
     }
   }
@@ -5265,14 +5301,43 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
     removeStackInterference();
   }
 
-  // Get the call target
-  if (ReaderBaseNS::Calli != Opcode) {
-    rdrMakeCallTargetNode(Data,
-                          ArgArray != nullptr ? &ArgArray[0].ArgNode : nullptr);
+  // Perform any post-processing necessary for newobj.
+  if (Data->isNewObj()) {
+    uint32_t ClassAttribs = Data->getClassAttribs();
+
+    bool IsMDArray = ((ClassAttribs & CORINFO_FLG_ARRAY) != 0);
+    if (IsMDArray) {
+      return genNewMDArrayCall(Data, Arguments, CallNode);
+    }
+
+    bool IsVarObjSize = ((ClassAttribs & CORINFO_FLG_VAROBJSIZE) != 0);
+    if (IsVarObjSize) {
+      // We are allocating an object whose size depends on constructor args
+      // (e.g., string). In this case the call to the constructor will allocate
+      // the object.
+
+      Data->CallTargetSignature.ResultType = {ArgumentTypes[0].CorType,
+                                              ArgumentTypes[0].Class};
+    }
   }
 
-  // Ask GenIR to emit call, returns a ReturnNode.
-  ReturnNode = genCall(Data, ArgArray, TotalArgs, CallNode);
+  // Get the call target
+  if (Data->isCallI()) {
+    Data->CallTargetNode =
+        makeFunctionPointer(Data->CallTargetSignature, Data->CallTargetNode);
+  } else {
+    rdrMakeCallTargetNode(Data,
+                          Arguments.size() == 0 ? nullptr : &Arguments[0]);
+    ASSERT(!Data->isNewObj() || Arguments[0] == NewObjThisArg);
+  }
+
+  // Ask GenIR to emit call, optionally returns a ReturnNode.
+  ReturnNode = genCall(Data, Arguments, CallNode);
+
+  if (Data->isNewObj()) {
+    ReturnNode = rdrMakeNewObjReturnNode(Data, NewObjThisArg, ReturnNode);
+  }
+
   return ReturnNode;
 }
 
@@ -5298,54 +5363,54 @@ void ReaderBase::rdrMakeCallTargetNode(ReaderCallTargetData *CallTargetData,
 
   // Check for Delegate Invoke optimization
   if (rdrCallIsDelegateInvoke(CallTargetData)) {
-    CallTargetData->CallTargetNode =
-        rdrGetDelegateInvokeTarget(CallTargetData, ThisPtr);
-    return;
+    Target = rdrGetDelegateInvokeTarget(CallTargetData, ThisPtr);
+  } else {
+    // Insert the code sequence to load a pointer to the target function.
+    // If that sequence involves dereferencing the current method's instance
+    // parameter (e.g. to find dynamic type parameter information for shared
+    // generic code) or the target method's instance argument (e.g. to look up
+    // its VTable), the sequence  generated here will include that dereference
+    // and any null checks necessary for it.
+    // Additionally, the NeedsNullCheck flag will be set if the ensuing call
+    // sequence needs to explicitly null-check the target method's instance
+    // argument (e.g. because the callvirt opcode was used to call a non-virtual
+    // method).  The NeedsNullCheck flag will not be set if the sequence
+    // generated here already dereferences (and therefore null-checks) the
+    // target
+    // method's instance argument (e.g. if callvirt was used but the method is
+    // virtual and lookup is performed via the target's VTable).
+    switch (CallInfo->kind) {
+    case CORINFO_CALL:
+      // Direct Call
+      CallTargetData->NeedsNullCheck = CallInfo->nullInstanceCheck == TRUE;
+      Target = rdrGetDirectCallTarget(CallTargetData);
+      break;
+    case CORINFO_CALL_CODE_POINTER:
+      // Runtime lookup required (code sharing w/o using inst param)
+      CallTargetData->NeedsNullCheck = CallInfo->nullInstanceCheck == TRUE;
+      Target = rdrGetCodePointerLookupCallTarget(CallTargetData);
+      break;
+    case CORINFO_VIRTUALCALL_STUB:
+      // Virtual Call via virtual dispatch stub
+      CallTargetData->NeedsNullCheck = true;
+      Target = rdrGetVirtualStubCallTarget(CallTargetData);
+      break;
+    case CORINFO_VIRTUALCALL_LDVIRTFTN:
+      // Virtual Call via indirect virtual call
+      Target = rdrGetIndirectVirtualCallTarget(CallTargetData, ThisPtr);
+      break;
+    case CORINFO_VIRTUALCALL_VTABLE:
+      // Virtual call via table lookup (vtable)
+      Target = rdrGetVirtualTableCallTarget(CallTargetData, ThisPtr);
+      break;
+    default:
+      ASSERTMNR(UNREACHED, "Unexpected call kind");
+      Target = nullptr;
+    }
   }
 
-  // Insert the code sequence to load a pointer to the target function.
-  // If that sequence involves dereferencing the current method's instance
-  // parameter (e.g. to find dynamic type parameter information for shared
-  // generic code) or the target method's instance argument (e.g. to look up
-  // its VTable), the sequence  generated here will include that dereference
-  // and any null checks necessary for it.
-  // Additionally, the NeedsNullCheck flag will be set if the ensuing call
-  // sequence needs to explicitly null-check the target method's instance
-  // argument (e.g. because the callvirt opcode was used to call a non-virtual
-  // method).  The NeedsNullCheck flag will not be set if the sequence
-  // generated here already dereferences (and therefore null-checks) the target
-  // method's instance argument (e.g. if callvirt was used but the method is
-  // virtual and lookup is performed via the target's VTable).
-  switch (CallInfo->kind) {
-  case CORINFO_CALL:
-    // Direct Call
-    CallTargetData->NeedsNullCheck = CallInfo->nullInstanceCheck == TRUE;
-    Target = rdrGetDirectCallTarget(CallTargetData);
-    break;
-  case CORINFO_CALL_CODE_POINTER:
-    // Runtime lookup required (code sharing w/o using inst param)
-    CallTargetData->NeedsNullCheck = CallInfo->nullInstanceCheck == TRUE;
-    Target = rdrGetCodePointerLookupCallTarget(CallTargetData);
-    break;
-  case CORINFO_VIRTUALCALL_STUB:
-    // Virtual Call via virtual dispatch stub
-    CallTargetData->NeedsNullCheck = true;
-    Target = rdrGetVirtualStubCallTarget(CallTargetData);
-    break;
-  case CORINFO_VIRTUALCALL_LDVIRTFTN:
-    // Virtual Call via indirect virtual call
-    Target = rdrGetIndirectVirtualCallTarget(CallTargetData, ThisPtr);
-    break;
-  case CORINFO_VIRTUALCALL_VTABLE:
-    // Virtual call via table lookup (vtable)
-    Target = rdrGetVirtualTableCallTarget(CallTargetData, ThisPtr);
-    break;
-  default:
-    ASSERTMNR(UNREACHED, "Unexpected call kind");
-    Target = nullptr;
-  }
-
-  CallTargetData->CallTargetNode = Target;
+  CallTargetData->CallTargetNode =
+      makeFunctionPointer(CallTargetData->CallTargetSignature, Target);
 }
 
 IRNode *
@@ -5389,7 +5454,7 @@ IRNode *ReaderBase::rdrGetDirectCallTarget(CORINFO_METHOD_HANDLE Method,
 
   IRNode *TargetNode;
   if ((AddressInfo.accessType == IAT_VALUE) && CanMakeDirectCall) {
-    TargetNode = makeDirectCallTargetNode(Method, AddressInfo.addr);
+    TargetNode = makeDirectCallTargetNode(AddressInfo.addr);
   } else {
     bool IsIndirect = AddressInfo.accessType != IAT_VALUE;
     TargetNode = handleToIRNode(MethodToken, AddressInfo.addr, 0, IsIndirect,
@@ -5750,7 +5815,7 @@ void ReaderBase::buildUpParams(uint32_t NumParams, bool HasSecretParameter) {
     // comes instParam (typeArg cookie)
     if (HasTypeArg) {
       // this is not a real arg.  we do not record it for verification
-      CORINFO_CLASS_HANDLE Class = 0;
+      const CORINFO_CLASS_HANDLE Class = nullptr;
       createSym(ParamIndex, false, CORINFO_TYPE_NATIVEINT, Class, false,
                 ReaderSpecialSymbolType::Reader_InstParam);
       ParamIndex++;
@@ -5775,7 +5840,7 @@ void ReaderBase::buildUpParams(uint32_t NumParams, bool HasSecretParameter) {
     if (HasSecretParameter) {
       ASSERT(ParamIndex == NumParams - 1);
 
-      CORINFO_CLASS_HANDLE Class = 0;
+      const CORINFO_CLASS_HANDLE Class = nullptr;
       createSym(ParamIndex, false, CORINFO_TYPE_NATIVEINT, Class, false,
                 ReaderSpecialSymbolType::Reader_SecretParam);
     }
