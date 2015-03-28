@@ -240,6 +240,7 @@ class GenIR : public ReaderBase {
 public:
   GenIR(LLILCJitContext *JitContext,
         std::map<CORINFO_CLASS_HANDLE, llvm::Type *> *ClassTypeMap,
+        std::map<CORINFO_CLASS_HANDLE, llvm::Type *> *BoxedTypeMap,
         std::map<std::tuple<CorInfoType, CORINFO_CLASS_HANDLE, uint32_t>,
                  llvm::Type *> *ArrayTypeMap,
         std::map<CORINFO_FIELD_HANDLE, uint32_t> *FieldIndexMap)
@@ -247,6 +248,7 @@ public:
                    JitContext->Flags) {
     this->JitContext = JitContext;
     this->ClassTypeMap = ClassTypeMap;
+    this->BoxedTypeMap = BoxedTypeMap;
     this->ArrayTypeMap = ArrayTypeMap;
     this->FieldIndexMap = FieldIndexMap;
   }
@@ -847,6 +849,13 @@ private:
   llvm::Type *getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
                            bool GetRefClassFields);
 
+  /// \brief Construct the LLVM type of the boxed representation of the given
+  ///        value type.
+  ///
+  /// \param Class The handle to the value type's class.
+  /// \returns The LLVM type of the boxed representation of the value type.
+  llvm::Type *getBoxedType(CORINFO_CLASS_HANDLE Class);
+
   /// Convert node to the desired type.
   /// May reinterpret, truncate, or extend as needed.
   /// \param Type Desired type
@@ -1168,6 +1177,7 @@ private:
   // insertion point parameters).
   llvm::IRBuilder<> *LLVMBuilder;
   std::map<CORINFO_CLASS_HANDLE, llvm::Type *> *ClassTypeMap;
+  std::map<CORINFO_CLASS_HANDLE, llvm::Type *> *BoxedTypeMap;
   std::map<std::tuple<CorInfoType, CORINFO_CLASS_HANDLE, uint32_t>,
            llvm::Type *> *ArrayTypeMap;
   std::map<CORINFO_FIELD_HANDLE, uint32_t> *FieldIndexMap;

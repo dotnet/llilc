@@ -1329,6 +1329,72 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
   return ResultTy;
 }
 
+Type *GenIR::getBoxedType(CORINFO_CLASS_HANDLE Class) {
+  assert(JitContext->JitInfo->isValueClass(Class));
+
+  // Check to see if the boxed version of this type has already been generated.
+  auto MapElement = BoxedTypeMap->find(Class);
+  if (MapElement != BoxedTypeMap->end()) {
+    return MapElement->second;
+  }
+
+  // Normalize the source type from Nullable<T> to T, if necessary.
+  CORINFO_CLASS_HANDLE TypeToBox = getTypeForBox(Class);
+
+  CorInfoType CorType = ReaderBase::getClassType(TypeToBox);
+  Type *ValueType = getType(CorType, TypeToBox);
+
+  // Treat the boxed type as a subclass of Object with a single field of the
+  // source type.
+  CORINFO_CLASS_HANDLE ObjectClass =
+      getBuiltinClass(CorInfoClassId::CLASSID_SYSTEM_OBJECT);
+
+  const bool IsRefClass = true;
+  const bool GetRefClassFields = true;
+  Type *ObjectPtrType =
+      getClassType(ObjectClass, IsRefClass, GetRefClassFields);
+  StructType *ObjectType =
+      cast<StructType>(ObjectPtrType->getPointerElementType());
+  ArrayRef<Type *> ObjectFields = ObjectType->elements();
+
+  std::vector<Type *> Fields(ObjectFields.size() + 1);
+
+  int I = 0;
+  for (auto F : ObjectFields) {
+    Fields[I++] = F;
+  }
+  Fields[I] = ValueType;
+
+  LLVMContext &Context = *JitContext->LLVMContext;
+  const bool IsPacked = true;
+  Type *BoxedType;
+
+  std::string BoxedTypeName;
+  StructType *TheStructType = dyn_cast<StructType>(ValueType);
+  if (TheStructType != nullptr) {
+    StringRef StructTypeName = TheStructType->getStructName();
+    if (!StructTypeName.empty()) {
+      BoxedTypeName = Twine("Boxed_", StructTypeName).str();
+    } else {
+      BoxedTypeName = "Boxed_AnonStruct";
+    }
+  }
+
+  if (BoxedTypeName.empty()) {
+    assert(ValueType->isFloatTy() || ValueType->isDoubleTy() ||
+           ValueType->isIntegerTy());
+    BoxedTypeName = "Boxed_Primitive";
+  }
+
+  BoxedType = StructType::create(Context, Fields, BoxedTypeName, IsPacked);
+  BoxedType = getManagedPointerType(BoxedType);
+  (*BoxedTypeMap)[TypeToBox] = BoxedType;
+  if (Class != TypeToBox) {
+    (*BoxedTypeMap)[Class] = BoxedType;
+  }
+  return BoxedType;
+}
+
 // Obtain an LLVM function type from a method handle.
 FunctionType *GenIR::getFunctionType(CORINFO_METHOD_HANDLE Method,
                                      bool HasSecretParameter) {
@@ -2944,9 +3010,7 @@ IRNode *GenIR::addressOfValue(IRNode *Leaf) {
 }
 
 IRNode *GenIR::makeBoxDstOperand(CORINFO_CLASS_HANDLE Class) {
-  const bool IsRefClass = false;
-  const bool GetRefClassFields = false;
-  Type *Ty = getClassType(getTypeForBox(Class), IsRefClass, GetRefClassFields);
+  Type *Ty = getBoxedType(Class);
   Value *Ptr = llvm::Constant::getNullValue(getManagedPointerType(Ty));
   return (IRNode *)Ptr;
 }
@@ -5163,16 +5227,20 @@ IRNode *GenIR::castOp(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *ObjRefNode,
     }
   }
 
-  Type *ResultType =
-      getType(CorInfoType::CORINFO_TYPE_CLASS, ResolvedToken->hClass);
-  IRNode *Dst = (IRNode *)Constant::getNullValue(ResultType);
+  CORINFO_CLASS_HANDLE Class = ResolvedToken->hClass;
+  Type *ResultType = nullptr;
+  if (JitContext->JitInfo->isValueClass(Class)) {
+    ResultType = getBoxedType(Class);
+  } else {
+    ResultType = getType(CORINFO_TYPE_CLASS, Class);
+  }
 
   // Generate the helper call or intrinsic
-  bool IsVolatile = false;
-  bool DoesNotInvokeStaticCtor = Optimize;
-  return callHelper(HelperId, Dst, ClassHandleNode, ObjRefNode, nullptr,
-                    nullptr, Reader_AlignUnknown, IsVolatile,
-                    DoesNotInvokeStaticCtor);
+  const bool IsVolatile = false;
+  const bool DoesNotInvokeStaticCtor = Optimize;
+  return callHelperImpl(HelperId, ResultType, ClassHandleNode, ObjRefNode,
+                        nullptr, nullptr, Reader_AlignUnknown, IsVolatile,
+                        DoesNotInvokeStaticCtor);
 }
 
 // Override the cast class optimization
