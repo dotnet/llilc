@@ -81,16 +81,16 @@ public:
   /// In addition, any cache coherency operations needed to reliably use the
   /// memory are also performed.
   ///
-  /// \param ErrMsg[out] Additional information about finalization errors
+  /// \param ErrMsg [out] Additional information about finalization errors.
   /// \returns false if an error occurred, true otherwise.
   bool finalizeMemory(std::string *ErrMsg = nullptr) override;
 
   /// Inform the memory manager about the total amount of memory required to
   /// allocate all sections to be loaded.
   ///
-  /// \param CodeSize - the total size of all code sections
-  /// \param DataSizeRO - the total size of all read-only data sections
-  /// \param DataSizeRW - the total size of all read-write data sections
+  /// \param CodeSize - the total size of all code sections.
+  /// \param DataSizeRO - the total size of all read-only data sections.
+  /// \param DataSizeRW - the total size of all read-write data sections.
   ///
   /// Note that by default the callback is disabled. To enable it
   /// redefine the method needsToReserveAllocationSpace to return true.
@@ -108,19 +108,19 @@ public:
   ///
   /// This is currently invoked once per .xdata section. The EE uses this info
   /// to build and register the appropriate .pdata with the OS.
-  /// \param Addr           The address of the data in the pre-loaded image
-  /// \param LoadAddr       The address the data will have once loaded
-  /// \param Size           Size of the unwind data in bytes
+  /// \param Addr           The address of the data in the pre-loaded image.
+  /// \param LoadAddr       The address the data will have once loaded.
+  /// \param Size           Size of the unwind data in bytes.
   /// \note Because we're not relocating data during loading, \p Addr and
   /// \p LoadAddr are currently identical.
   void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
 
 private:
-  LLILCJitContext *Context;         ///< LLVM context for types, etc
-  uint8_t *HotCodeBlock;            ///< Memory to hold the hot method code
-  uint8_t *ColdCodeBlock;           ///< Memory to hold the cold method code
-  uint8_t *ReadOnlyDataBlock;       ///< Memory to hold the readonly data
-  uint8_t *ReadOnlyDataUnallocated; ///< Address of unallocated part of RO data
+  LLILCJitContext *Context;         ///< LLVM context for types, etc.
+  uint8_t *HotCodeBlock;            ///< Memory to hold the hot method code.
+  uint8_t *ColdCodeBlock;           ///< Memory to hold the cold method code.
+  uint8_t *ReadOnlyDataBlock;       ///< Memory to hold the readonly data.
+  uint8_t *ReadOnlyDataUnallocated; ///< Address of unallocated part of RO data.
 };
 } // namespace llvm
 
