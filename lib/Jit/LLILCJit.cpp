@@ -285,7 +285,8 @@ bool LLILCJit::readMethod(LLILCJitContext *JitContext) {
 
   LLILCJitPerThreadState *PerThreadState = State.get();
   GenIR Reader(JitContext, &PerThreadState->ClassTypeMap,
-               &PerThreadState->ArrayTypeMap, &PerThreadState->FieldIndexMap);
+               &PerThreadState->BoxedTypeMap, &PerThreadState->ArrayTypeMap,
+               &PerThreadState->FieldIndexMap);
 
   std::string FuncName = JitContext->CurrentModule->getModuleIdentifier();
 

@@ -114,8 +114,8 @@ struct LLILCJitPerThreadState {
 public:
   /// Construct a new state.
   LLILCJitPerThreadState()
-      : LLVMContext(), ClassTypeMap(), ArrayTypeMap(), FieldIndexMap(),
-        JitContext(nullptr) {}
+      : LLVMContext(), ClassTypeMap(), BoxedTypeMap(), ArrayTypeMap(),
+        FieldIndexMap(), JitContext(nullptr) {}
 
   /// Each thread maintains its own \p LLVMContext. This is where
   /// LLVM keeps definitions of types and similar constructs.
@@ -126,6 +126,10 @@ public:
 
   /// Map from class handles to the LLVM types that represent them.
   std::map<CORINFO_CLASS_HANDLE, llvm::Type *> ClassTypeMap;
+
+  /// Map from class handles for value types to the LLVM types that represent
+  /// their boxed versions.
+  std::map<CORINFO_CLASS_HANDLE, llvm::Type *> BoxedTypeMap;
 
   /// \brief Map from class handles for arrays to the LLVM types that represent
   /// them.
