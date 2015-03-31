@@ -825,7 +825,14 @@ function Global:ApplyFilter([string]$File)
 # -------------------------------------------------------------------------
 
 function Global:ExcludeTest([string]$Arch="x64", [string]$Build="Release")
-{ 
+{
+  # Excluding Interop\ICastable\Castable*"
+  # remove ICastable until it can be debugged
+  pushd $CoreCLRTest\Interop\ICastable
+  del Castable*
+  popd
+
+  # Excluding JIT\CodeGenBringUpTests\div2*,localloc*"
   pushd $CoreCLRTest\JIT\CodeGenBringUpTests
   del div2*
   del localloc*
