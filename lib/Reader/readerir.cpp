@@ -2393,8 +2393,11 @@ IRNode *GenIR::binaryOp(ReaderBaseNS::BinaryOpcode Opcode, IRNode *Arg1,
     Instruction::BinaryOps Op = Triple[Opcode].Op.Opcode;
 
     if ((Op == Instruction::BinaryOps::SDiv) ||
-        (Op == Instruction::BinaryOps::UDiv)) {
-      // Integer divide throws a DivideByZeroException on 0 denominator
+        (Op == Instruction::BinaryOps::UDiv) ||
+        (Op == Instruction::BinaryOps::SRem) ||
+        (Op == Instruction::BinaryOps::URem)) {
+      // Integer divide and remainder throw a DivideByZeroException
+      // if the divisor is zero
       if (UseExplicitZeroDivideChecks) {
         Value *IsZero = LLVMBuilder->CreateIsNull(Arg2);
         genConditionalThrow(IsZero, CORINFO_HELP_THROWDIVZERO,
