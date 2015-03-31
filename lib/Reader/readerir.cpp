@@ -336,15 +336,30 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
     throw NotYetImplementedException("synchronized method");
   }
 
-  // TODO: support for JustMyCode hook
   if ((JitFlags & CORJIT_FLG_DEBUG_CODE) && !(JitFlags & CORJIT_FLG_IL_STUB)) {
-
+    // Get the handle from the EE.
     bool IsIndirect = false;
     void *DebugHandle =
         getJustMyCodeHandle(getCurrentMethodHandle(), &IsIndirect);
 
+    // If the handle is non-null, insert the hook.
     if (DebugHandle != nullptr) {
-      throw NotYetImplementedException("just my code hook");
+      const bool IsCallTarget = false;
+      IRNode *JustMyCodeFlagAddress =
+          handleToIRNode(mdtJMCHandle, DebugHandle, DebugHandle, IsIndirect,
+                         IsIndirect, IsIndirect, IsCallTarget);
+      const bool IsVolatile = false;
+      const bool IsReadOnly = false;
+      IRNode *JustMyCodeFlag =
+          loadIndirNonNull(ReaderBaseNS::LdindI4, JustMyCodeFlagAddress,
+                           Reader_AlignNatural, IsVolatile, IsReadOnly);
+      Value *Condition = LLVMBuilder->CreateIsNotNull(JustMyCodeFlag, "JMC");
+      IRNode *Zero = loadConstantI4(0);
+      Type *Void = Type::getVoidTy(*JitContext->LLVMContext);
+      const bool CallReturns = true;
+      genConditionalHelperCall(
+          Condition, CorInfoHelpFunc::CORINFO_HELP_DBG_IS_JUST_MY_CODE, Void,
+          JustMyCodeFlag, Zero, CallReturns, "JustMyCodeHook");
     }
   }
 
@@ -355,6 +370,16 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   if (InitClass) {
     insertClassConstructor();
   }
+
+  // Split the entry block at this point. The continuation will
+  // be the first block to hold the IR for MSIL opcodes and will be
+  // the target for MSIL offset 0 branches (and tail recursive calls).
+
+  FlowGraphNode *CurrentFlowGraphNode =
+      (FlowGraphNode *)LLVMBuilder->GetInsertBlock();
+  Instruction *CurrentInstruction = LLVMBuilder->GetInsertPoint();
+  IRNode *CurrentIRNode = (IRNode *)CurrentInstruction;
+  FirstMSILBlock = fgSplitBlock(CurrentFlowGraphNode, CurrentIRNode);
 }
 
 void GenIR::readerMiddlePass() { return; }
@@ -2080,7 +2105,7 @@ FlowGraphNode *GenIR::fgNodeGetNext(FlowGraphNode *FgNode) {
   }
 }
 
-FlowGraphNode *GenIR::fgPrePhase(FlowGraphNode *Fg) { return Fg; }
+FlowGraphNode *GenIR::fgPrePhase(FlowGraphNode *Fg) { return FirstMSILBlock; }
 
 void GenIR::fgPostPhase() { return; }
 

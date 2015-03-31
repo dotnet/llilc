@@ -1187,6 +1187,7 @@ private:
   std::vector<llvm::Value *> Arguments;
   std::vector<CorInfoType> ArgumentCorTypes;
   llvm::DenseMap<uint32_t, llvm::StoreInst *> ContinuationStoreMap;
+  FlowGraphNode *FirstMSILBlock;
   llvm::BasicBlock *UnreachableContinuationBlock;
   CorInfoType ReturnCorType;
   bool HasThis;
