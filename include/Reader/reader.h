@@ -204,6 +204,7 @@ struct EHRegion;
 class VerifyWorkList;
 class VerificationState;
 class FlowGraphNodeOffsetList;
+class ReaderCallTargetData;
 
 /// \brief Exception information for the Jit's exception filter
 ///
@@ -235,16 +236,15 @@ struct GCLayout {
   uint8_t GCPointers[0];  ///< Array indicating location of the gc pointers
 };
 
-/// \brief Structure used to pass argument information from rdrCall to GenCall.
+/// \brief Structure that encapsulates type information for the values passed to
+///        and returned from calls.
 ///
-/// ReaderBase (which implements \p rdrCall) doesn't know how the derived
-/// Reader (which implements \p GenCall) will represent type information, so it
-/// uses \p ArgType and \p ArgClass to describe the type of the argument, and
-/// \p ArgNode to describe its value.
-struct CallArgTriple {
-  IRNode *ArgNode;               ///< Opaque pointer to IR for argument value
-  CorInfoType ArgType;           ///< Low-level type of the argument
-  CORINFO_CLASS_HANDLE ArgClass; ///< Extra type info for pointers and similar
+/// ReaderBase doesn't know how the derived Reader will represent type
+/// information, so it uses \p CorType and \p Class to describe the type of
+/// the argument.
+struct CallArgType {
+  CorInfoType CorType;
+  CORINFO_CLASS_HANDLE Class;
 };
 
 /// Structure representing a linked list of flow graph nodes
@@ -396,6 +396,43 @@ public:
 
 #pragma endregion
 
+/// \brief Information about a runtime call signature.
+///
+/// Code generation for calls must take into account the parameters that a
+/// particular call target expects at runtime, as opposed to the parameters
+/// exposed by the target in metadata. This class encapsulates this information
+/// s.t. subclasses of ReaderBase need not compute this data ad-hoc.
+class ReaderCallSignature {
+  friend class ReaderBase;
+  friend class ReaderCallTargetData;
+
+private:
+  CorInfoCallConv CallingConvention; ///< The calling convention for this
+                                     ///< target.
+
+  CallArgType ResultType; ///< The type of the value returned by
+                          ///< this target.
+
+  std::vector<CallArgType> ArgumentTypes; ///< The list of types for the formal
+                                          ///< arguments to this target.
+
+public:
+  /// \brief Get the calling convention used for this target.
+  /// \returns The calling convention.
+  CorInfoCallConv getCallingConvention() const { return CallingConvention; }
+
+  /// \brief Get the type information for this target's return value.
+  /// \returns The type information.
+  const CallArgType &getResultType() const { return ResultType; }
+
+  /// \brief Get the type information for the formal arguments to this target.
+  /// \returns A vector containing the type information for each formal
+  ///          argument.
+  const std::vector<CallArgType> &getArgumentTypes() const {
+    return ArgumentTypes;
+  }
+};
+
 /// \brief Information about a specific call site.
 ///
 /// Code generation for calls must take into account many different factors.
@@ -457,6 +494,8 @@ private:
                                                   ///< secret parameter.
   IRNode *CallTargetNode;                         ///< Client IR for the call
                                                   ///< target.
+  ReaderCallSignature CallTargetSignature;        ///< Signature information for
+                                                  ///< the call target.
 #if defined(_DEBUG)
   char TargetName[MAX_CLASSNAME_LENGTH]; ///< Name of the call target.
 #endif
@@ -778,6 +817,16 @@ public:
   ///
   /// \param NewTargetMethodHandle    Method handle for the optimized ctor.
   void setOptimizedDelegateCtor(CORINFO_METHOD_HANDLE NewTargetMethodHandle);
+
+  /// \brief Return the runtime signature of the call target.
+  ///
+  /// The runtime signature may differ from the metadata signature for a variety
+  /// of reasons.
+  ///
+  /// \returns The runtime signature of the call target.
+  const ReaderCallSignature &getCallTargetSignature() const {
+    return CallTargetSignature;
+  }
 };
 
 // Interface to GenIR defined EHRegion structure
@@ -1966,6 +2015,28 @@ public:
   // at the end of this file.
   // ///////////////////////////////////////////////////////////////////////////
 
+  /// \brief Generate the \p this argument for \p newobj.
+  ///
+  /// \param CallTargetData  Information about the call site.
+  /// \param CorType         The \p CorInfoType of the \p this parameter.
+  /// \param Class           The class handle of the \p this parameter.
+  ///
+  /// \returns An \p IRNode that represents the \p this argument.
+  IRNode *rdrMakeNewObjThisArg(ReaderCallTargetData *CallTargetData,
+                               CorInfoType CorType, CORINFO_CLASS_HANDLE Class);
+
+  /// \brief Generate the return node for \p newobj.
+  ///
+  /// \param CallTargetData  Information about the call site.
+  /// \param ThisArg         The argument passed as the \p this parameter for
+  ///                        the call. This is exactly the node returned by a
+  ///                        previous call to \p genNewObjThisArg, if any.
+  /// \param CallReturnNode  The return node for the corresponding call, if any.
+  ///
+  /// \returns An \p IRNode that represents the result of the call.
+  IRNode *rdrMakeNewObjReturnNode(ReaderCallTargetData *CallTargetData,
+                                  IRNode *ThisArg, IRNode *CallReturnNode);
+
   IRNode *rdrCall(ReaderCallTargetData *CallTargetData,
                   ReaderBaseNS::CallOpcode Opcode, IRNode **CallNode);
 
@@ -2748,10 +2819,47 @@ public:
   virtual IRNode *addressOfLeaf(IRNode *Leaf) = 0;
   virtual IRNode *addressOfValue(IRNode *Leaf) = 0;
 
+  /// \brief Delegate to GenIR to generate code to instantiate a new MDArray.
+  ///
+  /// Creating MDArrays requires calling a runtime helper. This helper is
+  /// unique in that it is the only variadic helper. Rather than complicate the
+  /// general case (i.e. genCall and its inputs) in order to handle this,
+  /// simply special-case the helper call generation.
+  ///
+  /// \param CallTargetData  Information about the call site.
+  /// \param Args            The actual arguments to the call.
+  /// \param CallNode [out]  The \p IRNode corresponding to the call.
+  ///
+  /// \returns An \p IRNode that represents the result of the call, if any.
+  virtual IRNode *genNewMDArrayCall(ReaderCallTargetData *CallTargetData,
+                                    std::vector<IRNode *> Args,
+                                    IRNode **CallNode) = 0;
+
+  /// \brief Delegate to GenIR to generate the \p this argument for \p newobj.
+  ///
+  /// \param CallTargetData  Information about the call site.
+  /// \param CorType         The \p CorInfoType of the \p this parameter.
+  /// \param Class           The class handle of the \p this parameter.
+  ///
+  /// \returns An \p IRNode that represents the \p this argument.
+  virtual IRNode *genNewObjThisArg(ReaderCallTargetData *CallTargetData,
+                                   CorInfoType CorType,
+                                   CORINFO_CLASS_HANDLE Class) = 0;
+
+  /// \brief Delegate to GenIR to generate the return node for \p newobj.
+  ///
+  /// \param CallTargetData  Information about the call site.
+  /// \param ThisArg         The argument passed as the \p this parameter for
+  ///                        the call. This is exactly the node returned by a
+  ///                        previous call to \p genNewObjThisArg, if any.
+  ///
+  /// \returns An \p IRNode that represents the result of the call.
+  virtual IRNode *genNewObjReturnNode(ReaderCallTargetData *CallTargetData,
+                                      IRNode *ThisArg) = 0;
+
   // Helper callback used by rdrCall to emit call code.
-  virtual IRNode *genCall(ReaderCallTargetData *CallTargetDaTA,
-                          CallArgTriple *Args, uint32_t NumArgs,
-                          IRNode **CallNode) = 0;
+  virtual IRNode *genCall(ReaderCallTargetData *CallTargetData,
+                          std::vector<IRNode *> Args, IRNode **CallNode) = 0;
 
   virtual bool canMakeDirectCall(ReaderCallTargetData *CallTargetData) = 0;
 
@@ -2813,12 +2921,19 @@ public:
   virtual IRNode *makePtrDstGCOperand(bool IsInteriorGC) = 0;
   virtual IRNode *makePtrNode(ReaderPtrType PointerType = Reader_PtrNotGc) = 0;
   virtual IRNode *makeStackTypeNode(IRNode *Node) = 0;
-  virtual IRNode *makeCallReturnNode(CORINFO_SIG_INFO *Sig,
-                                     uint32_t *HiddenMBParamSize,
-                                     GCLayout **GCInfo) = 0;
 
-  virtual IRNode *makeDirectCallTargetNode(CORINFO_METHOD_HANDLE Method,
-                                           void *CodeAddress) = 0;
+  virtual IRNode *makeDirectCallTargetNode(void *CodeAddress) = 0;
+
+  /// \brief Create a function pointer with the given signature from the given
+  ///        target address.
+  ///
+  /// \param Signature   The runtime signature of the function located at the
+  ///                    target address.
+  /// \param SourceNode  The \p IRNode corresponding to the target address.
+  ///
+  /// \returns An \p IRNode that representing the function pointer.
+  virtual IRNode *makeFunctionPointer(const ReaderCallSignature &Signature,
+                                      IRNode *SourceNode) = 0;
 
   // Called once region tree has been built.
   virtual void setEHInfo(EHRegion *EhRegionTree,

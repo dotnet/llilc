@@ -703,9 +703,20 @@ public:
   IRNode *addressOfLeaf(IRNode *Leaf) override;
   IRNode *addressOfValue(IRNode *Leaf) override;
 
+  IRNode *genNewMDArrayCall(ReaderCallTargetData *CallTargetData,
+                            std::vector<IRNode *> Args,
+                            IRNode **CallNode) override;
+
+  IRNode *genNewObjThisArg(ReaderCallTargetData *CallTargetData,
+                           CorInfoType COrType,
+                           CORINFO_CLASS_HANDLE Class) override;
+
+  IRNode *genNewObjReturnNode(ReaderCallTargetData *CalLTargetData,
+                              IRNode *ThisArg) override;
+
   // Helper callback used by rdrCall to emit call code.
-  IRNode *genCall(ReaderCallTargetData *CallTargetInfo, CallArgTriple *ArgArray,
-                  uint32_t NumArgs, IRNode **CallNode) override;
+  IRNode *genCall(ReaderCallTargetData *CallTargetInfo,
+                  std::vector<IRNode *> Args, IRNode **CallNode) override;
 
   bool canMakeDirectCall(ReaderCallTargetData *CallTargetData) override;
 
@@ -773,11 +784,10 @@ public:
     throw NotYetImplementedException("makeStackTypeNode");
   };
 
-  IRNode *makeCallReturnNode(CORINFO_SIG_INFO *Sig, unsigned *HiddenMBParamSize,
-                             GCLayout **GcInfo) override;
+  IRNode *makeDirectCallTargetNode(void *CodeAddr) override;
 
-  IRNode *makeDirectCallTargetNode(CORINFO_METHOD_HANDLE Method,
-                                   void *CodeAddr) override;
+  IRNode *makeFunctionPointer(const ReaderCallSignature &Signature,
+                              IRNode *SourceNode) override;
 
   // Called once region tree has been built.
   void setEHInfo(EHRegion *EhRegionTree, EHRegionList *EhRegionList) override;
@@ -793,17 +803,10 @@ public:
   //
 
   // vararg
-  bool callIsCorVarArgs(IRNode *CallNode);
   void canonVarargsCall(IRNode *CallNode,
                         ReaderCallTargetData *CallTargetInfo) {
     throw NotYetImplementedException("canonVarargsCall");
   };
-
-  // newobj
-  bool canonNewObjCall(IRNode *CallNode, ReaderCallTargetData *CallTargetData,
-                       IRNode **OutResult);
-  IRNode *canonNewArrayCall(IRNode *CallNode,
-                            ReaderCallTargetData *CallTargetData);
 
   // stubs
   IRNode *canonStubCall(IRNode *CallNode, ReaderCallTargetData *CallTargetData);
@@ -845,6 +848,7 @@ private:
   llvm::FunctionType *getFunctionType(CORINFO_SIG_INFO &Sig,
                                       CORINFO_CLASS_HANDLE ThisClass,
                                       bool HasSecretParameter = false);
+  llvm::FunctionType *getFunctionType(const ReaderCallSignature &Signature);
 
   llvm::Type *getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
                            bool GetRefClassFields);

@@ -547,7 +547,12 @@ Instruction *GenIR::createTemporary(Type *Ty, const Twine &Name) {
   if (TempInsertionPoint == nullptr) {
     // There are no local, param or temp allocas in the entry block, so set
     // the insertion point to the first point in the block.
-    LLVMBuilder->SetInsertPoint(EntryBlock->getFirstInsertionPt());
+    auto FirstIP = EntryBlock->getFirstInsertionPt();
+    if (FirstIP == EntryBlock->end()) {
+      LLVMBuilder->SetInsertPoint(EntryBlock);
+    } else {
+      LLVMBuilder->SetInsertPoint(FirstIP);
+    }
   } else {
     // There are local, param or temp allocas. TempInsertionPoint refers to
     // the last of them. Set the insertion point to the next instruction since
@@ -1476,6 +1481,22 @@ FunctionType *GenIR::getFunctionType(CORINFO_SIG_INFO &Sig,
       FunctionType::get(LLVMReturnType, Arguments, IsVarArg);
 
   return FunctionType;
+}
+
+FunctionType *GenIR::getFunctionType(const ReaderCallSignature &Signature) {
+  CallArgType ResultType = Signature.getResultType();
+  Type *LLVMResultType = this->getType(ResultType.CorType, ResultType.Class);
+
+  const std::vector<CallArgType> &ArgumentTypes = Signature.getArgumentTypes();
+  const uint32_t NumArguments = ArgumentTypes.size();
+  SmallVector<Type *, 16> LLVMArgumentTypes(NumArguments);
+  for (uint32_t I = 0; I < NumArguments; I++) {
+    const CallArgType &Arg = ArgumentTypes[I];
+    LLVMArgumentTypes[I] = this->getType(Arg.CorType, Arg.Class);
+  }
+
+  const bool IsVarArg = false;
+  return FunctionType::get(LLVMResultType, LLVMArgumentTypes, IsVarArg);
 }
 
 // Verify that this value's type is a valid type
@@ -3377,33 +3398,186 @@ bool GenIR::canMakeDirectCall(ReaderCallTargetData *CallTargetData) {
   return !CallTargetData->isJmp();
 }
 
-IRNode *GenIR::makeDirectCallTargetNode(CORINFO_METHOD_HANDLE Method,
-                                        void *CodeAddr) {
+IRNode *GenIR::makeDirectCallTargetNode(void *CodeAddr) {
   uint32_t NumBits = TargetPointerSizeInBits;
   bool IsSigned = false;
 
   ConstantInt *CodeAddrValue = ConstantInt::get(
       *JitContext->LLVMContext, APInt(NumBits, (uint64_t)CodeAddr, IsSigned));
 
-  FunctionType *FunctionType = getFunctionType(Method);
+  return (IRNode *)CodeAddrValue;
+}
 
-  return (IRNode *)LLVMBuilder->CreateIntToPtr(
-      CodeAddrValue, getUnmanagedPointerType(FunctionType));
+IRNode *GenIR::makeFunctionPointer(const ReaderCallSignature &Signature,
+                                   IRNode *Source) {
+  Value *SourceValue = (Value *)Source;
+  assert(SourceValue->getType()->isIntegerTy(TargetPointerSizeInBits));
+  Type *FunctionTy = getFunctionType(Signature);
+  Type *FunctionPtrTy = getUnmanagedPointerType(FunctionTy);
+
+  return (IRNode *)LLVMBuilder->CreateIntToPtr(SourceValue, FunctionPtrTy);
+}
+
+// Helper callback used by rdrCall to emit a call to allocate a new MDArray.
+IRNode *GenIR::genNewMDArrayCall(ReaderCallTargetData *CallTargetData,
+                                 std::vector<IRNode *> Args,
+                                 IRNode **CallNode) {
+  // To construct the array we need to call a helper passing it the class handle
+  // for the constructor method, the number of arguments to the constructor and
+  // the arguments to the constructor.
+
+  const ReaderCallSignature &Signature =
+      CallTargetData->getCallTargetSignature();
+  const std::vector<CallArgType> SigArgumentTypes =
+      Signature.getArgumentTypes();
+  const uint32_t ArgCount = Args.size();
+
+  // Construct the new function type.
+  Type *ReturnType =
+      getType(SigArgumentTypes[0].CorType, SigArgumentTypes[0].Class);
+
+  SmallVector<Type *, 16> ArgumentTypes(ArgCount + 2);
+  SmallVector<Value *, 16> Arguments(ArgCount + 2);
+  uint32_t Index = 0;
+
+  // The first argument is the class handle.
+  IRNode *ClassHandle = CallTargetData->getClassHandleNode();
+  ASSERTNR(ClassHandle);
+
+  ArgumentTypes[Index] = ClassHandle->getType();
+  Arguments[Index++] = ClassHandle;
+
+  // The second argument is the number of arguments to follow.
+  const uint32_t NumBits = 32;
+  const bool IsSigned = true;
+  Value *NumArgs = ConstantInt::get(
+      *JitContext->LLVMContext,
+      APInt(NumBits, CallTargetData->getSigInfo()->numArgs, IsSigned));
+  ASSERTNR(NumArgs);
+
+  ArgumentTypes[Index] = NumArgs->getType();
+  Arguments[Index++] = NumArgs;
+
+  // The rest of the arguments are the same as in the original newobj call.
+  // It's a vararg call so add arguments but not argument types.
+  for (unsigned I = 1; I < ArgCount; ++I) {
+    IRNode *ArgNode = Args[I];
+    CorInfoType CorType = SigArgumentTypes[I].CorType;
+    CORINFO_CLASS_HANDLE Class = SigArgumentTypes[I].Class;
+    Type *ArgType = this->getType(CorType, Class);
+
+    if (ArgType->isStructTy()) {
+      throw NotYetImplementedException("Call has value type args");
+    }
+
+    IRNode *Arg = convertFromStackType(ArgNode, CorType, ArgType);
+    Arguments[Index++] = Arg;
+  }
+
+  const bool IsVarArg = true;
+  FunctionType *FunctionType =
+      FunctionType::get(ReturnType, ArgumentTypes, IsVarArg);
+
+  // Create a call target with the right type.
+  // Get the address of the Helper descr.
+  Value *Callee = getHelperCallAddress(CORINFO_HELP_NEW_MDARR);
+  Callee = LLVMBuilder->CreateIntToPtr(Callee,
+                                       getUnmanagedPointerType(FunctionType));
+
+  // Replace the old call instruction with the new one.
+  *CallNode = (IRNode *)LLVMBuilder->CreateCall(Callee, Arguments);
+  return *CallNode;
+}
+
+IRNode *GenIR::genNewObjThisArg(ReaderCallTargetData *CallTargetData,
+                                CorInfoType CorType,
+                                CORINFO_CLASS_HANDLE Class) {
+  Type *ThisType = this->getType(CorType, Class);
+
+  uint32_t ClassAttribs = CallTargetData->getClassAttribs();
+  bool IsVarObjSize = ((ClassAttribs & CORINFO_FLG_VAROBJSIZE) != 0);
+  if (IsVarObjSize) {
+    // Storage for variably-sized objects is allocated by the callee; simply
+    // pass a null pointer.
+    return (IRNode *)Constant::getNullValue(ThisType);
+  }
+
+  bool IsValueClass = ((ClassAttribs & CORINFO_FLG_VALUECLASS) != 0);
+  if (IsValueClass) {
+    CorInfoType StructCorType;
+    uint32_t MbSize;
+    ReaderBase::getClassType(Class, ClassAttribs, &StructCorType, &MbSize);
+
+    Type *StructType = this->getType(StructCorType, Class);
+
+    // We are allocating an instance of a value class on the stack.
+    Instruction *AllocaInst = createTemporary(StructType);
+
+    // Initialize the struct to zero.
+    LLVMContext &LLVMContext = *this->JitContext->LLVMContext;
+    Value *ZeroByte = Constant::getNullValue(Type::getInt8Ty(LLVMContext));
+    uint32_t Align = 0;
+    LLVMBuilder->CreateMemSet(AllocaInst, ZeroByte, MbSize, Align);
+
+    // Create a managed pointer to the struct instance and pass it as the 'this'
+    // argument to the constructor call.
+    Type *ManagedPointerType = getManagedPointerType(StructType);
+    Value *ManagedPointerToStruct =
+        LLVMBuilder->CreateAddrSpaceCast(AllocaInst, ManagedPointerType);
+    ManagedPointerToStruct =
+        LLVMBuilder->CreatePointerCast(ManagedPointerToStruct, ThisType);
+
+    return (IRNode *)ManagedPointerToStruct;
+  }
+
+  // We are allocating a fixed-size class on the heap.
+  // Create a call to the newobj helper specific to this class,
+  // and use its return value as the
+  // 'this' pointer to be passed as the first argument to the constructor.
+
+  // Create the address operand for the newobj helper.
+  CorInfoHelpFunc HelperId = getNewHelper(CallTargetData->getResolvedToken());
+  Value *ThisPointer =
+      callHelperImpl(HelperId, ThisType, CallTargetData->getClassHandleNode());
+  return (IRNode *)ThisPointer;
+}
+
+IRNode *GenIR::genNewObjReturnNode(ReaderCallTargetData *CallTargetData,
+                                   IRNode *ThisArg) {
+  uint32_t ClassAttribs = CallTargetData->getClassAttribs();
+  bool IsValueClass = ((ClassAttribs & CORINFO_FLG_VALUECLASS) != 0);
+
+  if (IsValueClass) {
+    // Dig through the 'this' arg to find the temporary created earlier
+    // and dereference it.
+    Value *Alloca = nullptr;
+    CastInst *PointerCast = cast<CastInst>(ThisArg);
+    AddrSpaceCastInst *AddrSpaceCast =
+        dyn_cast<AddrSpaceCastInst>(PointerCast->getOperand(0));
+    if (AddrSpaceCast == nullptr) {
+      Alloca = PointerCast->getOperand(0);
+    } else {
+      Alloca = AddrSpaceCast->getOperand(0);
+    }
+    AllocaInst *Temp = cast<AllocaInst>(Alloca);
+
+    // The temp we passed as the this arg needs to be dereferenced.
+    return (IRNode *)makeLoadNonNull((Value *)Temp, false);
+  }
+
+  // Otherwise, we already have a good value.
+  return ThisArg;
 }
 
 IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
-                       CallArgTriple *ArgArray, uint32_t NumArgs,
-                       IRNode **CallNode) {
-
+                       std::vector<IRNode *> Args, IRNode **CallNode) {
   IRNode *Call = nullptr, *ReturnNode = nullptr;
   IRNode *TargetNode = CallTargetInfo->getCallTargetNode();
-  CORINFO_SIG_INFO *SigInfo = CallTargetInfo->getSigInfo();
   CORINFO_CALL_INFO *CallInfo = CallTargetInfo->getCallInfo();
+  const ReaderCallSignature &Signature =
+      CallTargetInfo->getCallTargetSignature();
   bool IsStubCall =
       (CallInfo != nullptr) && (CallInfo->kind == CORINFO_VIRTUALCALL_STUB);
-
-  unsigned HiddenMBParamSize = 0;
-  GCLayout *GCInfo = nullptr;
 
   if (CallTargetInfo->isTailCall()) {
     // If there's no explicit tail prefix, we can generate
@@ -3413,27 +3587,30 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
     }
   }
 
+  CorInfoCallConv CC = Signature.getCallingConvention();
   if (CallTargetInfo->isIndirect()) {
-    CorInfoCallConv Conv = SigInfo->getCallConv();
-    if (Conv == CORINFO_CALLCONV_STDCALL || Conv == CORINFO_CALLCONV_C ||
-        Conv == CORINFO_CALLCONV_THISCALL ||
-        Conv == CORINFO_CALLCONV_FASTCALL ||
-        Conv == CORINFO_CALLCONV_NATIVEVARARG) {
+    if (CC == CORINFO_CALLCONV_STDCALL || CC == CORINFO_CALLCONV_C ||
+        CC == CORINFO_CALLCONV_THISCALL || CC == CORINFO_CALLCONV_FASTCALL ||
+        CC == CORINFO_CALLCONV_NATIVEVARARG) {
       throw NotYetImplementedException("PInvoke call");
     }
   }
 
-  // Ask GenIR to create return value.
-  if (!CallTargetInfo->isNewObj()) {
-    ReturnNode = makeCallReturnNode(SigInfo, &HiddenMBParamSize, &GCInfo);
+  CallArgType ResultType = Signature.getResultType();
+  if ((ResultType.CorType == CORINFO_TYPE_REFANY) ||
+      (ResultType.CorType == CORINFO_TYPE_VALUECLASS)) {
+    throw NotYetImplementedException("Return refany or value class");
   }
 
-  std::vector<Value *> Arguments;
+  const std::vector<CallArgType> &ArgumentTypes = Signature.getArgumentTypes();
+  const uint32_t NumArgs = Args.size();
+  assert(NumArgs == ArgumentTypes.size());
 
+  SmallVector<Value *, 16> Arguments(NumArgs);
   for (uint32_t I = 0; I < NumArgs; I++) {
-    IRNode *ArgNode = ArgArray[I].ArgNode;
-    CorInfoType CorType = ArgArray[I].ArgType;
-    CORINFO_CLASS_HANDLE Class = ArgArray[I].ArgClass;
+    IRNode *ArgNode = Args[I];
+    CorInfoType CorType = ArgumentTypes[I].CorType;
+    CORINFO_CLASS_HANDLE Class = ArgumentTypes[I].Class;
     Type *ArgType = this->getType(CorType, Class);
 
     if (ArgType->isStructTy()) {
@@ -3441,49 +3618,15 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
     }
 
     if (I == 0) {
-      if (CallTargetInfo->isNewObj()) {
-        // Memory and a representative node for the 'this' pointer for newobj
-        // has not been created yet. Pass a null value of the right type for
-        // now;
-        // it will be replaced by the real value in canonNewObjCall.
-        ASSERT(ArgNode == nullptr);
-        ArgNode = (IRNode *)Constant::getNullValue(ArgType);
-      } else if (CallTargetInfo->needsNullCheck()) {
+      if (!CallTargetInfo->isNewObj() && CallTargetInfo->needsNullCheck()) {
         // Insert this Ptr null check if required
-        ASSERT(SigInfo->hasThis());
+        ASSERT(CallTargetInfo->hasThis());
         ArgNode = genNullCheck(ArgNode);
       }
     }
     IRNode *Arg = convertFromStackType(ArgNode, CorType, ArgType);
-    Arguments.push_back(Arg);
+    Arguments[I] = Arg;
   }
-
-  // We may need to fix the type on the TargetNode.
-  const bool FixFunctionType = CallTargetInfo->isCallVirt() ||
-                               CallTargetInfo->isCallI() ||
-                               CallTargetInfo->isOptimizedDelegateCtor();
-  if (FixFunctionType) {
-    CORINFO_CLASS_HANDLE ThisClass = nullptr;
-    if (SigInfo->hasThis()) {
-      ThisClass = ArgArray[0].ArgClass;
-    }
-    Type *FunctionTy =
-        getUnmanagedPointerType(getFunctionType(*SigInfo, ThisClass));
-    if (TargetNode->getType()->isPointerTy()) {
-      TargetNode =
-          (IRNode *)LLVMBuilder->CreatePointerCast(TargetNode, FunctionTy);
-    } else {
-      ASSERT(TargetNode->getType()->isIntegerTy());
-      TargetNode =
-          (IRNode *)LLVMBuilder->CreateIntToPtr(TargetNode, FunctionTy);
-    }
-  } else {
-    // We should have a usable type already.
-    ASSERT(TargetNode->getType()->isPointerTy());
-    ASSERT(TargetNode->getType()->getPointerElementType()->isFunctionTy());
-  }
-
-  CallInst *CallInst = LLVMBuilder->CreateCall(TargetNode, Arguments);
 
   CorInfoIntrinsics IntrinsicID = CallTargetInfo->getCorInstrinsic();
   if ((0 <= IntrinsicID) && (IntrinsicID < CORINFO_INTRINSIC_Count)) {
@@ -3504,206 +3647,24 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
     }
   }
 
-  Call = (IRNode *)CallInst;
+  Call = (IRNode *)LLVMBuilder->CreateCall(TargetNode, Arguments);
 
-  *CallNode = Call;
-
-  bool Done = false;
-  // Process newobj. This may involve changing the call target.
-  if (CallTargetInfo->isNewObj()) {
-    Done = canonNewObjCall(Call, CallTargetInfo, &ReturnNode);
-  }
-
-  if (!Done) {
-    // Add VarArgs cookie to outgoing param list
-    if (callIsCorVarArgs(Call)) {
-      canonVarargsCall(Call, CallTargetInfo);
-    }
+  // Add VarArgs cookie to outgoing param list
+  if (CC == CORINFO_CALLCONV_VARARG) {
+    canonVarargsCall(Call, CallTargetInfo);
   }
 
   if (IsStubCall) {
     Call = canonStubCall(Call, CallTargetInfo);
   }
 
-  if (ReturnNode != nullptr) {
-    return ReturnNode;
-  }
-  if (SigInfo->retType != CORINFO_TYPE_VOID) {
-    IRNode *Result = convertToStackType((IRNode *)Call, SigInfo->retType);
-    return Result;
+  *CallNode = Call;
+
+  if (ResultType.CorType != CORINFO_TYPE_VOID) {
+    return convertToStackType((IRNode *)Call, ResultType.CorType);
   } else {
     return nullptr;
   }
-}
-
-// Canonicalizes a newobj call.
-// Returns true if the call is done being processed.
-// Outparam is the value to be pushed on the stack (this pointer of new object).
-bool GenIR::canonNewObjCall(IRNode *CallNode,
-                            ReaderCallTargetData *CallTargetData,
-                            IRNode **OutResult) {
-  uint32_t ClassAttribs = CallTargetData->getClassAttribs();
-  CORINFO_CLASS_HANDLE ClassHandle = CallTargetData->getClassHandle();
-
-  CorInfoType CorInfoType;
-  uint32_t MbSize;
-
-  ReaderBase::getClassType(ClassHandle, ClassAttribs, &CorInfoType, &MbSize);
-
-  bool DoneBeingProcessed = false;
-  bool IsArray = ((ClassAttribs & CORINFO_FLG_ARRAY) != 0);
-  bool IsVarObjSize = ((ClassAttribs & CORINFO_FLG_VAROBJSIZE) != 0);
-  bool IsValueClass = ((ClassAttribs & CORINFO_FLG_VALUECLASS) != 0);
-
-  CallInst *CallInstruction = dyn_cast<CallInst>(CallNode);
-  BasicBlock *CurrentBlock = CallInstruction->getParent();
-  BasicBlock::iterator SavedInsertPoint = LLVMBuilder->GetInsertPoint();
-  LLVMBuilder->SetInsertPoint(CallInstruction);
-
-  if (IsArray) {
-    // Zero-based, one-dimensional arrays are allocated via newarr;
-    // all other arrays are allocated via newobj
-    *OutResult = canonNewArrayCall(CallNode, CallTargetData);
-    LLVMBuilder->SetInsertPoint(CurrentBlock, SavedInsertPoint);
-    DoneBeingProcessed = true;
-  } else if (IsVarObjSize) {
-    // We are allocating an object whose size depends on constructor args
-    // (e.g., string). In this case the call to the constructor will allocate
-    // the object.
-
-    // Leave the 'this' argument to the constructor call as null.
-    ASSERTNR(CallInstruction->getArgOperand(0)->getValueID() ==
-             Value::ConstantPointerNullVal);
-
-    // Change the type of the called function and
-    // the type of the CallInstruction.
-    CallInst *CallInstruction = cast<CallInst>(CallNode);
-    Value *CalledValue = CallInstruction->getCalledValue();
-    PointerType *CalledValueType = cast<PointerType>(CalledValue->getType());
-    FunctionType *FuncType =
-        cast<FunctionType>(CalledValueType->getElementType());
-
-    // Construct the new function type.
-    std::vector<Type *> Arguments;
-
-    for (unsigned I = 0; I < FuncType->getNumParams(); ++I) {
-      Arguments.push_back(FuncType->getParamType(I));
-    }
-
-    FunctionType *NewFunctionType = FunctionType::get(
-        FuncType->getParamType(0), Arguments, FuncType->isVarArg());
-
-    // Create a call target with the right type.
-    Value *NewCalledValue = LLVMBuilder->CreatePointerCast(
-        CalledValue, getUnmanagedPointerType(NewFunctionType));
-    CallInstruction->setCalledFunction(NewCalledValue);
-
-    // Change the type of the call instruction.
-    CallInstruction->mutateType(FuncType->getParamType(0));
-
-    LLVMBuilder->SetInsertPoint(CurrentBlock, SavedInsertPoint);
-    *OutResult = (IRNode *)CallInstruction;
-  } else if (IsValueClass) {
-    // We are allocating an instance of a value class on the stack.
-    Type *StructType = this->getType(CorInfoType, ClassHandle);
-    Instruction *AllocaInst = createTemporary(StructType);
-
-    // Initialize the struct to zero.
-    LLVMContext &LLVMContext = *this->JitContext->LLVMContext;
-    Value *ZeroByte = Constant::getNullValue(Type::getInt8Ty(LLVMContext));
-    uint32_t Align = 0;
-    LLVMBuilder->CreateMemSet(AllocaInst, ZeroByte, MbSize, Align);
-
-    // Create a managed pointer to the struct instance and pass it as the 'this'
-    // argument to the constructor call.
-    Type *ManagedPointerType = getManagedPointerType(StructType);
-    Value *ManagedPointerToStruct =
-        LLVMBuilder->CreateAddrSpaceCast(AllocaInst, ManagedPointerType);
-    Value *CalledValue = CallInstruction->getCalledValue();
-    PointerType *CalledValueType =
-        dyn_cast<PointerType>(CalledValue->getType());
-    FunctionType *FuncType =
-        dyn_cast<FunctionType>(CalledValueType->getElementType());
-    Type *ThisType = FuncType->getFunctionParamType(0);
-    ManagedPointerToStruct =
-        LLVMBuilder->CreatePointerCast(ManagedPointerToStruct, ThisType);
-    CallInstruction->setArgOperand(0, ManagedPointerToStruct);
-    LLVMBuilder->SetInsertPoint(CurrentBlock, SavedInsertPoint);
-    *OutResult = (IRNode *)makeLoadNonNull(AllocaInst, false);
-  } else {
-    // We are allocating a fixed-size class on the heap.
-    // Create a call to the newobj helper specific to this class,
-    // and use its return value as the
-    // 'this' pointer to be passed as the first argument to the constructor.
-
-    // Create the address operand for the newobj helper.
-    CorInfoHelpFunc HelperId = getNewHelper(CallTargetData->getResolvedToken());
-    Value *Dest = CallInstruction->getArgOperand(0);
-    Value *ThisPointer = callHelper(HelperId, (IRNode *)Dest,
-                                    CallTargetData->getClassHandleNode());
-    CallInstruction->setArgOperand(0, ThisPointer);
-    LLVMBuilder->SetInsertPoint(CurrentBlock, SavedInsertPoint);
-    *OutResult = (IRNode *)ThisPointer;
-  }
-
-  return DoneBeingProcessed;
-}
-
-IRNode *GenIR::canonNewArrayCall(IRNode *Call,
-                                 ReaderCallTargetData *CallTargetData) {
-  CallInst *CallInstruction = dyn_cast<CallInst>(Call);
-  Value *CalledValue = CallInstruction->getCalledValue();
-  PointerType *CalledValueType = dyn_cast<PointerType>(CalledValue->getType());
-  FunctionType *FuncType =
-      dyn_cast<FunctionType>(CalledValueType->getElementType());
-
-  // To construct the array we need to call a helper passing it the class handle
-  // for the constructor method, the number of arguments to the constructor and
-  // the arguments to the constructor.
-
-  // Construct the new function type.
-  std::vector<Type *> NewTypeArguments;
-  std::vector<Value *> NewArguments;
-
-  // The first argument is the class handle.
-  IRNode *ClassHandle = CallTargetData->getClassHandleNode();
-  ASSERTNR(ClassHandle);
-
-  NewTypeArguments.push_back(ClassHandle->getType());
-  NewArguments.push_back(ClassHandle);
-
-  // The second argument is the number of arguments to follow.
-  uint32_t NumBits = 32;
-  bool IsSigned = true;
-  Value *NumArgs = ConstantInt::get(
-      *JitContext->LLVMContext,
-      APInt(NumBits, CallTargetData->getSigInfo()->numArgs, IsSigned));
-  ASSERTNR(NumArgs);
-
-  NewTypeArguments.push_back(NumArgs->getType());
-  NewArguments.push_back(NumArgs);
-
-  // The rest of the arguments are the same as in the original newobj call.
-  // It's a vararg call so add arguments but not type arguments.
-  for (unsigned I = 1; I < FuncType->getNumParams(); ++I) {
-    NewArguments.push_back(CallInstruction->getArgOperand(I));
-  }
-  bool IsVarArg = true;
-  FunctionType *NewFunctionType =
-      FunctionType::get(FuncType->getParamType(0), NewTypeArguments, IsVarArg);
-
-  // Create a call target with the right type.
-  // Get the address of the Helper descr.
-  IRNode *Target = getHelperCallAddress(CORINFO_HELP_NEW_MDARR);
-  Value *NewCalledValue = LLVMBuilder->CreateIntToPtr(
-      Target, getUnmanagedPointerType(NewFunctionType));
-
-  // Replace the old call instruction with the new one.
-  CallInst *NewCallInstruction =
-      LLVMBuilder->CreateCall(NewCalledValue, NewArguments);
-  CallInstruction->eraseFromParent();
-
-  return (IRNode *)NewCallInstruction;
 }
 
 IRNode *GenIR::convertToBoxHelperArgumentType(IRNode *Opr,
@@ -3737,13 +3698,6 @@ IRNode *GenIR::convertToBoxHelperArgumentType(IRNode *Opr,
   }
 
   return Opr;
-}
-
-bool GenIR::callIsCorVarArgs(IRNode *CallNode) {
-  CallInst *CallInstruction = cast<CallInst>(CallNode);
-  Value *CalledValue = CallInstruction->getCalledValue();
-  PointerType *CalledValueType = dyn_cast<PointerType>(CalledValue->getType());
-  return dyn_cast<FunctionType>(CalledValueType->getElementType())->isVarArg();
 }
 
 IRNode *GenIR::canonStubCall(IRNode *CallNode,
@@ -4045,17 +3999,6 @@ IRNode *GenIR::convert(Type *Ty, Value *Node, bool SourceIsSigned) {
   }
 
   return (IRNode *)Result;
-}
-
-IRNode *GenIR::makeCallReturnNode(CORINFO_SIG_INFO *Sig,
-                                  unsigned *HiddenMBParamSize,
-                                  GCLayout **GcInfo) {
-  if ((Sig->retType == CORINFO_TYPE_REFANY) ||
-      (Sig->retType == CORINFO_TYPE_VALUECLASS)) {
-    throw NotYetImplementedException("Return refany or value class");
-  }
-
-  return nullptr;
 }
 
 // Common to both recursive and non-recursive tail call considerations.
@@ -4801,9 +4744,7 @@ IRNode *GenIR::loadVirtFunc(IRNode *Arg1, CORINFO_RESOLVED_TOKEN *ResolvedToken,
   IRNode *CodeAddress = callHelperImpl(CORINFO_HELP_VIRTUAL_FUNC_PTR, Ty, Arg1,
                                        TypeToken, MethodToken);
 
-  FunctionType *FunctionType = getFunctionType(CallInfo->hMethod);
-  return (IRNode *)LLVMBuilder->CreateIntToPtr(
-      CodeAddress, getUnmanagedPointerType(FunctionType));
+  return CodeAddress;
 }
 
 IRNode *GenIR::getPrimitiveAddress(IRNode *Addr, CorInfoType CorInfoType,
