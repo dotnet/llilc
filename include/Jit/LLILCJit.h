@@ -24,9 +24,9 @@
 
 /// \brief Enum for LLVM IR Dump Level
 enum LLVMDumpLevel {
-  NODUMP,  ///< Do not dump any LLVM IR or summary
-  SUMMARY, ///< Only dump one line summary per method
-  VERBOSE  ///< Dump full LLVM IR and method summary
+  NODUMP,  ///< Do not dump any LLVM IR or summary.
+  SUMMARY, ///< Only dump one line summary per method.
+  VERBOSE  ///< Dump full LLVM IR and method summary.
 };
 
 struct LLILCJitPerThreadState;
@@ -43,7 +43,7 @@ struct LLILCJitPerThreadState;
 struct LLILCJitContext {
 
   /// Construct a context and push it onto the context stack.
-  /// \param State the per-thread state for this thread
+  /// \param State the per-thread state for this thread.
   LLILCJitContext(LLILCJitPerThreadState *State);
 
   /// Destruct this context and pop it from the context stack.
@@ -73,32 +73,32 @@ struct LLILCJitContext {
 public:
   /// \name CoreCLR EE information
   //@{
-  ICorJitInfo *JitInfo;            ///< EE callback interface
-  CORINFO_METHOD_INFO *MethodInfo; ///< Description of method to jit
-  uint32_t Flags;                  ///< Flags controlling jit behavior
-  CORINFO_EE_INFO EEInfo;          ///< Information about internal EE data
-  std::string MethodName;          ///< Name of the method (for diagnostics)
+  ICorJitInfo *JitInfo;            ///< EE callback interface.
+  CORINFO_METHOD_INFO *MethodInfo; ///< Description of method to jit.
+  uint32_t Flags;                  ///< Flags controlling jit behavior.
+  CORINFO_EE_INFO EEInfo;          ///< Information about internal EE data.
+  std::string MethodName;          ///< Name of the method (for diagnostics).
   //@}
 
   /// \name LLVM information
   //@{
-  llvm::LLVMContext *LLVMContext; ///< LLVM context for types and similar
-  llvm::Module *CurrentModule;    ///< Module holding LLVM IR
-  llvm::ExecutionEngine *EE;      ///< MCJIT execution engine
-  bool HasLoadedBitCode;          ///< Flag for side-loaded LLVM IR
+  llvm::LLVMContext *LLVMContext; ///< LLVM context for types and similar.
+  llvm::Module *CurrentModule;    ///< Module holding LLVM IR.
+  llvm::ExecutionEngine *EE;      ///< MCJIT execution engine.
+  bool HasLoadedBitCode;          ///< Flag for side-loaded LLVM IR.
   //@}
 
   /// \name Context management
   //@{
-  LLILCJitContext *Next;         ///< Parent jit context, if any
-  LLILCJitPerThreadState *State; ///< Per thread state for the jit
+  LLILCJitContext *Next;         ///< Parent jit context, if any.
+  LLILCJitPerThreadState *State; ///< Per thread state for the jit.
   //@}
 
   /// \name Jit output sizes
   //@{
-  uint32_t HotCodeSize = 0;      ///< Size of hot code section in bytes
-  uint32_t ColdCodeSize = 0;     ///< Size of cold code section in bytes
-  uint32_t ReadOnlyDataSize = 0; ///< Size of readonly data ref'd from code
+  uint32_t HotCodeSize = 0;      ///< Size of hot code section in bytes.
+  uint32_t ColdCodeSize = 0;     ///< Size of cold code section in bytes.
+  uint32_t ReadOnlyDataSize = 0; ///< Size of readonly data ref'd from code.
   //@}
 };
 
@@ -114,8 +114,8 @@ struct LLILCJitPerThreadState {
 public:
   /// Construct a new state.
   LLILCJitPerThreadState()
-      : LLVMContext(), ClassTypeMap(), ArrayTypeMap(), FieldIndexMap(),
-        JitContext(nullptr) {}
+      : LLVMContext(), ClassTypeMap(), BoxedTypeMap(), ArrayTypeMap(),
+        FieldIndexMap(), JitContext(nullptr) {}
 
   /// Each thread maintains its own \p LLVMContext. This is where
   /// LLVM keeps definitions of types and similar constructs.
@@ -126,6 +126,10 @@ public:
 
   /// Map from class handles to the LLVM types that represent them.
   std::map<CORINFO_CLASS_HANDLE, llvm::Type *> ClassTypeMap;
+
+  /// Map from class handles for value types to the LLVM types that represent
+  /// their boxed versions.
+  std::map<CORINFO_CLASS_HANDLE, llvm::Type *> BoxedTypeMap;
 
   /// \brief Map from class handles for arrays to the LLVM types that represent
   /// them.
@@ -165,11 +169,11 @@ public:
   /// Main entry point into the jit. Invoked once per method to be jitted.
   /// May be invoked re-entrantly and/or concurrently on multiple threads.
   ///
-  /// \param JitInfo               Interface the jit can use for callbacks
-  /// \param MethodInfo            Data structure describing the method to jit
-  /// \param Flags                 CorJitFlags controlling jit behavior
-  /// \param NativeEntry[out]      Address of the jitted code
-  /// \param NativeSizeOfCode[out] Length of the jitted code
+  /// \param JitInfo                Interface the jit can use for callbacks.
+  /// \param MethodInfo             Data structure describing the method to jit.
+  /// \param Flags                  CorJitFlags controlling jit behavior.
+  /// \param NativeEntry [out]      Address of the jitted code.
+  /// \param NativeSizeOfCode [out] Length of the jitted code.
   ///
   /// \returns Code indicating success or failure of the jit request.
   CorJitResult __stdcall compileMethod(ICorJitInfo *JitInfo,
@@ -181,7 +185,7 @@ public:
   void clearCache() override;
 
   /// Check if cache cleanup is required.
-  /// \returns \p true if the jit is caching information
+  /// \returns \p true if the jit is caching information.
   BOOL isCacheCleanupRequired() override;
 
   /// \brief Get the Jit's version identifier.
@@ -190,17 +194,21 @@ public:
   /// the jit for a version identifier GUID, and verify that it matches the
   /// expectations of the EE.
   ///
-  /// \param VersionIdentifier[out]  Buffer where the jit's GUID can be stored
+  /// \param VersionIdentifier [out] Buffer where the jit's GUID can be stored.
   void getVersionIdentifier(GUID *VersionIdentifier) override;
 
   /// \brief Get access to the current jit context.
+  ///
+  /// This method can be called from anywhere to retrieve the current jit
+  /// context.
+  ///
   /// \returns Context for the current jit request.
   static LLILCJitContext *getLLILCJitContext() {
     return TheJit->State.get()->JitContext;
   }
 
   /// Report a fatal error in the Jit.
-  /// \param Errnum Error number to report in exception context
+  /// \param Errnum Error number to report in exception context.
   static void __cdecl fatal(int Errnum, ...);
 
   /// Signal handler for LLVM abort signals.

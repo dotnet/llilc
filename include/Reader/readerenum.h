@@ -267,7 +267,7 @@ enum ConvOpcode {
   ConvOvfI4, ///< As #ConvI4, but throws an exception if the result is out of
              ///< range.
 
-  ConvOnvI8, ///< As #ConvI8, but throws an exception if the result is out of
+  ConvOvfI8, ///< As #ConvI8, but throws an exception if the result is out of
              ///< range.
 
   ConvOvfU1, ///< As #ConvU1, but throws an exception if the result is out of
@@ -306,7 +306,7 @@ enum ConvOpcode {
 
   ConvOvfIUn, ///< As #ConvOvfI, but treats its input as an unsigned integer.
 
-  ConvOvfUUn, ///< As #ConvOvfIU, but treats its input as an unsigned integer.
+  ConvOvfUUn, ///< As #ConvOvfU, but treats its input as an unsigned integer.
 
   ConvRUn, ///< Converts its argument to a floating-point number in the
            ///< runtime's internal representation, treating its input as an
@@ -711,7 +711,7 @@ SELECTANY const char OpcodeRemap[ReaderBaseNS::CEE_MACRO_END -
     ReaderBaseNS::ConvOvfU2,   // CEE_CONV_OVF_U2,
     ReaderBaseNS::ConvOvfI4,   // CEE_CONV_OVF_I4,
     ReaderBaseNS::ConvOvfU4,   // CEE_CONV_OVF_U4,
-    ReaderBaseNS::ConvOnvI8,   // CEE_CONV_OVF_I8,
+    ReaderBaseNS::ConvOvfI8,   // CEE_CONV_OVF_I8,
     ReaderBaseNS::ConvOvfU8,   // CEE_CONV_OVF_U8,
     -1,                        // CEE_UNUSED50,
     -1,                        // CEE_UNUSED18,
