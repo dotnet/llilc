@@ -1420,6 +1420,14 @@ protected:
   // could look like with divide-by-zero checks folded onto divides.
   static const bool UseExplicitZeroDivideChecks = true;
 
+  /// \brief Suppresses generation of code to handle exceptions
+  ///
+  /// This flag can be used when bringing up a new runtime target that doesn't
+  /// yet have exception handling support implemented.  If this flag is set,
+  /// no EH clauses will be reported to the runtime, but any code that doesn't
+  /// dynamically throw exceptions will be handled correctly.
+  static const bool SuppressExceptionHandlers = false;
+
   // Verification Info
 public:
   bool VerificationNeeded;
