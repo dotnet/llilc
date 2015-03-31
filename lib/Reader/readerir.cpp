@@ -269,18 +269,21 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
     ASSERTNR(UNREACHED);
   }
 
-  const uint32_t JitFlags = JitContext->Flags;
-
-  HasSecretParameter = (JitFlags & CORJIT_FLG_PUBLISH_SECRET_PARAM) != 0;
-
   CORINFO_METHOD_HANDLE MethodHandle = JitContext->MethodInfo->ftn;
-  Function = getFunction(MethodHandle, HasSecretParameter);
 
   // Capture low-level info about the return type for use in Return.
   CORINFO_SIG_INFO Sig;
   getMethodSig(MethodHandle, &Sig);
   ReturnCorType = Sig.retType;
 
+  if ((ReturnCorType == CORINFO_TYPE_REFANY) ||
+      (ReturnCorType == CORINFO_TYPE_VALUECLASS)) {
+    throw NotYetImplementedException("Return refany or value class");
+  }
+
+  const uint32_t JitFlags = JitContext->Flags;
+  HasSecretParameter = (JitFlags & CORJIT_FLG_PUBLISH_SECRET_PARAM) != 0;
+  Function = getFunction(MethodHandle, HasSecretParameter);
   EntryBlock = BasicBlock::Create(*JitContext->LLVMContext, "entry", Function);
 
   LLVMBuilder = new IRBuilder<>(*this->JitContext->LLVMContext);
