@@ -2755,8 +2755,9 @@ IRNode *GenIR::loadAtAddress(IRNode *Address, Type *Ty, CorInfoType CorType,
                              ReaderAlignType AlignmentPrefix, bool IsVolatile,
                              bool AddressMayBeNull) {
   if (Ty->isStructTy()) {
-    return loadObj(ResolvedToken, Address, AlignmentPrefix, IsVolatile, true,
-                   AddressMayBeNull);
+    bool IsFieldAccess = ResolvedToken->hField != nullptr;
+    return loadObj(ResolvedToken, Address, AlignmentPrefix, IsVolatile,
+                   IsFieldAccess, AddressMayBeNull);
   } else {
     LoadInst *LoadInst = makeLoad(Address, IsVolatile, AddressMayBeNull);
     uint32_t Align = convertReaderAlignment(AlignmentPrefix);
@@ -4782,7 +4783,7 @@ IRNode *GenIR::conditionalDerefAddress(IRNode *Address) {
 
   // Merge the two addresses and return the result.
   PHINode *Result = mergeConditionalResults(ContinueBlock, Address, TestBlock,
-                                            UpdatedAddress, ContinueBlock);
+                                            UpdatedAddress, IndirectionBlock);
 
   return (IRNode *)Result;
 }
