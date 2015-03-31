@@ -105,8 +105,6 @@ if( NOT WITH_CORECLR STREQUAL "" )
   set(CORECLR_INCLUDE "${WITH_CORECLR_ABS}/inc")
 endif()
 
-message(STATUS " ${CORECLR_INCLUDE}")
-
 # Check for CoreCLR headers
 find_path(CORINFO_H "corinfo.h" HINTS "${CORECLR_INCLUDE}")
 if(CORINFO_H STREQUAL CORINFO_H-NOTFOUND)
