@@ -165,13 +165,12 @@ function ValidatePreConditions
     }
   }
 
-  # Validate LLILCTESTRESULT
+  # Validate CoreCLR
 
-  $LLILCTestResultExists = Test-Path Env:\LLILCTESTRESULT
-  if (!$LLILCTestResultExists) {
-    Write-Warning "LLILC test result directory is not specified."
-    $DefaultLLILCTestResult = DefaultLLILCTestResult
-    Write-Warning "Default LLILC test result directory: $DefaultLLILCTestResult"
+  $CORECLRSOURCEExists = Test-Path Env:\CORECLRSOURCE
+  if (!$CORECLRSOURCEExists) {
+    Write-Warning "CORECLRSOURCE not specificed.  Specify CORECLRSOURCE in the environment."
+    throw "CORECLRSOURCE not specified"
   }
 }
 
@@ -180,6 +179,11 @@ function ValidatePreConditions
 # A list of resource location functions
 #
 # -------------------------------------------------------------------------
+
+# set CoreCLRSource variable from the environment.
+$CoreCLRSource = $ENV:CORECLRSOURCE
+$CoreCLRRuntime = "$CoreCLRSource\binaries\Product\Windows_NT.$Arch.$Build"
+$CoreCLRTest = "$CoreCLRSource\binaries\tests\Windows_NT.$Arch.$Build"
 
 function Global:DefaultLLILCSource
 {
@@ -255,20 +259,17 @@ function Global:LLILCBuild
 
 function Global:CoreCLRRuntime
 {
-  $LLILCTestResult = LLILCTestResult
-  return "$LLILCTestResult\CoreCLRRuntime"
+  return "$CoreCLRSource"
 }
 
 function Global:CoreCLRTestAssets
 {
-  $LLILCTestResult = LLILCTestResult
-  return "$LLILCTestResult\CoreCLRTestAssets"
+  return "$CoreCLRSource"
 }
 
-function Global:CoreCLRTestTargetBinaries([string]$Arch="x64", [string]$Build="Release")
+function Global:CoreCLRTestTargetBinaries([string]$Arch="x64", [string]$Build="Debug")
 {
-  $CoreCLRTestAssets = CoreCLRTestAssets
-  return "$CoreCLRTestAssets\coreclr\binaries\tests\Windows_NT.$Arch.$Build"
+  return "$CoreCLRSource\binaries\tests\Windows_NT.$Arch.$Build"
 }
 
 function Global:DefaultLLVMBuild
@@ -312,18 +313,18 @@ function Global:CoreCLRVersion
 # -------------------------------------------------------------------------
 
 
-function Global:CoreCLRBuild
-{
-  $CoreCLRVersion = CoreCLRVersion
+#function Global:CoreCLRBuild
+#{
+#  $CoreCLRVersion = CoreCLRVersion
 
-  if ($CoreCLRVersion -match "Debug") {
-    $CoreCLRBuild = "Debug"
-  }
-  else {
-    $CoreCLRBuild = "Release"
-  }
-  return $CoreCLRBuild
-}
+#  if ($CoreCLRVersion -match "Debug") {
+#    $CoreCLRBuild = "Debug"
+#  }
+#  else {
+#    $CoreCLRBuild = "Release"
+#  }
+#  return $CoreCLRBuild
+#}
 
 # -------------------------------------------------------------------------
 #
@@ -421,15 +422,11 @@ function CompleteEnvInit
 
   CreateLLILCBuildDirectory
   
-  CreateLLILCTestResultDirectory
+  #CreateLLILCTestResultDirectory
 
   CreateLLVMBuildDirectory
-
-  if (!$NoTestUpdate) {
-    GetCLRTestAssets
-  }
     
-  NuGetCLR
+  #NuGetCLR
 }
 
 # -------------------------------------------------------------------------
@@ -511,24 +508,7 @@ function Global:NuGetCLR
 
 function Global:GetCLRTestAssets
 {
-  $CoreCLRTestAssets = CoreCLRTestAssets
-  $CoreCLRTestAssetsExists = Test-Path $CoreCLRTestAssets
-  pushd .
-  if (!$CoreCLRTestAssetsExists) {
-    New-Item $CoreCLRTestAssets -itemtype Directory  | Out-Null
-    cd $CoreCLRTestAssets
-    git clone https://github.com/dotnet/coreclr.git
-    # set push url to bogus value to avoid inadvertent pushes
-    cd $CoreCLRTestAssets\coreclr
-    git remote set-url --push origin do_not_push
-  }
-
-  Write-Host("Updating CoreCLR Test Assets to LKG...")
-  cd $CoreCLRTestAssets\coreclr
-  git checkout -q 1644ae12020a1927bb9b7bb7b162ba8b1e8bc73e
-  git show -s '--format=%h, committed %ci' head
-
-  popd
+  throw "Use pre enlisted CoreCLR Drop"
 }
 
 # -------------------------------------------------------------------------
@@ -550,7 +530,7 @@ function Global:CheckEnv
   $LLILCTestResult = LLILCTestResult
   $CoreCLRTestAssets =  CoreCLRTestAssets
   $CoreCLRRuntime = CoreCLRRuntime
-  $CoreCLRVersion = CoreCLRVersion
+  #$CoreCLRVersion = CoreCLRVersion
 
   Write-Output("************************************ LLILC Work Environment **************************************")
   Write-Output("LLVM Source         : $Env:LLVMSOURCE")
@@ -563,7 +543,7 @@ function Global:CheckEnv
   Write-Output("LLILC Test Result   : $LLILCTestResult")
   Write-Output("CoreCLR Test Assets : $CoreCLRTestAssets")
   Write-Output("CoreCLR Runtime     : $CoreCLRRuntime")
-  Write-Output("CoreCLR Version     : $CoreCLRVersion")
+  #Write-Output("CoreCLR Version     : $CoreCLRVersion")
   Write-Output("**************************************************************************************************")
 }
 
@@ -643,20 +623,19 @@ function LLILCEnvInit
 
 function Global:CopyJIT([string]$Build="Debug")
 {
-  $CoreCLRRuntime = CoreCLRRuntime
-  $CoreCLRVersion = CoreCLRVersion
+  $CoreCLRBinaries = $CoreCLRRuntime
+  #$CoreCLRVersion = CoreCLRVersion
   $LLILCJit = LLILCJit($Build)
   $JitName = "LLILCJit.dll"
 
-  $WorkLLILCJitExists = Test-Path $CoreCLRRuntime\$CoreCLRVersion\bin\$JitName
+  $WorkLLILCJitExists = Test-Path $CoreCLRBinaries\$JitName
   if ($WorkLLILCJitExists) {
-    Remove-Item $CoreCLRRuntime\$CoreCLRVersion\bin\$JitName | Out-Null
+    Remove-Item $CoreCLRBinaries\$JitName | Out-Null
   }
 
-  pushd .
-  cd $CoreCLRRuntime\$CoreCLRVersion\bin\
+  pushd $CoreCLRBinaries
 
-  Write-Output ("Copying LLILC JIT")
+  Write-Output ("Copying LLILC JIT $LLILCJit $JitName")
   copy $LLILCJit $JitName
   Write-Output ("LLILC JIT Copied")
 
@@ -846,10 +825,8 @@ function Global:ApplyFilter([string]$File)
 # -------------------------------------------------------------------------
 
 function Global:ExcludeTest([string]$Arch="x64", [string]$Build="Release")
-{
-  $CoreCLRTestTargetBinaries = CoreCLRTestTargetBinaries -Arch $Arch -Build $Build
-  pushd .
-  cd $CoreCLRTestTargetBinaries\JIT\CodeGenBringUpTests
+{ 
+  pushd $CoreCLRTest\JIT\CodeGenBringUpTests
   del div2*
   del localloc*
   popd
@@ -861,20 +838,11 @@ function Global:ExcludeTest([string]$Arch="x64", [string]$Build="Release")
 #
 # -------------------------------------------------------------------------
 
-function Global:BuildTest([string]$Arch="x64", [string]$Build="Release")
+function Global:BuildTest([string]$Arch="x64", [string]$Build="Debug")
 {
-  if ($Build -eq "Debug") {
-    Write-Warning ("Only Release CoreCLR Runtime available at this point.")
-    Write-Warning ("BuildTest cannot be performed with Debug CoreCLR Runtime yet.")
-    return
-  }
-
-  $CoreCLRTestAssets = CoreCLRTestAssets
-
-  pushd .
-  cd $CoreCLRTestAssets\coreclr\tests
+  pushd $CoreCLRSource\tests
   .\buildtest $Arch $Build clean
-  ExcludeTest
+  ExcludeTest $Arch $Build
   popd
 }
 
@@ -911,21 +879,15 @@ function Global:RunTest
 {
   Param(
   [string]$Arch="x64", 
-  [string]$Build="Release",
+  [string]$Build="Debug",
   [string]$Jit="",
   [string]$Result="",
   [string]$Dump="NoDump"
   )
 
-  if ($Build -eq "Debug") {
-    Write-Warning ("Only Release CoreCLR Runtime available at this point.")
-    Write-Warning ("RunTest cannot be performed with Debug CoreCLR Runtime yet.")
-    return $False
-  }
-
-  $CoreCLRTestAssets = CoreCLRTestAssets
-  $CoreCLRRuntime = CoreCLRRuntime
-  $CoreCLRVersion = CoreCLRVersion
+  #$CoreCLRTestAssets = CoreCLRTestAssets
+  #$CoreCLRRuntime = CoreCLRRuntime
+  #$CoreCLRVersion = CoreCLRVersion
   $LLILCTest = LLILCTest
   $LLILCTestResult = LLILCTestResult
   $CoreCLRTestTargetBinaries = CoreCLRTestTargetBinaries -Arch $Arch -Build $Build
@@ -935,10 +897,10 @@ function Global:RunTest
 
   # Reserve the old jit and copy in the specified jit.
   if ($Jit -ne "") {
-    $CoreCLRRuntime = CoreCLRRuntime
-    $CoreCLRVersion = CoreCLRVersion
-    Rename-Item $CoreCLRRuntime\$CoreCLRVersion\bin\LLILCJit.dll $CoreCLRRuntime\$CoreCLRVersion\bin\LLILCJit.dll.backupcopy
-    Copy-Item $Jit $CoreCLRRuntime\$CoreCLRVersion\bin\LLILCJit.dll
+    #$CoreCLRRuntime = CoreCLRRuntime
+    #$CoreCLRVersion = CoreCLRVersion
+    Rename-Item $CoreCLRRuntime\LLILCJit.dll $CoreCLRRuntime\\LLILCJit.dll.backupcopy
+    Copy-Item $Jit $CoreCLRRuntime\LLILCJit.dll
   }
 
   # Protect old value and set the new value for DUMPLLVMIR
@@ -953,8 +915,8 @@ function Global:RunTest
 
   # Run the test
   pushd .
-  cd $CoreCLRTestAssets\coreclr\tests
-  .\runtest $Arch $Build TestEnv $LLILCTest\LLILCTestEnv.cmd $CoreCLRRuntime\$CoreCLRVersion\bin | Write-Host
+  cd $CoreCLRSource\tests
+  .\runtest $Arch $Build TestEnv $LLILCTest\LLILCTestEnv.cmd $CoreCLRRuntime | Write-Host
   popd
 
   # Restore old value for DUMPLLVMIR
@@ -964,8 +926,8 @@ function Global:RunTest
 
   # Restore the old jit
   if ($Jit -ne "") {
-    Remove-Item $CoreCLRRuntime\$CoreCLRVersion\bin\LLILCJit.dll | Out-Null
-    Rename-Item $CoreCLRRuntime\$CoreCLRVersion\bin\LLILCJit.dll.backupcopy $CoreCLRRuntime\$CoreCLRVersion\bin\LLILCJit.dll | Out-Null
+    Remove-Item $CoreCLRRuntime\LLILCJit.dll | Out-Null
+    Rename-Item $CoreCLRRuntime\LLILCJit.dll.backupcopy $CoreCLRRuntime\LLILCJit.dll | Out-Null
   }
 
   # Copy out result, normalize it in case of verbose dump.
