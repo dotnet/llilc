@@ -181,9 +181,9 @@ function ValidatePreConditions
 # -------------------------------------------------------------------------
 
 # set CoreCLRSource variable from the environment.
-$CoreCLRSource = $ENV:CORECLRSOURCE
-$CoreCLRRuntime = "$CoreCLRSource\binaries\Product\Windows_NT.$Arch.$Build"
-$CoreCLRTest = "$CoreCLRSource\binaries\tests\Windows_NT.$Arch.$Build"
+$Global:CoreCLRSource = $ENV:CORECLRSOURCE
+$Global:CoreCLRRuntime = "$CoreCLRSource\binaries\Product\Windows_NT.$Arch.$Build"
+$Global:CoreCLRTest = "$CoreCLRSource\binaries\tests\Windows_NT.$Arch.$Build"
 
 function Global:DefaultLLILCSource
 {
