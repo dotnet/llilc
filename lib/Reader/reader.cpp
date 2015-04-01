@@ -5677,28 +5677,6 @@ void ReaderBase::clearStack() {
   }
 }
 
-void ReaderBase::initParamsAndAutos(uint32_t NumParam, uint32_t NumAuto,
-                                    bool HasSecretParameter) {
-  // Init verification maps
-  if (VerificationNeeded) {
-    NumVerifyParams = NumParam;
-    if (NumParam > 0) {
-      ParamVerifyMap = (TypeInfo *)getTempMemory(NumParam * sizeof(LocalDescr));
-    }
-
-    NumVerifyAutos = NumAuto;
-    if (NumAuto > 0) {
-      AutoVerifyMap = (TypeInfo *)getTempMemory(NumAuto * sizeof(LocalDescr));
-    }
-  } else {
-    NumVerifyParams = 0;
-    NumVerifyAutos = 0;
-  }
-
-  buildUpParams(NumParam, HasSecretParameter);
-  buildUpAutos(NumAuto);
-}
-
 // Iterator for reading types from arg type list.Used by
 // buildUpAutos to gather types.  Used by inliner to ensure that
 // inlinee types are available.
@@ -5733,117 +5711,182 @@ ReaderBase::argListNext(CORINFO_ARG_LIST_HANDLE ArgListHandle,
   return NextArg;
 }
 
-void ReaderBase::buildUpAutos(uint32_t NumAutos) {
-  CORINFO_ARG_LIST_HANDLE Locs;
-  CorInfoType CorType;
-  CORINFO_CLASS_HANDLE Class;
-  bool IsPinned;
+void ReaderBase::initMethodInfo(bool HasSecretParameter,
+                                ReaderMethodSignature &Signature,
+                                uint32_t &NumAutos) {
+  // Get the number of arguments to this method.
+  CORINFO_SIG_INFO &SigInfo = MethodInfo->args;
+  uint32_t NormalArgs = (uint32_t)SigInfo.numArgs;
+  bool HasThis = SigInfo.hasThis();
+  bool IsVarArg = SigInfo.isVarArg();
+  bool HasTypeArg = SigInfo.hasTypeArg();
+  uint32_t NumArgs = (HasThis ? 1 : 0) + (IsVarArg ? 1 : 0) +
+                     (HasTypeArg ? 1 : 0) + NormalArgs +
+                     (HasSecretParameter ? 1 : 0);
 
-  if (NumAutos > 0) {
-    Locs = MethodInfo->locals.args;
+  // Get the number of autos for this method.
+  NumAutos = MethodInfo->locals.numArgs;
 
-    // Get the types of all of the automatics.
-    for (UINT I = 0; I < NumAutos; I++) {
-      // don't do anything until we've verified the local
-      if (VerificationNeeded) {
-        verifyRecordLocalType(I, &(MethodInfo->locals), Locs);
-      }
-
-      Locs =
-          argListNext(Locs, &(MethodInfo->locals), &CorType, &Class, &IsPinned);
-      createSym(I, true, CorType, Class, IsPinned);
+  // Init verification maps
+  if (VerificationNeeded) {
+    NumVerifyParams = NumArgs;
+    if (NumArgs > 0) {
+      ParamVerifyMap = (TypeInfo *)getTempMemory(NumArgs * sizeof(LocalDescr));
     }
+
+    NumVerifyAutos = NumAutos;
+    if (NumAutos > 0) {
+      AutoVerifyMap = (TypeInfo *)getTempMemory(NumAutos * sizeof(LocalDescr));
+    }
+  } else {
+    NumVerifyParams = 0;
+    NumVerifyAutos = 0;
+  }
+
+  // Set signature flags, calling convention, and return type.
+  Signature.HasThis = HasThis;
+  Signature.IsVarArg = IsVarArg;
+  Signature.HasTypeArg = HasTypeArg;
+  Signature.HasSecretParameter = HasSecretParameter;
+  Signature.CallingConvention = SigInfo.getCallConv();
+  Signature.ResultType = {SigInfo.retType, SigInfo.retTypeClass};
+
+  // Build up parameter info
+  std::vector<CallArgType> &ArgumentTypes = Signature.ArgumentTypes;
+  new (&ArgumentTypes) std::vector<CallArgType>(NumArgs);
+
+  uint32_t ParamIndex = 0;
+
+  // If the first argument is a this pointer we must synthesize its type.
+  if (HasThis) {
+    assert(ParamIndex == Signature.getThisIndex());
+
+    // Use the current method's containing class as the type of the "this"
+    // argument.
+    CORINFO_CLASS_HANDLE Class = getCurrentMethodClass();
+
+    // See if the current class is an valueclass
+    uint32_t Attribs = getClassAttribs(Class);
+
+    bool IsValClass;
+    CorInfoType CorType;
+    if ((Attribs & CORINFO_FLG_VALUECLASS) == 0) {
+      IsValClass = false;
+      CorType = CORINFO_TYPE_CLASS;
+    } else {
+      IsValClass = true;
+      CorType = CORINFO_TYPE_VALUECLASS;
+    }
+
+    if (VerificationNeeded) {
+      verifyRecordParamType(ParamIndex, CorType, Class, IsValClass, true);
+    }
+
+    ArgumentTypes[ParamIndex++] = {IsValClass ? CORINFO_TYPE_BYREF : CorType,
+                                   Class};
+  }
+
+  // For varargs, we have to synthesize the varargs cookie.  This
+  // comes after the this pointer (if any) and before any fixed
+  // params.
+  if (IsVarArg) {
+    assert(ParamIndex == Signature.getVarArgIndex());
+
+    // this is not a real arg.  we do not record it for verification
+    CORINFO_CLASS_HANDLE Class =
+        getBuiltinClass(CorInfoClassId::CLASSID_ARGUMENT_HANDLE);
+    ArgumentTypes[ParamIndex++] = {CORINFO_TYPE_PTR, Class};
+  }
+
+  // GENERICS: Code Sharing: After varargs, before fixed params
+  // comes instParam (typeArg cookie)
+  if (HasTypeArg) {
+    assert(ParamIndex == Signature.getTypeArgIndex());
+
+    // this is not a real arg.  we do not record it for verification
+    const CORINFO_CLASS_HANDLE Class = nullptr;
+    ArgumentTypes[ParamIndex++] = {CORINFO_TYPE_NATIVEINT, Class};
+  }
+
+  assert(ParamIndex == Signature.getNormalParamStart());
+  uint32_t NormalParamEnd = Signature.getNormalParamEnd();
+
+  // Get the types of all of the parameters.
+  CORINFO_ARG_LIST_HANDLE Args = SigInfo.args;
+  for (; ParamIndex < NormalParamEnd; ParamIndex++) {
+
+    if (VerificationNeeded) {
+      verifyRecordParamType(Signature.getILArgForArgIndex(ParamIndex), &SigInfo,
+                            Args);
+    }
+
+    CallArgType &Arg = ArgumentTypes[ParamIndex];
+    Args = argListNext(Args, &SigInfo, &Arg.CorType, &Arg.Class);
+  }
+
+  if (HasSecretParameter) {
+    assert(ParamIndex == Signature.getSecretParameterIndex());
+
+    const CORINFO_CLASS_HANDLE Class = nullptr;
+    ArgumentTypes[ParamIndex++] = {CORINFO_TYPE_NATIVEINT, Class};
   }
 }
 
-// Note there is parallel logic in GenIR::GetFunctionType.
-// It must be kept in sync with the logic in this method.
-// We possibly should merge these two.
-void ReaderBase::buildUpParams(uint32_t NumParams, bool HasSecretParameter) {
-  if (NumParams > 0) {
-    CORINFO_ARG_LIST_HANDLE NextLoc, Locs;
-    CORINFO_CLASS_HANDLE Class;
+void ReaderBase::initParamsAndAutos(const ReaderMethodSignature &Signature) {
+  buildUpParams(Signature);
+  buildUpAutos();
+}
+
+void ReaderBase::buildUpAutos() {
+  // Get the types of all of the automatics.
+  CORINFO_SIG_INFO &LocalInfo = MethodInfo->locals;
+  CORINFO_ARG_LIST_HANDLE Locs = LocalInfo.args;
+  for (UINT I = 0; I < LocalInfo.numArgs; I++) {
+    // don't do anything until we've verified the local
+    if (VerificationNeeded) {
+      verifyRecordLocalType(I, &LocalInfo, Locs);
+    }
+
     CorInfoType CorType;
+    CORINFO_CLASS_HANDLE Class;
+    bool IsPinned;
+    Locs = argListNext(Locs, &LocalInfo, &CorType, &Class, &IsPinned);
+    createSym(I, true, CorType, Class, IsPinned);
+  }
+}
 
-    Locs = MethodInfo->args.args;
-    bool IsVarArg = MethodInfo->args.isVarArg();
-    bool HasTypeArg = MethodInfo->args.hasTypeArg();
-    uint32_t ParamIndex = 0;
+void ReaderBase::buildUpParams(const ReaderMethodSignature &Signature) {
+  const std::vector<CallArgType> &Args = Signature.getArgumentTypes();
 
-    // We must check to see if the first argument is a this pointer
-    // in which case we have to synthesize it.
-    if (MethodInfo->args.hasThis()) {
-      uint32_t Attribs;
-      bool IsValClass;
+  if (Signature.hasThis()) {
+    const uint32_t I = Signature.getThisIndex();
+    const CallArgType &Arg = Args[I];
+    createSym(I, false, Arg.CorType, Arg.Class, false, Reader_ThisPtr);
+  }
 
-      // Get the handle for the class which this method is part of.
-      Class = getCurrentMethodClass();
+  if (Signature.isVarArg()) {
+    const uint32_t I = Signature.getVarArgIndex();
+    const CallArgType &Arg = Args[I];
+    createSym(I, false, Arg.CorType, Arg.Class, false, Reader_VarArgsToken);
+  }
 
-      // See if the current class is an valueclass
-      Attribs = getClassAttribs(Class);
+  if (Signature.hasTypeArg()) {
+    const uint32_t I = Signature.getTypeArgIndex();
+    const CallArgType &Arg = Args[I];
+    createSym(I, false, Arg.CorType, Arg.Class, false, Reader_InstParam);
+  }
 
-      if ((Attribs & CORINFO_FLG_VALUECLASS) == 0) {
-        IsValClass = false;
-        CorType = CORINFO_TYPE_CLASS;
-      } else {
-        IsValClass = true;
-        CorType = CORINFO_TYPE_VALUECLASS;
-      }
+  for (uint32_t I = Signature.getNormalParamStart(),
+                E = Signature.getNormalParamEnd();
+       I != E; ++I) {
+    const CallArgType &Arg = Args[I];
+    createSym(I, false, Arg.CorType, Arg.Class, false);
+  }
 
-      if (VerificationNeeded) {
-        verifyRecordParamType(ParamIndex, CorType, Class, IsValClass, true);
-      }
-
-      createSym(ParamIndex, false, IsValClass ? CORINFO_TYPE_BYREF : CorType,
-                Class, false, ReaderSpecialSymbolType::Reader_ThisPtr);
-      ParamIndex++;
-    }
-
-    // For varargs, we have to synthesize the varargs cookie.  This
-    // comes after the this pointer (if any) and before any fixed
-    // params.
-    if (IsVarArg) {
-      // this is not a real arg.  we do not record it for verification
-      CORINFO_CLASS_HANDLE Class =
-          getBuiltinClass(CorInfoClassId::CLASSID_ARGUMENT_HANDLE);
-      createSym(ParamIndex, false, CORINFO_TYPE_PTR, Class, false,
-                ReaderSpecialSymbolType::Reader_VarArgsToken);
-      ParamIndex++;
-    }
-
-    // GENERICS: Code Sharing: After varargs, before fixed params
-    // comes instParam (typeArg cookie)
-    if (HasTypeArg) {
-      // this is not a real arg.  we do not record it for verification
-      const CORINFO_CLASS_HANDLE Class = nullptr;
-      createSym(ParamIndex, false, CORINFO_TYPE_NATIVEINT, Class, false,
-                ReaderSpecialSymbolType::Reader_InstParam);
-      ParamIndex++;
-    }
-
-    uint32_t NumRealParams = HasSecretParameter ? NumParams - 1 : NumParams;
-
-    // Get the types of all of the parameters.
-    for (; ParamIndex < NumRealParams; ParamIndex++) {
-
-      if (VerificationNeeded) {
-        verifyRecordParamType(ParamIndex - (IsVarArg ? 1 : 0) -
-                                  (HasTypeArg ? 1 : 0),
-                              &(MethodInfo->args), Locs);
-      }
-
-      NextLoc = argListNext(Locs, &(MethodInfo->args), &CorType, &Class);
-      createSym(ParamIndex, false, CorType, Class, false);
-      Locs = NextLoc;
-    }
-
-    if (HasSecretParameter) {
-      ASSERT(ParamIndex == NumParams - 1);
-
-      const CORINFO_CLASS_HANDLE Class = nullptr;
-      createSym(ParamIndex, false, CORINFO_TYPE_NATIVEINT, Class, false,
-                ReaderSpecialSymbolType::Reader_SecretParam);
-    }
+  if (Signature.hasSecretParameter()) {
+    const uint32_t I = Signature.getSecretParameterIndex();
+    const CallArgType &Arg = Args[I];
+    createSym(I, false, Arg.CorType, Arg.Class, false, Reader_SecretParam);
   }
 }
 
