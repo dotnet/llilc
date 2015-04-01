@@ -35,7 +35,6 @@
 #include "corjit.h"
 #include "readerenum.h"
 #include "gverify.h"
-#include "switches.h"
 
 // as defined in src\vm\vars.hpp
 #define MAX_CLASSNAME_LENGTH 1024
