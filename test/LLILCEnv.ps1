@@ -182,8 +182,8 @@ function ValidatePreConditions
 
 # set CoreCLRSource variable from the environment.
 $Global:CoreCLRSource = $ENV:CORECLRSOURCE
-$Global:CoreCLRRuntime = "$CoreCLRSource\binaries\Product\Windows_NT.$Arch.$Build"
-$Global:CoreCLRTest = "$CoreCLRSource\binaries\tests\Windows_NT.$Arch.$Build"
+$Global:CoreCLRRuntime = "$CoreCLRSource\bin\Product\Windows_NT.$Arch.$Build"
+$Global:CoreCLRTest = "$CoreCLRSource\bin\tests\Windows_NT.$Arch.$Build"
 
 function Global:DefaultLLILCSource
 {
@@ -863,7 +863,7 @@ function Global:BuildTest([string]$Arch="x64", [string]$Build="Debug")
 function Global:CheckFailure([string]$Arch="x64", [string]$Build="Release")
 {
   $CoreCLRTestAssets = CoreCLRTestAssets
-  $RunResult = "$CoreCLRTestAssets\coreclr\binaries\Logs\TestRunResults_Windows_NT__"
+  $RunResult = "$CoreCLRTestAssets\coreclr\bin\Logs\TestRunResults_Windows_NT__"
   $RunResult  = $RunResult + "$Arch"
   $RunResult  = $RunResult + "__$Build.log"
   $RunResultsExists = Test-Path $RunResult
