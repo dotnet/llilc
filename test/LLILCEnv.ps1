@@ -269,7 +269,7 @@ function Global:CoreCLRTestAssets
 
 function Global:CoreCLRTestTargetBinaries([string]$Arch="x64", [string]$Build="Debug")
 {
-  return "$CoreCLRSource\binaries\tests\Windows_NT.$Arch.$Build"
+  return "$CoreCLRSource\bin\tests\Windows_NT.$Arch.$Build"
 }
 
 function Global:DefaultLLVMBuild
