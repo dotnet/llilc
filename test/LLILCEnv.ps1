@@ -863,7 +863,7 @@ function Global:BuildTest([string]$Arch="x64", [string]$Build="Debug")
 function Global:CheckFailure([string]$Arch="x64", [string]$Build="Release")
 {
   $CoreCLRTestAssets = CoreCLRTestAssets
-  $RunResult = "$CoreCLRTestAssets\coreclr\bin\Logs\TestRunResults_Windows_NT__"
+  $RunResult = "$CoreCLRTestAssets\bin\Logs\TestRunResults_Windows_NT__"
   $RunResult  = $RunResult + "$Arch"
   $RunResult  = $RunResult + "__$Build.log"
   $RunResultsExists = Test-Path $RunResult
