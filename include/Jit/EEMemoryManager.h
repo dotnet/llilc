@@ -16,7 +16,7 @@
 #ifndef EE_MEMORYMANAGER_H
 #define EE_MEMORYMANAGER_H
 
-#include "llvm/ExecutionEngine/RuntimeDyld.h"
+#include "llvm/ExecutionEngine/RTDyldMemoryManager.h"
 
 class LLILCJitContext;
 
