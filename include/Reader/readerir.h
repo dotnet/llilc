@@ -840,14 +840,8 @@ private:
   llvm::Type *getType(CorInfoType Type, CORINFO_CLASS_HANDLE ClassHandle,
                       bool GetRefClassFields = true);
 
-  llvm::Function *getFunction(CORINFO_METHOD_HANDLE Method,
-                              bool HasSecretParameter);
+  llvm::Function *getFunction(const ReaderMethodSignature &Signature);
 
-  llvm::FunctionType *getFunctionType(CORINFO_METHOD_HANDLE Method,
-                                      bool HasSecretParameter = false);
-  llvm::FunctionType *getFunctionType(CORINFO_SIG_INFO &Sig,
-                                      CORINFO_CLASS_HANDLE ThisClass,
-                                      bool HasSecretParameter = false);
   llvm::FunctionType *getFunctionType(const ReaderCallSignature &Signature);
 
   llvm::Type *getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
@@ -1090,9 +1084,6 @@ private:
 
   bool isManagedPointerType(llvm::PointerType *PointerType);
 
-  uint32_t argOrdinalToArgIndex(uint32_t ArgOrdinal);
-  uint32_t argIndexToArgOrdinal(uint32_t ArgIndex);
-
   llvm::StoreInst *makeStore(llvm::Value *ValueToStore, llvm::Value *Address,
                              bool IsVolatile, bool AddressMayBeNull = true);
   llvm::StoreInst *makeStoreNonNull(llvm::Value *ValueToStore,
@@ -1169,6 +1160,7 @@ private:
 
 private:
   LLILCJitContext *JitContext;
+  ReaderMethodSignature MethodSignature;
   llvm::Function *Function;
   // The LLVMBuilder has a notion of a current insertion point.  During the
   // first-pass flow-graph construction, each method sets the insertion point
@@ -1189,15 +1181,10 @@ private:
   std::vector<llvm::Value *> LocalVars;
   std::vector<CorInfoType> LocalVarCorTypes;
   std::vector<llvm::Value *> Arguments;
-  std::vector<CorInfoType> ArgumentCorTypes;
   llvm::DenseMap<uint32_t, llvm::StoreInst *> ContinuationStoreMap;
   FlowGraphNode *FirstMSILBlock;
   llvm::BasicBlock *UnreachableContinuationBlock;
   CorInfoType ReturnCorType;
-  bool HasThis;
-  bool HasTypeParameter;
-  bool HasVarargsToken;
-  bool HasSecretParameter;
   bool KeepGenericContextAlive;
   llvm::BasicBlock *EntryBlock;
   llvm::Instruction *TempInsertionPoint;

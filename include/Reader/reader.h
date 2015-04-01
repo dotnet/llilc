@@ -400,12 +400,12 @@ public:
 /// Code generation for calls must take into account the parameters that a
 /// particular call target expects at runtime, as opposed to the parameters
 /// exposed by the target in metadata. This class encapsulates this information
-/// s.t. subclasses of ReaderBase need not compute this data ad-hoc.
+/// s.t. subclasses of ReaderBase need not compute it ad-hoc.
 class ReaderCallSignature {
   friend class ReaderBase;
   friend class ReaderCallTargetData;
 
-private:
+protected:
   CorInfoCallConv CallingConvention; ///< The calling convention for this
                                      ///< target.
 
@@ -429,6 +429,147 @@ public:
   ///          argument.
   const std::vector<CallArgType> &getArgumentTypes() const {
     return ArgumentTypes;
+  }
+};
+
+/// \brief Information about a runtime method signature.
+///
+/// The JIT needs to be able to accurately locate various parameters to a
+/// method relative to its runtime signature (as opposed to the signature
+/// exposed in metadata). This class encapsulates this information s.t.
+/// subclasses of ReaderBase need not compute it ad-hoc.
+class ReaderMethodSignature : public ReaderCallSignature {
+  friend class ReaderBase;
+
+private:
+  bool HasThis;            ///< Does this method take a this argument?
+  bool IsVarArg;           ///< Is this method variadic?
+  bool HasTypeArg;         ///< Does this method accept instantiation info?
+  bool HasSecretParameter; ///< Does this method take a secret parameter?
+
+public:
+  /// \brief Check whether this method takes a this argument.
+  ///
+  /// \returns True if this method takes a this argument.
+  bool hasThis() const { return HasThis; }
+
+  /// \brief Check whether this method is variadic.
+  ///
+  /// \returns True if this method is variadic.
+  bool isVarArg() const { return IsVarArg; }
+
+  /// \brief Check whether this method accepts instantiation information.
+  ///
+  /// \returns True if this method accepts instantiation information.
+  bool hasTypeArg() const { return HasTypeArg; }
+
+  /// \brief Check whether this method acceps a secret parameter.
+  ///
+  /// \returns True if this method accepts a secret parameter.
+  bool hasSecretParameter() const { return HasSecretParameter; }
+
+  /// \brief Get the index of the method's \p this parameter.
+  ///
+  /// The result of this method can be used as an index into the
+  /// result of \p getArgumentTypes.
+  ///
+  /// \returns The index of the method's \p this parameter.
+  uint32_t getThisIndex() const {
+    assert(HasThis);
+    return 0;
+  }
+
+  /// \brief Get the index of the method's vararg cookie parameter.
+  ///
+  /// The result of this method can be used as an index into the
+  /// result of \p getArgumentTypes.
+  ///
+  /// \returns The index of the method's vararg cookie parameter.
+  uint32_t getVarArgIndex() const {
+    assert(IsVarArg);
+    return HasThis ? 1 : 0;
+  }
+
+  /// \brief Get the index of the method's instantiation parameter.
+  ///
+  /// The result of this method can be used as an index into the
+  /// result of \p getArgumentTypes.
+  ///
+  /// \returns The index of the method's instantiation parameter.
+  uint32_t getTypeArgIndex() const {
+    assert(HasTypeArg);
+    return (HasThis ? 1 : 0) + (IsVarArg ? 1 : 0);
+  }
+
+  /// \brief Get the index of the method's secret parameter.
+  ///
+  /// The result of this method can be used as an index into the
+  /// result of \p getArgumentTypes.
+  ///
+  /// \returns The index of the method's secret parameter.
+  uint32_t getSecretParameterIndex() const {
+    assert(HasSecretParameter);
+    return ArgumentTypes.size() - 1;
+  }
+
+  /// \brief Get the index of the method's first normal parameter.
+  ///
+  /// The "normal" parameters of a method signature are those parameter which
+  /// are not the \p this, vararg cookie, instantiation, or secret parameters.
+  ///
+  /// For methods without a \p this parameter, the normal parameters correspond
+  /// exactly to the parameters present in metadata; otherwise, the normal
+  /// parameters are the metadata parameters after the \p this parameter.
+  ///
+  /// The result of this method can be used as an index into the
+  /// result of \p getArgumentTypes.
+  ///
+  /// \returns The index of the method's first normal parameter.
+  uint32_t getNormalParamStart() const {
+    return (HasThis ? 1 : 0) + (IsVarArg ? 1 : 0) + (HasTypeArg ? 1 : 0);
+  }
+
+  /// \brief Get the index after the last normal parameter to the method.
+  ///
+  /// See \p getIndexOfFirstNormalParam for a discussion of "normal" parameters.
+  ///
+  /// \returns The index after the last normal parameter to this method.
+  uint32_t getNormalParamEnd() const {
+    return ArgumentTypes.size() - (HasSecretParameter ? 1 : 0);
+  }
+
+  /// \brief Return the index of the argument that corresponds to the given
+  ///        IL argument ordinal.
+  ///
+  /// The result of this method can be used as an index into the
+  /// result of \p getArgumentTypes.
+  ///
+  /// \param Ordinal  The IL argument ordinal.
+  ///
+  /// \returns The index of the argument.
+  uint32_t getArgIndexForILArg(uint32_t Ordinal) const {
+    if (HasThis && Ordinal == 0) {
+      return 0;
+    }
+    uint32_t Index = Ordinal + (IsVarArg ? 1 : 0) + (HasTypeArg ? 1 : 0);
+    assert(Index >= getNormalParamStart());
+    assert(Index < getNormalParamEnd());
+    return Index;
+  }
+
+  /// \brief Return the IL argument ordinal that corresponds to the given
+  ///        index.
+  ///
+  /// \
+  ///
+  /// \returns The IL argument ordinal.
+  uint32_t getILArgForArgIndex(uint32_t Index) const {
+    if (HasThis && Index == 0) {
+      return 0;
+    }
+    assert(Index >= getNormalParamStart());
+    assert(Index < getNormalParamEnd());
+    return Index - (IsVarArg ? 1 : 0) - (HasTypeArg ? 1 : 0);
   }
 };
 
@@ -1230,6 +1371,39 @@ private:
   GlobalVerifyData *GvWorklistHead;
   GlobalVerifyData *GvWorklistTail;
 
+  /// \brief Process the next element (argument or local) in a signature
+  ///
+  /// Utility routine used by \p buildUpParams and \p buildUpLocals to iterate
+  /// through a signature and obtain more detailed information about each
+  /// element.
+  ///
+  /// \param ArgListHandle   Handle for the current element of the signature
+  /// \param Sig             The signature being iterated over.
+  /// \param CorType [out]   Optional; the CorInfoType of the current element.
+  /// \param Class [out]     Optional; the class handle of the current element.
+  /// \param IsPinned [out]  Optional; true if the current element is pinned.
+  ///
+  /// \returns Handle for the next element of the signature.
+  CORINFO_ARG_LIST_HANDLE argListNext(CORINFO_ARG_LIST_HANDLE ArgListHandle,
+                                      CORINFO_SIG_INFO *Sig,
+                                      CorInfoType *CorType = nullptr,
+                                      CORINFO_CLASS_HANDLE *Class = nullptr,
+                                      bool *IsPinned = nullptr);
+
+  /// \brief Set up parameters
+  ///
+  /// Uses the method signature and information from the EE to direct the
+  /// client to set up processing for method parameters.
+  ///
+  /// \param Signature  The signature for the method being compiled.
+  void buildUpParams(const ReaderMethodSignature &Signature);
+
+  /// \brief Set up locals (autos)
+  ///
+  /// Uses the local signature to direct the client to set up processing
+  /// for local variables in the method.
+  void buildUpAutos();
+
 public:
   bool AreInlining;
 
@@ -1263,60 +1437,29 @@ public:
   /// 7. Final pass to allow the client a chance to finish up
   void msilToIR();
 
+  /// \brief Set up some basic method information.
+  ///
+  /// Uses the method info from the EE to compute the method signature and
+  /// number of local variables for the method being compiled.
+  ///
+  /// \param HasSecretParameter  Indicates whether or not this method accepts
+  ///                            a secret parameter.
+  /// \param Signature [out]     Upon return, signature information for the
+  ///                            method being compiled.
+  /// \param NumAutos [out]      Upon return, the number of local variables for
+  ///                            the method being compiled.
+  void initMethodInfo(bool HasSecretParameter, ReaderMethodSignature &Signature,
+                      uint32_t &NumAutos);
+
   /// \brief Set up parameters and locals (autos)
   ///
   /// Uses the method and local signatures and information from the EE to
   /// direct client processing for the method parameters and the local
   /// variables of the method.
   ///
-  /// \param NumParam            Number of parameters to the method. Note this
-  ///                            includes implicit parameters like the this
-  ///                            pointer.
-  /// \param NumAuto             Number of locals described in the local
-  ///                            signature.
-  /// \param HasSecretParameter  Indicates whether or not the terminal parameter
-  ///                            is the secret parameter of an IL stub.
-  void initParamsAndAutos(uint32_t NumParam, uint32_t NumAuto,
-                          bool HasSecretParameter);
-
-  /// \brief Set up parameters
-  ///
-  /// Uses the method signature and information from the EE to direct the
-  /// client to set up processing for method parameters.
-  ///
-  /// \param NumParams           Number of parameters to the method. Note this
-  ///                            includes implicit parameters like the this
-  ///                            pointer.
-  /// \param HasSecretParameter  Indicates whether or not the terminal parameter
-  ///                            is the secret parameter of an IL stub.
-  void buildUpParams(uint32_t NumParams, bool HasSecretParameter);
-
-  /// \brief Set up locals (autos)
-  ///
-  /// Uses the local signature to direct the client to set up processing
-  /// for local variables in the method.
-  ///
-  /// \param NumAutos   Number of locals described in the signature.
-  void buildUpAutos(uint32_t NumAutos);
-
-  /// \brief Process the next element (argument or local) in a signature
-  ///
-  /// Utility routine used by \p buildUpParams and \p buildUpLocals to iterate
-  /// through a signature and obtain more detailed information about each
-  /// element.
-  ///
-  /// \param ArgListHandle   Handle for the current element of the signature
-  /// \param Sig             The signature being iterated over.
-  /// \param CorType [out]   Optional; the CorInfoType of the current element.
-  /// \param Class [out]     Optional; the class handle of the current element.
-  /// \param IsPinned [out]  Optional; true if the current element is pinned.
-  ///
-  /// \returns Handle for the next element of the signature.
-  CORINFO_ARG_LIST_HANDLE argListNext(CORINFO_ARG_LIST_HANDLE ArgListHandle,
-                                      CORINFO_SIG_INFO *Sig,
-                                      CorInfoType *CorType = nullptr,
-                                      CORINFO_CLASS_HANDLE *Class = nullptr,
-                                      bool *IsPinned = nullptr);
+  /// \param Signature  Signature information for the method being compiled, as
+  ///                   copmuted by \p initMethodInfo.
+  void initParamsAndAutos(const ReaderMethodSignature &Signature);
 
   /// \brief Build the flow graph for the method.
   ///

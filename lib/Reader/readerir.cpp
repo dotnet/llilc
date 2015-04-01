@@ -282,8 +282,12 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   }
 
   const uint32_t JitFlags = JitContext->Flags;
-  HasSecretParameter = (JitFlags & CORJIT_FLG_PUBLISH_SECRET_PARAM) != 0;
-  Function = getFunction(MethodHandle, HasSecretParameter);
+  bool HasSecretParameter = (JitFlags & CORJIT_FLG_PUBLISH_SECRET_PARAM) != 0;
+
+  uint32_t NumLocals = 0;
+  initMethodInfo(HasSecretParameter, MethodSignature, NumLocals);
+
+  Function = getFunction(MethodSignature);
   EntryBlock = BasicBlock::Create(*JitContext->LLVMContext, "entry", Function);
 
   LLVMBuilder = new IRBuilder<>(*this->JitContext->LLVMContext);
@@ -291,23 +295,16 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
 
   // Note numArgs may exceed the IL argument count when there
   // are hidden args like the varargs cookie or type descriptor.
-  // Since we add these hidden args to the function's type, we can use the
-  // type's argument count to get the right number here.
-  uint32_t NumArgs = Function->getFunctionType()->getFunctionNumParams();
+  uint32_t NumArgs = MethodSignature.getArgumentTypes().size();
   ASSERT(NumArgs >= JitContext->MethodInfo->args.totalILArgs());
-  uint32_t NumLocals = JitContext->MethodInfo->locals.numArgs;
 
+  Arguments.resize(NumArgs);
   LocalVars.resize(NumLocals);
   LocalVarCorTypes.resize(NumLocals);
-  Arguments.resize(NumArgs);
-  ArgumentCorTypes.resize(NumArgs);
-  HasThis = JitContext->MethodInfo->args.hasThis();
-  HasTypeParameter = JitContext->MethodInfo->args.hasTypeArg();
-  HasVarargsToken = JitContext->MethodInfo->args.isVarArg();
   KeepGenericContextAlive = false;
   UnreachableContinuationBlock = nullptr;
 
-  initParamsAndAutos(NumArgs, NumLocals, HasSecretParameter);
+  initParamsAndAutos(MethodSignature);
 
   // Take note of the current insertion point in case we need
   // to add more allocas later.
@@ -401,7 +398,7 @@ void GenIR::readerPostPass(bool IsImportOnly) {
     if (Options & CORINFO_GENERICS_CTXT_FROM_THIS) {
       // The this argument might be modified in the method body, so
       // make a copy of the incoming this in a scratch local.
-      ASSERT(HasThis);
+      ASSERT(MethodSignature.hasThis());
       Value *This = thisObj();
       Instruction *ScratchLocalAlloca = createTemporary(This->getType());
       // Put the store just after the newly added alloca.
@@ -414,8 +411,8 @@ void GenIR::readerPostPass(bool IsImportOnly) {
       // spilled value location for reporting.
       ASSERT(Options & (CORINFO_GENERICS_CTXT_FROM_METHODDESC |
                         CORINFO_GENERICS_CTXT_FROM_METHODTABLE));
-      ASSERT(HasTypeParameter);
-      ContextLocalAddress = Arguments[HasThis ? (HasVarargsToken ? 2 : 1) : 0];
+      ASSERT(MethodSignature.hasTypeArg());
+      ContextLocalAddress = Arguments[MethodSignature.getTypeArgIndex()];
     }
 
     // Indicate that the context location's address escapes by inserting a call
@@ -451,31 +448,6 @@ void GenIR::readerPostPass(bool IsImportOnly) {
 //
 //===----------------------------------------------------------------------===//
 
-// Translate an ArgOrdinal (from MSIL) into an in index
-// into the Arguments array.
-uint32_t GenIR::argOrdinalToArgIndex(uint32_t ArgOrdinal) {
-  bool MightNeedShift = !HasThis || ArgOrdinal > 0;
-  if (MightNeedShift) {
-    uint32_t Delta = (HasTypeParameter ? 1 : 0) + (HasVarargsToken ? 1 : 0);
-    return ArgOrdinal + Delta;
-  }
-
-  return ArgOrdinal;
-}
-
-// Translate an index into the Arguments array into
-// the ordinal used in MSIL.
-uint32_t GenIR::argIndexToArgOrdinal(uint32_t ArgIndex) {
-  bool MightNeedShift = !HasThis || ArgIndex > 0;
-  if (MightNeedShift) {
-    uint32_t Delta = (HasTypeParameter ? 1 : 0) + (HasVarargsToken ? 1 : 0);
-    ASSERT(ArgIndex >= Delta);
-    return ArgIndex - Delta;
-  }
-
-  return ArgIndex;
-}
-
 void GenIR::createSym(uint32_t Num, bool IsAuto, CorInfoType CorType,
                       CORINFO_CLASS_HANDLE Class, bool IsPinned,
                       ReaderSpecialSymbolType SymType) {
@@ -490,25 +462,29 @@ void GenIR::createSym(uint32_t Num, bool IsAuto, CorInfoType CorType,
 
   switch (SymType) {
   case ReaderSpecialSymbolType::Reader_ThisPtr:
-    ASSERT(HasThis);
+    ASSERT(MethodSignature.hasThis());
     SymName = "this";
     break;
 
   case ReaderSpecialSymbolType::Reader_InstParam:
-    ASSERT(HasTypeParameter);
+    ASSERT(MethodSignature.hasTypeArg());
     SymName = "$TypeArg";
     break;
 
   case ReaderSpecialSymbolType::Reader_VarArgsToken:
-    ASSERT(HasVarargsToken);
+    ASSERT(MethodSignature.isVarArg());
     SymName = "$VarargsToken";
-    HasVarargsToken = true;
+    break;
+
+  case ReaderSpecialSymbolType::Reader_SecretParam:
+    ASSERT(MethodSignature.hasSecretParameter());
+    SymName = "$SecretParam";
     break;
 
   default:
     UseNumber = true;
     if (!IsAuto) {
-      Number = argIndexToArgOrdinal(Num);
+      Number = MethodSignature.getILArgForArgIndex(Num);
     }
     break;
   }
@@ -523,14 +499,12 @@ void GenIR::createSym(uint32_t Num, bool IsAuto, CorInfoType CorType,
     LocalVarCorTypes[Num] = CorType;
   } else {
     Arguments[Num] = AllocaInst;
-    ArgumentCorTypes[Num] = CorType;
   }
 }
 
-Function *GenIR::getFunction(CORINFO_METHOD_HANDLE MethodHandle,
-                             bool HasSecretParameter) {
+Function *GenIR::getFunction(const ReaderMethodSignature &Signature) {
   Module *M = JitContext->CurrentModule;
-  FunctionType *Ty = getFunctionType(MethodHandle, HasSecretParameter);
+  FunctionType *Ty = getFunctionType(Signature);
   llvm::Function *F = Function::Create(Ty, Function::ExternalLinkage,
                                        M->getModuleIdentifier(), M);
 
@@ -544,7 +518,7 @@ Function *GenIR::getFunction(CORINFO_METHOD_HANDLE MethodHandle,
     Args->setName(Twine("param") + Twine(N++));
   }
 
-  if (HasSecretParameter) {
+  if (Signature.hasSecretParameter()) {
     ASSERT((--F->arg_end())->getType() ==
            getType(CORINFO_TYPE_NATIVEINT, nullptr));
 
@@ -593,17 +567,27 @@ Instruction *GenIR::createTemporary(Type *Ty, const Twine &Name) {
   return AllocaInst;
 }
 
+static Value *functionArgAt(Function *F, uint32_t I) {
+  Function::arg_iterator Args = F->arg_begin();
+  for (; I > 0; I--) {
+    ++Args;
+  }
+  return Args;
+}
+
 // Get the value of the unmodified this object.
 IRNode *GenIR::thisObj() {
-  ASSERT(HasThis);
-  Function::arg_iterator Args = Function->arg_begin();
-  Value *UnmodifiedThis = Args++;
-  return (IRNode *)UnmodifiedThis;
+  ASSERT(MethodSignature.hasThis());
+  uint32_t I = MethodSignature.getThisIndex();
+  return (IRNode *)functionArgAt(Function, I);
+  ;
 }
 
 // Get the value of the secret parameter to an IL stub.
 IRNode *GenIR::secretParam() {
-  ASSERT(HasSecretParameter);
+  ASSERT(MethodSignature.hasSecretParameter());
+  ASSERT(MethodSignature.getSecretParameterIndex() ==
+         (MethodSignature.getArgumentTypes().size() - 1));
   Function::arg_iterator Args = Function->arg_end();
   Value *SecretParameter = --Args;
   return (IRNode *)SecretParameter;
@@ -611,27 +595,16 @@ IRNode *GenIR::secretParam() {
 
 // Get the value of the varargs token (aka argList).
 IRNode *GenIR::argList() {
-  ASSERT(HasVarargsToken);
-  Function::arg_iterator Args = Function->arg_begin();
-  if (HasThis) {
-    Args++;
-  }
-  Value *ArgList = Args++;
-  return (IRNode *)ArgList;
+  ASSERT(MethodSignature.isVarArg());
+  uint32_t I = MethodSignature.getVarArgIndex();
+  return (IRNode *)functionArgAt(Function, I);
 }
 
 // Get the value of the instantiation parameter (aka type parameter).
 IRNode *GenIR::instParam() {
-  ASSERT(HasTypeParameter);
-  Function::arg_iterator Args = Function->arg_begin();
-  if (HasThis) {
-    Args++;
-  }
-  if (HasVarargsToken) {
-    Args++;
-  }
-  Value *TypeParameter = Args++;
-  return (IRNode *)TypeParameter;
+  ASSERT(MethodSignature.hasTypeArg());
+  uint32_t I = MethodSignature.getTypeArgIndex();
+  return (IRNode *)functionArgAt(Function, I);
 }
 
 // Convert ReaderAlignType to byte alighnment
@@ -1426,86 +1399,6 @@ Type *GenIR::getBoxedType(CORINFO_CLASS_HANDLE Class) {
     (*BoxedTypeMap)[Class] = BoxedType;
   }
   return BoxedType;
-}
-
-// Obtain an LLVM function type from a method handle.
-FunctionType *GenIR::getFunctionType(CORINFO_METHOD_HANDLE Method,
-                                     bool HasSecretParameter) {
-  CORINFO_SIG_INFO Sig;
-  getMethodSig(Method, &Sig);
-  CORINFO_CLASS_HANDLE Class = getMethodClass(Method);
-  FunctionType *Result = getFunctionType(Sig, Class, HasSecretParameter);
-  return Result;
-}
-
-// Obtain an LLVM function type from a signature.
-//
-// If the signature has an implicit 'this' parameter,
-// ThisClass must be passed in as the appropriate class handle.
-FunctionType *GenIR::getFunctionType(CORINFO_SIG_INFO &Sig,
-                                     CORINFO_CLASS_HANDLE ThisClass,
-                                     bool HasSecretParameter) {
-  CorInfoType ReturnType = Sig.retType;
-  CORINFO_CLASS_HANDLE ReturnClass = Sig.retTypeClass;
-  Type *LLVMReturnType = this->getType(ReturnType, ReturnClass);
-  std::vector<Type *> Arguments;
-
-  if (Sig.hasThis()) {
-    // We'd better have a valid class handle.
-    ASSERT(ThisClass != nullptr);
-
-    // See if the this pointer class is an valueclass
-    uint32_t Attribs = getClassAttribs(ThisClass);
-
-    CorInfoType CorType;
-
-    if ((Attribs & CORINFO_FLG_VALUECLASS) == 0) {
-      CorType = CORINFO_TYPE_CLASS;
-    } else {
-      CorType = CORINFO_TYPE_BYREF;
-    }
-
-    Type *LLVMArgType = this->getType(CorType, ThisClass);
-    Arguments.push_back(LLVMArgType);
-  }
-
-  bool IsVarArg = Sig.isVarArg();
-
-  if (IsVarArg) {
-    CORINFO_CLASS_HANDLE Class =
-        getBuiltinClass(CorInfoClassId::CLASSID_ARGUMENT_HANDLE);
-    Type *VarArgCookieType = getType(CORINFO_TYPE_PTR, Class);
-    Arguments.push_back(VarArgCookieType);
-  }
-
-  bool HasTypeArg = Sig.hasTypeArg();
-
-  if (HasTypeArg) {
-    CORINFO_CLASS_HANDLE Class = nullptr;
-    Type *TypeArgType = getType(CORINFO_TYPE_NATIVEINT, Class);
-    Arguments.push_back(TypeArgType);
-  }
-
-  CORINFO_ARG_LIST_HANDLE NextArg = Sig.args;
-
-  for (uint32_t I = 0; I < Sig.numArgs; ++I) {
-    CorInfoType ArgType = CorInfoType::CORINFO_TYPE_UNDEF;
-    CORINFO_CLASS_HANDLE Class;
-    NextArg = this->argListNext(NextArg, &Sig, &ArgType, &Class);
-    Type *LLVMArgType = this->getType(ArgType, Class);
-    Arguments.push_back(LLVMArgType);
-  }
-
-  if (HasSecretParameter) {
-    CORINFO_CLASS_HANDLE Class = nullptr;
-    Type *SecretParameterType = getType(CORINFO_TYPE_NATIVEINT, Class);
-    Arguments.push_back(SecretParameterType);
-  }
-
-  FunctionType *FunctionType =
-      FunctionType::get(LLVMReturnType, Arguments, IsVarArg);
-
-  return FunctionType;
 }
 
 FunctionType *GenIR::getFunctionType(const ReaderCallSignature &Signature) {
@@ -2636,10 +2529,11 @@ IRNode *GenIR::loadLocalAddress(uint32_t LocalOrdinal) {
 
 void GenIR::storeArg(uint32_t ArgOrdinal, IRNode *Arg1,
                      ReaderAlignType Alignment, bool IsVolatile) {
-  uint32_t ArgIndex = argOrdinalToArgIndex(ArgOrdinal);
+  uint32_t ArgIndex = MethodSignature.getArgIndexForILArg(ArgOrdinal);
   Value *ArgAddress = Arguments[ArgIndex];
   Type *ArgTy = ArgAddress->getType()->getPointerElementType();
-  IRNode *Value = convertFromStackType(Arg1, ArgumentCorTypes[ArgIndex], ArgTy);
+  CorInfoType CorType = MethodSignature.getArgumentTypes()[ArgIndex].CorType;
+  IRNode *Value = convertFromStackType(Arg1, CorType, ArgTy);
   makeStoreNonNull(Value, ArgAddress, false);
 }
 
@@ -2647,15 +2541,16 @@ IRNode *GenIR::loadArg(uint32_t ArgOrdinal, bool IsJmp) {
   if (IsJmp) {
     throw NotYetImplementedException("JMP");
   }
-  uint32_t ArgIndex = argOrdinalToArgIndex(ArgOrdinal);
+  uint32_t ArgIndex = MethodSignature.getArgIndexForILArg(ArgOrdinal);
   Value *ArgAddress = Arguments[ArgIndex];
   IRNode *Value = (IRNode *)makeLoadNonNull(ArgAddress, false);
-  IRNode *Result = convertToStackType(Value, ArgumentCorTypes[ArgIndex]);
+  CorInfoType CorType = MethodSignature.getArgumentTypes()[ArgIndex].CorType;
+  IRNode *Result = convertToStackType(Value, CorType);
   return Result;
 }
 
 IRNode *GenIR::loadArgAddress(uint32_t ArgOrdinal) {
-  uint32_t ArgIndex = argOrdinalToArgIndex(ArgOrdinal);
+  uint32_t ArgIndex = MethodSignature.getArgIndexForILArg(ArgOrdinal);
   return loadManagedAddress(Arguments, ArgIndex);
 }
 
