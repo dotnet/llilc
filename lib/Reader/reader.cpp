@@ -659,7 +659,7 @@ GCLayout *ReaderBase::getClassGCLayout(CORINFO_CLASS_HANDLE Class) {
   // before the struct.  Therefore we add the size of the
   // GCLAYOUT_STRUCT to our computed size above.
   GCLayout *GCLayoutInfo =
-      (GCLayout *)getProcMemory(GcLayoutSize + sizeof(GCLayout));
+      (GCLayout *)calloc(GcLayoutSize + sizeof(GCLayout), sizeof(uint8_t));
   uint32_t NumGCVars =
       JitInfo->getClassGClayout(Class, GCLayoutInfo->GCPointers);
 
@@ -671,10 +671,17 @@ GCLayout *ReaderBase::getClassGCLayout(CORINFO_CLASS_HANDLE Class) {
     // GCLayout.  It is our convention that if you have a GCLayout,
     // then you have pointers.  This allows us to do only one check
     // when we want to know if a MB has GC pointers.
+    free(GCLayoutInfo);
     GCLayoutInfo = nullptr;
   }
 
   return GCLayoutInfo;
+}
+
+bool ReaderBase::classHasGCPointers(CORINFO_CLASS_HANDLE Class) {
+  GCLayout *Layout = getClassGCLayout(Class);
+  free(Layout);
+  return Layout != nullptr;
 }
 
 uint32_t ReaderBase::getClassAttribs(CORINFO_CLASS_HANDLE Class) {
@@ -692,7 +699,7 @@ uint32_t ReaderBase::getClassAlignmentRequirement(CORINFO_CLASS_HANDLE Class) {
 #if !defined(NODEBUG)
   // Make sure that classes which contain GC refs also have sufficient
   // alignment requirements.
-  if (getClassGCLayout(Class)) {
+  if (classHasGCPointers(Class)) {
     const uint32_t PointerSize = getPointerByteSize();
     ASSERTNR(JitInfo->getClassAlignmentRequirement(Class) >= PointerSize);
   }
@@ -714,7 +721,7 @@ ReaderBase::getMinimumClassAlignment(CORINFO_CLASS_HANDLE Class,
 
   // Unaligned GC pointers are not supported by the CLR.
   // Simply ignore users that specify otherwise
-  if (getClassGCLayout(Class) != nullptr) {
+  if (classHasGCPointers(Class)) {
     Alignment = Reader_AlignNatural;
   }
 
@@ -4198,9 +4205,7 @@ void ReaderBase::rdrCallFieldHelper(
 // Alignment is necessary in case the JIT wants to turn a struct write
 // barrier into a struct copy.
 void ReaderBase::rdrCallWriteBarrierHelper(
-    IRNode *Arg1, // addrDst
-    IRNode *Arg2, // addrSrc
-    ReaderAlignType Alignment, bool IsVolatile,
+    IRNode *Dst, IRNode *Src, ReaderAlignType Alignment, bool IsVolatile,
     CORINFO_RESOLVED_TOKEN *ResolvedToken, bool IsNotValueClass,
     bool IsValueIsPointer, bool IsFieldToken, bool IsUnchecked) {
   if (IsNotValueClass) {
@@ -4210,7 +4215,7 @@ void ReaderBase::rdrCallWriteBarrierHelper(
     // HCIMPL2(void, JIT_CheckedWriteBarrier, Object** dest, Object * value)
     callHelper(IsUnchecked ? CORINFO_HELP_ASSIGN_REF
                            : CORINFO_HELP_CHECKED_ASSIGN_REF,
-               nullptr, Arg1, Arg2, nullptr, nullptr, Alignment, IsVolatile);
+               nullptr, Dst, Src, nullptr, nullptr, Alignment, IsVolatile);
   } else {
     // This is the case in which we will be copying a value class into
     // the field of this struct.  The runtime will need to be passed
@@ -4224,7 +4229,7 @@ void ReaderBase::rdrCallWriteBarrierHelper(
       // Do note that in this case we want a pointer to the source,
       // but we will actually have is the struct itself, therefore we
       // need to get its address.
-      Arg2 = (IRNode *)addressOfValue(Arg2);
+      Src = (IRNode *)addressOfValue(Src);
     }
 
     CORINFO_CLASS_HANDLE Class = nullptr;
@@ -4234,55 +4239,29 @@ void ReaderBase::rdrCallWriteBarrierHelper(
       Class = ResolvedToken->hClass;
     }
 
-    if (getClassGCLayout(Class)) {
-      IRNode *Arg3;
-
+    if (classHasGCPointers(Class)) {
       // We are able to speed up perf with shared methods
       // by using the representative class handle (getClassHandle(Token))
       // rather than the exact class handle (genericTokenToNode(Token)).
+      //
       // For the purposes of the write barrier helper, the gclayout should
       // be the same for both representative and exact class handles.
       bool IsIndirect;
       void *ClassHandle = embedClassHandle(Class, &IsIndirect);
 
-      Arg3 = handleToIRNode(ResolvedToken->token, ClassHandle, Class,
-                            IsIndirect, IsIndirect, true, false);
+      IRNode *ClassHandleNode =
+          handleToIRNode(ResolvedToken->token, ClassHandle, Class, IsIndirect,
+                         IsIndirect, true, false);
 
-      callHelper(CORINFO_HELP_ASSIGN_STRUCT, nullptr, Arg1, Arg2, Arg3, nullptr,
-                 Alignment, IsVolatile);
+      callHelper(CORINFO_HELP_ASSIGN_STRUCT, nullptr, Dst, Src, ClassHandleNode,
+                 nullptr, Alignment, IsVolatile);
     } else {
       // If the class doesn't have a gc layout then use a memcopy
       IRNode *Size = loadConstantI4(getClassSize(Class));
-      callHelper(CORINFO_HELP_MEMCPY, nullptr, Arg1, Arg2, Size, nullptr,
+      callHelper(CORINFO_HELP_MEMCPY, nullptr, Dst, Src, Size, nullptr,
                  Alignment, IsVolatile);
     }
   }
-}
-
-// rdrCallWriteBarrierHelperForReturnValue
-//
-// This is a variant of rdrCallWriteBarrierHelper where we are
-// returning a struct with gc pointers by value through a hidden
-// parameter.
-void ReaderBase::rdrCallWriteBarrierHelperForReturnValue(
-    IRNode *Arg1, // addrDst
-    IRNode *Arg2, // addrSrc
-
-    mdToken Token) {
-  IRNode *Arg3;
-  bool IsIndirect;
-
-  CORINFO_SIG_INFO SignatureOfCurrentMethod;
-
-  getMethodSig(getCurrentMethodHandle(), &SignatureOfCurrentMethod);
-  void *ClassHandle =
-      embedClassHandle(SignatureOfCurrentMethod.retTypeClass, &IsIndirect);
-
-  // TODO: Note this handle is read-only for aliasing purposes?
-  Arg3 =
-      handleToIRNode(Token, ClassHandle, SignatureOfCurrentMethod.retTypeClass,
-                     IsIndirect, IsIndirect, true, false);
-  callHelper(CORINFO_HELP_ASSIGN_STRUCT, nullptr, Arg1, Arg2, Arg3);
 }
 
 IRNode *ReaderBase::rdrCallGetStaticBase(CORINFO_CLASS_HANDLE Class,
@@ -5142,6 +5121,7 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
   CORINFO_SIG_INFO *SigInfo = Data->getSigInfo();
 
   // Set the calling convention.
+  Data->CallTargetSignature.HasThis = Data->hasThis();
   Data->CallTargetSignature.CallingConvention = SigInfo->getCallConv();
 
   // Get the number of arguments to this method.
@@ -5328,10 +5308,7 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
   }
 
   // Get the call target
-  if (Data->isCallI()) {
-    Data->CallTargetNode =
-        makeFunctionPointer(Data->CallTargetSignature, Data->CallTargetNode);
-  } else {
+  if (!Data->isCallI()) {
     rdrMakeCallTargetNode(Data,
                           Arguments.size() == 0 ? nullptr : &Arguments[0]);
     ASSERT(!Data->isNewObj() || Arguments[0] == NewObjThisArg);
@@ -5415,8 +5392,7 @@ void ReaderBase::rdrMakeCallTargetNode(ReaderCallTargetData *CallTargetData,
     }
   }
 
-  CallTargetData->CallTargetNode =
-      makeFunctionPointer(CallTargetData->CallTargetSignature, Target);
+  CallTargetData->CallTargetNode = Target;
 }
 
 IRNode *

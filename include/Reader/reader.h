@@ -281,6 +281,7 @@ enum ReaderSpecialSymbolType {
   Reader_NotSpecialSymbol = 0, ///< Nothing special
   Reader_ThisPtr,              ///< Current this pointer for method
   Reader_UnmodifiedThisPtr,    ///< This pointer param passed to method
+  Reader_IndirectResult,       ///< Indirect result pointer
   Reader_VarArgsToken,         ///< Special param for varargs support
   Reader_InstParam,            ///< Special param for shared generics
   Reader_SecretParam,          ///< Special param for IL stubs
@@ -409,6 +410,8 @@ class ReaderCallSignature {
   friend class ReaderCallTargetData;
 
 protected:
+  bool HasThis; ///< Indicates whether or not this call has a \p this argument.
+
   CorInfoCallConv CallingConvention; ///< The calling convention for this
                                      ///< target.
 
@@ -419,15 +422,23 @@ protected:
                                           ///< arguments to this target.
 
 public:
+  /// \brief Check whether this method takes a this argument.
+  ///
+  /// \returns True if this method takes a this argument.
+  bool hasThis() const { return HasThis; }
+
   /// \brief Get the calling convention used for this target.
+  ///
   /// \returns The calling convention.
   CorInfoCallConv getCallingConvention() const { return CallingConvention; }
 
   /// \brief Get the type information for this target's return value.
+  ///
   /// \returns The type information.
   const CallArgType &getResultType() const { return ResultType; }
 
   /// \brief Get the type information for the formal arguments to this target.
+  ///
   /// \returns A vector containing the type information for each formal
   ///          argument.
   const std::vector<CallArgType> &getArgumentTypes() const {
@@ -445,17 +456,11 @@ class ReaderMethodSignature : public ReaderCallSignature {
   friend class ReaderBase;
 
 private:
-  bool HasThis;            ///< Does this method take a this argument?
   bool IsVarArg;           ///< Is this method variadic?
   bool HasTypeArg;         ///< Does this method accept instantiation info?
   bool HasSecretParameter; ///< Does this method take a secret parameter?
 
 public:
-  /// \brief Check whether this method takes a this argument.
-  ///
-  /// \returns True if this method takes a this argument.
-  bool hasThis() const { return HasThis; }
-
   /// \brief Check whether this method is variadic.
   ///
   /// \returns True if this method is variadic.
@@ -2278,19 +2283,20 @@ public:
       bool IsLoad,
       IRNode *Dst, // dst node if this is a load, otherwise nullptr
       IRNode *Obj, IRNode *Value, ReaderAlignType Alignment, bool IsVolatile);
-  void rdrCallWriteBarrierHelper(IRNode *Arg1, IRNode *Arg2,
-                                 ReaderAlignType Alignment, bool IsVolatile,
 
+  void rdrCallWriteBarrierHelper(IRNode *Dst, IRNode *Src,
+                                 ReaderAlignType Alignment, bool IsVolatile,
                                  CORINFO_RESOLVED_TOKEN *ResolvedToken,
                                  bool IsNonValueClass, bool IsValueIsPointer,
                                  bool IsFieldToken, bool IsUnchecked);
-  void rdrCallWriteBarrierHelperForReturnValue(IRNode *Arg1, IRNode *Arg2,
-                                               mdToken Token);
+
   IRNode *rdrGetFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                              CORINFO_FIELD_INFO *FieldInfo, IRNode *Obj,
                              bool BaseIsGCObj, bool MustNullCheck);
+
   IRNode *rdrGetStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                                    CORINFO_FIELD_INFO *FieldInfo);
+
   IRNode *rdrCallGetStaticBase(CORINFO_CLASS_HANDLE Class, mdToken ClassToken,
                                CorInfoHelpFunc HelperId, bool NoCtor,
                                bool CanMoveUp, IRNode *Dst);
@@ -2406,6 +2412,7 @@ public:
                           CORINFO_CLASS_HANDLE Class, bool IncludeNamespace,
                           bool FullInst, bool IncludeAssembly);
   GCLayout *getClassGCLayout(CORINFO_CLASS_HANDLE Class);
+  bool classHasGCPointers(CORINFO_CLASS_HANDLE Class);
   uint32_t getClassAttribs(CORINFO_CLASS_HANDLE Class);
   uint32_t getClassSize(CORINFO_CLASS_HANDLE Class);
   CorInfoType getClassType(CORINFO_CLASS_HANDLE Class);
@@ -3115,17 +3122,6 @@ public:
   virtual IRNode *makeStackTypeNode(IRNode *Node) = 0;
 
   virtual IRNode *makeDirectCallTargetNode(void *CodeAddress) = 0;
-
-  /// \brief Create a function pointer with the given signature from the given
-  ///        target address.
-  ///
-  /// \param Signature   The runtime signature of the function located at the
-  ///                    target address.
-  /// \param SourceNode  The \p IRNode corresponding to the target address.
-  ///
-  /// \returns An \p IRNode that representing the function pointer.
-  virtual IRNode *makeFunctionPointer(const ReaderCallSignature &Signature,
-                                      IRNode *SourceNode) = 0;
 
   // Called once region tree has been built.
   virtual void setEHInfo(EHRegion *EhRegionTree,
