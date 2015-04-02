@@ -105,14 +105,14 @@ the block.
 Second Pass
 -----------
 
-In the second pass the reader walks the flow graph in depth-first
-preorder (starting with the head block) and translates MSIL instructions
-for each block.  Walking the flow graph in this order allows the reader
-to identify unused blocks that are then removed.  No new control flow is
-introduced in this pass except for exception checks (null checks, bounds
-checks, etc.) and conditional helper calls.  Extra care should be taken with
-any changes to control flow graph in the second pass to make sure they don't
-interfere with dominance computation we do for class initialization.
+In the second pass the reader walks the flow graph in reverse postorder
+(starting with the head block) and translates MSIL instructions for each
+block.  Walking the flow graph in this order allows the reader to identify
+unused blocks that are then removed.  No new control flow is introduced in
+this pass except for exception checks (null checks, bounds checks, etc.)
+and conditional helper calls.  Extra care should be taken with any changes
+to control flow graph in the second pass to make sure they don't interfere
+with dominance computation we do for class initialization.
 
 ReaderBase::readBytesForFlowGraphNode\_Helper is the method that
 iterates over basic block bytes.
@@ -245,7 +245,17 @@ successors of the current block such that the current block is their
 only predecessor, the algorithm simply copies the predecessor’s stack.
 For successors of the current block such that the current block is not
 their only predecessor, the algorithm creates PHI instructions in the
-successor blocks and pushes them on the operand stacks.
+successor blocks and pushes them on the operand stacks. It's possible that
+the corresponding values from the operand stacks of the blocks
+predecessors are of different types. [ECMA-335](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-335.pdf)
+allows merging of the following values:
+* float value with a double value (the result is of type double);
+* nativeint value with an int32 value (the result is of type nativeint);
+* two gc pointer values (the result is of the closest common supertype).
+We need to process all of the block's predecessors in order to finalize the
+types of the block's PHI instructions. That is the reason we process the nodes
+in reverse post-order. Note that [ECMA-335](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-335.pdf)
+section III.1.7.5 prohibits non-empty operand stacks on backwards branches.
 
 Post-Pass
 ---------

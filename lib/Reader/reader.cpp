@@ -29,6 +29,7 @@
 #include "imeta.h"
 #include <climits>
 #include <algorithm>
+#include <list>
 
 extern int _cdecl dbPrint(const char *Form, ...);
 
@@ -2019,7 +2020,7 @@ void ReaderBase::fgRemoveUnusedBlocks(FlowGraphNode *FgHead,
       fgDeleteBlockAndNodes(Block);
     } else {
       ASSERTNR(fgNodeIsVisited(Block));
-      fgNodeSetVisited(Block, false);
+      fgNodeSetState(Block, Undiscovered);
     }
     Block = NextBlock;
   }
@@ -7845,8 +7846,8 @@ void ReaderBase::readBytesForFlowGraphNode(FlowGraphNode *Fg,
 }
 
 FlowGraphNodeWorkList *
-ReaderBase::fgAppendUnvisitedSuccToWorklist(FlowGraphNodeWorkList *Worklist,
-                                            FlowGraphNode *CurrBlock) {
+ReaderBase::fgPrependUndiscoveredSuccToWorklist(FlowGraphNodeWorkList *Worklist,
+                                                FlowGraphNode *CurrBlock) {
   FlowGraphNode *Successor;
 
   for (FlowGraphEdgeList *FgEdge = fgNodeGetSuccessorList(CurrBlock);
@@ -7854,7 +7855,7 @@ ReaderBase::fgAppendUnvisitedSuccToWorklist(FlowGraphNodeWorkList *Worklist,
 
     Successor = fgEdgeListGetSink(FgEdge);
 
-    if (!fgNodeIsVisited(Successor)) {
+    if (!fgNodeIsDiscovered(Successor)) {
 #ifndef NODEBUG
       // Ensure that no block is on the worklist twice.
       FlowGraphNodeWorkList *DbTemp;
@@ -7871,8 +7872,8 @@ ReaderBase::fgAppendUnvisitedSuccToWorklist(FlowGraphNodeWorkList *Worklist,
       FlowGraphNodeWorkList *NewBlockList =
           (FlowGraphNodeWorkList *)getTempMemory(sizeof(FlowGraphNodeWorkList));
 
-      // Mark the block as added to the list
-      fgNodeSetVisited(Successor, true);
+      // Mark the block as discovered
+      fgNodeSetState(Successor, Discovered);
 
       // Add the new blockList element to the head of the list.
       NewBlockList->Block = Successor;
@@ -7940,13 +7941,13 @@ void ReaderBase::msilToIR(void) {
   // Notify GenIR we've finsihed building the flow graph
   readerMiddlePass();
 
-  // Iterate over flow graph in depth-first preorder.
+  // Iterate over flow graph in reverse postorder.
   Worklist =
       (FlowGraphNodeWorkList *)getTempMemory(sizeof(FlowGraphNodeWorkList));
   Worklist->Block = FgHead;
   Worklist->Next = nullptr;
   Worklist->Parent = nullptr;
-  fgNodeSetVisited(FgHead, true);
+  fgNodeSetState(FgHead, Discovered);
 
 // fake up edges to unreachable code for peverify
 // (so we can report errors in unreachable code)
@@ -7982,13 +7983,35 @@ void ReaderBase::msilToIR(void) {
 
   bool IsImportOnly = (Flags & CORJIT_FLG_IMPORT_ONLY) != 0;
 
+  // First compute reverse postorder of the flow graph. Walk the graph in
+  // depth-first order and prepend the node to FlowGraphRPO after all of its
+  // children have been processed.
+  std::list<FlowGraphNode *> FlowGraphRPO;
+
   while (Worklist != nullptr) {
     FlowGraphNode *Block, *Parent;
 
-    // Pop top block
     Block = Worklist->Block;
-    Worklist = Worklist->Next;
-    readBytesForFlowGraphNode(Block, IsImportOnly);
+    if (fgNodeIsVisited(Block)) {
+      // Push Block to the RPO list and pop it from the worklist.
+      FlowGraphRPO.push_front(Block);
+      Worklist = Worklist->Next;
+      continue;
+    }
+
+    // Append undiscovered successors to worklist
+    Worklist = fgPrependUndiscoveredSuccToWorklist(Worklist, Block);
+    // Mark the block as visited. It will be prepended to FlowGraphRPO when
+    // it's again on top of the worklist.
+    fgNodeSetState(Block, Visited);
+  }
+
+  // Process the nodes in reverse postorder.
+  std::list<FlowGraphNode *>::iterator it = FlowGraphRPO.begin();
+
+  while (it != FlowGraphRPO.end()) {
+    FlowGraphNode *CurrentNode = *it;
+    readBytesForFlowGraphNode(CurrentNode, IsImportOnly);
 
 #ifndef CC_PEVERIFY
     if (IsImportOnly && !VerificationNeeded) {
@@ -8000,8 +8023,26 @@ void ReaderBase::msilToIR(void) {
     }
 #endif // !CC_PEVERIFY
 
-    // Append unvisited successors to worklist
-    Worklist = fgAppendUnvisitedSuccToWorklist(Worklist, Block);
+    // Check whether we created new FlowGraphNodes while processing CurrentNode.
+    for (FlowGraphEdgeList *FgEdge = fgNodeGetSuccessorList(CurrentNode);
+         FgEdge != nullptr; FgEdge = fgEdgeListGetNextSuccessor(FgEdge)) {
+
+      FlowGraphNode *Successor = fgEdgeListGetSink(FgEdge);
+      if (!fgNodeIsVisited(Successor)) {
+        // Check that CurrentNode is the only predecessor of Successor that
+        // propagates stack.
+        ASSERT(!fgNodeHasMultiplePredsPropagatingStack(Successor));
+        ASSERTNR(fgNodePropagatesOperandStack(CurrentNode));
+        // Insert Successor to the RPO list after CurrentNode.
+        ++it;
+        FlowGraphRPO.insert(it, Successor);
+        // Point the iterator back to CurrentNode.
+        --it;
+        --it;
+        fgNodeSetState(Successor, Visited);
+      }
+    }
+    ++it;
   }
 
   // global verification dataflow
@@ -8044,6 +8085,24 @@ void ReaderBase::msilToIR(void) {
   // Client post-pass
   //
   readerPostPass(IsImportOnly);
+}
+
+bool ReaderBase::fgNodeHasMultiplePredsPropagatingStack(FlowGraphNode *Node) {
+  int NumberOfPredecessorsPropagatingStack = 0;
+  for (FlowGraphEdgeList *NodePredecessorList =
+           fgNodeGetPredecessorListActual(Node);
+       NodePredecessorList != nullptr;
+       NodePredecessorList =
+           fgEdgeListGetNextPredecessorActual(NodePredecessorList)) {
+    FlowGraphNode *PredecessorNode = fgEdgeListGetSource(NodePredecessorList);
+    if (fgNodePropagatesOperandStack(PredecessorNode)) {
+      ++NumberOfPredecessorsPropagatingStack;
+      if (NumberOfPredecessorsPropagatingStack > 1) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 // Checks to see if a given offset is the start of an instruction. If
