@@ -5513,7 +5513,7 @@ ReaderBase::rdrGetCodePointerLookupCallTarget(CORINFO_CALL_INFO *CallInfo,
 }
 
 // This is basically a runtime look up for virtual calls. A JIT helper
-// call is invoked at runtime which finds the virutal call target. The
+// call is invoked at runtime which finds the virtual call target. The
 // return value of this helper call is then called indirectly.
 IRNode *ReaderBase::rdrGetIndirectVirtualCallTarget(
     ReaderCallTargetData *CallTargetData, IRNode **ThisPtr) {
@@ -5536,8 +5536,9 @@ IRNode *ReaderBase::rdrGetIndirectVirtualCallTarget(
   IRNode *ThisPtrCopy;
   dup(*ThisPtr, &ThisPtrCopy, ThisPtr);
 
-  // Get the address of the target function by calling helper
-  IRNode *Dst = makePtrNode();
+  // Get the address of the target function by calling helper.
+  // Type it as a native int, it will be recast later.
+  IRNode *Dst = loadConstantI(0);
   return callHelper(CORINFO_HELP_VIRTUAL_FUNC_PTR, Dst, ThisPtrCopy,
                     ClassHandle, MethodHandle);
 }
