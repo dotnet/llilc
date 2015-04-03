@@ -952,6 +952,7 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
                                       ArrayRank)] = ResultTy;
     } else {
       (*ClassTypeMap)[ClassHandle] = ResultTy;
+      (*ReverseClassTypeMap)[ResultTy] = ClassHandle;
     }
 
     // Fetch the name of this type for use in dumps.
@@ -1999,12 +2000,16 @@ ReaderStack *GenIR::fgNodeGetOperandStack(FlowGraphNode *Fg) {
   return FlowGraphInfoMap[Fg].TheReaderStack;
 }
 
-bool GenIR::fgNodeIsVisited(FlowGraphNode *Fg) {
-  return FlowGraphInfoMap[Fg].IsVisited;
+bool GenIR::fgNodeIsDiscovered(FlowGraphNode *Fg) {
+  return FlowGraphInfoMap[Fg].State != Undiscovered;
 }
 
-void GenIR::fgNodeSetVisited(FlowGraphNode *Fg, bool Visited) {
-  FlowGraphInfoMap[Fg].IsVisited = Visited;
+bool GenIR::fgNodeIsVisited(FlowGraphNode *Fg) {
+  return FlowGraphInfoMap[Fg].State == Visited;
+}
+
+void GenIR::fgNodeSetState(FlowGraphNode *Fg, FlowGraphNodeState State) {
+  FlowGraphInfoMap[Fg].State = State;
 }
 
 // Check whether this node propagates operand stack.
@@ -5192,26 +5197,7 @@ void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
   while (SuccessorList != nullptr) {
     FlowGraphNode *SuccessorBlock = fgEdgeListGetSink(SuccessorList);
 
-    int NumberOfPredecessorsPropagatingStack = 0;
-    for (FlowGraphEdgeList *SuccessorPredecessorList =
-             fgNodeGetPredecessorListActual(SuccessorBlock);
-         SuccessorPredecessorList != nullptr;
-         SuccessorPredecessorList =
-             fgEdgeListGetNextPredecessorActual(SuccessorPredecessorList)) {
-      FlowGraphNode *SuccessorPredecessorNode =
-          fgEdgeListGetSource(SuccessorPredecessorList);
-      if (fgNodePropagatesOperandStack(SuccessorPredecessorNode)) {
-        ++NumberOfPredecessorsPropagatingStack;
-        // We don't need the exact number of predecessors propagating operand
-        // stack; we are only interested if there are more than one.
-        if (NumberOfPredecessorsPropagatingStack > 1) {
-          break;
-        }
-      }
-    }
-
-    ASSERTNR(NumberOfPredecessorsPropagatingStack >= 1);
-    if (NumberOfPredecessorsPropagatingStack == 1) {
+    if (!fgNodeHasMultiplePredsPropagatingStack(SuccessorBlock)) {
       // The current node is the only relevant predecessor of this Successor.
       ASSERTNR(fgNodePropagatesOperandStack(CurrentBlock));
       // We need to create a stack for the Successor and copy the items from the
@@ -5250,10 +5236,7 @@ void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
           PHI = cast<PHINode>(CurrentInst);
           CurrentInst = CurrentInst->getNextNode();
         }
-        if (PHI->getType() != CurrentValue->getType()) {
-          throw NotYetImplementedException("PHI type mismatch");
-        }
-        PHI->addIncoming(CurrentValue, (BasicBlock *)CurrentBlock);
+        AddPHIOperand(PHI, CurrentValue, (BasicBlock *)CurrentBlock);
         if (CreatePHIs) {
           SuccessorStack->push((IRNode *)PHI);
         }
@@ -5267,6 +5250,109 @@ void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
   }
 
   clearStack();
+}
+
+void GenIR::AddPHIOperand(PHINode *PHI, Value *NewOperand,
+                          BasicBlock *NewBlock) {
+  Type *PHITy = PHI->getType();
+  Type *NewOperandTy = NewOperand->getType();
+
+  if (PHITy != NewOperandTy) {
+    Type *NewPHITy = getStackMergeType(PHITy, NewOperandTy);
+    IRBuilder<>::InsertPoint SavedInsertPoint = LLVMBuilder->saveIP();
+    if (NewPHITy != PHITy) {
+      // Change the type of the PHI instruction and the types of all of its
+      // operands.
+      PHI->mutateType(NewPHITy);
+      for (int i = 0; i < PHI->getNumOperands(); ++i) {
+        Value *Operand = PHI->getIncomingValue(i);
+        BasicBlock *OperandBlock = PHI->getIncomingBlock(i);
+        Operand = ChangePHIOperandType(Operand, OperandBlock, NewPHITy);
+        PHI->setIncomingValue(i, Operand);
+      }
+    }
+    if (NewPHITy != NewOperandTy) {
+      // Change the type of the new PHI operand.
+      NewOperand = ChangePHIOperandType(NewOperand, NewBlock, NewPHITy);
+    }
+    LLVMBuilder->restoreIP(SavedInsertPoint);
+  }
+
+  PHI->addIncoming(NewOperand, NewBlock);
+}
+
+Value *GenIR::ChangePHIOperandType(Value *Operand, BasicBlock *OperandBlock,
+                                   Type *NewTy) {
+  LLVMBuilder->SetInsertPoint(OperandBlock->getTerminator());
+  if (NewTy->isIntegerTy()) {
+    bool IsSigned = true;
+    return LLVMBuilder->CreateIntCast(Operand, NewTy, IsSigned);
+  } else if (NewTy->isFloatingPointTy()) {
+    return LLVMBuilder->CreateFPCast(Operand, NewTy);
+  } else {
+    return LLVMBuilder->CreatePointerCast(Operand, NewTy);
+  }
+}
+
+Type *GenIR::getStackMergeType(Type *Ty1, Type *Ty2) {
+  if (Ty1 == Ty2) {
+    return Ty1;
+  }
+
+  LLVMContext &LLVMContext = *this->JitContext->LLVMContext;
+
+  // If we have nativeint and int32 the result is nativeint.
+  Type *NativeIntTy = Type::getIntNTy(LLVMContext, TargetPointerSizeInBits);
+  Type *Int32Ty = Type::getInt32Ty(LLVMContext);
+  if (((Ty1 == NativeIntTy) && (Ty2 == Int32Ty)) ||
+      ((Ty2 == NativeIntTy) && (Ty1 == Int32Ty))) {
+    return NativeIntTy;
+  }
+
+  // If we have float and double the result is double.
+  Type *FloatTy = Type::getFloatTy(LLVMContext);
+  Type *DoubleTy = Type::getDoubleTy(LLVMContext);
+  if (((Ty1 == FloatTy) && (Ty2 == DoubleTy)) ||
+      ((Ty2 == FloatTy) && (Ty1 == DoubleTy))) {
+    return DoubleTy;
+  }
+
+  // If we have GC pointers, the result is the closest common supertype.
+  PointerType *PointerTy1 = dyn_cast<PointerType>(Ty1);
+  PointerType *PointerTy2 = dyn_cast<PointerType>(Ty2);
+  if ((PointerTy1 != nullptr) && (PointerTy2 != nullptr) &&
+      (isManagedPointerType(PointerTy1)) &&
+      (isManagedPointerType(PointerTy2))) {
+
+    CORINFO_CLASS_HANDLE Class1 = nullptr;
+    auto MapElement1 = ReverseClassTypeMap->find(PointerTy1);
+    if (MapElement1 != ReverseClassTypeMap->end()) {
+      Class1 = MapElement1->second;
+    }
+
+    CORINFO_CLASS_HANDLE Class2 = nullptr;
+    auto MapElement2 = ReverseClassTypeMap->find(PointerTy2);
+    if (MapElement2 != ReverseClassTypeMap->end()) {
+      Class2 = MapElement2->second;
+    }
+
+    CORINFO_CLASS_HANDLE MergedClass = nullptr;
+    if ((Class1 != nullptr) && (Class2 != nullptr)) {
+      MergedClass = JitContext->JitInfo->mergeClasses(Class1, Class2);
+      ASSERT(!JitContext->JitInfo->isValueClass(MergedClass));
+    } else {
+      // We can get here if one of the types is an array or a boxed type.
+      // We can't map arrays back to its handles because an array can be
+      // identified by one of two handles: the actual array handle and the
+      // handle for its MethodTable. mergeClasses will only work correctly with
+      // the former.
+      // Use System.Object as the result for these cases.
+      MergedClass = getBuiltinClass(CorInfoClassId::CLASSID_SYSTEM_OBJECT);
+    }
+    return getType(CORINFO_TYPE_CLASS, MergedClass);
+  }
+  ASSERT(UNREACHED);
+  return nullptr;
 }
 
 // Create a PHI node in a block that may or may not have a terminator.

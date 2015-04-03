@@ -246,6 +246,9 @@ struct CallArgType {
   CORINFO_CLASS_HANDLE Class;
 };
 
+/// \brief Enum describing state of a flow graph node.
+enum FlowGraphNodeState { Undiscovered = 0, Discovered = 1, Visited = 2 };
+
 /// Structure representing a linked list of flow graph nodes
 struct FlowGraphNodeList {
   FlowGraphNode *Block;    ///< Head node in the list
@@ -1680,19 +1683,19 @@ private:
   IRNode *fgAddCaseToCaseListHelper(IRNode *SwitchNode, IRNode *LabelNode,
                                     uint32_t Element);
 
-  /// \brief Add the unvisited successors of this block to the worklist.
+  /// \brief Add the undiscovered successors of this block to the worklist.
   ///
   /// This method scans all the successor blocks of \p CurrBlock, and
-  /// if there are any, creates new work list nodes for these successors,
-  /// marks them as visited, and (despite the method name) prepends them,
-  /// returning a new worklist head node.
+  /// if there are any undiscovered ones , creates new work list nodes for these
+  /// successors, marks them as discovered, and prepends them, returning a new
+  /// worklist head node.
   ///
-  /// \param Worklist       The current worklist of unvisited blocks.
-  /// \param CurrBlock      The block to examine for unvisited successors.
-  /// \returns              Updated list of unvisited blocks.
+  /// \param Worklist       The current worklist of blocks.
+  /// \param CurrBlock      The block to examine for undiscovered successors.
+  /// \returns              Updated worklist of blocks.
   FlowGraphNodeWorkList *
-  fgAppendUnvisitedSuccToWorklist(FlowGraphNodeWorkList *Worklist,
-                                  FlowGraphNode *CurrBlock);
+  fgPrependUndiscoveredSuccToWorklist(FlowGraphNodeWorkList *Worklist,
+                                      FlowGraphNode *CurrBlock);
 
   /// \brief Remove this flow graph node and associated client IRNodes.
   ///
@@ -2597,10 +2600,42 @@ public:
   virtual void fgNodeSetEndMSILOffset(FlowGraphNode *FgNode,
                                       uint32_t Offset) = 0;
 
+  /// \brief Checks whether this node has been discovered by an algorithm
+  /// traversing the flow graph.
+  ///
+  /// \param FgNode Flow graph node to check.
+  /// \returns true iff this node has been discovered.
+  virtual bool fgNodeIsDiscovered(FlowGraphNode *FgNode) = 0;
+
+  /// \brief Checks whether this node has been visited by an algorithm
+  /// traversing the flow graph.
+  ///
+  /// \param FgNode Flow graph node to check.
+  /// \returns true iff this node has been visited.
   virtual bool fgNodeIsVisited(FlowGraphNode *FgNode) = 0;
-  virtual void fgNodeSetVisited(FlowGraphNode *FgNode, bool IsVisited) = 0;
+
+  /// \brief Sets the traversing state of this node.
+  ///
+  /// \param FgNode Flow graph node to set the state.
+  /// \param State The new state.
+  virtual void fgNodeSetState(FlowGraphNode *FgNode,
+                              FlowGraphNodeState State) = 0;
   virtual void fgNodeSetOperandStack(FlowGraphNode *Fg, ReaderStack *Stack) = 0;
   virtual ReaderStack *fgNodeGetOperandStack(FlowGraphNode *Fg) = 0;
+
+  /// Check whether this node propagates operand stack.
+  ///
+  /// \param Fg Flow graph node.
+  /// \returns true iff this flow graph node propagates operand stack.
+  virtual bool fgNodePropagatesOperandStack(FlowGraphNode *Fg) = 0;
+
+  /// Check whether this node has multiple predecessors that propagate operand
+  /// stack.
+  ///
+  /// \param Node Flow graph node.
+  /// \returns true iff this flow graph node has multiple predecessors that
+  /// propagate operand stack.
+  bool fgNodeHasMultiplePredsPropagatingStack(FlowGraphNode *Node);
 
   virtual IRNode *
   getStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken) = 0;

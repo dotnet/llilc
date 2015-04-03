@@ -39,7 +39,7 @@ public:
   FlowGraphNodeInfo() {
     StartMSILOffset = 0;
     EndMSILOffset = 0;
-    IsVisited = false;
+    State = Undiscovered;
     TheReaderStack = nullptr;
     PropagatesOperandStack = true;
   };
@@ -53,8 +53,8 @@ public:
   uint32_t EndMSILOffset;
 
   /// In algorithms traversing the flow graph, used to track which basic blocks
-  /// have been visited.
-  bool IsVisited;
+  /// have been discovered or visited.
+  FlowGraphNodeState State;
 
   /// Used to track what is on the operand stack on entry to the basic block.
   ReaderStack *TheReaderStack;
@@ -240,6 +240,7 @@ class GenIR : public ReaderBase {
 public:
   GenIR(LLILCJitContext *JitContext,
         std::map<CORINFO_CLASS_HANDLE, llvm::Type *> *ClassTypeMap,
+        std::map<llvm::Type *, CORINFO_CLASS_HANDLE> *ReverseClassTypeMap,
         std::map<CORINFO_CLASS_HANDLE, llvm::Type *> *BoxedTypeMap,
         std::map<std::tuple<CorInfoType, CORINFO_CLASS_HANDLE, uint32_t>,
                  llvm::Type *> *ArrayTypeMap,
@@ -248,6 +249,7 @@ public:
                    JitContext->Flags) {
     this->JitContext = JitContext;
     this->ClassTypeMap = ClassTypeMap;
+    this->ReverseClassTypeMap = ReverseClassTypeMap;
     this->BoxedTypeMap = BoxedTypeMap;
     this->ArrayTypeMap = ArrayTypeMap;
     this->FieldIndexMap = FieldIndexMap;
@@ -319,8 +321,9 @@ public:
   uint32_t fgNodeGetEndMSILOffset(FlowGraphNode *Fg) override;
   void fgNodeSetEndMSILOffset(FlowGraphNode *FgNode, uint32_t Offset) override;
 
+  bool fgNodeIsDiscovered(FlowGraphNode *FgNode) override;
   bool fgNodeIsVisited(FlowGraphNode *FgNode) override;
-  void fgNodeSetVisited(FlowGraphNode *FgNode, bool Visited) override;
+  void fgNodeSetState(FlowGraphNode *FgNode, FlowGraphNodeState State) override;
   void fgNodeSetOperandStack(FlowGraphNode *Fg, ReaderStack *Stack) override;
   ReaderStack *fgNodeGetOperandStack(FlowGraphNode *Fg) override;
 
@@ -1063,6 +1066,16 @@ private:
   IRNode *convertFromStackType(IRNode *Node, CorInfoType CorType,
                                llvm::Type *ResultTy);
 
+  /// Get the type of the result of the merge of two values from operand stacks
+  /// of a block's predecessors. The allowed combinations are nativeint and
+  // int32 (resulting in nativeint), float and double (resulting in double),
+  /// and GC pointers (resulting in the closest common supertype).
+  ///
+  /// \param Ty1 Type of the first value.
+  /// \param Ty1 Type of the second value.
+  /// \returns The result type.
+  llvm::Type *getStackMergeType(llvm::Type *Ty1, llvm::Type *Ty2);
+
   bool objIsThis(IRNode *Obj);
 
   /// Create a new temporary variable that can be
@@ -1138,11 +1151,26 @@ private:
                                unsigned int NumReservedValues,
                                const llvm::Twine &NameStr);
 
-  /// Check whether this node propagates operand stack.
+  /// Add a new operand to the PHI instruction. The type of the new operand may
+  /// or may not equal to the type of the PHI instruction. Adjust the types as
+  /// necessary.
   ///
-  /// \param Fg Flow graph node.
-  /// \returns true iff this flow graph node propagates operand stack.
-  bool fgNodePropagatesOperandStack(FlowGraphNode *Fg);
+  /// \param PHI PHI instruction.
+  /// \param NewOperand Operand to add to the PHI instruction.
+  void AddPHIOperand(llvm::PHINode *PHI, llvm::Value *NewOperand,
+                     llvm::BasicBlock *NewBlock);
+
+  /// Change the type of a PHI instruction operand as a result of a stack merge.
+  ///
+  /// \param Operand Operand to change the type on.
+  /// \param OperandBlock Basic block corresponding to the operand.
+  /// \param NewTy New type of the operand.
+  /// \returns Operand with the changed type.
+  llvm::Value *ChangePHIOperandType(llvm::Value *Operand,
+                                    llvm::BasicBlock *OperandBlock,
+                                    llvm::Type *NewTy);
+
+  bool fgNodePropagatesOperandStack(FlowGraphNode *Fg) override;
 
   /// Set whether this node propagates operand stack.
   ///
@@ -1173,6 +1201,7 @@ private:
   // insertion point parameters).
   llvm::IRBuilder<> *LLVMBuilder;
   std::map<CORINFO_CLASS_HANDLE, llvm::Type *> *ClassTypeMap;
+  std::map<llvm::Type *, CORINFO_CLASS_HANDLE> *ReverseClassTypeMap;
   std::map<CORINFO_CLASS_HANDLE, llvm::Type *> *BoxedTypeMap;
   std::map<std::tuple<CorInfoType, CORINFO_CLASS_HANDLE, uint32_t>,
            llvm::Type *> *ArrayTypeMap;

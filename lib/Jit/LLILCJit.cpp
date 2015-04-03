@@ -289,6 +289,7 @@ bool LLILCJit::readMethod(LLILCJitContext *JitContext) {
 
   LLILCJitPerThreadState *PerThreadState = State.get();
   GenIR Reader(JitContext, &PerThreadState->ClassTypeMap,
+               &PerThreadState->ReverseClassTypeMap,
                &PerThreadState->BoxedTypeMap, &PerThreadState->ArrayTypeMap,
                &PerThreadState->FieldIndexMap);
 
