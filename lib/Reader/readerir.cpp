@@ -1839,6 +1839,10 @@ IRNode *GenIR::fgMakeThrow(IRNode *Insert) {
 
 IRNode *GenIR::fgMakeEndFinally(IRNode *InsertNode, EHRegion *FinallyRegion,
                                 uint32_t CurrentOffset) {
+  if (FinallyRegion == nullptr) {
+    throw NotYetImplementedException("endfinally null region");
+  }
+
   BasicBlock *Block = (BasicBlock *)InsertNode;
   SwitchInst *Switch = FinallyRegion->EndFinallySwitch;
   if (Switch == nullptr) {
@@ -2087,6 +2091,10 @@ IRNode *GenIR::loadLen(IRNode *Array, bool ArrayMayBeNull) {
 
   // TODO: verify this struct looks like an array... field index 1 is at
   // offset 4 with type i32; last "field" is zero sized array.
+  StructType *ArrayStructTy = cast<StructType>(ArrayTy);
+  if (ArrayStructTy->getNumElements() < 3) {
+    throw NotYetImplementedException("unexpected type to loadlen");
+  }
 
   if (ArrayMayBeNull && UseExplicitNullChecks) {
     // Check whether the array pointer, rather than the pointer to its
@@ -2124,7 +2132,11 @@ IRNode *GenIR::loadStringLen(IRNode *Address) {
   }
 
   // Verify this type is a string.
-  StringRef StringName = cast<StructType>(StringTy)->getStructName();
+  StructType *StringStructTy = cast<StructType>(StringTy);
+  if (StringStructTy->getStructNumElements() < 3) {
+    throw NotYetImplementedException("unexpected type in strlen");
+  }
+  StringRef StringName = StringStructTy->getStructName();
   ASSERT(StringName.startswith("System.String"));
 
   // Length field is at field index 1. Get its address.
@@ -3356,7 +3368,9 @@ IRNode *GenIR::genNewMDArrayCall(ReaderCallTargetData *CallTargetData,
   Type *ReturnType =
       getType(SigArgumentTypes[0].CorType, SigArgumentTypes[0].Class);
 
-  SmallVector<Type *, 16> ArgumentTypes(ArgCount + 2);
+  // The helper is variadic; we only want the types of the two fixed arguments
+  // but need the values of all the arguments.
+  Type *ArgumentTypes[2];
   SmallVector<Value *, 16> Arguments(ArgCount + 2);
   uint32_t Index = 0;
 

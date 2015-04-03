@@ -226,6 +226,10 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
     Result = CORJIT_OK;
   }
 
+  // Clean up a bit
+  delete Context.EE;
+  Context.EE = nullptr;
+
   return Result;
 }
 
