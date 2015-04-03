@@ -238,7 +238,7 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
       PMBuilder.SizeLevel = 0; // so that no additional phases are run.
       PMBuilder.populateModulePassManager(Passes);
 
-      Passes.add(createRewriteStatepointsForGCPass());
+      Passes.add(createRewriteStatepointsForGCPass(false));
       Passes.run(*Context.CurrentModule);
     }
 
@@ -274,25 +274,64 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
   return Result;
 }
 
-// This is the method invoked by the EE to Jit code.
+
+// Insert the special @gc.safepoint_poll function
+//
+// This helper is required by the LLVM GC-Statepoint insertion phase.
+// Statepoint lowering inlines the body of @gc.safepoint_poll function
+// at function entry and at loop-back-edges.
+//
+// The following code is inserted into the module:
+//
+// An empty dummy function
+// define void @__llilc_statepoint() {
+// entry:
+// ret void
+// }
+//
+// gc.safepoint_poll() function containing a call to an empty function
+// The call instruction causes a safepoint placement.
+// define void @gc.safepoint_poll()
+// {
+// entry:
+// call void @__llilc_statepoint()
+// ret void
+// }
+//
+// TODO: Rather than introduce a Call at every poll-site, use a 
+// CLR-specific sequence that checks if a GC is pending, and calls/branches
+// to a runtime helper when necessary.
+
 void LLILCJit::insertSafepointPoll(LLILCJitContext *Context) {
   Module *M = Context->CurrentModule;
 
   FunctionType *VoidFnType =
-      FunctionType::get(Type::getVoidTy(M->getContext()), false);
+    FunctionType::get(Type::getVoidTy(M->getContext()), false);
+
+  // Create a dummy empty function
+
+  Function *EmptyFunction = dyn_cast<Function>(
+    M->getOrInsertFunction("__llilcGcPoll", VoidFnType));
+
+  assert(EmptyFunction->empty());
+
+  llvm::BasicBlock *EmptyEntryBlock =
+    BasicBlock::Create(*Context->LLVMContext, "entry", EmptyFunction);
+  ReturnInst::Create(*Context->LLVMContext, EmptyEntryBlock);
+
+  // Create the gc.safepoint_poll() function containing a call to the 
+  // above dummy function, so that the call is converted into 
+  // a gc.statepoint()
 
   Function *SafepointPoll = dyn_cast<Function>(
       M->getOrInsertFunction("gc.safepoint_poll", VoidFnType));
 
   assert(SafepointPoll->empty());
 
-  Function *Safepoint =
-      dyn_cast<Function>(M->getOrInsertFunction("do_safepoint", VoidFnType));
-
   llvm::BasicBlock *EntryBlock =
       BasicBlock::Create(*Context->LLVMContext, "entry", SafepointPoll);
 
-  CallInst::Create(Safepoint, "", EntryBlock);
+  CallInst::Create(EmptyFunction, "", EntryBlock);
   ReturnInst::Create(*Context->LLVMContext, EntryBlock);
 }
 
