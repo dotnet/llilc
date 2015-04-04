@@ -373,9 +373,8 @@ public:
   };
   IRNode *loadStringLen(IRNode *Arg1) override;
 
-  IRNode *getTypeFromHandle(IRNode *Arg1) override {
-    throw NotYetImplementedException("getTypeFromHandle");
-  };
+  IRNode *getTypeFromHandle(IRNode *HandleNode) override;
+
   IRNode *getValueFromRuntimeHandle(IRNode *Arg1) override {
     throw NotYetImplementedException("getValueFromRuntimeHandle");
   };
@@ -388,10 +387,8 @@ public:
                      ReaderAlignType AlignmentPrefix) override {
     throw NotYetImplementedException("loadAndBox");
   };
-  IRNode *convertHandle(IRNode *GetTokenNumericNode, CorInfoHelpFunc HelperID,
-                        CORINFO_CLASS_HANDLE ClassHandle) override {
-    throw NotYetImplementedException("convertHandle");
-  };
+  IRNode *convertHandle(IRNode *RuntimeTokenNode, CorInfoHelpFunc HelperID,
+                        CORINFO_CLASS_HANDLE ClassHandle) override;
   void
   convertTypeHandleLookupHelperToIntrinsic(bool CanCompareToGetType) override {
     throw NotYetImplementedException(

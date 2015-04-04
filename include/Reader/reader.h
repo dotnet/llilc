@@ -2686,7 +2686,13 @@ public:
   IRNode *loadLenNonNull(IRNode *Array) { return loadLen(Array, false); }
   virtual bool arrayAddress(CORINFO_SIG_INFO *Aig, IRNode **RetVal) = 0;
   virtual IRNode *loadStringLen(IRNode *Arg1) = 0;
-  virtual IRNode *getTypeFromHandle(IRNode *Arg1) = 0;
+
+  /// \brief Get RuntimeType from RuntimeTypeHandle.
+  ///
+  /// \param HandleNode  RuntimeTypeHandle node.
+  ///
+  /// \returns RuntimeType node.
+  virtual IRNode *getTypeFromHandle(IRNode *HandleNode) = 0;
   virtual IRNode *getValueFromRuntimeHandle(IRNode *Arg1) = 0;
   virtual IRNode *arrayGetDimLength(IRNode *Arg1, IRNode *Arg2,
                                     CORINFO_CALL_INFO *CallInfo) = 0;
@@ -2703,7 +2709,16 @@ public:
   virtual IRNode *loadAndBox(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                              IRNode *Address,
                              ReaderAlignType AlignmentPrefix) = 0;
-  virtual IRNode *convertHandle(IRNode *GetTokenNumeric,
+
+  /// \brief Get a runtime handle corresponding to the token node.
+  ///
+  /// \param RuntimeTokenNode  Node corresponding to the runtime token lookup.
+  /// \param HelperID  Helper to call to get the runtime type, method, or field.
+  /// \param Class  Class handle that corresponds to RuntimeTypeHandle,
+  ///               RuntimeMethodHandle, or RuntimeFieldHandle.
+  ///
+  /// \returns Runtime handle corresponding to the token node..
+  virtual IRNode *convertHandle(IRNode *RuntimeTokenNode,
                                 CorInfoHelpFunc HelperID,
                                 CORINFO_CLASS_HANDLE Class) = 0;
   virtual void

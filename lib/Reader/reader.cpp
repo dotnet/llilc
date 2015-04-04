@@ -4643,10 +4643,9 @@ IRNode *ReaderBase::loadToken(CORINFO_RESOLVED_TOKEN *ResolvedToken) {
       genericTokenToNode(ResolvedToken, false, true, &CompileTimeHandleValue,
                          &RequiresRuntimeLookup);
   IRNode *LdtokenNode;
-  CORINFO_CLASS_HANDLE TokenType;
 
   CorInfoHelpFunc Helper = CORINFO_HELP_UNDEF;
-  TokenType = JitInfo->getTokenTypeAsHandle(ResolvedToken);
+  CORINFO_CLASS_HANDLE TokenType = JitInfo->getTokenTypeAsHandle(ResolvedToken);
 
   if (ResolvedToken->hMethod != nullptr) {
     Helper = CORINFO_HELP_METHODDESC_TO_STUBRUNTIMEMETHOD;
@@ -4658,18 +4657,24 @@ IRNode *ReaderBase::loadToken(CORINFO_RESOLVED_TOKEN *ResolvedToken) {
 
   LdtokenNode = convertHandle(GetTokenNumericNode, Helper, TokenType);
 
-  if (Helper == CORINFO_HELP_TYPEHANDLE_TO_RUNTIMETYPE) {
-    bool CanCompareToGetType = false;
+  // TODO: use intrinsic instead of a helper call for
+  // CORINFO_HELP_TYPEHANDLE_TO_RUNTIMETYPE.
 
-    if (!RequiresRuntimeLookup &&
-        canInlineTypeCheckWithObjectVTable(
-            (CORINFO_CLASS_HANDLE)CompileTimeHandleValue)) {
-      CanCompareToGetType = true;
+  bool ConvertToIntrinsic = false;
+
+  if (ConvertToIntrinsic) {
+    if (Helper == CORINFO_HELP_TYPEHANDLE_TO_RUNTIMETYPE) {
+      bool CanCompareToGetType = false;
+
+      if (!RequiresRuntimeLookup &&
+          canInlineTypeCheckWithObjectVTable(
+              (CORINFO_CLASS_HANDLE)CompileTimeHandleValue)) {
+        CanCompareToGetType = true;
+      }
+
+      convertTypeHandleLookupHelperToIntrinsic(CanCompareToGetType);
     }
-
-    convertTypeHandleLookupHelperToIntrinsic(CanCompareToGetType);
   }
-
   return LdtokenNode;
 }
 

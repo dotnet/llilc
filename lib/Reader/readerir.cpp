@@ -3331,6 +3331,45 @@ IRNode *GenIR::callRuntimeHandleHelper(CorInfoHelpFunc Helper, IRNode *Arg1,
   return (IRNode *)PHI;
 };
 
+IRNode *GenIR::convertHandle(IRNode *GetTokenNumericNode,
+                             CorInfoHelpFunc HelperID,
+                             CORINFO_CLASS_HANDLE ClassHandle) {
+  CorInfoType CorType = JitContext->JitInfo->asCorInfoType(ClassHandle);
+  Type *ResultType = getType(CorType, ClassHandle);
+
+  // We expect RuntimeTypeHandle, or RuntimeMethodHandle, or RuntimeFieldHandle,
+  // each of which has a single field.
+  assert(ResultType->getStructNumElements() == 1);
+
+  // Create a temporary for the result struct.
+  Value *Result = createTemporary(ResultType);
+  Value *FieldAddress = LLVMBuilder->CreateStructGEP(Result, 0);
+
+  // Get the value that should be assign to the struct's field, e.g., an
+  // instance of RuntimeType.
+  Type *HelperResultType = FieldAddress->getType()->getPointerElementType();
+  IRNode *HelperResult =
+      callHelperImpl(HelperID, HelperResultType, GetTokenNumericNode);
+
+  // Assign the field of the result struct.
+  LLVMBuilder->CreateStore(HelperResult, FieldAddress);
+
+  const bool IsVolatile = false;
+  return (IRNode *)LLVMBuilder->CreateLoad(Result, IsVolatile);
+};
+
+IRNode *GenIR::getTypeFromHandle(IRNode *Arg1) {
+  // We expect RuntimeTypeHandle that has a single field.
+  assert(Arg1->getType()->getStructNumElements() == 1);
+
+  // Get the address of the struct's only field.
+  Value *FieldAddress = LLVMBuilder->CreateStructGEP(addressOfValue(Arg1), 0);
+
+  // Return the field's value (of type RuntimeType).
+  const bool IsVolatile = false;
+  return (IRNode *)LLVMBuilder->CreateLoad(FieldAddress, IsVolatile);
+};
+
 bool GenIR::canMakeDirectCall(ReaderCallTargetData *CallTargetData) {
   return !CallTargetData->isJmp();
 }
