@@ -1185,6 +1185,7 @@ private:
 
 private:
   LLILCJitContext *JitContext;
+
   ReaderMethodSignature MethodSignature;
   llvm::Function *Function;
   // The LLVMBuilder has a notion of a current insertion point.  During the

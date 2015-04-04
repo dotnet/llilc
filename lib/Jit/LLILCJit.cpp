@@ -66,13 +66,7 @@ LLVMDumpLevel dumpLevel() {
 // When CLR config support is included, update it here.
 bool shouldUseConservativeGC() {
   const char *LevelCStr = getenv("COMPLUS_GCCONSERVATIVE");
-  if (LevelCStr) {
-    std::string Level = LevelCStr;
-    if (Level.compare("1") == 0) {
-      return true;
-    }
-  }
-  return false;
+  return (LevelCStr != nullptr) && (strcmp(LevelCStr, "1") == 0);
 }
 
 // The one and only Jit Object.
@@ -105,6 +99,8 @@ LLILCJit::LLILCJit() {
   InitializeNativeTargetAsmPrinter();
   InitializeNativeTargetAsmParser();
   llvm::linkStatepointExampleGC();
+
+  ShouldUseConservativeGC = shouldUseConservativeGC();
 }
 
 #ifdef LLVM_ON_WIN32
@@ -182,10 +178,9 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
   Context.LLVMContext = &PerThreadState->LLVMContext;
   std::unique_ptr<Module> M = Context.getModuleForMethod(MethodInfo);
   Context.CurrentModule = M.get();
-  Context.ShouldUseConservativeGC = shouldUseConservativeGC();
 
-  if (!Context.ShouldUseConservativeGC) {
-    insertSafepointPoll(&Context);
+  if (!ShouldUseConservativeGC) {
+    createSafepointPoll(&Context);
   }
 
   EngineBuilder Builder(std::move(M));
@@ -198,7 +193,7 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
   TargetOptions Options;
 
   // Statepoint GC does not support FastIsel yet.
-  Options.EnableFastISel = Context.ShouldUseConservativeGC;
+  Options.EnableFastISel = false;
 
   if ((Flags & CORJIT_FLG_DEBUG_CODE) == 0) {
     Builder.setOptLevel(CodeGenOpt::Level::Default);
@@ -227,7 +222,7 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
 
   if (HasMethod) {
 
-    if (!Context.ShouldUseConservativeGC) {
+    if (!ShouldUseConservativeGC) {
       // If using Precise GC, run the GC-Safepoint insertion
       // and lowering passes before generating code.
       legacy::PassManager Passes;
@@ -274,7 +269,6 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
   return Result;
 }
 
-
 // Insert the special @gc.safepoint_poll function
 //
 // This helper is required by the LLVM GC-Statepoint insertion phase.
@@ -283,55 +277,30 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
 //
 // The following code is inserted into the module:
 //
-// An empty dummy function
-// define void @__llilc_statepoint() {
-// entry:
-// ret void
-// }
-//
-// gc.safepoint_poll() function containing a call to an empty function
-// The call instruction causes a safepoint placement.
 // define void @gc.safepoint_poll()
 // {
 // entry:
-// call void @__llilc_statepoint()
 // ret void
 // }
 //
-// TODO: Rather than introduce a Call at every poll-site, use a 
-// CLR-specific sequence that checks if a GC is pending, and calls/branches
+// TODO: Replace this empty safepoint_poll function with a CLR-specific
+// sequence that checks if a GC is pending, and calls/branches
 // to a runtime helper when necessary.
 
-void LLILCJit::insertSafepointPoll(LLILCJitContext *Context) {
+void LLILCJit::createSafepointPoll(LLILCJitContext *Context) {
   Module *M = Context->CurrentModule;
 
   FunctionType *VoidFnType =
-    FunctionType::get(Type::getVoidTy(M->getContext()), false);
-
-  // Create a dummy empty function
-
-  Function *EmptyFunction = dyn_cast<Function>(
-    M->getOrInsertFunction("__llilcGcPoll", VoidFnType));
-
-  assert(EmptyFunction->empty());
-
-  llvm::BasicBlock *EmptyEntryBlock =
-    BasicBlock::Create(*Context->LLVMContext, "entry", EmptyFunction);
-  ReturnInst::Create(*Context->LLVMContext, EmptyEntryBlock);
-
-  // Create the gc.safepoint_poll() function containing a call to the 
-  // above dummy function, so that the call is converted into 
-  // a gc.statepoint()
+      FunctionType::get(Type::getVoidTy(M->getContext()), false);
 
   Function *SafepointPoll = dyn_cast<Function>(
       M->getOrInsertFunction("gc.safepoint_poll", VoidFnType));
 
   assert(SafepointPoll->empty());
 
-  llvm::BasicBlock *EntryBlock =
+  BasicBlock *EntryBlock =
       BasicBlock::Create(*Context->LLVMContext, "entry", SafepointPoll);
 
-  CallInst::Create(EmptyFunction, "", EntryBlock);
   ReturnInst::Create(*Context->LLVMContext, EntryBlock);
 }
 
