@@ -2109,7 +2109,7 @@ IRNode *GenIR::loadLen(IRNode *Array, bool ArrayMayBeNull) {
   }
 
   // Length field is at field index 1. Get its address.
-  Value *LengthFieldAddress = LLVMBuilder->CreateStructGEP(Array, 1);
+  Value *LengthFieldAddress = LLVMBuilder->CreateStructGEP(nullptr, Array, 1);
 
   // Load and return the length.
   // TODO: this load cannot be aliased.
@@ -2145,7 +2145,7 @@ IRNode *GenIR::loadStringLen(IRNode *Address) {
   ASSERT(StringName.startswith("System.String"));
 
   // Length field is at field index 1. Get its address.
-  Value *LengthFieldAddress = LLVMBuilder->CreateStructGEP(Address, 1);
+  Value *LengthFieldAddress = LLVMBuilder->CreateStructGEP(nullptr, Address, 1);
 
   // Load and return the length.
   // TODO: this load cannot be aliased.
@@ -2433,7 +2433,7 @@ IRNode *GenIR::simpleFieldAddress(IRNode *BaseAddress,
       const uint32_t FieldOffset = StructLayout->getElementOffset(FieldIndex);
       ASSERT(FieldOffset == FieldInfo->offset);
 
-      Address = LLVMBuilder->CreateStructGEP(BaseAddress, FieldIndex);
+      Address = LLVMBuilder->CreateStructGEP(nullptr, BaseAddress, FieldIndex);
     }
   }
 
@@ -3341,7 +3341,7 @@ IRNode *GenIR::convertHandle(IRNode *GetTokenNumericNode,
 
   // Create a temporary for the result struct.
   Value *Result = createTemporary(ResultType);
-  Value *FieldAddress = LLVMBuilder->CreateStructGEP(Result, 0);
+  Value *FieldAddress = LLVMBuilder->CreateStructGEP(nullptr, Result, 0);
 
   // Get the value that should be assign to the struct's field, e.g., an
   // instance of RuntimeType.
@@ -3361,7 +3361,8 @@ IRNode *GenIR::getTypeFromHandle(IRNode *Arg1) {
   assert(Arg1->getType()->getStructNumElements() == 1);
 
   // Get the address of the struct's only field.
-  Value *FieldAddress = LLVMBuilder->CreateStructGEP(addressOfValue(Arg1), 0);
+  Value *FieldAddress =
+      LLVMBuilder->CreateStructGEP(nullptr, addressOfValue(Arg1), 0);
 
   // Return the field's value (of type RuntimeType).
   const bool IsVolatile = false;
