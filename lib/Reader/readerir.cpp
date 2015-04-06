@@ -2834,12 +2834,10 @@ void GenIR::storePrimitiveType(IRNode *Value, IRNode *Addr,
 // Helper used to wrap CreateStore
 StoreInst *GenIR::makeStore(Value *ValueToStore, Value *Address,
                             bool IsVolatile, bool AddressMayBeNull) {
-  if (IsVolatile) {
-    // TODO: There is a JitConfig call back which can alter
-    // how volatile stores are handled.
-    throw NotYetImplementedException("Volatile store");
-  }
-
+  // TODO: There is a JitConfig setting JitLockWrite which can alter how
+  // volatile stores are handled for x86 architectures. When this is set we
+  // should emit a (lock) xchg intead of mov. RyuJit doesn't to look at this
+  // config setting, so we also ignore it.
   if (AddressMayBeNull) {
     if (UseExplicitNullChecks) {
       Address = genNullCheck((IRNode *)Address);
