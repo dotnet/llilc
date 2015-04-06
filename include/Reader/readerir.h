@@ -490,9 +490,7 @@ public:
   //
 
   // Base calls to alert client it needs a security check
-  void methodNeedsSecurityCheck() override {
-    throw NotYetImplementedException("methodNeedsSecurityCheck");
-  };
+  void methodNeedsSecurityCheck() override { NeedsSecurityObject = true; }
 
   // Base calls to alert client it needs keep generics context alive
   void
@@ -1183,6 +1181,12 @@ private:
   /// \returns true iff this node is constant null.
   bool isConstantNull(IRNode *Node);
 
+  /// \brief Insert IR to keep the generic context alive
+  void insertIRToKeepGenericContextAlive();
+
+  /// \brief Insert IR to setup the security object
+  void insertIRForSecurityObject();
+
 private:
   LLILCJitContext *JitContext;
   ReaderMethodSignature MethodSignature;
@@ -1212,6 +1216,7 @@ private:
   llvm::BasicBlock *UnreachableContinuationBlock;
   CorInfoType ReturnCorType;
   bool KeepGenericContextAlive;
+  bool NeedsSecurityObject;
   llvm::BasicBlock *EntryBlock;
   llvm::Instruction *TempInsertionPoint;
   uint32_t TargetPointerSizeInBits;
