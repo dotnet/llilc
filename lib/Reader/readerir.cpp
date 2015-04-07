@@ -302,6 +302,7 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   LocalVars.resize(NumLocals);
   LocalVarCorTypes.resize(NumLocals);
   KeepGenericContextAlive = false;
+  NeedsSecurityObject = false;
   UnreachableContinuationBlock = nullptr;
 
   initParamsAndAutos(MethodSignature);
@@ -385,57 +386,99 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
 void GenIR::readerMiddlePass() { return; }
 
 void GenIR::readerPostPass(bool IsImportOnly) {
-
-  // If the generic context must be kept live,
-  // insert the necessary code to make it so.
+  // If the generic context must be kept live, make it so.
   if (KeepGenericContextAlive) {
-    IRBuilder<>::InsertPoint SavedInsertPoint = LLVMBuilder->saveIP();
-    Value *ContextLocalAddress = nullptr;
-    CorInfoOptions Options = JitContext->MethodInfo->options;
-    Instruction *InsertPoint = TempInsertionPoint;
-    ASSERT(InsertPoint != nullptr);
+    insertIRToKeepGenericContextAlive();
+  }
 
-    if (Options & CORINFO_GENERICS_CTXT_FROM_THIS) {
-      // The this argument might be modified in the method body, so
-      // make a copy of the incoming this in a scratch local.
-      ASSERT(MethodSignature.hasThis());
-      Value *This = thisObj();
-      Instruction *ScratchLocalAlloca = createTemporary(This->getType());
-      // Put the store just after the newly added alloca.
-      LLVMBuilder->SetInsertPoint(ScratchLocalAlloca->getNextNode());
-      InsertPoint = makeStoreNonNull(This, ScratchLocalAlloca, false);
-      // The scratch local's address is the saved context address.
-      ContextLocalAddress = ScratchLocalAlloca;
-    } else {
-      // We know the type arg is unmodified so we can use its initial
-      // spilled value location for reporting.
-      ASSERT(Options & (CORINFO_GENERICS_CTXT_FROM_METHODDESC |
-                        CORINFO_GENERICS_CTXT_FROM_METHODTABLE));
-      ASSERT(MethodSignature.hasTypeArg());
-      ContextLocalAddress = Arguments[MethodSignature.getTypeArgIndex()];
-    }
-
-    // Indicate that the context location's address escapes by inserting a call
-    // to llvm.frameescape. Put that call just after the last alloca or the
-    // store to the scratch local.
-    LLVMBuilder->SetInsertPoint(InsertPoint->getNextNode());
-    Value *FrameEscape = Intrinsic::getDeclaration(JitContext->CurrentModule,
-                                                   Intrinsic::frameescape);
-    Value *Args[] = {ContextLocalAddress};
-    LLVMBuilder->CreateCall(FrameEscape, Args);
-    // Don't move TempInsertionPoint up since what we added was not an alloca
-    LLVMBuilder->restoreIP(SavedInsertPoint);
-
-    // This method now requires a frame pointer.
-    TargetMachine *TM = JitContext->EE->getTargetMachine();
-    TM->Options.NoFramePointerElim = true;
-
-    // TODO: we must convey the offset of this local to the runtime
-    // via the GC encoding.
+  // If the method needs a security object, set one up.
+  if (NeedsSecurityObject) {
+    insertIRForSecurityObject();
   }
 
   // Cleanup the memory we've been using.
   delete LLVMBuilder;
+}
+
+void GenIR::insertIRToKeepGenericContextAlive() {
+  IRBuilder<>::InsertPoint SavedInsertPoint = LLVMBuilder->saveIP();
+  Value *ContextLocalAddress = nullptr;
+  CorInfoOptions Options = JitContext->MethodInfo->options;
+  Instruction *InsertPoint = TempInsertionPoint;
+  ASSERT(InsertPoint != nullptr);
+
+  if (Options & CORINFO_GENERICS_CTXT_FROM_THIS) {
+    // The this argument might be modified in the method body, so
+    // make a copy of the incoming this in a scratch local.
+    ASSERT(MethodSignature.hasThis());
+    Value *This = thisObj();
+    Instruction *ScratchLocalAlloca = createTemporary(This->getType());
+    // Put the store just after the newly added alloca.
+    LLVMBuilder->SetInsertPoint(ScratchLocalAlloca->getNextNode());
+    InsertPoint = makeStoreNonNull(This, ScratchLocalAlloca, false);
+    // The scratch local's address is the saved context address.
+    ContextLocalAddress = ScratchLocalAlloca;
+  } else {
+    // We know the type arg is unmodified so we can use its initial
+    // spilled value location for reporting.
+    ASSERT(Options & (CORINFO_GENERICS_CTXT_FROM_METHODDESC |
+                      CORINFO_GENERICS_CTXT_FROM_METHODTABLE));
+    ASSERT(MethodSignature.hasTypeArg());
+    ContextLocalAddress = Arguments[MethodSignature.getTypeArgIndex()];
+  }
+
+  // Indicate that the context location's address escapes by inserting a call
+  // to llvm.frameescape. Put that call just after the last alloca or the
+  // store to the scratch local.
+  LLVMBuilder->SetInsertPoint(InsertPoint->getNextNode());
+  Value *FrameEscape = Intrinsic::getDeclaration(JitContext->CurrentModule,
+                                                 Intrinsic::frameescape);
+  Value *Args[] = {ContextLocalAddress};
+  LLVMBuilder->CreateCall(FrameEscape, Args);
+  // Don't move TempInsertionPoint up since what we added was not an alloca
+  LLVMBuilder->restoreIP(SavedInsertPoint);
+
+  // This method now requires a frame pointer.
+  TargetMachine *TM = JitContext->EE->getTargetMachine();
+  TM->Options.NoFramePointerElim = true;
+
+  // TODO: we must convey the offset of this local to the runtime
+  // via the GC encoding.
+}
+
+void GenIR::insertIRForSecurityObject() {
+  IRBuilder<>::InsertPoint SavedInsertPoint = LLVMBuilder->saveIP();
+  Type *Ty = getManagedPointerType(Type::getInt8Ty(*JitContext->LLVMContext));
+  Instruction *SecurityObjectAddress = createTemporary(Ty, "SecurityObject");
+
+  // Zero out the security object.
+  LLVMBuilder->SetInsertPoint(SecurityObjectAddress->getNextNode());
+  IRNode *NullValue = loadNull();
+  const bool IsVolatile = true;
+  makeStoreNonNull(NullValue, SecurityObjectAddress, IsVolatile);
+
+  // Call the helper, passing the method handle and the security object.
+  bool IsIndirect = false;
+  CORINFO_METHOD_HANDLE MethodHandle = getCurrentMethodHandle();
+  CORINFO_METHOD_HANDLE EmbeddedHandle =
+      embedMethodHandle(MethodHandle, &IsIndirect);
+  const bool IsRelocatable = true;
+  const bool IsCallTarget = false;
+  IRNode *MethodNode = handleToIRNode(getMethodDefFromMethod(MethodHandle),
+                                      MethodHandle, EmbeddedHandle, IsIndirect,
+                                      IsIndirect, IsRelocatable, IsCallTarget);
+  CorInfoHelpFunc SecurityHelper =
+      JitContext->JitInfo->getSecurityPrologHelper(MethodHandle);
+  callHelper(SecurityHelper, nullptr, MethodNode,
+             (IRNode *)SecurityObjectAddress);
+
+  LLVMBuilder->restoreIP(SavedInsertPoint);
+
+  // TODO: if passing the security object's address to the helper is not enough
+  // to keep it live throughout the method, find another way to ensure this.
+
+  // TODO: we must convey the offset of the security object to the runtime
+  // via the GC encoding.
 }
 
 #pragma endregion
