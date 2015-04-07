@@ -1112,9 +1112,9 @@ private:
   /// \param Array Array that the element belongs to.
   /// \param Index Index of the element.
   /// \param ElementTy Type of the element.
-  /// \returns Value representing the address of the element.
-  llvm::Value *genArrayElemAddress(IRNode *Array, IRNode *Index,
-                                   llvm::Type *ElementTy);
+  /// \returns Node representing the address of the element.
+  IRNode *genArrayElemAddress(IRNode *Array, IRNode *Index,
+                              llvm::Type *ElementTy);
 
   /// Convert ReaderAlignType to byte alighnment to byte alignment.
   ///
