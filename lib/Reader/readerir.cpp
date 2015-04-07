@@ -572,6 +572,10 @@ Function *GenIR::getFunction(const ReaderMethodSignature &Signature) {
     F->setCallingConv(CallingConv::CLR_SecretParameter);
   }
 
+  if (!LLILCJit::TheJit->ShouldUseConservativeGC) {
+    F->setGC("statepoint-example");
+  }
+
   return F;
 }
 
