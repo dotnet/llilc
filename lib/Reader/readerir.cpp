@@ -3056,10 +3056,10 @@ IRNode *GenIR::loadElem(ReaderBaseNS::LdElemOpcode Opcode,
   Type *ElementTy =
       getArrayElementType(Array, ResolvedToken, &CorType, &Alignment);
 
-  Value *ElementAddress = genArrayElemAddress(Array, Index, ElementTy);
+  IRNode *ElementAddress = genArrayElemAddress(Array, Index, ElementTy);
   bool IsVolatile = false;
-  return loadAtAddressNonNull((IRNode *)ElementAddress, ElementTy, CorType,
-                              ResolvedToken, Alignment, IsVolatile);
+  return loadAtAddressNonNull(ElementAddress, ElementTy, CorType, ResolvedToken,
+                              Alignment, IsVolatile);
 }
 
 IRNode *GenIR::loadElemA(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Index,
@@ -3080,7 +3080,7 @@ IRNode *GenIR::loadElemA(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Index,
                           Index, HandleNode);
   }
 
-  return (IRNode *)genArrayElemAddress(Array, Index, ElementTy);
+  return genArrayElemAddress(Array, Index, ElementTy);
 }
 
 void GenIR::storeElem(ReaderBaseNS::StElemOpcode Opcode,
@@ -3122,7 +3122,7 @@ void GenIR::storeElem(ReaderBaseNS::StElemOpcode Opcode,
     }
   }
 
-  Value *ElementAddress = genArrayElemAddress(Array, Index, ElementTy);
+  IRNode *ElementAddress = genArrayElemAddress(Array, Index, ElementTy);
   bool IsVolatile = false;
   bool IsField = false;
   ValueToStore = convertFromStackType(ValueToStore, CorType, ElementTy);
@@ -3131,11 +3131,11 @@ void GenIR::storeElem(ReaderBaseNS::StElemOpcode Opcode,
     bool IsValueIsPointer = false;
     bool IsUnchecked = false;
     // Store with a write barrier if the struct has gc pointers.
-    rdrCallWriteBarrierHelper(Array, ValueToStore, Alignment, IsVolatile,
-                              ResolvedToken, IsNonValueClass, IsValueIsPointer,
-                              IsField, IsUnchecked);
+    rdrCallWriteBarrierHelper(ElementAddress, ValueToStore, Alignment,
+                              IsVolatile, ResolvedToken, IsNonValueClass,
+                              IsValueIsPointer, IsField, IsUnchecked);
   } else {
-    storeAtAddressNonNull((IRNode *)ElementAddress, ValueToStore, ElementTy,
+    storeAtAddressNonNull(ElementAddress, ValueToStore, ElementTy,
                           ResolvedToken, Alignment, IsVolatile, IsField);
   }
 }
@@ -3170,8 +3170,8 @@ Type *GenIR::getArrayElementType(IRNode *Array,
 }
 
 // Get address of the array element.
-Value *GenIR::genArrayElemAddress(IRNode *Array, IRNode *Index,
-                                  Type *ElementTy) {
+IRNode *GenIR::genArrayElemAddress(IRNode *Array, IRNode *Index,
+                                   Type *ElementTy) {
   // This call will load the array length which will ensure that the array is
   // not null.
   Array = genBoundsCheck(Array, Index);
@@ -3194,7 +3194,7 @@ Value *GenIR::genArrayElemAddress(IRNode *Array, IRNode *Index,
       ConstantInt::get(Type::getInt32Ty(Context), RawArrayStructFieldIndex),
       Index};
 
-  return LLVMBuilder->CreateInBoundsGEP(Array, Indices);
+  return (IRNode *)LLVMBuilder->CreateInBoundsGEP(Array, Indices);
 }
 
 void GenIR::branch() {
@@ -3370,7 +3370,7 @@ IRNode *GenIR::callRuntimeHandleHelper(CorInfoHelpFunc Helper, IRNode *Arg1,
       mergeConditionalResults(CurrentBlock, NullCheckArg, SaveBlock, HelperCall,
                               CallBlock, "RuntimeHandle");
   return (IRNode *)PHI;
-};
+}
 
 IRNode *GenIR::convertHandle(IRNode *GetTokenNumericNode,
                              CorInfoHelpFunc HelperID,
@@ -3386,7 +3386,7 @@ IRNode *GenIR::convertHandle(IRNode *GetTokenNumericNode,
   Value *Result = createTemporary(ResultType);
   Value *FieldAddress = LLVMBuilder->CreateStructGEP(nullptr, Result, 0);
 
-  // Get the value that should be assign to the struct's field, e.g., an
+  // Get the value that should be assigned to the struct's field, e.g., an
   // instance of RuntimeType.
   Type *HelperResultType = FieldAddress->getType()->getPointerElementType();
   IRNode *HelperResult =
@@ -3397,7 +3397,7 @@ IRNode *GenIR::convertHandle(IRNode *GetTokenNumericNode,
 
   const bool IsVolatile = false;
   return (IRNode *)LLVMBuilder->CreateLoad(Result, IsVolatile);
-};
+}
 
 IRNode *GenIR::getTypeFromHandle(IRNode *Arg1) {
   // We expect RuntimeTypeHandle that has a single field.
@@ -3410,7 +3410,7 @@ IRNode *GenIR::getTypeFromHandle(IRNode *Arg1) {
   // Return the field's value (of type RuntimeType).
   const bool IsVolatile = false;
   return (IRNode *)LLVMBuilder->CreateLoad(FieldAddress, IsVolatile);
-};
+}
 
 bool GenIR::canMakeDirectCall(ReaderCallTargetData *CallTargetData) {
   return !CallTargetData->isJmp();
@@ -4330,7 +4330,7 @@ IRNode *GenIR::genNullCheck(IRNode *Node) {
   genConditionalThrow(Compare, HelperId, "ThrowNullRef");
 
   return Node;
-};
+}
 
 // Generate array bounds check.
 IRNode *GenIR::genBoundsCheck(IRNode *Array, IRNode *Index) {
@@ -4354,7 +4354,7 @@ IRNode *GenIR::genBoundsCheck(IRNode *Array, IRNode *Index) {
   genConditionalThrow(UpperBoundCompare, HelperId, "ThrowIndexOutOfRange");
 
   return Array;
-};
+}
 
 /// \brief Get the immediate target (innermost exited finally) for this leave.
 ///
