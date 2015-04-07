@@ -967,6 +967,15 @@ bool rgnGetIsLive(EHRegion *EhRegion);
 void rgnSetIsLive(EHRegion *EhRegion, bool Live);
 void rgnSetParent(EHRegion *EhRegion, EHRegion *Parent);
 EHRegion *rgnGetParent(EHRegion *EhRegion);
+/// \brief Determine if this region is lexically outside its parent in the tree
+///
+/// Handler regions are children of the \p try regions they protect in the
+/// region tree, but lexically they come after (not inside) the protected
+/// region.  This routine identifies them.
+///
+/// \param Region   The child region to check against its parent
+/// \returns True iff this region is lexically outside its parent
+bool rgnIsOutsideParent(EHRegion *Region);
 void rgnSetChildList(EHRegion *EhRegion, EHRegionList *Children);
 EHRegionList *rgnGetChildList(EHRegion *EhRegion);
 bool rgnGetHasNonLocalFlow(EHRegion *EhRegion);
@@ -1009,23 +1018,6 @@ EHRegion *getFinallyRegion(EHRegion *TryRegion);
 /// \name Client Flow Graph interface
 ///
 ///@{
-
-/// \brief Determine the EH region for this flow graph node
-///
-/// One the EH regions have been created, each flow graph node should have an
-/// innermost containing EH region. This method returns that region.
-///
-/// \param FgNode   The FlowGraphNode of interest.
-/// \returns        Associated EH region.
-EHRegion *fgNodeGetRegion(FlowGraphNode *FgNode);
-
-/// \brief Establish the EH region for this flow graph node
-///
-/// Sets up the association between a FlowGraphNode and and EH Region.
-///
-/// \param FgNode   The FlowGraphNode of interest.
-/// \param EhRegion The EH region to associate.
-void fgNodeSetRegion(FlowGraphNode *FgNode, EHRegion *EhRegion);
 
 /// \brief Obtain a list of the successor edges of a FlowGraphNode
 ///
@@ -1355,6 +1347,7 @@ public:
   // The reader's operand stack. Public because of inlining and debug prints
   ReaderStack *ReaderOperandStack;
 
+  // Used in both first and second pass
   // Public for debug printing
   EHRegion *CurrentRegion;
 
@@ -1983,6 +1976,19 @@ private:
 
   void rgnCreateRegionTree(void);
   void rgnPushRegionChild(EHRegion *Parent, EHRegion *Child);
+
+  /// \brief Process a region transition during 1st-pass flow-graph construction
+  ///
+  /// Computes the new current region and the MSIL offset where the next region
+  /// transition will occur (in a forward lexical walk).
+  ///
+  /// \param OldRegion   The region that was current before reaching \p Offset
+  /// \param Offset      The new MSIL offset reached in the lexical walk
+  /// \param NextOffset [out] The MSIL offset where the next region transition
+  ///                         after this one will occur (in the lexical walk)
+  /// \returns The innermost \p EHRegion enclosing \p Offset
+  EHRegion *fgSwitchRegion(EHRegion *OldRegion, uint32_t Offset,
+                           uint32_t *NextOffset);
 
 public:
   EHRegion *rgnMakeRegion(ReaderBaseNS::RegionKind Type, EHRegion *Parent,
@@ -2690,6 +2696,10 @@ public:
   virtual uint32_t fgNodeGetEndMSILOffset(FlowGraphNode *Fg) = 0;
   virtual void fgNodeSetEndMSILOffset(FlowGraphNode *FgNode,
                                       uint32_t Offset) = 0;
+  virtual EHRegion *fgNodeGetRegion(FlowGraphNode *FgNode) = 0;
+  virtual void fgNodeSetRegion(FlowGraphNode *FgNode, EHRegion *EhRegion) = 0;
+  virtual void fgNodeChangeRegion(FlowGraphNode *FgNode,
+                                  EHRegion *EhRegion) = 0;
 
   /// \brief Checks whether this node has been visited by an algorithm
   /// traversing the flow graph.
@@ -3068,11 +3078,9 @@ public:
   /// \param PreviousNode  The new node will follow \p PreviousNode in the
   ///                      node list if specified (may be nullptr, in which case
   ///                      the new node will simply be appended)
-  /// \param Region        EHRegion to apply to the new node
   /// \returns The new FlowGraphNode
   virtual FlowGraphNode *makeFlowGraphNode(uint32_t TargetOffset,
-                                           FlowGraphNode *PreviousNode,
-                                           EHRegion *Region) = 0;
+                                           FlowGraphNode *PreviousNode) = 0;
   virtual void markAsEHLabel(IRNode *LabelNode) = 0;
   virtual IRNode *makeTryEndNode(void) = 0;
   virtual IRNode *makeRegionStartNode(ReaderBaseNS::RegionKind RegionType) = 0;

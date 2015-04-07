@@ -180,6 +180,19 @@ void rgnSetParent(EHRegion *Region, EHRegion *Parent) {
 
 EHRegion *rgnGetParent(EHRegion *Region) { return Region->Parent; }
 
+bool rgnIsOutsideParent(EHRegion *Region) {
+  switch (Region->Kind) {
+  case ReaderBaseNS::RegionKind::RGN_Fault:
+  case ReaderBaseNS::RegionKind::RGN_Finally:
+  case ReaderBaseNS::RegionKind::RGN_Filter:
+  case ReaderBaseNS::RegionKind::RGN_MExcept:
+  case ReaderBaseNS::RegionKind::RGN_MCatch:
+    return true;
+  default:
+    return false;
+  }
+}
+
 void rgnSetChildList(EHRegion *Region, EHRegionList *Children) {
   Region->Children = Children;
 }
@@ -1879,11 +1892,18 @@ bool GenIR::isUnmanagedPointerType(llvm::Type *Type) {
 //
 //===----------------------------------------------------------------------===//
 
-EHRegion *fgNodeGetRegion(FlowGraphNode *Node) { return nullptr; }
+EHRegion *GenIR::fgNodeGetRegion(FlowGraphNode *Node) {
+  return FlowGraphInfoMap[Node].Region;
+}
 
-EHRegion *fgNodeGetRegion(llvm::Function *Function) { return nullptr; }
+void GenIR::fgNodeSetRegion(FlowGraphNode *Node, EHRegion *Region) {
+  assert(fgNodeGetRegion(Node) == nullptr && "unexpected region change");
+  FlowGraphInfoMap[Node].Region = Region;
+}
 
-void fgNodeSetRegion(FlowGraphNode *Node, EHRegion *Region) { return; }
+void GenIR::fgNodeChangeRegion(FlowGraphNode *Node, EHRegion *Region) {
+  FlowGraphInfoMap[Node].Region = Region;
+}
 
 FlowGraphNode *GenIR::fgGetHeadBlock() {
   return ((FlowGraphNode *)&Function->getEntryBlock());
@@ -1894,8 +1914,7 @@ FlowGraphNode *GenIR::fgGetTailBlock() {
 }
 
 FlowGraphNode *GenIR::makeFlowGraphNode(uint32_t TargetOffset,
-                                        FlowGraphNode *PreviousNode,
-                                        EHRegion *Region) {
+                                        FlowGraphNode *PreviousNode) {
   BasicBlock *NextBlock =
       (PreviousNode == nullptr ? nullptr : PreviousNode->getNextNode());
   FlowGraphNode *Node = (FlowGraphNode *)BasicBlock::Create(
@@ -2146,8 +2165,7 @@ FlowGraphNode *GenIR::fgNodeGetIDom(FlowGraphNode *FgNode) {
   //  is not a true dominance relationship. Progress to the next
   //  dominator in the chain until we reach a true dominating
   //  block or there are no more blocks.
-  while (nullptr != Idom &&
-         fgNodeGetRegion(Idom) != fgNodeGetRegion(Function) &&
+  while (nullptr != Idom && fgNodeGetRegion(Idom) != EhRegionTree &&
          fgNodeGetRegion(Idom) != fgNodeGetRegion(FgNode)) {
     Idom = getNextIDom(Idom);
   }
@@ -4857,6 +4875,9 @@ BasicBlock *GenIR::createPointBlock(uint32_t PointOffset,
   FlowGraphNode *PointFlowGraphNode = (FlowGraphNode *)Block;
   fgNodeSetStartMSILOffset(PointFlowGraphNode, PointOffset);
   fgNodeSetEndMSILOffset(PointFlowGraphNode, PointOffset);
+
+  // Make the point block part of the current region
+  fgNodeSetRegion(PointFlowGraphNode, CurrentRegion);
 
   // Point blocks don't need an operand stack: they don't have any MSIL and
   // any successor block will get the stack propagated from the other

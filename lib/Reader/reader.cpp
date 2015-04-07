@@ -1969,8 +1969,7 @@ FlowGraphNodeOffsetList *ReaderBase::fgAddNodeMSILOffset(
   NewElement->setOffset(TargetOffset);
 
   if (*Node == nullptr) {
-    *Node = makeFlowGraphNode(TargetOffset, nullptr,
-                              fgGetRegionFromMSILOffset(TargetOffset));
+    *Node = makeFlowGraphNode(TargetOffset, nullptr);
   }
   NewElement->setNode(*Node);
 
@@ -2255,7 +2254,7 @@ FlowGraphNode *ReaderBase::fgSplitBlock(FlowGraphNode *Block,
   fgNodeSetEndMSILOffset(NewBlock, OldEndOffset);
 
   // Set the EH region
-  fgNodeSetRegion(NewBlock, fgGetRegionFromMSILOffset(CurrentOffset));
+  fgNodeSetRegion(NewBlock, fgNodeGetRegion(Block));
 
   // Init operand stack to nullptr.
   fgNodeSetOperandStack(NewBlock, nullptr);
@@ -2458,18 +2457,6 @@ void ReaderBase::fgInsertEndRegionExceptionNode(
 
       // Insert the EH tuple
       insertEHAnnotationNode(InsertionPointNode, Node);
-
-      // TODO: Rewrite in an appropriate common way.
-
-      // Split the block if necessary.
-      if ((Offset != End) || fgIsExceptRegionStartNode(irNodeGetNext(Node))) {
-        Block = fgSplitBlock(Block, Offset, irNodeGetNext(Node));
-
-        // When two regions begin/End at the same offset this block my have the
-        // wrong region assigned to it. We have to correct for that by
-        // assigning the region of the Ending IR Node to this block.
-        fgNodeSetRegion(Block, irNodeGetRegion(irNodeGetNext(Node)));
-      }
 
       // No need to keep processing blocks!
       break;
@@ -2848,6 +2835,82 @@ EHRegion *getFinallyRegion(EHRegion *TryRegion) {
   return nullptr;
 }
 
+EHRegion *ReaderBase::fgSwitchRegion(EHRegion *OldRegion, uint32_t Offset,
+                                     uint32_t *NextOffset) {
+  uint32_t TransitionOffset = rgnGetEndMSILOffset(OldRegion);
+  if (Offset >= TransitionOffset) {
+    // Exit this region; recursively check parent (may need to exit to ancestor
+    // and/or may need to enter sibling/cousin).
+    assert(Offset == TransitionOffset && "over-stepped region end");
+    EHRegion *ParentRegion = rgnGetParent(OldRegion);
+    if (rgnIsOutsideParent(OldRegion)) {
+      // We want the enclosing ancestor, not the immediate parent.
+      ParentRegion = rgnGetParent(ParentRegion);
+    }
+    return fgSwitchRegion(ParentRegion, Offset, NextOffset);
+  }
+
+  for (EHRegionList *ChildNode = rgnGetChildList(OldRegion); ChildNode;
+       ChildNode = rgnListGetNext(ChildNode)) {
+    EHRegion *ChildRegion = rgnListGetRgn(ChildNode);
+
+    uint32_t ChildStartOffset = rgnGetStartMSILOffset(ChildRegion);
+    if (Offset < ChildStartOffset) {
+      // Haven't reached this child yet; consider it a potential next
+      // transition
+
+      if (ChildStartOffset < TransitionOffset) {
+        TransitionOffset = ChildStartOffset;
+      }
+
+      continue;
+    }
+
+    uint32_t ChildEndOffset = rgnGetEndMSILOffset(ChildRegion);
+
+    if (Offset < ChildEndOffset) {
+      // Enter this region; recursively check it (may need to enter descendant)
+      return fgSwitchRegion(ChildRegion, Offset, NextOffset);
+    }
+
+    if (rgnGetRegionType(ChildRegion) == ReaderBaseNS::RegionKind::RGN_Try) {
+      // A handler region for the try is a child of it in the tree but follows
+      // it in the IR, so we explicitly have to check for grandchildren in this
+      // case (the current offset falls in the grandchild's range but not the
+      // child's range).
+      for (EHRegionList *GrandchildNode = rgnGetChildList(ChildRegion);
+           GrandchildNode; GrandchildNode = rgnListGetNext(GrandchildNode)) {
+
+        EHRegion *Grandchild = rgnListGetRgn(GrandchildNode);
+
+        uint32_t GrandchildStartOffset = rgnGetStartMSILOffset(Grandchild);
+        if (Offset < GrandchildStartOffset) {
+          // Haven't reached this child yet; consider it a potential next
+          // transition
+
+          if (GrandchildStartOffset < TransitionOffset) {
+            TransitionOffset = GrandchildStartOffset;
+          }
+
+          continue;
+        }
+
+        uint32_t GrandchildEndOffset = rgnGetEndMSILOffset(Grandchild);
+
+        if (Offset < GrandchildEndOffset) {
+          // Enter this region; recursively check it (may need to enter
+          // descendant)
+          return fgSwitchRegion(Grandchild, Offset, NextOffset);
+        }
+      }
+    }
+  }
+
+  // Not exiting OldRegion or entering child; just report the transition offset
+  *NextOffset = TransitionOffset;
+  return OldRegion;
+}
+
 #define CHECKTARGET(TargetOffset, BufSize)                                     \
   {                                                                            \
     if (TargetOffset < 0 || TargetOffset >= BufSize)                           \
@@ -2866,6 +2929,7 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
   IRNode *BranchNode, *BlockNode, *TheExitLabel;
   FlowGraphNode *GraphNode;
   uint32_t CurrentOffset, BranchOffset, TargetOffset, NextOffset, NumCases;
+  uint32_t NextRegionTransitionOffset;
   EHRegion *FinallyRegion;
   bool IsShortInstr, IsConditional, IsTailCall, IsReadOnly, PreviousWasPrefix;
   bool LoadFtnToken;
@@ -2903,10 +2967,25 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
   LoadFtnToken = false;
   BranchesToVerify = nullptr;
   HasLocAlloc = false;
-  NextOffset = CurrentOffset = 0;
+  NextRegionTransitionOffset = NextOffset = CurrentOffset = 0;
 
   // Keep going through the buffer of bytecodes until we get to the end.
   while (CurrentOffset < ILInputSize) {
+    if ((EhRegionTree != nullptr) &&
+        (CurrentOffset == NextRegionTransitionOffset)) {
+
+      CurrentRegion = fgSwitchRegion(CurrentRegion, CurrentOffset,
+                                     &NextRegionTransitionOffset);
+
+      if (fgNodeGetStartMSILOffset(Block) != CurrentOffset) {
+        // Split the block so we can maintain a many-to-one block-to-region
+        // mapping.
+        Block = fgSplitBlock(Block, CurrentOffset, nullptr);
+      }
+      // Update the region on the current block (it will have inherited the
+      // previous block's region when it was split off from it).
+      fgNodeChangeRegion(Block, CurrentRegion);
+    }
     uint8_t *Operand;
     NextOffset = parseILOpcode(ILInput, CurrentOffset, ILInputSize, this,
                                &Opcode, &Operand);
@@ -3116,7 +3195,7 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
       verifyReturnFlow(CurrentOffset);
       fgNodeSetEndMSILOffset(Block, NextOffset);
       if (NextOffset < ILInputSize) {
-        Block = makeFlowGraphNode(NextOffset, Block, nullptr);
+        Block = makeFlowGraphNode(NextOffset, Block);
       }
       break;
 
@@ -3423,8 +3502,9 @@ FlowGraphNode *ReaderBase::fgBuildBasicBlocksFromBytes(uint8_t *Buffer,
   FlowGraphNode *Block;
 
   // Initialize head block to root region.
+  CurrentRegion = EhRegionTree;
   Block = fgGetHeadBlock();
-  fgNodeSetRegion(Block, fgGetRegionFromMSILOffset(0));
+  fgNodeSetRegion(Block, CurrentRegion);
 
   // PRE-PHASE
   Block = fgPrePhase(Block);
@@ -7757,7 +7837,8 @@ void ReaderBase::readBytesForFlowGraphNode(FlowGraphNode *Fg,
   beginFlowGraphNode(Fg, TheParam.CurrentOffset, IsVerifyOnly);
 
   if (!IsVerifyOnly) {
-    setupBlockForEH();
+    // TODO: Re-incorporate whatever portion of this is relevant for LLILC.
+    // setupBlockForEH();
   }
 
   PAL_TRY(ReadBytesForFlowGraphNodeHelperParam *, Param, &TheParam) {

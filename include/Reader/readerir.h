@@ -46,6 +46,7 @@ public:
   FlowGraphNodeInfo() {
     StartMSILOffset = 0;
     EndMSILOffset = 0;
+    Region = nullptr;
     IsVisited = false;
     TheReaderStack = nullptr;
     PropagatesOperandStack = true;
@@ -58,6 +59,9 @@ public:
   /// Byte offset that is just past the last MSIL instruction of the Basic
   /// Block.
   uint32_t EndMSILOffset;
+
+  /// Region containing this block
+  EHRegion *Region;
 
   /// In algorithms traversing the flow graph, used to track which basic blocks
   /// have been visited.
@@ -330,6 +334,9 @@ public:
   void fgNodeSetStartMSILOffset(FlowGraphNode *Fg, uint32_t Offset) override;
   uint32_t fgNodeGetEndMSILOffset(FlowGraphNode *Fg) override;
   void fgNodeSetEndMSILOffset(FlowGraphNode *FgNode, uint32_t Offset) override;
+  EHRegion *fgNodeGetRegion(FlowGraphNode *FgNode) override;
+  void fgNodeSetRegion(FlowGraphNode *FgNode, EHRegion *EhRegion) override;
+  void fgNodeChangeRegion(FlowGraphNode *FgNode, EHRegion *EhRegion) override;
 
   bool fgNodeIsVisited(FlowGraphNode *FgNode) override;
   void fgNodeSetVisited(FlowGraphNode *FgNode, bool Visited) override;
@@ -636,8 +643,7 @@ public:
     throw NotYetImplementedException("insertEHAnnotationNode");
   };
   FlowGraphNode *makeFlowGraphNode(uint32_t TargetOffset,
-                                   FlowGraphNode *PreviousNode,
-                                   EHRegion *Region) override;
+                                   FlowGraphNode *PreviousNode) override;
   void markAsEHLabel(IRNode *LabelNode) override {
     throw NotYetImplementedException("markAsEHLabel");
   };
