@@ -4280,10 +4280,8 @@ IRNode *GenIR::genNullCheck(IRNode *Node) {
   // Insert the compare against null.
   Value *Compare = LLVMBuilder->CreateIsNull(Node, "NullCheck");
 
-  // TODO: Use throw_null_ref helper once that's available from CoreCLR.  For
-  // now, use throw_div_zero since it has the right signature and we don't
-  // expect exceptions to work dynamically anyway.
-  CorInfoHelpFunc HelperId = CORINFO_HELP_THROWDIVZERO;
+  // Insert the conditional throw
+  CorInfoHelpFunc HelperId = CORINFO_HELP_THROWNULLREF;
   genConditionalThrow(Compare, HelperId, "ThrowNullRef");
 
   return Node;
