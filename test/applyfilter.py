@@ -40,15 +40,40 @@
 # Suppress type id difference from run to run, string name with double quotes
 #==========================================================================================
 
+import os
 import sys
 import re
+import argparse
 
-re_addr = re.compile(r'i64 \d{10}\d*')
-re_type = re.compile(r'%("?)(.*?)\.\d+\1 addrspace')
+# Apply filter on src and create a normalized file dest
+def ApplyOne(src, dest):
+    re_addr = re.compile(r'i64 \d{10}\d*')
+    re_type = re.compile(r'%("?)(.*?)\.\d+\1 addrspace')
+    with open(src, 'r') as ins, open(dest, 'w') as outs:
+        for line in ins:
+            line = re_addr.sub(r'i64 NORMALIZED_ADDRESS', line)
+            line = re_type.sub(r'%\1\2.NORMALIZED_TYPEID\1 addrspace', line)
+            outs.write(line)
 
-with open(sys.argv[1], 'r') as ins:
-  with open(sys.argv[2], 'w') as outs:
-    for line in ins:
-      line = re_addr.sub(r'i64 NORMALIZED_ADDRESS', line)
-      line = re_type.sub(r'%\1\2.NORMALIZED_TYPEID\1 addrspace', line)
-      outs.write(line)
+# Apply filter recursively on directory walk_dir
+def ApplyAll(walk_dir):
+    for root, subdirs, files in os.walk(walk_dir):
+        for filename in files:
+            if filename.endswith("error.txt"):
+                tmp_filename = filename + ".tmp"
+                file_path = os.path.join(root, filename)
+                tmp_file_path = os.path.join(root, tmp_filename)
+                ApplyOne(file_path, tmp_file_path)
+                os.remove(file_path)
+                os.rename(tmp_file_path, file_path)
+
+# The script itself applies the filter on one file
+if __name__=='__main__':
+    # Parse the command line
+    parser = argparse.ArgumentParser()
+    parser.add_argument("src", type=str, help="source result to apply filter on")
+    parser.add_argument("dest", type=str, help="destination result after applying filter")
+    args = parser.parse_args()
+
+    # Apply the filter on one file
+    ApplyOne(args.src, args.dest)
