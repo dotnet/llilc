@@ -22,6 +22,8 @@
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/ThreadLocal.h"
 
+class ABIInfo;
+
 /// \brief Enum for LLVM IR Dump Level
 enum LLVMDumpLevel {
   NODUMP,  ///< Do not dump any LLVM IR or summary.
@@ -86,6 +88,11 @@ public:
   llvm::Module *CurrentModule;    ///< Module holding LLVM IR.
   llvm::ExecutionEngine *EE;      ///< MCJIT execution engine.
   bool HasLoadedBitCode;          ///< Flag for side-loaded LLVM IR.
+  //@}
+
+  /// \name ABI information
+  //@{
+  ABIInfo *TheABIInfo; ///< Target ABI information.
   //@}
 
   /// \name Context management

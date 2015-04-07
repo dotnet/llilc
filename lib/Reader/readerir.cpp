@@ -257,6 +257,14 @@ void *GenIR::getProcMemory(size_t NumBytes) { return calloc(1, NumBytes); }
 //
 //===----------------------------------------------------------------------===//
 
+static Value *functionArgAt(Function *F, uint32_t I) {
+  Function::arg_iterator Args = F->arg_begin();
+  for (; I > 0; I--) {
+    ++Args;
+  }
+  return Args;
+}
+
 void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   Triple PT(Triple::normalize(LLVM_DEFAULT_TARGET_TRIPLE));
   if (PT.isArch16Bit()) {
@@ -274,11 +282,9 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   // Capture low-level info about the return type for use in Return.
   CORINFO_SIG_INFO Sig;
   getMethodSig(MethodHandle, &Sig);
-  ReturnCorType = Sig.retType;
 
-  if ((ReturnCorType == CORINFO_TYPE_REFANY) ||
-      (ReturnCorType == CORINFO_TYPE_VALUECLASS)) {
-    throw NotYetImplementedException("Return refany or value class");
+  if (Sig.retType == CORINFO_TYPE_REFANY) {
+    throw NotYetImplementedException("Return refany");
   }
 
   const uint32_t JitFlags = JitContext->Flags;
@@ -287,7 +293,10 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   uint32_t NumLocals = 0;
   initMethodInfo(HasSecretParameter, MethodSignature, NumLocals);
 
-  Function = getFunction(MethodSignature);
+  new (&ABIMethodSig)
+      ABIMethodSignature(MethodSignature, *this, *JitContext->TheABIInfo);
+  Function = ABIMethodSig.createFunction(*this, *JitContext->CurrentModule);
+
   EntryBlock = BasicBlock::Create(*JitContext->LLVMContext, "entry", Function);
 
   LLVMBuilder = new IRBuilder<>(*this->JitContext->LLVMContext);
@@ -307,6 +316,17 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
 
   initParamsAndAutos(MethodSignature);
 
+  // Add storage for the indirect result, if any.
+  const ABIArgInfo &ResultInfo = ABIMethodSig.getResultInfo();
+  bool HasIndirectResult = ResultInfo.getKind() == ABIArgInfo::Indirect;
+  int32_t IndirectResultIndex = -1;
+  if (HasIndirectResult) {
+    IndirectResultIndex = ResultInfo.getIndex();
+    IndirectResult = functionArgAt(Function, IndirectResultIndex);
+  } else {
+    IndirectResult = nullptr;
+  }
+
   // Take note of the current insertion point in case we need
   // to add more allocas later.
   if (EntryBlock->empty()) {
@@ -315,18 +335,27 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
     TempInsertionPoint = &EntryBlock->back();
   }
 
-  Function::arg_iterator Args = Function->arg_begin();
-  Value *CurrentArg;
-  int32_t I;
-  for (CurrentArg = Args++, I = 0; CurrentArg != Function->arg_end();
-       CurrentArg = Args++, I++) {
-    if (CurrentArg->getType()->isStructTy()) {
-      // LLVM doesn't use the same calling convention as other .Net jits
-      // for structs, and we want to be able to select jits per-method
-      // so we need them to interoperate.
-      throw NotYetImplementedException("Struct parameter");
+  // Home the method arguments.
+  Function::arg_iterator ArgI = Function->arg_begin();
+  Function::arg_iterator ArgE = Function->arg_end();
+  for (uint32_t I = 0, J = 0; ArgI != ArgE; ++I, ++ArgI) {
+    if (IndirectResultIndex >= 0 && I == IndirectResultIndex) {
+      // Indirect results aren't homed.
+      continue;
     }
-    makeStoreNonNull(CurrentArg, Arguments[I], false);
+
+    const ABIArgInfo ArgInfo = ABIMethodSig.getArgumentInfo(J);
+    if (ArgInfo.getKind() == ABIArgInfo::Indirect) {
+      // Indirect arguments aren't homed.
+    } else {
+      Value *Arg = ArgI;
+      Value *Home = Arguments[J];
+      Type *HomeType = Home->getType()->getPointerElementType();
+      Arg = ABISignature::coerce(*this, HomeType, Arg);
+      LLVMBuilder->CreateStore(Arg, Home);
+    }
+
+    J++;
   }
 
   // Check for special cases where the Jit needs to do extra work.
@@ -533,6 +562,14 @@ void GenIR::createSym(uint32_t Num, bool IsAuto, CorInfoType CorType,
   }
 
   Type *LLVMType = this->getType(CorType, Class);
+  if (!IsAuto) {
+    const ABIArgInfo &Info = ABIMethodSig.getArgumentInfo(Num);
+    if (Info.getKind() == ABIArgInfo::Indirect) {
+      Arguments[Num] = functionArgAt(Function, Info.getIndex());
+      return;
+    }
+  }
+
   AllocaInst *AllocaInst = LLVMBuilder->CreateAlloca(
       LLVMType, nullptr,
       UseNumber ? Twine(SymName) + Twine(Number) : Twine(SymName));
@@ -543,40 +580,6 @@ void GenIR::createSym(uint32_t Num, bool IsAuto, CorInfoType CorType,
   } else {
     Arguments[Num] = AllocaInst;
   }
-}
-
-Function *GenIR::getFunction(const ReaderMethodSignature &Signature) {
-  Module *M = JitContext->CurrentModule;
-  FunctionType *Ty = getFunctionType(Signature);
-  llvm::Function *F = Function::Create(Ty, Function::ExternalLinkage,
-                                       M->getModuleIdentifier(), M);
-
-  ASSERT(Ty == F->getFunctionType());
-
-  // Use "param" for these initial parameter values. Numbering here
-  // is strictly positional (hence includes implicit parameters).
-  uint32_t N = 0;
-  for (Function::arg_iterator Args = F->arg_begin(); Args != F->arg_end();
-       Args++) {
-    Args->setName(Twine("param") + Twine(N++));
-  }
-
-  if (Signature.hasSecretParameter()) {
-    ASSERT((--F->arg_end())->getType() ==
-           getType(CORINFO_TYPE_NATIVEINT, nullptr));
-
-    LLVMContext &Context = *JitContext->LLVMContext;
-    AttributeSet Attrs = F->getAttributes();
-    F->setAttributes(
-        Attrs.addAttribute(Context, F->arg_size(), "CLR_SecretParameter"));
-    F->setCallingConv(CallingConv::CLR_SecretParameter);
-  }
-
-  if (!LLILCJit::TheJit->ShouldUseConservativeGC) {
-    F->setGC("statepoint-example");
-  }
-
-  return F;
 }
 
 // Return true if this IR node is a reference to the
@@ -590,20 +593,25 @@ Instruction *GenIR::createTemporary(Type *Ty, const Twine &Name) {
   // the temporary uses can appear anywhere.
   IRBuilder<>::InsertPoint IP = LLVMBuilder->saveIP();
 
+  Instruction *InsertBefore = nullptr;
+  BasicBlock *Block = nullptr;
   if (TempInsertionPoint == nullptr) {
     // There are no local, param or temp allocas in the entry block, so set
     // the insertion point to the first point in the block.
-    auto FirstIP = EntryBlock->getFirstInsertionPt();
-    if (FirstIP == EntryBlock->end()) {
-      LLVMBuilder->SetInsertPoint(EntryBlock);
-    } else {
-      LLVMBuilder->SetInsertPoint(FirstIP);
-    }
+    InsertBefore = EntryBlock->getFirstInsertionPt();
+    Block = EntryBlock;
   } else {
     // There are local, param or temp allocas. TempInsertionPoint refers to
     // the last of them. Set the insertion point to the next instruction since
     // the builder will insert new instructions before the insertion point.
-    LLVMBuilder->SetInsertPoint(TempInsertionPoint->getNextNode());
+    InsertBefore = TempInsertionPoint->getNextNode();
+    Block = TempInsertionPoint->getParent();
+  }
+
+  if (InsertBefore == Block->end()) {
+    LLVMBuilder->SetInsertPoint(Block);
+  } else {
+    LLVMBuilder->SetInsertPoint(InsertBefore);
   }
 
   AllocaInst *AllocaInst = LLVMBuilder->CreateAlloca(Ty, nullptr, Name);
@@ -614,18 +622,11 @@ Instruction *GenIR::createTemporary(Type *Ty, const Twine &Name) {
   return AllocaInst;
 }
 
-static Value *functionArgAt(Function *F, uint32_t I) {
-  Function::arg_iterator Args = F->arg_begin();
-  for (; I > 0; I--) {
-    ++Args;
-  }
-  return Args;
-}
-
 // Get the value of the unmodified this object.
 IRNode *GenIR::thisObj() {
   ASSERT(MethodSignature.hasThis());
   uint32_t I = MethodSignature.getThisIndex();
+  I = ABIMethodSig.getArgumentInfo(I).getIndex();
   return (IRNode *)functionArgAt(Function, I);
   ;
 }
@@ -644,6 +645,7 @@ IRNode *GenIR::secretParam() {
 IRNode *GenIR::argList() {
   ASSERT(MethodSignature.isVarArg());
   uint32_t I = MethodSignature.getVarArgIndex();
+  I = ABIMethodSig.getArgumentInfo(I).getIndex();
   return (IRNode *)functionArgAt(Function, I);
 }
 
@@ -651,6 +653,7 @@ IRNode *GenIR::argList() {
 IRNode *GenIR::instParam() {
   ASSERT(MethodSignature.hasTypeArg());
   uint32_t I = MethodSignature.getTypeArgIndex();
+  I = ABIMethodSig.getArgumentInfo(I).getIndex();
   return (IRNode *)functionArgAt(Function, I);
 }
 
@@ -1447,22 +1450,6 @@ Type *GenIR::getBoxedType(CORINFO_CLASS_HANDLE Class) {
     (*BoxedTypeMap)[Class] = BoxedType;
   }
   return BoxedType;
-}
-
-FunctionType *GenIR::getFunctionType(const ReaderCallSignature &Signature) {
-  CallArgType ResultType = Signature.getResultType();
-  Type *LLVMResultType = this->getType(ResultType.CorType, ResultType.Class);
-
-  const std::vector<CallArgType> &ArgumentTypes = Signature.getArgumentTypes();
-  const uint32_t NumArguments = ArgumentTypes.size();
-  SmallVector<Type *, 16> LLVMArgumentTypes(NumArguments);
-  for (uint32_t I = 0; I < NumArguments; I++) {
-    const CallArgType &Arg = ArgumentTypes[I];
-    LLVMArgumentTypes[I] = this->getType(Arg.CorType, Arg.Class);
-  }
-
-  const bool IsVarArg = false;
-  return FunctionType::get(LLVMResultType, LLVMArgumentTypes, IsVarArg);
 }
 
 // Verify that this value's type is a valid type
@@ -2588,7 +2575,7 @@ IRNode *GenIR::loadLocal(uint32_t LocalOrdinal) {
 
 IRNode *GenIR::loadLocalAddress(uint32_t LocalOrdinal) {
   uint32_t LocalIndex = LocalOrdinal;
-  return loadManagedAddress(LocalVars, LocalIndex);
+  return loadManagedAddress(LocalVars[LocalIndex]);
 }
 
 void GenIR::storeArg(uint32_t ArgOrdinal, IRNode *Arg1,
@@ -2596,9 +2583,15 @@ void GenIR::storeArg(uint32_t ArgOrdinal, IRNode *Arg1,
   uint32_t ArgIndex = MethodSignature.getArgIndexForILArg(ArgOrdinal);
   Value *ArgAddress = Arguments[ArgIndex];
   Type *ArgTy = ArgAddress->getType()->getPointerElementType();
-  CorInfoType CorType = MethodSignature.getArgumentTypes()[ArgIndex].CorType;
-  IRNode *Value = convertFromStackType(Arg1, CorType, ArgTy);
-  makeStoreNonNull(Value, ArgAddress, false);
+  const CallArgType &CallArgType = MethodSignature.getArgumentTypes()[ArgIndex];
+  IRNode *Value = convertFromStackType(Arg1, CallArgType.CorType, ArgTy);
+
+  if (ABIMethodSig.getArgumentInfo(ArgIndex).getKind() ==
+      ABIArgInfo::Indirect) {
+    storeIndirectArg(CallArgType, Value, ArgAddress, IsVolatile);
+  } else {
+    makeStoreNonNull(Value, ArgAddress, IsVolatile);
+  }
 }
 
 IRNode *GenIR::loadArg(uint32_t ArgOrdinal, bool IsJmp) {
@@ -2607,21 +2600,20 @@ IRNode *GenIR::loadArg(uint32_t ArgOrdinal, bool IsJmp) {
   }
   uint32_t ArgIndex = MethodSignature.getArgIndexForILArg(ArgOrdinal);
   Value *ArgAddress = Arguments[ArgIndex];
-  IRNode *Value = (IRNode *)makeLoadNonNull(ArgAddress, false);
+  IRNode *ArgValue = (IRNode *)makeLoadNonNull(ArgAddress, false);
   CorInfoType CorType = MethodSignature.getArgumentTypes()[ArgIndex].CorType;
-  IRNode *Result = convertToStackType(Value, CorType);
+  IRNode *Result = convertToStackType(ArgValue, CorType);
   return Result;
 }
 
 IRNode *GenIR::loadArgAddress(uint32_t ArgOrdinal) {
   uint32_t ArgIndex = MethodSignature.getArgIndexForILArg(ArgOrdinal);
-  return loadManagedAddress(Arguments, ArgIndex);
+  const ABIArgInfo &Info = ABIMethodSig.getArgumentInfo(ArgIndex);
+  Value *Address = Arguments[ArgIndex];
+  return loadManagedAddress(Address);
 }
 
-IRNode *
-GenIR::loadManagedAddress(const std::vector<Value *> &UnmanagedAddresses,
-                          uint32_t Index) {
-  Value *UnmanagedAddress = UnmanagedAddresses[Index];
+IRNode *GenIR::loadManagedAddress(Value *UnmanagedAddress) {
   Type *ElementType = UnmanagedAddress->getType()->getPointerElementType();
   Type *ManagedPointerType = getManagedPointerType(ElementType);
 
@@ -2876,6 +2868,32 @@ void GenIR::storePrimitiveType(IRNode *Value, IRNode *Addr,
   StoreInst *StoreInst =
       makeStore(ValueToStore, TypedAddr, IsVolatile, AddressMayBeNull);
   StoreInst->setAlignment(Align);
+}
+
+void GenIR::storeIndirectArg(const CallArgType &ValueArgType,
+                             llvm::Value *ValueToStore, llvm::Value *Address,
+                             bool IsVolatile) {
+  assert(isManagedPointerType(cast<PointerType>(Address->getType())));
+  assert(ValueToStore->getType()->isStructTy());
+
+  CORINFO_CLASS_HANDLE ArgClass = ValueArgType.Class;
+
+  // The argument may be on the heap; call the write barrier helper if
+  // necessary.
+  CORINFO_RESOLVED_TOKEN ResolvedToken;
+  memset(&ResolvedToken, 0, sizeof(CORINFO_RESOLVED_TOKEN));
+  ResolvedToken.hClass = ArgClass;
+
+  const ReaderAlignType Alignment =
+      getMinimumClassAlignment(ArgClass, Reader_AlignNatural);
+  const bool IsNotValueClass = !JitContext->JitInfo->isValueClass(ArgClass);
+  const bool IsValueIsPointer = false;
+  const bool IsFieldToken = false;
+  const bool IsUnchecked = false;
+  rdrCallWriteBarrierHelper((IRNode *)Address, (IRNode *)ValueToStore,
+                            Alignment, IsVolatile, &ResolvedToken,
+                            IsNotValueClass, IsValueIsPointer, IsFieldToken,
+                            IsUnchecked);
 }
 
 // Helper used to wrap CreateStore
@@ -3430,16 +3448,6 @@ IRNode *GenIR::makeDirectCallTargetNode(void *CodeAddr) {
   return (IRNode *)CodeAddrValue;
 }
 
-IRNode *GenIR::makeFunctionPointer(const ReaderCallSignature &Signature,
-                                   IRNode *Source) {
-  Value *SourceValue = (Value *)Source;
-  assert(SourceValue->getType()->isIntegerTy(TargetPointerSizeInBits));
-  Type *FunctionTy = getFunctionType(Signature);
-  Type *FunctionPtrTy = getUnmanagedPointerType(FunctionTy);
-
-  return (IRNode *)LLVMBuilder->CreateIntToPtr(SourceValue, FunctionPtrTy);
-}
-
 // Helper callback used by rdrCall to emit a call to allocate a new MDArray.
 IRNode *GenIR::genNewMDArrayCall(ReaderCallTargetData *CallTargetData,
                                  std::vector<IRNode *> Args,
@@ -3621,9 +3629,8 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
   }
 
   CallArgType ResultType = Signature.getResultType();
-  if ((ResultType.CorType == CORINFO_TYPE_REFANY) ||
-      (ResultType.CorType == CORINFO_TYPE_VALUECLASS)) {
-    throw NotYetImplementedException("Return refany or value class");
+  if (ResultType.CorType == CORINFO_TYPE_REFANY) {
+    throw NotYetImplementedException("Return refany");
   }
 
   const std::vector<CallArgType> &ArgumentTypes = Signature.getArgumentTypes();
@@ -3636,10 +3643,6 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
     CorInfoType CorType = ArgumentTypes[I].CorType;
     CORINFO_CLASS_HANDLE Class = ArgumentTypes[I].Class;
     Type *ArgType = this->getType(CorType, Class);
-
-    if (ArgType->isStructTy()) {
-      throw NotYetImplementedException("Call has value type args");
-    }
 
     if (I == 0) {
       if (!CallTargetInfo->isNewObj() && CallTargetInfo->needsNullCheck()) {
@@ -3671,21 +3674,20 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
     }
   }
 
-  Call = (IRNode *)LLVMBuilder->CreateCall(TargetNode, Arguments);
+  ABICallSignature ABICallSig(Signature, *this, *JitContext->TheABIInfo);
+  Value *ResultNode = ABICallSig.emitCall(
+      *this, (Value *)TargetNode, Arguments,
+      (Value *)CallTargetInfo->getIndirectionCellNode(), (Value **)&Call);
 
   // Add VarArgs cookie to outgoing param list
   if (CC == CORINFO_CALLCONV_VARARG) {
     canonVarargsCall(Call, CallTargetInfo);
   }
 
-  if (IsStubCall) {
-    Call = canonStubCall(Call, CallTargetInfo);
-  }
-
   *CallNode = Call;
 
   if (ResultType.CorType != CORINFO_TYPE_VOID) {
-    return convertToStackType((IRNode *)Call, ResultType.CorType);
+    return convertToStackType((IRNode *)ResultNode, ResultType.CorType);
   } else {
     return nullptr;
   }
@@ -3722,53 +3724,6 @@ IRNode *GenIR::convertToBoxHelperArgumentType(IRNode *Opr,
   }
 
   return Opr;
-}
-
-IRNode *GenIR::canonStubCall(IRNode *CallNode,
-                             ReaderCallTargetData *CallTargetData) {
-  assert(CallTargetData != nullptr);
-  assert(CallTargetData->getCallInfo() != nullptr &&
-         CallTargetData->getCallInfo()->kind == CORINFO_VIRTUALCALL_STUB);
-
-  CallInst *Call = cast<CallInst>(CallNode);
-  BasicBlock *CurrentBlock = Call->getParent();
-
-  BasicBlock::iterator SavedInsertPoint = LLVMBuilder->GetInsertPoint();
-  LLVMBuilder->SetInsertPoint(Call);
-
-  Value *Target = Call->getCalledValue();
-  PointerType *TargetType = cast<PointerType>(Target->getType());
-  FunctionType *TargetFuncType =
-      cast<FunctionType>(TargetType->getElementType());
-
-  // Construct the new function type.
-  std::vector<Type *> ArgumentTypes;
-  std::vector<Value *> Arguments;
-
-  Value *IndirectionCell = (Value *)CallTargetData->getIndirectionCellNode();
-  assert(IndirectionCell != nullptr);
-
-  ArgumentTypes.push_back(IndirectionCell->getType());
-  Arguments.push_back(IndirectionCell);
-
-  for (unsigned I = 0; I < TargetFuncType->getNumParams(); ++I) {
-    ArgumentTypes.push_back(TargetFuncType->getParamType(I));
-    Arguments.push_back(Call->getArgOperand(I));
-  }
-
-  FunctionType *FuncType =
-      FunctionType::get(TargetFuncType->getReturnType(), ArgumentTypes,
-                        TargetFuncType->isVarArg());
-
-  Value *NewTarget =
-      LLVMBuilder->CreatePointerCast(Target, getUnmanagedPointerType(FuncType));
-
-  CallInst *NewCall = LLVMBuilder->CreateCall(NewTarget, Arguments);
-  NewCall->setCallingConv(CallingConv::CLR_VirtualDispatchStub);
-  Call->eraseFromParent();
-
-  LLVMBuilder->SetInsertPoint(CurrentBlock, SavedInsertPoint);
-  return (IRNode *)NewCall;
 }
 
 Value *GenIR::genConvertOverflowCheck(Value *Source, IntegerType *TargetTy,
@@ -4177,14 +4132,43 @@ bool GenIR::fgOptRecurse(mdToken Token) {
 }
 
 void GenIR::returnOpcode(IRNode *Opr, bool IsSynchronousMethod) {
-  Type *ReturnTy = Function->getReturnType();
-  if (Opr == nullptr) {
-    ASSERT(ReturnTy->isVoidTy());
+  const ABIArgInfo &ResultInfo = ABIMethodSig.getResultInfo();
+  const CallArgType &ResultArgType = MethodSignature.getResultType();
+  CorInfoType ResultCorType = ResultArgType.CorType;
+
+  if (ResultCorType == CORINFO_TYPE_VOID) {
+    assert(Opr == nullptr);
+    assert(ResultInfo.getType()->isVoidTy());
     LLVMBuilder->CreateRetVoid();
-  } else {
-    Value *ReturnValue = convertFromStackType(Opr, ReturnCorType, ReturnTy);
-    LLVMBuilder->CreateRet(ReturnValue);
+    return;
   }
+
+  assert(Opr != nullptr);
+
+  Value *ResultValue = nullptr;
+  if (ResultInfo.getKind() == ABIArgInfo::Indirect) {
+    Type *ResultTy = ResultInfo.getType();
+    ResultValue = convertFromStackType(Opr, ResultCorType, ResultTy);
+
+    CORINFO_CLASS_HANDLE ResultClass = ResultArgType.Class;
+    if (JitContext->JitInfo->isStructRequiringStackAllocRetBuf(ResultClass) ==
+        TRUE) {
+      // The return buffer must be on the stack; a simple store will suffice.
+      LLVMBuilder->CreateStore(ResultValue, IndirectResult);
+    } else {
+      const bool IsVolatile = false;
+      storeIndirectArg(ResultArgType, ResultValue, IndirectResult, IsVolatile);
+    }
+
+    ResultValue = IndirectResult;
+  } else {
+    Type *ResultTy = getType(ResultCorType, ResultArgType.Class);
+    ResultValue = convertFromStackType(Opr, ResultCorType, ResultTy);
+    ResultValue =
+        ABISignature::coerce(*this, ResultInfo.getType(), ResultValue);
+  }
+
+  LLVMBuilder->CreateRet(ResultValue);
 }
 
 bool GenIR::needSequencePoints() { return false; }

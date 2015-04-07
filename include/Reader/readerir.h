@@ -25,7 +25,13 @@
 #include "llvm/IR/Verifier.h"
 #include "llvm/IR/CFG.h"
 #include "reader.h"
+#include "abi.h"
+#include "abisignature.h"
 #include "LLILCJit.h"
+
+class ABISignature;
+class ABICallSignature;
+class ABIMethodSignature;
 
 class FlowGraphNode : public llvm::BasicBlock {};
 
@@ -236,6 +242,9 @@ public:
 };
 
 class GenIR : public ReaderBase {
+  friend class ABISignature;
+  friend class ABICallSignature;
+  friend class ABIMethodSignature;
 
 public:
   GenIR(LLILCJitContext *JitContext,
@@ -784,9 +793,6 @@ public:
 
   IRNode *makeDirectCallTargetNode(void *CodeAddr) override;
 
-  IRNode *makeFunctionPointer(const ReaderCallSignature &Signature,
-                              IRNode *SourceNode) override;
-
   // Called once region tree has been built.
   void setEHInfo(EHRegion *EhRegionTree, EHRegionList *EhRegionList) override;
 
@@ -837,10 +843,6 @@ public:
 private:
   llvm::Type *getType(CorInfoType Type, CORINFO_CLASS_HANDLE ClassHandle,
                       bool GetRefClassFields = true);
-
-  llvm::Function *getFunction(const ReaderMethodSignature &Signature);
-
-  llvm::FunctionType *getFunctionType(const ReaderCallSignature &Signature);
 
   llvm::Type *getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
                            bool GetRefClassFields);
@@ -1082,9 +1084,7 @@ private:
   llvm::Instruction *createTemporary(llvm::Type *Ty,
                                      const llvm::Twine &Name = "");
 
-  IRNode *
-  loadManagedAddress(const std::vector<llvm::Value *> &UnmanagedAddresses,
-                     uint32_t Index);
+  IRNode *loadManagedAddress(llvm::Value *UnmanagedAddresses);
 
   llvm::PointerType *getManagedPointerType(llvm::Type *ElementType);
 
@@ -1104,6 +1104,19 @@ private:
   llvm::LoadInst *makeLoadNonNull(llvm::Value *Address, bool IsVolatile) {
     return makeLoad(Address, IsVolatile, false);
   }
+
+  /// Store a value to an argument passed indirectly.
+  ///
+  /// The storage backing such arguments may be loacted on the heap; any stores
+  /// to these loactions may need write barriers.
+  ///
+  /// \param ValueArgType  EE type info for the value to store.
+  /// \param ValueToStore  The value to store.
+  /// \param Address       The address to store to (i.e. the indirect argument).
+  /// \param IsVolatile    Indicates whether or not the store is volatile.
+  void storeIndirectArg(const CallArgType &ValueArgType,
+                        llvm::Value *ValueToStore, llvm::Value *Address,
+                        bool IsVolatile);
 
   /// Get address of the array element.
   ///
@@ -1189,8 +1202,9 @@ private:
 
 private:
   LLILCJitContext *JitContext;
-
+  ABIInfo *TheABIInfo;
   ReaderMethodSignature MethodSignature;
+  ABIMethodSignature ABIMethodSig;
   llvm::Function *Function;
   // The LLVMBuilder has a notion of a current insertion point.  During the
   // first-pass flow-graph construction, each method sets the insertion point
@@ -1212,10 +1226,10 @@ private:
   std::vector<llvm::Value *> LocalVars;
   std::vector<CorInfoType> LocalVarCorTypes;
   std::vector<llvm::Value *> Arguments;
+  llvm::Value *IndirectResult;
   llvm::DenseMap<uint32_t, llvm::StoreInst *> ContinuationStoreMap;
   FlowGraphNode *FirstMSILBlock;
   llvm::BasicBlock *UnreachableContinuationBlock;
-  CorInfoType ReturnCorType;
   bool KeepGenericContextAlive;
   bool NeedsSecurityObject;
   llvm::BasicBlock *EntryBlock;

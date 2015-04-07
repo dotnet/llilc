@@ -10,6 +10,8 @@ if( WIN32 )
 endif()
 
 add_llilcjit_library(LLILCReader
+  abi.cpp
+  abisignature.cpp
   reader.cpp
   readerir.cpp
   GenIRStubs.cpp

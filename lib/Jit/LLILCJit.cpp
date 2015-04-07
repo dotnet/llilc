@@ -16,6 +16,7 @@
 #include "jitpch.h"
 #include "LLILCJit.h"
 #include "readerir.h"
+#include "abi.h"
 #include "EEMemoryManager.h"
 #include "llvm/CodeGen/GCs.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
@@ -178,6 +179,8 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
   Context.LLVMContext = &PerThreadState->LLVMContext;
   std::unique_ptr<Module> M = Context.getModuleForMethod(MethodInfo);
   Context.CurrentModule = M.get();
+  Context.CurrentModule->setTargetTriple(LLVM_DEFAULT_TARGET_TRIPLE);
+  Context.TheABIInfo = ABIInfo::get(*Context.CurrentModule);
 
   if (!ShouldUseConservativeGC) {
     createSafepointPoll(&Context);
@@ -265,6 +268,8 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
   // Clean up a bit
   delete Context.EE;
   Context.EE = nullptr;
+  delete Context.TheABIInfo;
+  Context.TheABIInfo = nullptr;
 
   return Result;
 }
