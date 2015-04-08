@@ -7852,8 +7852,8 @@ void ReaderBase::readBytesForFlowGraphNode(FlowGraphNode *Fg,
 }
 
 FlowGraphNodeWorkList *
-ReaderBase::fgPrependUndiscoveredSuccToWorklist(FlowGraphNodeWorkList *Worklist,
-                                                FlowGraphNode *CurrBlock) {
+ReaderBase::fgPrependUnvisitedSuccToWorklist(FlowGraphNodeWorkList *Worklist,
+                                             FlowGraphNode *CurrBlock) {
   FlowGraphNode *Successor;
 
   for (FlowGraphEdgeList *FgEdge = fgNodeGetSuccessorList(CurrBlock);
@@ -7861,25 +7861,9 @@ ReaderBase::fgPrependUndiscoveredSuccToWorklist(FlowGraphNodeWorkList *Worklist,
 
     Successor = fgEdgeListGetSink(FgEdge);
 
-    if (!fgNodeIsDiscovered(Successor)) {
-#ifndef NODEBUG
-      // Ensure that no block is on the worklist twice.
-      FlowGraphNodeWorkList *DbTemp;
-
-      DbTemp = Worklist;
-      while (DbTemp != nullptr) {
-        if (DbTemp->Block == Successor) {
-          ASSERTNR(UNREACHED);
-        }
-        DbTemp = DbTemp->Next;
-      }
-#endif
-
+    if (!fgNodeIsVisited(Successor)) {
       FlowGraphNodeWorkList *NewBlockList =
           (FlowGraphNodeWorkList *)getTempMemory(sizeof(FlowGraphNodeWorkList));
-
-      // Mark the block as discovered
-      fgNodeSetState(Successor, Discovered);
 
       // Add the new blockList element to the head of the list.
       NewBlockList->Block = Successor;
@@ -7953,7 +7937,7 @@ void ReaderBase::msilToIR(void) {
   Worklist->Block = FgHead;
   Worklist->Next = nullptr;
   Worklist->Parent = nullptr;
-  fgNodeSetState(FgHead, Discovered);
+  fgNodeSetState(FgHead, Undiscovered);
 
 // fake up edges to unreachable code for peverify
 // (so we can report errors in unreachable code)
@@ -7992,24 +7976,33 @@ void ReaderBase::msilToIR(void) {
   // First compute reverse postorder of the flow graph. Walk the graph in
   // depth-first order and prepend the node to FlowGraphRPO after all of its
   // children have been processed.
+  // A node is marked discovered when its children are added to Worklist;
+  // a node is marked visited when it's removed from the Worklist and added to
+  // FlowGraphRPO.
   std::list<FlowGraphNode *> FlowGraphRPO;
 
   while (Worklist != nullptr) {
     FlowGraphNode *Block, *Parent;
 
     Block = Worklist->Block;
-    if (fgNodeIsVisited(Block)) {
-      // Push Block to the RPO list and pop it from the worklist.
-      FlowGraphRPO.push_front(Block);
+    if (fgNodeIsDiscovered(Block)) {
+      // The node's children have been processed.
+      if (!fgNodeIsVisited(Block)) {
+        // The node hasn't been added to the RPO list. Push it now.
+        FlowGraphRPO.push_front(Block);
+        fgNodeSetState(Block, Visited);
+      }
+      // Pop the block from the worklist.
       Worklist = Worklist->Next;
       continue;
     }
 
-    // Append undiscovered successors to worklist
-    Worklist = fgPrependUndiscoveredSuccToWorklist(Worklist, Block);
-    // Mark the block as visited. It will be prepended to FlowGraphRPO when
+    // Append unvisited successors to worklist. Note that a node may appear
+    // multiple times on Worklist.
+    Worklist = fgPrependUnvisitedSuccToWorklist(Worklist, Block);
+    // Mark the block as discovered. It will be prepended to FlowGraphRPO when
     // it's again on top of the worklist.
-    fgNodeSetState(Block, Visited);
+    fgNodeSetState(Block, Discovered);
   }
 
   // Process the nodes in reverse postorder.
