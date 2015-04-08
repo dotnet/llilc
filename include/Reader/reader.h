@@ -1688,19 +1688,18 @@ private:
   IRNode *fgAddCaseToCaseListHelper(IRNode *SwitchNode, IRNode *LabelNode,
                                     uint32_t Element);
 
-  /// \brief Add the undiscovered successors of this block to the worklist.
+  /// \brief Add the unvisited successors of this block to the worklist.
   ///
   /// This method scans all the successor blocks of \p CurrBlock, and
-  /// if there are any undiscovered ones , creates new work list nodes for these
-  /// successors, marks them as discovered, and prepends them, returning a new
-  /// worklist head node.
+  /// if there are any unvisited ones, creates new work list nodes for these
+  /// successors and prepends them, returning a new worklist head node.
   ///
   /// \param Worklist       The current worklist of blocks.
-  /// \param CurrBlock      The block to examine for undiscovered successors.
+  /// \param CurrBlock      The block to examine for unvisited successors.
   /// \returns              Updated worklist of blocks.
   FlowGraphNodeWorkList *
-  fgPrependUndiscoveredSuccToWorklist(FlowGraphNodeWorkList *Worklist,
-                                      FlowGraphNode *CurrBlock);
+  fgPrependUnvisitedSuccToWorklist(FlowGraphNodeWorkList *Worklist,
+                                   FlowGraphNode *CurrBlock);
 
   /// \brief Remove this flow graph node and associated client IRNodes.
   ///
