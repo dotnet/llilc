@@ -1200,6 +1200,12 @@ private:
   /// \brief Insert IR to setup the security object
   void insertIRForSecurityObject();
 
+  /// \brief Create the @gc.safepoint_poll() method
+  /// Creates the @gc.safepoint_poll() method and insertes it into the
+  /// current module. This helper is required by the LLVM GC-Statepoint
+  /// insertion phase.
+  void createSafepointPoll();
+
 private:
   LLILCJitContext *JitContext;
   ABIInfo *TheABIInfo;

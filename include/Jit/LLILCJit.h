@@ -237,13 +237,6 @@ private:
   /// \returns \p true if GC info was successfully reported.
   bool outputGCInfo(LLILCJitContext *JitContext);
 
-  /// Create the @gc.safepoint_poll() method
-  /// Creates the @gc.safepoint_poll() method and insertes it into the
-  /// current module. This helper is required by the LLVM GC-Statepoint
-  /// insertion phase.
-  /// \param Context JitContext Context record for the current jit request.
-  void createSafepointPoll(LLILCJitContext *Context);
-
 public:
   /// A pointer to the singleton jit instance.
   static LLILCJit *TheJit;
