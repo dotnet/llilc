@@ -21,6 +21,13 @@
 # to
 # %3 = icmp eq i64 NORMALIZED_ADDRESS, %2
 #
+# Example 3:
+#
+# Normalize
+# %12 = phi i64 [ 709816494128, %3 ], [ 709816494128, %7 ]
+# to
+# %12 = phi i64 [ NORMALIZED_ADDRESS, %3 ], [ NORMALIZED_ADDRESS, %7 ]
+#
 # Suppress type id difference from run to run
 #
 # Example 1:
@@ -49,10 +56,12 @@ import argparse
 def ApplyOne(src, dest):
     re_addr = re.compile(r'i64 \d{10}\d*')
     re_type = re.compile(r'%("?)(.*?)\.\d+\1 addrspace')
+    re_phi = re.compile(r'\[ \d{10}\d*, %')
     with open(src, 'r') as ins, open(dest, 'w') as outs:
         for line in ins:
             line = re_addr.sub(r'i64 NORMALIZED_ADDRESS', line)
             line = re_type.sub(r'%\1\2.NORMALIZED_TYPEID\1 addrspace', line)
+            line = re_phi.sub(r'[ NORMALIZED_ADDRESS, %', line)
             outs.write(line)
 
 # Apply filter recursively on directory walk_dir
