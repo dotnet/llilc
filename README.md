@@ -27,7 +27,7 @@ Supported Platforms
 -------------------
 
 Our initial supported platform is [Windows](https://github.com/dotnet/llilc/wiki/Getting-Started-For-Windows),
-but [Linux and Mac OSX](https://github.com/dotnet/llilc/wiki/Getting-Started-For-Linux-and-OS-X)
+but [Linux and Mac OS X](https://github.com/dotnet/llilc/wiki/Getting-Started-For-Linux-and-OS-X)
 support are under development.
 
 
