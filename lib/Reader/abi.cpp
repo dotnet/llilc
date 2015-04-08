@@ -156,7 +156,7 @@ ABIInfo *ABIInfo::get(Module &M) {
     return new X86_64ABIInfo(TargetTriple, M.getDataLayout());
 
   default:
-    assert(false && "Unsupported architecture");
+    llvm_unreachable("Unsupported architecture");
   }
 }
 
