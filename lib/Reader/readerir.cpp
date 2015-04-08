@@ -269,6 +269,10 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
     ASSERTNR(UNREACHED);
   }
 
+  if (!LLILCJit::TheJit->ShouldUseConservativeGC) {
+    createSafepointPoll();
+  }
+
   CORINFO_METHOD_HANDLE MethodHandle = JitContext->MethodInfo->ftn;
 
   // Capture low-level info about the return type for use in Return.
@@ -660,6 +664,47 @@ uint32_t GenIR::convertReaderAlignment(ReaderAlignType ReaderAlignment) {
                         ? TargetPointerSizeInBits / 8
                         : ReaderAlignment;
   return Result;
+}
+
+// Create the special @gc.safepoint_poll function
+//
+// This helper is required by the LLVM GC-Statepoint insertion phase.
+// Statepoint lowering inlines the body of @gc.safepoint_poll function
+// at function entry and at loop-back-edges.
+//
+// The current strategy is to use an unconditional call to the GCPoll helper.
+// TODO: Inline calls to GCPoll helper when CORJIT_FLG_GCPOLL_INLINE is set.
+//
+// The following code is inserted into the module:
+//
+// define void @gc.safepoint_poll()
+// {
+// entry:
+//   call void inttoptr(i64 <JIT_GCPoll> to void()*)()
+//   ret void
+// }
+
+void GenIR::createSafepointPoll() {
+  Module *M = JitContext->CurrentModule;
+  llvm::LLVMContext *LLVMContext = JitContext->LLVMContext;
+
+  Type *VoidType = Type::getVoidTy(*LLVMContext);
+  FunctionType *VoidFnType = FunctionType::get(VoidType, false);
+
+  llvm::Function *SafepointPoll = dyn_cast<llvm::Function>(
+      M->getOrInsertFunction("gc.safepoint_poll", VoidFnType));
+
+  assert(SafepointPoll->empty());
+
+  BasicBlock *EntryBlock =
+      BasicBlock::Create(*LLVMContext, "entry", SafepointPoll);
+
+  IRNode *Address = getHelperCallAddress(CORINFO_HELP_POLL_GC);
+  Value *Target =
+      LLVMBuilder->CreateIntToPtr(Address, getUnmanagedPointerType(VoidFnType));
+
+  CallInst::Create(Target, "", EntryBlock);
+  ReturnInst::Create(*LLVMContext, EntryBlock);
 }
 
 #pragma endregion

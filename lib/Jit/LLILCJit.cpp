@@ -179,10 +179,6 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
   std::unique_ptr<Module> M = Context.getModuleForMethod(MethodInfo);
   Context.CurrentModule = M.get();
 
-  if (!ShouldUseConservativeGC) {
-    createSafepointPoll(&Context);
-  }
-
   EngineBuilder Builder(std::move(M));
   std::string ErrStr;
   Builder.setErrorStr(&ErrStr);
@@ -267,41 +263,6 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
   Context.EE = nullptr;
 
   return Result;
-}
-
-// Insert the special @gc.safepoint_poll function
-//
-// This helper is required by the LLVM GC-Statepoint insertion phase.
-// Statepoint lowering inlines the body of @gc.safepoint_poll function
-// at function entry and at loop-back-edges.
-//
-// The following code is inserted into the module:
-//
-// define void @gc.safepoint_poll()
-// {
-// entry:
-// ret void
-// }
-//
-// TODO: Replace this empty safepoint_poll function with a CLR-specific
-// sequence that checks if a GC is pending, and calls/branches
-// to a runtime helper when necessary.
-
-void LLILCJit::createSafepointPoll(LLILCJitContext *Context) {
-  Module *M = Context->CurrentModule;
-
-  FunctionType *VoidFnType =
-      FunctionType::get(Type::getVoidTy(M->getContext()), false);
-
-  Function *SafepointPoll = dyn_cast<Function>(
-      M->getOrInsertFunction("gc.safepoint_poll", VoidFnType));
-
-  assert(SafepointPoll->empty());
-
-  BasicBlock *EntryBlock =
-      BasicBlock::Create(*Context->LLVMContext, "entry", SafepointPoll);
-
-  ReturnInst::Create(*Context->LLVMContext, EntryBlock);
 }
 
 std::unique_ptr<Module>
