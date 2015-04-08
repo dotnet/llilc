@@ -68,13 +68,14 @@ public:
   /// \param Reader           The \p GenIR instance that will be used to emit
   ///                         IR.
   /// \param Target           The call target.
+  /// \param MayThrow         True iff the callee may raise an exception
   /// \param Args             The arguments to the call.
   /// \param IndirectionCell  The indirection cell argument for the call, if
   ///                         any.
   /// \param CallNode [out]   The call instruction.
   ///
   /// \returns The result of the call to the target.
-  llvm::Value *emitCall(GenIR &Reader, llvm::Value *Target,
+  llvm::Value *emitCall(GenIR &Reader, llvm::Value *Target, bool mayThrow,
                         llvm::ArrayRef<llvm::Value *> Args,
                         llvm::Value *IndirectionCell,
                         llvm::Value **CallNode) const;
