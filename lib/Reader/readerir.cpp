@@ -4738,16 +4738,16 @@ BasicBlock *GenIR::createPointBlock(const Twine &BlockName) {
   BasicBlock *Block =
       BasicBlock::Create(*JitContext->LLVMContext, BlockName, Function);
 
-  // Give the call block equal start and end offsets so subsequent processing
+  // Give the point block equal start and end offsets so subsequent processing
   // won't try to translate MSIL into it.
-  FlowGraphNode *CallFlowGraphNode = (FlowGraphNode *)Block;
-  fgNodeSetStartMSILOffset(CallFlowGraphNode, CurrInstrOffset);
-  fgNodeSetEndMSILOffset(CallFlowGraphNode, CurrInstrOffset);
+  FlowGraphNode *PointFlowGraphNode = (FlowGraphNode *)Block;
+  fgNodeSetStartMSILOffset(PointFlowGraphNode, CurrInstrOffset);
+  fgNodeSetEndMSILOffset(PointFlowGraphNode, CurrInstrOffset);
 
   // Point blocks don't need an operand stack: they don't have any MSIL and
   // any successor block will get the stack propagated from the other
   // predecessor.
-  fgNodeSetPropagatesOperandStack(CallFlowGraphNode, false);
+  fgNodeSetPropagatesOperandStack(PointFlowGraphNode, false);
 
   return Block;
 }
