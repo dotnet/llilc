@@ -1106,7 +1106,9 @@ private:
 
   llvm::PointerType *getUnmanagedPointerType(llvm::Type *ElementType);
 
-  bool isManagedPointerType(llvm::PointerType *PointerType);
+  bool isManagedType(llvm::Type *Type);
+  bool isManagedPointerType(llvm::Type *Type);
+  bool isManagedAggregateType(llvm::Type *Type);
 
   llvm::StoreInst *makeStore(llvm::Value *ValueToStore, llvm::Value *Address,
                              bool IsVolatile, bool AddressMayBeNull = true);
