@@ -967,6 +967,22 @@ private:
                                                 llvm::BasicBlock *PointBlock,
                                                 bool Rejoin);
 
+  /// Split the block at the current insertion point.
+  ///
+  /// \param Goto [out] If \p Goto is non-null, \p *Goto will be set to the
+  ///                   terminator connecting the old block to the new one.
+  ///
+  /// \returns          The newly-created successor block
+  llvm::BasicBlock *splitCurrentBlock(llvm::TerminatorInst **Goto = nullptr);
+
+  /// Insert one instruction in place of another.
+  ///
+  /// \param OldInstruction The instruction to be removed.  Must have no uses.
+  /// \param NewInstruction The instruction to insert where \p OldInstruction
+  ///                       was.
+  void replaceInstruction(llvm::Instruction *OldInstruction,
+                          llvm::Instruction *NewInstruction);
+
   /// \brief Insert a PHI to merge two values
   ///
   /// Create a \p PHINode in \p JoinBlock to merge \p Arg1 and \p Arg2.

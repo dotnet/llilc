@@ -4700,41 +4700,68 @@ BasicBlock *GenIR::createPointBlock(const Twine &BlockName) {
 BasicBlock *GenIR::insertConditionalPointBlock(Value *Condition,
                                                BasicBlock *PointBlock,
                                                bool Rejoin) {
+  // Split the current block.  This creates a goto connecting the blocks that
+  // we'll replace with the conditional branch.
+  TerminatorInst *Goto;
+  BasicBlock *ContinueBlock = splitCurrentBlock(&Goto);
+  BranchInst *Branch = BranchInst::Create(PointBlock, ContinueBlock, Condition);
+  replaceInstruction(Goto, Branch);
+
+  if (Rejoin) {
+    ASSERT(PointBlock->getTerminator() == nullptr);
+    IRBuilder<>::InsertPoint SavedInsertPoint = LLVMBuilder->saveIP();
+    LLVMBuilder->SetInsertPoint(PointBlock);
+    LLVMBuilder->CreateBr(ContinueBlock);
+    LLVMBuilder->restoreIP(SavedInsertPoint);
+  }
+
+  return ContinueBlock;
+}
+
+BasicBlock *GenIR::splitCurrentBlock(TerminatorInst **Goto) {
   BasicBlock *CurrentBlock = LLVMBuilder->GetInsertBlock();
   BasicBlock::iterator InsertPoint = LLVMBuilder->GetInsertPoint();
   Instruction *NextInstruction =
       (InsertPoint == CurrentBlock->end() ? nullptr
                                           : (Instruction *)InsertPoint);
 
-  // Split the current block.  This creates a goto connecting the blocks that
-  // we'll replace with the conditional branch.
   // Note that we split at offset NextInstrOffset rather than CurrInstrOffset.
   // We're already generating the IR for the instr at CurrInstrOffset, and using
   // NextInstrOffset here ensures that we won't redundantly try to add this
-  // instruction again when processing moves to the new ContinueBlock.
-  BasicBlock *ContinueBlock =
+  // instruction again when processing moves to NewBlock.
+  BasicBlock *NewBlock =
       ReaderBase::fgSplitBlock((FlowGraphNode *)CurrentBlock, NextInstrOffset,
                                (IRNode *)NextInstruction);
-  TerminatorInst *Goto = CurrentBlock->getTerminator();
-  LLVMBuilder->SetInsertPoint(Goto);
-  BranchInst *Branch =
-      LLVMBuilder->CreateCondBr(Condition, PointBlock, ContinueBlock);
-  Goto->eraseFromParent();
 
-  if (Rejoin) {
-    ASSERT(PointBlock->getTerminator() == nullptr);
-    LLVMBuilder->SetInsertPoint(PointBlock);
-    LLVMBuilder->CreateBr(ContinueBlock);
+  if (Goto != nullptr) {
+    // Report the created goto to the caller
+    *Goto = CurrentBlock->getTerminator();
   }
 
-  // Move the insert point to the first instruction in the continuation.
+  // Move the insertion point to the first instruction in the new block
   if (NextInstruction == nullptr) {
-    LLVMBuilder->SetInsertPoint(ContinueBlock);
+    LLVMBuilder->SetInsertPoint(NewBlock);
   } else {
-    LLVMBuilder->SetInsertPoint(ContinueBlock->getFirstInsertionPt());
+    LLVMBuilder->SetInsertPoint(NewBlock, NextInstruction);
   }
+  return NewBlock;
+}
 
-  return ContinueBlock;
+void GenIR::replaceInstruction(Instruction *OldInstruction,
+                               Instruction *NewInstruction) {
+  // Record where we were
+  IRBuilder<>::InsertPoint SavedInsertPoint = LLVMBuilder->saveIP();
+
+  // Insert the new instruction in the proper place.
+  LLVMBuilder->SetInsertPoint(OldInstruction);
+  LLVMBuilder->Insert(NewInstruction);
+
+  // Remove the old instruction.  Make sure it has no uses first.
+  assert(OldInstruction->use_empty());
+  OldInstruction->eraseFromParent();
+
+  // Move the insertion point back.
+  LLVMBuilder->restoreIP(SavedInsertPoint);
 }
 
 // Add a PHI at the start of the JoinBlock to merge the two results.
