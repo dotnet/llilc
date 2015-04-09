@@ -63,6 +63,7 @@ def ApplyAll(walk_dir):
                 tmp_filename = filename + ".tmp"
                 file_path = os.path.join(root, filename)
                 tmp_file_path = os.path.join(root, tmp_filename)
+                print("Normalizing " + file_path)
                 ApplyOne(file_path, tmp_file_path)
                 os.remove(file_path)
                 os.rename(tmp_file_path, file_path)
