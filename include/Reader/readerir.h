@@ -47,8 +47,8 @@ public:
     StartMSILOffset = 0;
     EndMSILOffset = 0;
     Region = nullptr;
-    IsVisited = false;
     TheReaderStack = nullptr;
+    IsVisited = false;
     PropagatesOperandStack = true;
   };
 
@@ -63,12 +63,12 @@ public:
   /// Region containing this block
   EHRegion *Region;
 
+  /// Used to track what is on the operand stack on entry to the basic block.
+  ReaderStack *TheReaderStack;
+
   /// In algorithms traversing the flow graph, used to track which basic blocks
   /// have been visited.
   bool IsVisited;
-
-  /// Used to track what is on the operand stack on entry to the basic block.
-  ReaderStack *TheReaderStack;
 
   /// true iff this basic block uses an operand stack and propagates it to the
   /// block's successors when it's not empty on exit.
