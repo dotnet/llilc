@@ -246,9 +246,6 @@ struct CallArgType {
   CORINFO_CLASS_HANDLE Class;
 };
 
-/// \brief Enum describing state of a flow graph node.
-enum FlowGraphNodeState { Undiscovered = 0, Discovered = 1, Visited = 2 };
-
 /// Structure representing a linked list of flow graph nodes
 struct FlowGraphNodeList {
   FlowGraphNode *Block;    ///< Head node in the list
@@ -1683,19 +1680,19 @@ private:
   IRNode *fgAddCaseToCaseListHelper(IRNode *SwitchNode, IRNode *LabelNode,
                                     uint32_t Element);
 
-  /// \brief Add the undiscovered successors of this block to the worklist.
+  /// \brief Add the unvisited successors of this block to the worklist.
   ///
   /// This method scans all the successor blocks of \p CurrBlock, and
-  /// if there are any undiscovered ones , creates new work list nodes for these
-  /// successors, marks them as discovered, and prepends them, returning a new
+  /// if there are any unvisited ones, creates new work list nodes for these
+  /// successors, marks them as visited, and prepends them, returning a new
   /// worklist head node.
   ///
   /// \param Worklist       The current worklist of blocks.
-  /// \param CurrBlock      The block to examine for undiscovered successors.
+  /// \param CurrBlock      The block to examine for unvisited successors.
   /// \returns              Updated worklist of blocks.
   FlowGraphNodeWorkList *
-  fgPrependUndiscoveredSuccToWorklist(FlowGraphNodeWorkList *Worklist,
-                                      FlowGraphNode *CurrBlock);
+  fgPrependUnvisitedSuccToWorklist(FlowGraphNodeWorkList *Worklist,
+                                   FlowGraphNode *CurrBlock);
 
   /// \brief Remove this flow graph node and associated client IRNodes.
   ///
@@ -1798,13 +1795,11 @@ private:
 
   /// \brief Remove all unreachable blocks.
   ///
-  /// Walk the flow graph and remove any block (except the tail block)
-  /// that cannot be reached from the head block. Blocks are removed by
-  /// calling \p fgDeleteBlockAndNodes.
+  /// Walk the flow graph and remove any block that cannot be reached from the
+  /// head block. Blocks are removed by calling \p fgDeleteBlockAndNodes.
   ///
   /// \param FgHead     the head block of the flow graph.
-  /// \param FgTail     the tail block of the flow graph.
-  void fgRemoveUnusedBlocks(FlowGraphNode *FgHead, FlowGraphNode *FgTail);
+  void fgRemoveUnusedBlocks(FlowGraphNode *FgHead);
 
   /// Find the canonical landing point for leaves from an EH region.
   ///
@@ -2600,13 +2595,6 @@ public:
   virtual void fgNodeSetEndMSILOffset(FlowGraphNode *FgNode,
                                       uint32_t Offset) = 0;
 
-  /// \brief Checks whether this node has been discovered by an algorithm
-  /// traversing the flow graph.
-  ///
-  /// \param FgNode Flow graph node to check.
-  /// \returns true iff this node has been discovered.
-  virtual bool fgNodeIsDiscovered(FlowGraphNode *FgNode) = 0;
-
   /// \brief Checks whether this node has been visited by an algorithm
   /// traversing the flow graph.
   ///
@@ -2614,12 +2602,13 @@ public:
   /// \returns true iff this node has been visited.
   virtual bool fgNodeIsVisited(FlowGraphNode *FgNode) = 0;
 
-  /// \brief Sets the traversing state of this node.
+  /// \brief Sets whether this node has been visited by an algorithm
+  /// traversing the flow graph.
   ///
   /// \param FgNode Flow graph node to set the state.
-  /// \param State The new state.
-  virtual void fgNodeSetState(FlowGraphNode *FgNode,
-                              FlowGraphNodeState State) = 0;
+  /// \param Visited true iff this node has been visited,
+  virtual void fgNodeSetVisited(FlowGraphNode *FgNode, bool Visited) = 0;
+
   virtual void fgNodeSetOperandStack(FlowGraphNode *Fg, ReaderStack *Stack) = 0;
   virtual ReaderStack *fgNodeGetOperandStack(FlowGraphNode *Fg) = 0;
 

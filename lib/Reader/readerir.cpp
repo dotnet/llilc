@@ -1912,6 +1912,7 @@ IRNode *GenIR::fgMakeEndFinally(IRNode *InsertNode, EHRegion *FinallyRegion,
     uint32_t EndOffset = FinallyRegion->EndMsilOffset;
     fgNodeSetStartMSILOffset(TargetNode, EndOffset);
     fgNodeSetEndMSILOffset(TargetNode, EndOffset);
+    fgNodeSetPropagatesOperandStack(TargetNode, false);
   }
 
   // Generate and return branch to the block that holds the switch
@@ -2043,16 +2044,12 @@ ReaderStack *GenIR::fgNodeGetOperandStack(FlowGraphNode *Fg) {
   return FlowGraphInfoMap[Fg].TheReaderStack;
 }
 
-bool GenIR::fgNodeIsDiscovered(FlowGraphNode *Fg) {
-  return FlowGraphInfoMap[Fg].State != Undiscovered;
-}
-
 bool GenIR::fgNodeIsVisited(FlowGraphNode *Fg) {
-  return FlowGraphInfoMap[Fg].State == Visited;
+  return FlowGraphInfoMap[Fg].IsVisited;
 }
 
-void GenIR::fgNodeSetState(FlowGraphNode *Fg, FlowGraphNodeState State) {
-  FlowGraphInfoMap[Fg].State = State;
+void GenIR::fgNodeSetVisited(FlowGraphNode *Fg, bool Visited) {
+  FlowGraphInfoMap[Fg].IsVisited = Visited;
 }
 
 // Check whether this node propagates operand stack.
@@ -4479,6 +4476,8 @@ uint32_t GenIR::updateLeaveOffset(EHRegion *Region, uint32_t LeaveOffset,
         UnreachableContinuationBlock =
             BasicBlock::Create(Context, "NullDefault", Function);
         new UnreachableInst(Context, UnreachableContinuationBlock);
+        fgNodeSetPropagatesOperandStack(
+            (FlowGraphNode *)UnreachableContinuationBlock, false);
       }
 
       LoadInst *Load = new LoadInst(SelectorAddr);
