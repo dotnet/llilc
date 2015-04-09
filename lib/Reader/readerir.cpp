@@ -400,6 +400,29 @@ void GenIR::readerPostPass(bool IsImportOnly) {
     insertIRForSecurityObject();
   }
 
+  if (!LLILCJit::TheJit->ShouldUseConservativeGC) {
+
+    // Precise GC using statepoints cannot handle aggregates that contain
+    // managed pointers yet. So, check if this function deals with such values
+    // and fail early. (Issue #33)
+
+    for (const Argument &arg : Function->args()) {
+      if (isManagedAggregateType(arg.getType())) {
+        throw NotYetImplementedException(
+            "NYI: Precice GC for Managed-Aggregate values");
+      }
+    }
+
+    for (const BasicBlock &BB : *Function) {
+      for (const Instruction &Instr : BB) {
+        if (isManagedAggregateType(Instr.getType())) {
+          throw NotYetImplementedException(
+              "NYI: Precice GC for Managed-Aggregate values");
+        }
+      }
+    }
+  }
+
   // Cleanup the memory we've been using.
   delete LLVMBuilder;
 }
@@ -1769,8 +1792,40 @@ PointerType *GenIR::getUnmanagedPointerType(Type *ElementType) {
   return PointerType::get(ElementType, UnmanagedAddressSpace);
 }
 
-bool GenIR::isManagedPointerType(PointerType *PointerType) {
-  return PointerType->getAddressSpace() == ManagedAddressSpace;
+bool GenIR::isManagedPointerType(Type *Type) {
+  const PointerType *PtrType = dyn_cast<llvm::PointerType>(Type);
+  if (PtrType != nullptr) {
+    return PtrType->getAddressSpace() == ManagedAddressSpace;
+  }
+
+  return false;
+}
+
+bool GenIR::isManagedAggregateType(Type *AggType) {
+  VectorType *VecType = dyn_cast<VectorType>(AggType);
+  if (VecType != nullptr) {
+    return isManagedPointerType(VecType->getScalarType());
+  }
+
+  ArrayType *ArrType = dyn_cast<ArrayType>(AggType);
+  if (ArrType != nullptr) {
+    return isManagedType(ArrType->getElementType());
+  }
+
+  StructType *StType = dyn_cast<StructType>(AggType);
+  if (StType != nullptr) {
+    for (Type *SubType : StType->subtypes()) {
+      if (isManagedType(SubType)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+bool GenIR::isManagedType(Type *Type) {
+  return isManagedPointerType(Type) || isManagedAggregateType(Type);
 }
 
 #pragma endregion
