@@ -5,3 +5,15 @@ Common;Exceptions;GC;Loader;managed;packages;Regressions;runtime;Tests;TestWrapp
 Interop\ICastable\Castable
 JIT\CodeGenBringUpTests\div2
 JIT\CodeGenBringUpTests\localloc
+JIT\jit64\gc\misc\eh1
+JIT\jit64\gc\misc\funclet
+JIT\jit64\gc\misc\fgtest1
+JIT\jit64\gc\misc\struct6_5
+JIT\jit64\gc\misc\struct7_1
+JIT\jit64\gc\misc\structfpseh5_1
+JIT\jit64\gc\misc\structfpseh6_1
+JIT\jit64\gc\misc\structret6_1
+JIT\jit64\gc\misc\structret6_2
+JIT\jit64\gc\misc\structret6_3
+JIT\jit64\gc\regress\vswhidbey\339415
+JIT\jit64\gc\regress\vswhidbey\143837
