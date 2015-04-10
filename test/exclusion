@@ -1,0 +1,7 @@
+# Top level test directory to exclude
+Common;Exceptions;GC;Loader;managed;packages;Regressions;runtime;Tests;TestWrappers_x64_release;Threading
+
+# Individual test case to exclude
+Interop\ICastable\Castable
+JIT\CodeGenBringUpTests\div2
+JIT\CodeGenBringUpTests\localloc
