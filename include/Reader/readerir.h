@@ -45,7 +45,7 @@ public:
   FlowGraphNodeInfo() {
     StartMSILOffset = 0;
     EndMSILOffset = 0;
-    State = Undiscovered;
+    IsVisited = false;
     TheReaderStack = nullptr;
     PropagatesOperandStack = true;
   };
@@ -59,8 +59,8 @@ public:
   uint32_t EndMSILOffset;
 
   /// In algorithms traversing the flow graph, used to track which basic blocks
-  /// have been discovered or visited.
-  FlowGraphNodeState State;
+  /// have been visited.
+  bool IsVisited;
 
   /// Used to track what is on the operand stack on entry to the basic block.
   ReaderStack *TheReaderStack;
@@ -330,9 +330,8 @@ public:
   uint32_t fgNodeGetEndMSILOffset(FlowGraphNode *Fg) override;
   void fgNodeSetEndMSILOffset(FlowGraphNode *FgNode, uint32_t Offset) override;
 
-  bool fgNodeIsDiscovered(FlowGraphNode *FgNode) override;
   bool fgNodeIsVisited(FlowGraphNode *FgNode) override;
-  void fgNodeSetState(FlowGraphNode *FgNode, FlowGraphNodeState State) override;
+  void fgNodeSetVisited(FlowGraphNode *FgNode, bool Visited) override;
   void fgNodeSetOperandStack(FlowGraphNode *Fg, ReaderStack *Stack) override;
   ReaderStack *fgNodeGetOperandStack(FlowGraphNode *Fg) override;
 
