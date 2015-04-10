@@ -3766,6 +3766,10 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo,
       // For now just treat as a normal call.
       break;
     }
+    case CORINFO_INTRINSIC_InitializeArray: {
+      // For now just treat as a normal call.
+      break;
+    }
     default:
       throw NotYetImplementedException("Call intrinsic");
     }
