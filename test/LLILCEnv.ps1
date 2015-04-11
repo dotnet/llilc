@@ -826,16 +826,38 @@ function Global:ApplyFilter([string]$File)
 
 function Global:ExcludeTest([string]$Arch="x64", [string]$Build="Release")
 {
-  # Excluding Interop\ICastable\Castable*"
+  # Excluding Interop\ICastable\Castable*
   # remove ICastable until it can be debugged
   pushd $CoreCLRTest\Interop\ICastable
   del Castable*
   popd
 
-  # Excluding JIT\CodeGenBringUpTests\div2*,localloc*"
+  # Excluding JIT\CodeGenBringUpTests\div2*,localloc*
   pushd $CoreCLRTest\JIT\CodeGenBringUpTests
   del div2*
   del localloc*
+  popd
+
+  # Excluding JIT\jit64\gc\misc\eh1*,funclet*,fgtest1*,
+  # struct6_5*,struct7_1*,structfpseh5_1*,structfpseh6_1*,
+  # structret6_1*,structret6_2*,structret6_3*
+  pushd $CoreCLRTest\JIT\jit64\gc\misc
+  del eh1*
+  del funclet*
+  del fgtest1*
+  del struct6_5*
+  del struct7_1*
+  del structfpseh5_1*
+  del structfpseh6_1*
+  del structret6_1*
+  del structret6_2*
+  del structret6_3*
+  popd
+
+  # Excluding JIT\jit64\gc\regress\vswhidbey\339415*,143837*
+  pushd $CoreCLRTest\JIT\jit64\gc\regress\vswhidbey
+  del 339415*
+  del 143837*
   popd
 }
 
