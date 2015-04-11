@@ -249,19 +249,18 @@ public:
   // private:
   union {
     // Right now m_bits is for debugging,
+    // clang-format off
     struct {
       TITypes Type : 6;
       uint32_t UninitObj : 1; // used
       uint32_t ByRef : 1;     // used
       uint32_t ByRefReadOnly : 1;
-    // clang-format off
       uint32_t: 3;            // unused?
       uint32_t ThisPtr : 1;   // used
       uint32_t: 1;            // unused?
-      // clang-format on
       uint32_t GenericTypeVar : 1; // used
     } Bits;
-
+    // clang-format on
     uint32_t Flags;
   };
 

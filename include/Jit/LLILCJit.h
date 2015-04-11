@@ -17,20 +17,13 @@
 #define LLILC_JIT_H
 
 #include "Pal/LLILCPal.h"
+#include "options.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/ThreadLocal.h"
 
 class ABIInfo;
-
-/// \brief Enum for LLVM IR Dump Level
-enum LLVMDumpLevel {
-  NODUMP,  ///< Do not dump any LLVM IR or summary.
-  SUMMARY, ///< Only dump one line summary per method.
-  VERBOSE  ///< Dump full LLVM IR and method summary.
-};
-
 struct LLILCJitPerThreadState;
 
 /// \brief This struct holds per-jit request state.
@@ -38,7 +31,7 @@ struct LLILCJitPerThreadState;
 /// LLILC is invoked to jit one method at a time. An \p LLILCJitContext
 /// represents all of the information about a particular jit request.
 ///
-/// Note the Jit can be re-entered on the same thread thread while in the
+/// Note the Jit can be re-entered on the same thread while in the
 /// middle of jitting a method, if other methods must be run and also require
 /// jitting. To handle this, the contexts form a stack, so that the jit can
 /// keep the state from nested jit requests distinct from parent requests.
@@ -99,6 +92,11 @@ public:
   //@{
   LLILCJitContext *Next;         ///< Parent jit context, if any.
   LLILCJitPerThreadState *State; ///< Per thread state for the jit.
+  //@}
+
+  /// \name Per invocation JIT Options
+  //@{
+  Options Options;
   //@}
 
   /// \name Jit output sizes
