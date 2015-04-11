@@ -935,13 +935,30 @@ private:
   ///
   /// Use this method to create a block when expanding a single MSIL
   /// instruction into an instruction sequence with control flow. Give the
+  /// block the given MSIL offset at both begin and end since it represents
+  /// code at a single point in the IL stream. Mark the block as not
+  /// contributing an operand stack to any subsequent join.
+  ///
+  /// \param PointOffset       MSIL offset the block starts and ends at.
+  /// \param BlockName         Optional name for the new block.
+  /// \returns                 Newly allocated block.
+  llvm::BasicBlock *createPointBlock(uint32_t PointOffset,
+                                     const llvm::Twine &BlockName = "");
+
+  /// \brief Create a basic block for use when expanding a single MSIL
+  /// instruction.
+  ///
+  /// Use this method to create a block when expanding a single MSIL
+  /// instruction into an instruction sequence with control flow. Give the
   /// block the current MSIL offset at both begin and end since it represents
   /// code at a single point in the IL stream. Mark the block as not
   /// contributing an operand stack to any subsequent join.
   ///
   /// \param BlockName         Optional name for the new block.
   /// \returns                 Newly allocated block.
-  llvm::BasicBlock *createPointBlock(const llvm::Twine &BlockName = "");
+  llvm::BasicBlock *createPointBlock(const llvm::Twine &BlockName = "") {
+    return createPointBlock(CurrInstrOffset, BlockName);
+  }
 
   /// \brief Insert a conditional branch to a point block.
   ///

@@ -4734,15 +4734,16 @@ IRNode *GenIR::derefAddress(IRNode *Address, bool DstIsGCPtr, bool IsConst,
 // Create an empty block to hold IR for some conditional instructions at a
 // particular point in the MSIL (conditional LLVM instructions that are part
 // of the expansion of a single MSIL instruction)
-BasicBlock *GenIR::createPointBlock(const Twine &BlockName) {
+BasicBlock *GenIR::createPointBlock(uint32_t PointOffset,
+                                    const Twine &BlockName) {
   BasicBlock *Block =
       BasicBlock::Create(*JitContext->LLVMContext, BlockName, Function);
 
   // Give the point block equal start and end offsets so subsequent processing
   // won't try to translate MSIL into it.
   FlowGraphNode *PointFlowGraphNode = (FlowGraphNode *)Block;
-  fgNodeSetStartMSILOffset(PointFlowGraphNode, CurrInstrOffset);
-  fgNodeSetEndMSILOffset(PointFlowGraphNode, CurrInstrOffset);
+  fgNodeSetStartMSILOffset(PointFlowGraphNode, PointOffset);
+  fgNodeSetEndMSILOffset(PointFlowGraphNode, PointOffset);
 
   // Point blocks don't need an operand stack: they don't have any MSIL and
   // any successor block will get the stack propagated from the other
