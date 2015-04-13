@@ -149,12 +149,12 @@ def main(argv):
 
     # Todo: Test Env is right now only for Windows. Will expand when cross platform
     with open(time_stamped_test_env_path, "w") as test_env:
-        test_env.write("set COMPLUS_AltJit=*\n")
-        test_env.write("set COMPLUS_AltJitName=" + time_stamped_jit_name + "\n")
-        test_env.write("set COMPLUS_GCCONSERVATIVE=1\n")
+        test_env.write("set COMPlus_AltJit=*\n")
+        test_env.write("set COMPlus_AltJitName=" + time_stamped_jit_name + "\n")
+        test_env.write("set COMPlus_GCConservative=1\n")
         test_env.write("chcp 65001\n")
         if args.dump_level is not None:
-            test_env.write("set DUMPLLVMIR=" + args.dump_level + "\n")
+            test_env.write("set COMPlus_DumpLLVMIR=" + args.dump_level + "\n")
 
     # Exclude undesired tests from running
     ExcludeTopLevelTestDirectories()
