@@ -6,8 +6,8 @@ Build Status
 
 |           |    Windows    |    Linux    |
 |-----------|---------------|-------------|
-| **Debug** |[![Build status](http://dotnet-ci.cloudapp.net/job/dotnet_llilc_windows_debug_win64/badge/icon)](http://dotnet-ci.cloudapp.net/job/dotnet_llilc_windows_debug_win64/)|[![Build Status](http://dotnet-ci.cloudapp.net/job/dotnet_llilc_linux_debug/badge/icon)](http://dotnet-ci.cloudapp.net/job/dotnet_llilc_linux_debug/)|
-|**Release**|[![Build status](http://dotnet-ci.cloudapp.net/job/dotnet_llilc_windows_release_win64/badge/icon)](http://dotnet-ci.cloudapp.net/job/dotnet_llilc_windows_release_win64/)|[![Build Status](http://dotnet-ci.cloudapp.net/job/dotnet_llilc_linux_release/badge/icon)](http://dotnet-ci.cloudapp.net/job/dotnet_llilc_linux_release/)|
+| **Debug** |[![Build status](http://dotnet-ci.cloudapp.net/job/dotnet_llilc_debug_win64/badge/icon)](http://dotnet-ci.cloudapp.net/job/dotnet_llilc_debug_win64/)|[![Build Status](http://dotnet-ci.cloudapp.net/job/dotnet_llilc_linux_debug/badge/icon)](http://dotnet-ci.cloudapp.net/job/dotnet_llilc_linux_debug/)|
+|**Release**|[![Build status](http://dotnet-ci.cloudapp.net/job/dotnet_llilc_release_win64/badge/icon)](http://dotnet-ci.cloudapp.net/job/dotnet_llilc_release_win64/)|[![Build Status](http://dotnet-ci.cloudapp.net/job/dotnet_llilc_linux_release/badge/icon)](http://dotnet-ci.cloudapp.net/job/dotnet_llilc_linux_release/)|
 
 
 Introduction
