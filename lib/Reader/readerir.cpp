@@ -294,6 +294,7 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   }
 
   const uint32_t JitFlags = JitContext->Flags;
+
   bool HasSecretParameter = (JitFlags & CORJIT_FLG_PUBLISH_SECRET_PARAM) != 0;
 
   uint32_t NumLocals = 0;
@@ -573,6 +574,100 @@ void GenIR::callMonitorHelper(bool IsEnter) {
   const bool MayThrow = false;
   callHelperImpl(HelperId, MayThrow, Type::getVoidTy(*JitContext->LLVMContext),
                  MethodSyncHandle, (IRNode *)SyncFlag);
+}
+
+void GenIR::insertIRForUnmanagedCallFrame() {
+  // There's nothing more to do if we've already inserted the necessary IR.
+  if (UnmanagedCallFrame != nullptr) {
+    assert(ThreadPointer != nullptr);
+    return;
+  }
+
+  const struct CORINFO_EE_INFO::InlinedCallFrameInfo &CallFrameInfo =
+      JitContext->EEInfo.inlinedCallFrameInfo;
+  LLVMContext &LLVMContext = *JitContext->LLVMContext;
+  Type *Int8Ty = Type::getInt8Ty(LLVMContext);
+  Type *Int32Ty = Type::getInt32Ty(LLVMContext);
+  Type *Int8PtrTy = getUnmanagedPointerType(Int8Ty);
+  IRBuilder<>::InsertPoint SavedInsertPoint = LLVMBuilder->saveIP();
+
+  // Mark this function as requiring a frame pointer and as using GC.
+  Function->addFnAttr("no-frame-pointer-elim-non-leaf");
+  Function->setGC("statepoint-example");
+
+  // The call frame data structure is modeled as an opaque blob of bytes.
+  Type *CallFrameTy = ArrayType::get(Int8Ty, CallFrameInfo.size);
+  Instruction *CallFrameAddress =
+      createTemporary(CallFrameTy, "InlinedCallFrame");
+
+  Type *ThreadPointerTy = getUnmanagedPointerType(ArrayType::get(Int8Ty, 0));
+  Instruction *ThreadPointerAddress =
+      createTemporary(ThreadPointerTy, "ThreadPointer");
+
+  // Intialize the call frame
+  LLVMBuilder->SetInsertPoint(ThreadPointerAddress->getNextNode());
+
+  // Argument 0: &InlinedCallFrame[CallFrameInfo.offsetOfFrameVptr]
+  Value *FrameVPtrIndices[] = {
+      ConstantInt::get(Int32Ty, 0),
+      ConstantInt::get(Int32Ty, CallFrameInfo.offsetOfFrameVptr)};
+  Value *FrameVPtrAddress =
+      LLVMBuilder->CreateInBoundsGEP(CallFrameAddress, FrameVPtrIndices);
+
+  // Argument 1: the secret parameter, if any
+  Value *SecretParam = nullptr;
+  if (MethodSignature.hasSecretParameter()) {
+    SecretParam = (Value *)secretParam();
+  } else {
+    SecretParam = Constant::getNullValue(Int8PtrTy);
+  }
+
+  // Call CORINFO_HELP_INIT_PINVOKE_FRAME
+  const bool MayThrow = false;
+  Value *ThreadPointerValue =
+      callHelperImpl(CORINFO_HELP_INIT_PINVOKE_FRAME, MayThrow, ThreadPointerTy,
+                     (IRNode *)FrameVPtrAddress,
+                     (IRNode *)SecretParam).getInstruction();
+  LLVMBuilder->CreateStore(ThreadPointerValue, ThreadPointerAddress);
+
+  // Store the stack and frame pointers
+  Type *RegType = Type::getIntNTy(LLVMContext, TargetPointerSizeInBits);
+  Type *ReadRegisterTypes[] = {RegType};
+  llvm::Function *ReadRegister = Intrinsic::getDeclaration(
+      JitContext->CurrentModule, Intrinsic::read_register, ReadRegisterTypes);
+
+  Value *CallSiteSPIndices[] = {
+      ConstantInt::get(Int32Ty, 0),
+      ConstantInt::get(Int32Ty, CallFrameInfo.offsetOfCallSiteSP)};
+  Value *CallSiteSPAddress =
+      LLVMBuilder->CreateInBoundsGEP(CallFrameAddress, CallSiteSPIndices);
+  CallSiteSPAddress = LLVMBuilder->CreatePointerCast(
+      CallSiteSPAddress, getUnmanagedPointerType(RegType));
+  MDString *SPName = MDString::get(LLVMContext, "rsp");
+  Metadata *SPNameNodeMDs[]{SPName};
+  MDNode *SPNameNode = MDNode::get(LLVMContext, SPNameNodeMDs);
+  Value *SPNameValue = MetadataAsValue::get(LLVMContext, SPNameNode);
+  Value *SPValue = LLVMBuilder->CreateCall(ReadRegister, SPNameValue);
+  LLVMBuilder->CreateStore(SPValue, CallSiteSPAddress);
+
+  Value *CalleeSavedFPIndices[] = {
+      ConstantInt::get(Int32Ty, 0),
+      ConstantInt::get(Int32Ty, CallFrameInfo.offsetOfCalleeSavedFP)};
+  Value *CalleeSavedFPAddress =
+      LLVMBuilder->CreateInBoundsGEP(CallFrameAddress, CalleeSavedFPIndices);
+  CalleeSavedFPAddress = LLVMBuilder->CreatePointerCast(
+      CalleeSavedFPAddress, getUnmanagedPointerType(RegType));
+  MDString *FPName = MDString::get(LLVMContext, "rbp");
+  Metadata *FPNameNodeMDs[]{FPName};
+  MDNode *FPNameNode = MDNode::get(LLVMContext, FPNameNodeMDs);
+  Value *FPNameValue = MetadataAsValue::get(LLVMContext, FPNameNode);
+  Value *FPValue = LLVMBuilder->CreateCall(ReadRegister, FPNameValue);
+  LLVMBuilder->CreateStore(FPValue, CalleeSavedFPAddress);
+
+  LLVMBuilder->restoreIP(SavedInsertPoint);
+
+  UnmanagedCallFrame = CallFrameAddress;
+  ThreadPointer = ThreadPointerAddress;
 }
 
 #pragma endregion
@@ -3814,12 +3909,9 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo, bool MayThrow,
   }
 
   CorInfoCallConv CC = Signature.getCallingConvention();
-  if (CallTargetInfo->isIndirect()) {
-    if (CC == CORINFO_CALLCONV_STDCALL || CC == CORINFO_CALLCONV_C ||
-        CC == CORINFO_CALLCONV_THISCALL || CC == CORINFO_CALLCONV_FASTCALL ||
-        CC == CORINFO_CALLCONV_NATIVEVARARG) {
-      throw NotYetImplementedException("PInvoke call");
-    }
+  bool IsUnmanagedCall = CC != CORINFO_CALLCONV_DEFAULT;
+  if (!CallTargetInfo->isIndirect() && IsUnmanagedCall) {
+    throw NotYetImplementedException("Direct unmanaged call");
   }
 
   CallArgType ResultType = Signature.getResultType();
@@ -4820,7 +4912,9 @@ IRNode *GenIR::handleToIRNode(mdToken Token, void *EmbHandle, void *RealHandle,
                               bool IsRelocatable, bool IsCallTarget,
                               bool IsFrozenObject /* default = false */
                               ) {
-  if (IsIndirect || IsCallTarget || IsFrozenObject) {
+  LLVMContext &LLVMContext = *JitContext->LLVMContext;
+
+  if (IsCallTarget || IsFrozenObject) {
     throw NotYetImplementedException("NYI handle cases");
   }
 
@@ -4830,8 +4924,15 @@ IRNode *GenIR::handleToIRNode(mdToken Token, void *EmbHandle, void *RealHandle,
   uint32_t NumBits = TargetPointerSizeInBits;
   bool IsSigned = false;
 
-  ConstantInt *HandleValue = ConstantInt::get(
-      *JitContext->LLVMContext, APInt(NumBits, (uint64_t)EmbHandle, IsSigned));
+  Value *HandleValue = ConstantInt::get(
+      LLVMContext, APInt(NumBits, (uint64_t)EmbHandle, IsSigned));
+
+  if (IsIndirect) {
+    Type *HandleTy = Type::getIntNTy(LLVMContext, TargetPointerSizeInBits);
+    Type *HandlePtrTy = getUnmanagedPointerType(HandleTy);
+    Value *HandlePtr = LLVMBuilder->CreateIntToPtr(HandleValue, HandlePtrTy);
+    HandleValue = LLVMBuilder->CreateLoad(HandlePtr);
+  }
 
   return (IRNode *)HandleValue;
 }
@@ -5145,7 +5246,7 @@ IRNode *GenIR::loadNonPrimitiveObj(IRNode *Addr,
   LoadInst->setAlignment(Align);
 
   return (IRNode *)LoadInst;
-};
+}
 
 void GenIR::classifyCmpType(Type *Ty, uint32_t &Size, bool &IsPointer,
                             bool &IsFloat) {

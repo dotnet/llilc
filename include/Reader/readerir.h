@@ -256,7 +256,8 @@ public:
                  llvm::Type *> *ArrayTypeMap,
         std::map<CORINFO_FIELD_HANDLE, uint32_t> *FieldIndexMap)
       : ReaderBase(JitContext->JitInfo, JitContext->MethodInfo,
-                   JitContext->Flags) {
+                   JitContext->Flags),
+        UnmanagedCallFrame(nullptr), ThreadPointer(nullptr) {
     this->JitContext = JitContext;
     this->ClassTypeMap = ClassTypeMap;
     this->ReverseClassTypeMap = ReverseClassTypeMap;
@@ -1280,6 +1281,10 @@ private:
   /// \brief Insert IR to setup the security object
   void insertIRForSecurityObject();
 
+  /// \brief Insert IR to setup the unmanaged call frame (PInvoke frame) and
+  ///        the thread pointer.
+  void insertIRForUnmanagedCallFrame();
+
   /// \brief Create the @gc.safepoint_poll() method
   /// Creates the @gc.safepoint_poll() method and insertes it into the
   /// current module. This helper is required by the LLVM GC-Statepoint
@@ -1314,6 +1319,12 @@ private:
   std::map<CORINFO_FIELD_HANDLE, uint32_t> *FieldIndexMap;
   std::map<llvm::BasicBlock *, FlowGraphNodeInfo> FlowGraphInfoMap;
   std::vector<llvm::Value *> LocalVars;
+  llvm::Value *UnmanagedCallFrame; ///< If the method contains unmanaged calls,
+                                   ///< this is the address of the unmanaged
+                                   ///< call frame.
+  llvm::Value *ThreadPointer;      ///< If the method contains unmanaged calls,
+                                   ///< this is the address of the pointer to
+                                   ///< the runtime thread.
   std::vector<CorInfoType> LocalVarCorTypes;
   std::vector<llvm::Value *> Arguments;
   llvm::Value *IndirectResult;
