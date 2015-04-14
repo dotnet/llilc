@@ -1,8 +1,6 @@
-Exception Handling in the LLILC JIT
-========================================
+# Exception Handling in the LLILC JIT
 
-Introduction
-------------
+## Introduction
 
 This document provides a high-level overview of the LLILC jit's processing
 of exception handling constructs in the code it compiles.  It is not a fully
@@ -25,8 +23,7 @@ This document pertains specifically to just-in-time compilation.  Details
 for ahead-of-time compilation would possibly differ.
 
 
-EH Constructs in MSIL
----------------------
+## EH Constructs in MSIL
 
 MSIL exception handling constructs are defined in [ECMA-335 Partitions I, II, and
 III](http://www.ecma-international.org/publications/standards/Ecma-335.htm).
@@ -67,8 +64,7 @@ handlers associated with protected regions being exited before transferring
 control to the `leave` target.
 
 
-Contract with CLR Execution Engine
-----------------------------------
+## Contract with CLR Execution Engine
 
 This section describes the constraints that the Execution Engine imposes on
 the jit (and its codegen) to support exception processing.
@@ -161,8 +157,7 @@ this section may differ for other architectures (particularly x86), where
 unwinding may proceed differently.
 
 
-LLVM IR Model for Exception/Cleanup Flow
-----------------------------------------
+## LLVM IR Model for Exception/Cleanup Flow
 
 Exception handling in LLVM is [documented at llvm.org](http://llvm.org/docs/ExceptionHandling.html).
 Briefly, exceptions may only be raised at [`invoke`
@@ -197,8 +192,7 @@ codegen) to collapse the explicit dispatch and to separate non-filter
 funclets by outlining handlers.
 
 
-Potential Sticking Points
--------------------------
+## Potential Sticking Points
 
 There are a number of design points where the .Net Jit/EE have taken a
 different approach than most of the targets that LLVM supports.  The
@@ -360,8 +354,7 @@ beginfinally/beginfault intrinsic that [LLILC will insert](#finally-handlers)
 at the start of each finally/fault handler.
 
 
-Translation from MSIL to LLVM IR in Reader
-------------------------------------------
+## Translation from MSIL to LLVM IR in Reader
 
 This section describes the processing of EH constructs in the MSIL Reader.
 The goal is to translate the MSIL constructs into IR constructs that match
@@ -478,8 +471,7 @@ then branch to the innermost finally handler whose protected region it
 exits.
 
 
-Translation from LLVM IR to EH Tables
--------------------------------------
+## Translation from LLVM IR to EH Tables
 
 The plan for LLILC is to use the LLVM code that is currently being developed
 to support native Windows EH in order to identify the structure of the
@@ -489,8 +481,7 @@ encoded in the two cases is essentially similar, so a mapping should be
 feasible.
 
 
-Staging Plan and Current Status
--------------------------------
+## Staging Plan and Current Status
 
 Full EH support will take a while to implement, and many jit tests don't
 throw exceptions at runtime and therefore don't require full EH support to
@@ -562,8 +553,7 @@ In summary, the plan/status is:
 ahead-of-time is TBD, based on future priorities.)
 
 
-Open Questions
---------------
+## Open Questions
 
  1. Can filter outlining leverage some of the same outlining utilities used
     by the late outlining of handlers in LLVM, or is it best performed

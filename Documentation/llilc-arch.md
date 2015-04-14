@@ -43,17 +43,17 @@ for the JIT compilation model, and within the native runtime for the AOT model. 
 on the heap are used to identify fields with GC references, and the JIT is required to report stack slots and registers that 
 contain GC references.  This information is used by the garbage collector for updating references when heap objects 
 are relocated.  A discussion of the garbage collector as used by LLILC is 
-[here](https://github.com/dotnet/llilc/blob/master/Documentation/llilc-gc.md).
+[here](llilc-gc.md).
 
 ####MSIL reader
 
 The key component needed to start testing code generation out of LLVM and get basic methods working 
 is an MSIL reader.  This component takes a request from [CoreCLR](https://github.com/dotnet/coreclr) to 
 compile a method, reads in all the method MSIL, maps the required types into LLVM, and translates the MSIL 
-opcodes into BitCode. The base Reader code is [here](https://github.com/dotnet/llilc/blob/master/lib/Reader/reader.cpp) 
+opcodes into BitCode. The base Reader code is [here](../lib/Reader/reader.cpp) 
 and the main entry point is ReaderBase::msilToIR().  From this starting point MSIL is converted into equivalent 
 BitCode.  In organization the reader is made up of a base component that interfaces with the CLR/EE interface 
-and [readerir](https://github.com/dotnet/llilc/blob/master/lib/Reader/readerir.cpp) which is responsible 
+and [readerir](../lib/Reader/readerir.cpp) which is responsible 
 for generating the actual BitCode.  This separation of concerns allows for easier refactoring and simplifies 
 BitCode creation.
 
@@ -69,7 +69,7 @@ to compile a method one method at a time, we currently would not get any benefit
 performed by the runtime.)
 
 There is a further discussion of how we're modeling the managed code semantics within LLVM in a following 
-[section](##Managed Semantics in LLVM). 
+[section](#managed-semantics-in-llvm).
 
 ####IL Transforms
 
@@ -98,7 +98,7 @@ EH can be found [here](https://msdn.microsoft.com/en-us/library/ms173162.aspx). 
 the ECMA spec [here](http://www.ecma-international.org/publications/standards/Ecma-335.htm). 
 In LLILC we will explicitly expand the CLR required checks in to explicit flow, while for the additional clauses, use 
 the funclet design that is emerging in LLVM to support MSVC-compatible EH.  A full description of our EH approach can be 
-found in our documentation [here](https://github.com/dotnet/llilc/blob/master/Documentation/llilc-jit-eh.md).
+found in our documentation [here](llilc-jit-eh.md).
 
 #### Ahead of Time (AOT) Compilation Driver
 
@@ -169,7 +169,7 @@ to gain more benefit from the mid-level optimizer.
 
 ####Interior vs base pointers
 The GC used by the CLR differentiates between reported base pointers and interior pointers (see 
-[Garbage Collection](https://github.com/dotnet/llilc/blob/master/Documentation/llilc-gc.md#interior-pointers) doc for 
+[Garbage Collection](llilc-gc.md#interior-pointers) doc for 
 more details).  In simple terms an interior pointer results from an arithmetic operation on a base pointer if the resulting 
 pointer is still contained within the object being referenced. (Exterior pointers are not supported.) While all pointers can 
 be reported as interior this will increase the overhead of the GC since more checks are required to establish the object 

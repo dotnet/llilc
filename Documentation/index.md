@@ -1,4 +1,4 @@
-# LLILC {#mainpage}
+# LLILC
 
 ## Introduction
 Welcome to LLILC.
