@@ -1,8 +1,6 @@
-﻿LLILC Reader
-============
+﻿# LLILC Reader
 
-Introduction
-------------
+## Introduction
 
 LLILC reader is part of LLILC JIT and is responsible for translating
 MSIL instructions into LLVM IR.  The semantics of MSIL instructions is
@@ -18,8 +16,7 @@ Engine.  The reader calls methods of that interface to resolve MSIL
 tokens, get information about types, fields, code locations and much
 more.
 
-Main Classes
-------------
+## Main Classes
 
 The two main classes comprising the reader are ReaderBase and GenIR.
 GenIR derives from ReaderBase. ReaderBase encapsulates MSIL processing
@@ -31,8 +28,7 @@ code more maintainable and easier to evolve.  A legacy jit was
 implemented using the same ReaderBase and a different implementation of
 GenIR.
 
-Reader Driver
--------------
+## Reader Driver
 
 The main driver for the reader is ReaderBase::msilToIR.  The driver has
 the steps below:
@@ -56,8 +52,7 @@ the steps below:
 
 -   Execute [Post-pass](#post-pass) to allow the client a chance to finish up
 
-Pre-pass
---------
+## Pre-pass
 
 An instance of GenIR translates a single function.  GenIR::readerPrePass
 is responsible for initial setup.  The steps it performs:
@@ -78,8 +73,7 @@ is responsible for initial setup.  The steps it performs:
 -   Check whether the function has features that the reader hasn’t
     implemented yet
 
-First Pass
-----------
+## First Pass
 
 First pass is responsible for building LLVM basic blocks. The only instructions
 that are inserted are terminating branches and switches. Blocks that end with
@@ -102,8 +96,7 @@ temporary target blocks with the real ones.  This may involve splitting a
 basic block if a target of a branch has offset that’s in the middle of
 the block.
 
-Second Pass
------------
+## Second Pass
 
 In the second pass the reader first walks the flow graph in depth-first preorder
 (starting with the head block) to identify unused blocks.  Then the reader walks
@@ -260,14 +253,12 @@ that propagate operand stacks in the order of MSIL offsets.  Note that
 [ECMA-335](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-335.pdf)
 section III.1.7.5 prohibits non-empty operand stacks on backwards branches.
 
-Post-Pass
----------
+## Post-Pass
 
 The post-pass inserts the necessary code for keeping generic context
 alive and cleans up memory used by the reader.
 
-Future Work
------------
+## Future Work
 
 -   [Implement remaining MSIL instructions.](#user-content-Not%20implemented)
 
