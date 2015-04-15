@@ -136,21 +136,8 @@ extern "C"
     jitFilter(PEXCEPTION_POINTERS ExceptionPointersPtr, void *Param);
 extern void _cdecl fatal(int Errnum, ...);
 
-// Global environment config variables (set by GetConfigString).
-// These are defined/set in jit.cpp.
+// Environment config variables
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-extern uint32_t EnvConfigCseOn;
-#ifndef NDEBUG
-extern uint32_t EnvConfigCseBinarySearch;
-extern uint32_t EnvConfigCseMax;
-extern uint32_t EnvConfigCopyPropMax;
-extern uint32_t EnvConfigDeadCodeMax;
-extern uint32_t EnvConfigCseStats;
-#endif // !NDEBUG
 #if !defined(CC_PEVERIFY)
 extern uint32_t EnvConfigTailCallOpt;
 #if !defined(NODEBUG)
@@ -160,18 +147,8 @@ extern uint32_t EnvConfigTailCallMax;
 #endif // !CC_PEVERIFY
 extern uint32_t EnvConfigPInvokeInline;
 extern uint32_t EnvConfigPInvokeCalliOpt;
-extern uint32_t EnvConfigNewGCCalc;
 extern uint32_t EnvConfigTurnOffDebugInfo;
-extern char16_t *EnvConfigJitName;
 
-extern bool HaveEnvConfigCseOn;
-extern bool HaveEnvConfigCseStats;
-#ifndef NDEBUG
-extern bool HaveEnvConfigCseBinarySearch;
-extern bool HaveEnvConfigCseMax;
-extern bool HaveEnvConfigCopyPropMax;
-extern bool HaveEnvConfigDeadCodeMax;
-#endif // !NDEBUG
 #if !defined(CC_PEVERIFY)
 extern bool HaveEnvConfigTailCallOpt;
 #if !defined(NODEBUG)
@@ -181,11 +158,7 @@ extern bool HaveEnvConfigTailCallMax;
 #endif // !CC_PEVERIFY
 extern bool HaveEnvConfigPInvokeInline;
 extern bool HaveEnvConfigPInvokeCalliOpt;
-extern bool HaveEnvConfigNewGCCalc;
 extern bool HaveEnvConfigTurnOffDebugInfo;
-extern bool HaveEnvConfigJitName;
-
-} // extern "C"
 
 #ifdef CC_PEVERIFY
 extern HRESULT VerLastError;
@@ -565,7 +538,7 @@ public:
   /// \brief Return the IL argument ordinal that corresponds to the given
   ///        index.
   ///
-  /// \
+  /// \param Index  The index of the argument in the current argument list.
   ///
   /// \returns The IL argument ordinal.
   uint32_t getILArgForArgIndex(uint32_t Index) const {
@@ -1033,38 +1006,146 @@ void rgnSetCatchClassToken(EHRegion *CatchRegion, mdToken Token);
 /// \returns The finally protecting this try if it exists; else nullptr
 EHRegion *getFinallyRegion(EHRegion *TryRegion);
 
-// Interface to GenIR defined Flow Graph structures.
-// Implementation Supplied by Jit Client
+/// \name Client Flow Graph interface
+///
+///@{
+
+/// \brief Determine the EH region for this flow graph node
+///
+/// One the EH regions have been created, each flow graph node should have an
+/// innermost containing EH region. This method returns that region.
+///
+/// \param FgNode   The FlowGraphNode of interest.
+/// \returns        Associated EH region.
 EHRegion *fgNodeGetRegion(FlowGraphNode *FgNode);
+
+/// \brief Establish the EH region for this flow graph node
+///
+/// Sets up the association between a FlowGraphNode and and EH Region.
+///
+/// \param FgNode   The FlowGraphNode of interest.
+/// \param EhRegion The EH region to associate.
 void fgNodeSetRegion(FlowGraphNode *FgNode, EHRegion *EhRegion);
+
+/// \brief Obtain a list of the successor edges of a FlowGraphNode
+///
+/// \param FgNode   The FlowGraphNode of interest.
+/// \returns        A list of the successor edges, or nullptr if there are no
+///                 successors.
 FlowGraphEdgeList *fgNodeGetSuccessorList(FlowGraphNode *FgNode);
+
+/// \brief Obtain a list of the predecessor edges of a FlowGraphNode
+///
+/// \param FgNode   The FlowGraphNode of interest.
+/// \returns        A list of the predecessor edges, or nullptr if there are no
+///                 predecessors.
 FlowGraphEdgeList *fgNodeGetPredecessorList(FlowGraphNode *FgNode);
 
-// Get the special block-start placekeeping node
+/// \brief Get the IRNode that is the label for a flow graph node.
+///
+/// \param  FgNode  The FlowGraphNode of interest.
+/// \returns        The label for the flow graph node.
 IRNode *fgNodeGetStartIRNode(FlowGraphNode *FgNode);
 
-// Get the first non-placekeeping node in block
+/// \brief Get the first insertion point IR node in a flow graph node.
+///
+/// \param  FgNode  The FlowGraphNode of interest.
+/// \returns        The first insertion point.
 IRNode *fgNodeGetStartInsertIRNode(FlowGraphNode *FgNode);
 
+/// \brief Get the global verification data for a flow graph node.
+///
+/// \param  FgNode  The FlowGraphNode of interest.
+/// \returns        The global verification data for the node.
 GlobalVerifyData *fgNodeGetGlobalVerifyData(FlowGraphNode *Fg);
+
+/// \brief Set the global verification data for a flow graph node.
+///
+/// \param  FgNode  The FlowGraphNode of interest.
+/// \param  GvData  The global verification data to associate.
 void fgNodeSetGlobalVerifyData(FlowGraphNode *Fg, GlobalVerifyData *GvData);
 
+/// \brief Get this flow graph node's number.
+///
+/// \param  FgNode  The FlowGraphNode of interest.
+/// \returns        Number in range [0, number of blocks] unique to this node.
 uint32_t fgNodeGetBlockNum(FlowGraphNode *Fg);
 
+/// \brief Advance a successor edge list to the next edge.
+///
+/// \param FgEdge    The edge list in question.
+/// \returns         Edge list with head at the next edge, or nullptr
+///                  if there are no more successor edges.
 FlowGraphEdgeList *fgEdgeListGetNextSuccessor(FlowGraphEdgeList *FgEdge);
+
+/// \brief Advance a predecessor edge list to the next edge.
+///
+/// \param FgEdge    The edge list in question.
+/// \returns         Edge list with head at the next edge, or nullptr
+///                  if there are no more predecessor edges.
 FlowGraphEdgeList *fgEdgeListGetNextPredecessor(FlowGraphEdgeList *FgEdge);
+
+/// \brief Get the source flow graph node for the first edge in a edge list
+///
+/// \param  FgEdge    The edge list in question.
+/// \returns          The source FlowGraphNode.
 FlowGraphNode *fgEdgeListGetSource(FlowGraphEdgeList *FgEdge);
+
+/// \brief Get the sink flow graph node for the first edge in a edge list
+///
+/// \param  FgEdge    The edge list in question.
+/// \returns          The sink FlowGraphNode.
 FlowGraphNode *fgEdgeListGetSink(FlowGraphEdgeList *FgEdge);
+
+/// \brief Determine if this edge represents exceptional control flow
+///
+/// \param  FgEdge    An edge list.
+/// \returns          True if the edge at the the head of the list describes
+///                   exceptional control flow.
 bool fgEdgeListIsNominal(FlowGraphEdgeList *FgEdge);
+
 #ifdef CC_PEVERIFY
+/// \brief Mark this edge as representing fake control flow added to ensure
+/// all blocks are reachable from the head block.
+///
+/// \param   FgEdge  Edge to mark as fake control flow.
 void fgEdgeListMakeFake(FlowGraphEdgeList *FgEdge);
 #endif
 
+/// \brief Advance a successor edge list to the next edge that represents
+/// actual (non-exceptional) control flow.
+///
+/// \param FgEdge    The edge list in question.
+/// \returns         Edge list with head at the next edge, or nullptr
+///                  if there are no more successor edges.
 FlowGraphEdgeList *fgEdgeListGetNextSuccessorActual(FlowGraphEdgeList *FgEdge);
+
+/// \brief Advance a predecessor edge list to the next edge that represents
+/// actual (non-exceptional) control flow.
+///
+/// \param FgEdge    The edge list in question.
+/// \returns         Edge list with head at the next edge, or nullptr
+///                  if there are no more predecessor edges.
 FlowGraphEdgeList *
 fgEdgeListGetNextPredecessorActual(FlowGraphEdgeList *FgEdge);
+
+/// \brief Obtain a list of the actual (non-exceptional) successor edges of a
+/// FlowGraphNode
+///
+/// \param FgNode   The FlowGraphNode of interest.
+/// \returns        A list of the actual successor edges, or nullptr if there
+///                 are no such successors.
 FlowGraphEdgeList *fgNodeGetSuccessorListActual(FlowGraphNode *Fg);
+
+/// \brief Obtain a list of the actual (non-exceptional) predecessor edges of a
+/// FlowGraphNode
+///
+/// \param FgNode   The FlowGraphNode of interest.
+/// \returns        A list of the actual predecessor edges, or nullptr if there
+///                 are no such predecessors.
 FlowGraphEdgeList *fgNodeGetPredecessorListActual(FlowGraphNode *Fg);
+
+///@}
 
 /// \name Client IR interface
 ///
