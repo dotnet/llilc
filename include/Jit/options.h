@@ -9,8 +9,8 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief Declaration of the Options object to encapsulate JIT options
-/// extracted from CoreCLR config values.
+/// \brief Declaration of the Options class that encapsulates JIT options
+///        extracted from CoreCLR config values.
 ///
 //===----------------------------------------------------------------------===//
 
@@ -70,7 +70,7 @@ public:
 public:
   LLILCJitContext *Context; ///< Invocation CLR Execution Engine flags.
   LLVMDumpLevel DumpLevel;  ///< Dump level for this JIT invocation.
-  OptLevel OptLevel;        ///< Optimization level for this JIT invocation.
+  ::OptLevel OptLevel;      ///< Optimization level for this JIT invocation.
   bool IsAltJit;            ///< True if compiling as the alternative JIT.
 
 private:

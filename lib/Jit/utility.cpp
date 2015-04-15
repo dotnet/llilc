@@ -1,8 +1,20 @@
-// Utility code
+//===----------------- lib/Jit/utility.cpp ----------------------*- C++ -*-===//
+//
+// LLILC
+//
+// Copyright (c) Microsoft. All rights reserved.
+// Licensed under the MIT license.
+// See LICENSE file in the project root for full license information.
+//
+//===----------------------------------------------------------------------===//
+///
+/// \file
+/// \brief Definitions of utility classes.
+///
+//===----------------------------------------------------------------------===//
 
 #include "global.h"
 #include "jitpch.h"
-
 #include "utility.h"
 #include "llvm/Support/ConvertUTF.h"
 
@@ -10,12 +22,12 @@
 
 bool MethodSet::contains(const char *Name, const char *ClassName,
                          PCCOR_SIGNATURE sig) {
-  assert(this->isInitialized());
+  assert(isInitialized());
 
   std::list<MethodName>::const_iterator iterator;
 
-  for (iterator = this->MethodList->begin();
-       iterator != this->MethodList->end(); ++iterator) {
+  for (iterator = MethodList->begin(); iterator != MethodList->end();
+       ++iterator) {
     if (iterator->Name->compare("*") == 0) {
       return true;
     }

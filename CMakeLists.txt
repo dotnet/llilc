@@ -147,18 +147,18 @@ endif()
 include_directories("${CORECLR_INCLUDE}")
 
 if( UNIX )
-  find_library(CORECLR_PATH "coreclr"
+  find_library(CORECLR_PATH "coreclrpal"
     HINTS ${CORECLR_SEARCH_PATHS}
-    DOC "Path to libcoreclr"
+    DOC "Path to libcoreclrpal"
     NO_DEFAULT_PATH)
-  find_library(CORECLR_PATH "coreclr"
-    DOC "Path to libcoreclr")
+  find_library(CORECLR_PATH "coreclrpal"
+    DOC "Path to libcoreclrpal")
 
   if( NOT ${CORECLR_PATH} STREQUAL CORECLR_PATH-NOTFOUND AND EXISTS "${CORECLR_PATH}" )
     get_filename_component(WITH_CORECLR_ABS "${CORECLR_SO_PATH}" DIRECTORY CACHE)
     link_directories("${WITH_CORECLR_ABS}")
   else()
-    message(FATAL_ERROR "Could not find libcoreclr. Please set WITH_CORECLR to a directory where CoreCLR was built or installed.")
+    message(FATAL_ERROR "Could not find libcoreclrpal. Please set WITH_CORECLR to a directory where CoreCLR was built or installed.")
   endif()
 endif()
 
