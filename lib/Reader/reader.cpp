@@ -1630,9 +1630,6 @@ void ReaderBase::rgnCreateRegionTree(void) {
   EHClauses = nullptr;
 
   if (MethodInfo->EHcount > 0) {
-    uint32_t NumEHMarkers;
-
-    NumEHMarkers = 2 * MethodInfo->EHcount;
     EHClauses = (CORINFO_EH_CLAUSE *)getProcMemory(sizeof(CORINFO_EH_CLAUSE) *
                                                    MethodInfo->EHcount);
     ASSERTNR(EHClauses);
@@ -1828,7 +1825,6 @@ void ReaderBase::rgnCreateRegionTree(void) {
   // hopefully this happens in MSILReadProc somewhere
 
   EhRegionTree = RegionTreeRoot;
-  AllRegionList = AllRegionList;
 }
 
 //
@@ -2874,7 +2870,7 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
   IRNode *BranchNode, *BlockNode, *TheExitLabel;
   FlowGraphNode *GraphNode;
   uint32_t CurrentOffset, BranchOffset, TargetOffset, NextOffset, NumCases;
-  EHRegion *Region, *FinallyRegion;
+  EHRegion *FinallyRegion;
   bool IsShortInstr, IsConditional, IsTailCall, IsReadOnly, PreviousWasPrefix;
   bool LoadFtnToken;
   mdToken TokenConstrained;
@@ -5458,8 +5454,6 @@ IRNode *ReaderBase::rdrGetCodePointerLookupCallTarget(
   ASSERTNR(!CallTargetData->getSigInfo()->hasTypeArg());
   ASSERTNR(!CallTargetData->getSigInfo()->isVarArg());
 
-  CORINFO_CALL_INFO *CallInfo = CallTargetData->getCallInfo();
-
   return rdrGetCodePointerLookupCallTarget(CallTargetData->getCallInfo(),
                                            CallTargetData->IsIndirect);
 }
@@ -6395,7 +6389,7 @@ void ReaderBase::readBytesForFlowGraphNodeHelper(
   uint32_t TargetOffset;
   uint8_t *Operand;
   mdToken Token;
-  ReaderAlignType AlignmentPrefix = Reader_AlignUnknown;
+  ReaderAlignType AlignmentPrefix = Reader_AlignNatural;
   bool HasVolatilePrefix = false;
   bool HasTailCallPrefix = false;
   bool HasReadOnlyPrefix = false;
@@ -6408,10 +6402,6 @@ void ReaderBase::readBytesForFlowGraphNodeHelper(
   int MappedValue;
 
   TheVerificationState = verifyInitializeBlock(Fg, CurrentOffset);
-
-  AlignmentPrefix = Reader_AlignNatural;
-  HasVolatilePrefix = false;
-  HasTailCallPrefix = false;
 
   ILInput = MethodInfo->ILCode;
   ILSize = MethodInfo->ILCodeSize;
@@ -7865,7 +7855,6 @@ ReaderBase::fgPrependUnvisitedSuccToWorklist(FlowGraphNodeWorkList *Worklist,
 void ReaderBase::msilToIR(void) {
 
   FlowGraphNodeWorkList *Worklist;
-  FlowGraphNodeList *Temp;
   FlowGraphNode *FgHead, *FgTail;
 
   // Compiler dependent pre-pass
@@ -7961,7 +7950,7 @@ void ReaderBase::msilToIR(void) {
   // Walk the graph in depth-first order to discover reachable nodes but don't
   // process them yet. All reachable nodes are marked as visited.
   while (Worklist != nullptr) {
-    FlowGraphNode *Block, *Parent;
+    FlowGraphNode *Block;
 
     // Pop top block
     Block = Worklist->Block;
