@@ -1,3 +1,19 @@
+//===----------------- lib/Jit/options.cpp ----------------------*- C++ -*-===//
+//
+// LLILC
+//
+// Copyright (c) Microsoft. All rights reserved.
+// Licensed under the MIT license.
+// See LICENSE file in the project root for full license information.
+//
+//===----------------------------------------------------------------------===//
+///
+/// \file
+/// \brief Definition of the Options class that encapsulates JIT options
+///        extracted from CoreCLR config values.
+///
+//===----------------------------------------------------------------------===//
+
 #include "global.h"
 #include "jitpch.h"
 #include "LLILCJit.h"
@@ -17,19 +33,19 @@ Options::Options(LLILCJitContext *Context) : Context(Context) {}
 
 void Options::initialize() {
   // Set 'IsAltJit' based on environment information.
-  this->setIsAltJit();
+  setIsAltJit();
 
   // Set dump level for this JIT invocation.
-  this->setDumpLevel();
+  setDumpLevel();
 
   // Set optimization level for this JIT invocation.
-  this->setOptLevel();
+  setOptLevel();
 }
 
 void Options::setIsAltJit() {
   // Initial state is that we are not an alternative jit until proven otherwise;
 
-  this->IsAltJit = false;
+  IsAltJit = false;
 
 // NDEBUG is !Debug
 
@@ -40,71 +56,68 @@ void Options::setIsAltJit() {
   // Get/reuse method set that contains the altjit method value.
   MethodSet *AltJit = nullptr;
 
-  if (this->Context->Flags & CORJIT_FLG_PREJIT) {
-    wchar_t *NgenStr =
-        this->Context->JitInfo->getStringConfigValue(L"AltJitNgen");
+  if (Context->Flags & CORJIT_FLG_PREJIT) {
+    wchar_t *NgenStr = Context->JitInfo->getStringConfigValue(L"AltJitNgen");
     std::unique_ptr<std::string> NgenUtf8 = Convert::wideToUtf8(NgenStr);
-    this->AltJitNgenMethodSet.init(std::move(NgenUtf8));
-    this->Context->JitInfo->freeStringConfigValue(NgenStr);
+    AltJitNgenMethodSet.init(std::move(NgenUtf8));
+    Context->JitInfo->freeStringConfigValue(NgenStr);
     AltJit = &AltJitNgenMethodSet;
   } else {
-    wchar_t *JitStr = this->Context->JitInfo->getStringConfigValue(L"AltJit");
+    wchar_t *JitStr = Context->JitInfo->getStringConfigValue(L"AltJit");
     // Move this to the UTIL code and ifdef it for platform
     std::unique_ptr<std::string> JitUtf8 = Convert::wideToUtf8(JitStr);
-    this->AltJitMethodSet.init(std::move(JitUtf8));
-    this->Context->JitInfo->freeStringConfigValue(JitStr);
+    AltJitMethodSet.init(std::move(JitUtf8));
+    Context->JitInfo->freeStringConfigValue(JitStr);
     AltJit = &AltJitMethodSet;
   }
 
 #ifdef ALT_JIT
-  if (AltJit->contains(this->Context->MethodName.data(), nullptr,
-                       this->Context->MethodInfo->args.pSig)) {
-    this->IsAltJit = true;
+  if (AltJit->contains(Context->MethodName.data(), nullptr,
+                       Context->MethodInfo->args.pSig)) {
+    IsAltJit = true;
   }
 #endif // ALT_JIT
 
 #else
-  if (this->Context->Flags & CORJIT_FLG_PREJIT) {
-    wchar_t *NgenStr =
-        this->Context->JitInfo->getStringConfigValue(L"AltJitNgen");
+  if (Context->Flags & CORJIT_FLG_PREJIT) {
+    wchar_t *NgenStr = Context->JitInfo->getStringConfigValue(L"AltJitNgen");
     std::unique_ptr<std::string> NgenUtf8 = Convert::wideToUtf8(NgenStr);
     if (NgenUtf8->compare("*") == 0) {
-      this->IsAltJit = true;
+      IsAltJit = true;
     }
   } else {
-    wchar_t *JitStr = this->Context->JitInfo->getStringConfigValue(L"AltJit");
+    wchar_t *JitStr = Context->JitInfo->getStringConfigValue(L"AltJit");
     std::unique_ptr<std::string> JitUtf8 = Convert::wideToUtf8(JitStr);
     if (JitUtf8->compare("*") == 0) {
-      this->IsAltJit = true;
+      IsAltJit = true;
     }
   }
 #endif
 }
 
 void Options::setDumpLevel() {
-  wchar_t *LevelWStr =
-      this->Context->JitInfo->getStringConfigValue(L"DUMPLLVMIR");
+  wchar_t *LevelWStr = Context->JitInfo->getStringConfigValue(L"DUMPLLVMIR");
   if (LevelWStr) {
     std::unique_ptr<std::string> Level = Convert::wideToUtf8(LevelWStr);
     std::transform(Level->begin(), Level->end(), Level->begin(), ::toupper);
     if (Level->compare("VERBOSE") == 0) {
-      this->DumpLevel = VERBOSE;
+      DumpLevel = VERBOSE;
       return;
     }
     if (Level->compare("SUMMARY") == 0) {
-      this->DumpLevel = SUMMARY;
+      DumpLevel = SUMMARY;
       return;
     }
   }
 
-  this->DumpLevel = NODUMP;
+  DumpLevel = NODUMP;
 }
 
 void Options::setOptLevel() {
   // Currently we only check for the debug flag but this will be extended
   // to account for further opt levels as we move forward.
-  if ((this->Context->Flags & CORJIT_FLG_DEBUG_CODE) != 0) {
-    this->OptLevel = OptLevel::DEBUG_CODE;
+  if ((Context->Flags & CORJIT_FLG_DEBUG_CODE) != 0) {
+    OptLevel = ::OptLevel::DEBUG_CODE;
   }
 }
 

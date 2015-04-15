@@ -96,7 +96,7 @@ public:
 
   /// \name Per invocation JIT Options
   //@{
-  Options Options;
+  ::Options Options;
   //@}
 
   /// \name Jit output sizes
