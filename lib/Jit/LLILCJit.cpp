@@ -45,24 +45,6 @@
 
 using namespace llvm;
 
-// Get the LLVM IR dump level. For now this is done by directly
-// accessing environment variable. When CLR config support is
-// included, update it here.
-LLVMDumpLevel dumpLevel() {
-  const char *LevelCStr = getenv("DUMPLLVMIR");
-  if (LevelCStr) {
-    std::string Level = LevelCStr;
-    std::transform(Level.begin(), Level.end(), Level.begin(), ::toupper);
-    if (Level.compare("VERBOSE") == 0) {
-      return VERBOSE;
-    }
-    if (Level.compare("SUMMARY") == 0) {
-      return SUMMARY;
-    }
-  }
-  return NODUMP;
-}
-
 // Get the GC-Scheme used by the runtime -- conservative/precise
 // For now this is done by directly accessing environment variable.
 // When CLR config support is included, update it here.
