@@ -1890,6 +1890,7 @@ void GenIR::fgNodeSetEndMSILOffset(FlowGraphNode *Fg, uint32_t Offset) {
 FlowGraphNode *GenIR::fgSplitBlock(FlowGraphNode *Block, IRNode *Node) {
   Instruction *Inst = (Instruction *)Node;
   BasicBlock *TheBasicBlock = (BasicBlock *)Block;
+  bool PropagatesStack = fgNodePropagatesOperandStack(Block);
   BasicBlock *NewBlock;
   if (Inst == nullptr) {
     NewBlock = BasicBlock::Create(*JitContext->LLVMContext, "", Function,
@@ -1925,6 +1926,7 @@ FlowGraphNode *GenIR::fgSplitBlock(FlowGraphNode *Block, IRNode *Node) {
       BranchInst::Create(NewBlock, TheBasicBlock);
     }
   }
+  fgNodeSetPropagatesOperandStack((FlowGraphNode *)NewBlock, PropagatesStack);
   return (FlowGraphNode *)NewBlock;
 }
 
