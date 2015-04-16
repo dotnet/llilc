@@ -1679,6 +1679,7 @@ void ReaderBase::rgnCreateRegionTree(void) {
 
   RegionTreeRoot = rgnMakeRegion(ReaderBaseNS::RGN_Root, nullptr,
                                  RegionTreeRoot, &AllRegionList);
+  rgnSetEndMSILOffset(RegionTreeRoot, MethodInfo->ILCodeSize);
   RegionTree = RegionTreeRoot;
 
   // Map the clause information into try regions for later processing
