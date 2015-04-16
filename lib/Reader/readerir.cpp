@@ -1761,6 +1761,9 @@ IRNode *GenIR::convertFromStackType(IRNode *Node, CorInfoType CorType,
   }
 
   case Type::TypeID::StructTyID:
+    if (Ty != ResultTy) {
+      throw NotYetImplementedException("mismatching struct types");
+    }
     ASSERT(Ty == ResultTy);
     // No conversions possible/necessary.
     break;
@@ -2561,7 +2564,7 @@ IRNode *GenIR::simpleFieldAddress(IRNode *BaseAddress,
     // Double-check that the field index is sensible. Note
     // in unverifiable IL we may not have proper referent types and
     // so may see what appear to be unrelated field accesses.
-    if (BaseObjStructTy->getNumElements() >= FieldIndex) {
+    if (BaseObjStructTy->getNumElements() > FieldIndex) {
       const DataLayout *DataLayout = JitContext->EE->getDataLayout();
       const StructLayout *StructLayout =
           DataLayout->getStructLayout(BaseObjStructTy);
@@ -5565,6 +5568,11 @@ Type *GenIR::getStackMergeType(Type *Ty1, Type *Ty2) {
     }
     return getType(CORINFO_TYPE_CLASS, MergedClass);
   }
+
+  if (Ty1->isStructTy() && Ty2->isStructTy()) {
+    throw NotYetImplementedException("mismatching PHI struct types");
+  }
+
   ASSERT(UNREACHED);
   return nullptr;
 }
