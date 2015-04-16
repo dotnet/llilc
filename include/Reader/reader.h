@@ -2926,7 +2926,7 @@ public:
   methodNeedsToKeepAliveGenericsContext(bool KeepGenericsCtxtAlive) = 0;
 
   // Called to instantiate an empty reader stack.
-  virtual ReaderStack *createStack(uint32_t MaxStack, ReaderBase *Reader) = 0;
+  virtual ReaderStack *createStack() = 0;
 
   // Called when reader begins processing method.
   virtual void readerPrePass(uint8_t *Buffer, uint32_t NumBytes) = 0;

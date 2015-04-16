@@ -505,7 +505,7 @@ public:
   methodNeedsToKeepAliveGenericsContext(bool KeepGenericsCtxtAlive) override;
 
   // Called to instantiate an empty reader stack.
-  ReaderStack *createStack(uint32_t MaxStack, ReaderBase *Reader) override;
+  ReaderStack *createStack() override;
 
   // Called when reader begins processing method.
   void readerPrePass(uint8_t *Buf, uint32_t NumBytes) override;
