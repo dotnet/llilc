@@ -4785,14 +4785,29 @@ BasicBlock *GenIR::splitCurrentBlock(TerminatorInst **Goto) {
   Instruction *NextInstruction =
       (InsertPoint == CurrentBlock->end() ? nullptr
                                           : (Instruction *)InsertPoint);
+  uint32_t CurrentEndOffset =
+      fgNodeGetEndMSILOffset((FlowGraphNode *)CurrentBlock);
+  uint32_t SplitOffset;
 
-  // Note that we split at offset NextInstrOffset rather than CurrInstrOffset.
-  // We're already generating the IR for the instr at CurrInstrOffset, and using
-  // NextInstrOffset here ensures that we won't redundantly try to add this
-  // instruction again when processing moves to NewBlock.
-  BasicBlock *NewBlock =
-      ReaderBase::fgSplitBlock((FlowGraphNode *)CurrentBlock, NextInstrOffset,
-                               (IRNode *)NextInstruction);
+  if (CurrentEndOffset >= NextInstrOffset) {
+    // Split at offset NextInstrOffset rather than CurrInstrOffset.  We're
+    // already generating the IR for the instr at CurrInstrOffset, and using
+    // NextInstrOffset here ensures that we won't redundantly try to add this
+    // instruction again when processing moves to NewBlock.
+
+    SplitOffset = NextInstrOffset;
+  } else {
+    // It may be the case that we're splitting a point block, whose point is
+    // CurrInstrOffset rather than NextInstrOffset.  In that case, give the new
+    // point block the same point as the old one, to ensure that the "split"
+    // operation never produces a block whose IL offset range isn't contained
+    // in the original block's range.
+
+    assert(CurrentEndOffset == CurrInstrOffset);
+    SplitOffset = CurrentEndOffset;
+  }
+  BasicBlock *NewBlock = ReaderBase::fgSplitBlock(
+      (FlowGraphNode *)CurrentBlock, SplitOffset, (IRNode *)NextInstruction);
 
   if (Goto != nullptr) {
     // Report the created goto to the caller
