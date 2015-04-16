@@ -241,7 +241,7 @@ public:
 
   /// \name CoreCLR GC information
   //@{
-  bool ShouldUseConservativeGC; ///< Whether the GC is conservative/precise
+  bool ShouldInsertStatepoints; ///< Whether to insert gc.statepoint intrinsics
   //@}
 
 private:
