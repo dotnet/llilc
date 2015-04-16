@@ -232,7 +232,7 @@ struct RuntimeFilterParams {
 /// actually has GC pointers, so \p NumGCPtrs should be nonzero.
 struct GCLayout {
   uint32_t NumGCPointers; ///< Total number of gc pointers to report
-  uint8_t GCPointers[0];  ///< Array indicating location of the gc pointers
+  uint8_t GCPointers[1];  ///< Array indicating location of the gc pointers
 };
 
 /// \brief Structure that encapsulates type information for the values passed to
