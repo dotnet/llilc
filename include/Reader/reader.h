@@ -2714,6 +2714,13 @@ public:
   /// propagate operand stack.
   bool fgNodeHasMultiplePredsPropagatingStack(FlowGraphNode *Node);
 
+  /// Check whether this node has any predecessors that propagate operand stack.
+  ///
+  /// \param Node Flow graph node.
+  /// \returns true iff this flow graph node has any predecessors that propagate
+  /// operand stack.
+  bool fgNodeHasNoPredsPropagatingStack(FlowGraphNode *Node);
+
   virtual IRNode *
   getStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken) = 0;
   virtual void initBlk(IRNode *NumBytes, IRNode *ValuePerByte,

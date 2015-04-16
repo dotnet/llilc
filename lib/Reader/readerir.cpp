@@ -5397,15 +5397,20 @@ void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
     FlowGraphNode *SuccessorBlock = fgEdgeListGetSink(SuccessorList);
 
     if (!fgNodeHasMultiplePredsPropagatingStack(SuccessorBlock)) {
-      // The current node is the only relevant predecessor of this Successor.
-      ASSERTNR(fgNodePropagatesOperandStack(CurrentBlock));
       // We need to create a stack for the Successor and copy the items from the
       // current stack.
       if (!fgNodePropagatesOperandStack(SuccessorBlock)) {
         // This successor block doesn't need a stack. This is a common case for
         // implicit exception throw blocks or conditional helper calls.
       } else {
-        fgNodeSetOperandStack(SuccessorBlock, ReaderOperandStack->copy());
+        // The current node is the only relevant predecessor of this Successor.
+        if (fgNodePropagatesOperandStack(CurrentBlock)) {
+          fgNodeSetOperandStack(SuccessorBlock, ReaderOperandStack->copy());
+        } else {
+          // The successor block starts with empty stack.
+          assert(fgNodeHasNoPredsPropagatingStack(SuccessorBlock));
+          fgNodeSetOperandStack(SuccessorBlock, createStack());
+        }
       }
     } else {
       ReaderStack *SuccessorStack = fgNodeGetOperandStack(SuccessorBlock);
