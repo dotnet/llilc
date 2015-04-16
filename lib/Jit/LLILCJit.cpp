@@ -216,6 +216,8 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
     return CORJIT_INTERNALERROR;
   }
 
+  // Don't allow the EE to search for external symbols.
+  NewEngine->DisableSymbolSearching();
   Context.EE = NewEngine;
 
   // Now jit the method.
