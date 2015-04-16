@@ -46,6 +46,9 @@ build/
 *.log
 *.scc
 
+# Python cache
+__pycache__
+
 # Visual C++ cache files
 ipch/
 *.aps
