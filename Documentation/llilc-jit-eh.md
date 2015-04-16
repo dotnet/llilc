@@ -349,9 +349,9 @@ caller.  The SEH support currently being added to LLVM expects filters to be
 outlined by the front-end (and support for this outlining has been [added to
 clang](http://reviews.llvm.org/rL226760)).  Similar outlining will need to
 be performed by LLILC.  With this approach, the invocation of the outlined
-filter can conceptually be modeled as part of the execution of the
-beginfinally/beginfault intrinsic that [LLILC will insert](#finally-handlers)
-at the start of each finally/fault handler.
+filter is modeled as an effect of the `invoke` target (the invoke target
+must call an external function to raise an exception, which therefore must
+be conservatively modeled as possibly calling the filter function).
 
 
 ## Translation from MSIL to LLVM IR in Reader
@@ -404,12 +404,8 @@ write aliases (in particular, they need to interfere with `rethrow`).
 Any region protected by a finally handler will have an associated
 `landingpad` that is the target of exception edges.  The `landingpad` will
 have a `cleanup` clause.  The code of the finally handler will follow the
-`landingpad`, prefixed by a `beginfinally`.  The `beginfinally` intrinsic
-will model the effects of potentially calling outer filters before invoking
-the finally (Note: LLVM currently does not have a `beginfinally` intrinsic;
-it can be specific to LLILC initially but may be a good candidate to push up
-into llvm).  Control at the end of a finally handler may flow to a number of
-different places (an outer exception handler, or the target of any `leave`
+`landingpad`.  Control at the end of a finally handler may flow to a number
+of different places (an outer exception handler, or the target of any `leave`
 instruction that crosses the finally handler).  The code used for this
 sequence should match what the LLVM optimizer and funclet outliner
 expect to see; the outliner logic is [still being
@@ -428,8 +424,6 @@ One performance consideration of note for finally handlers is that jits
 often make a clone of the finally handler for the primary non-exceptional
 path, to allow better optimization (and avoid the overhead of a call at
 runtime) along that path.  This will be considered after initial bring-up.
-It would be legal to remove the `beginfinally` intrinsic call in the
-non-exceptional clone when this is done.
 
 ### Fault Handlers
 Fault handlers will essentially be treated like [finally handlers](#finally-handlers),
@@ -438,15 +432,13 @@ during the processing of `leave` instructions (and in general will never
 insert code to enter fault handlers except from landing pads), and therefore
 fault handlers don't need associated continuation selector variables (the end
 of a fault handler will branch unconditionally to the exception continuation).
-It may make sense to use a `beginfault` intrinsic rather than `beginfinally`
-for fault handlers.
 
 ### Filter Handlers
 Filters have a "filter part" and a "handler part".  The "filter part" will
 be outlined at the start of compilation, so that referenced locals can be
-moved to closures and the calls to filters implicit in beginfinally
-intrinsic invocations are a sound representation of the control flow into
-and out of filters.  The "handler part" will be treated similar to a [catch
+moved to closures and the calls to filters implicit in throwing `invoke`
+targets are a sound representation of the control flow into and out of
+filters.  The "handler part" will be treated similar to a [catch
 handler](#catch-handlers), with the difference that, following the LLVM
 convention for SEH, the address of the outlined filter function will appear
 in the landing pad where the type of caught exception appears for catch
@@ -536,7 +528,6 @@ In summary, the plan/status is:
    - [ ] Support for `rethrow`
    - [ ] Finally handler support
      - [ ] In reader (includes `leave` processing, continuation selection)
-     - [ ] Beginfinally intrinsic handling
      - [ ] EH Clause generation
    - [ ] Filter handler support
      - [ ] In reader (includes early outlining)
