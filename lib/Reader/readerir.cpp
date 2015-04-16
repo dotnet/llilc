@@ -80,10 +80,12 @@ ReaderStack *GenStack::copy() {
   return Copy;
 }
 
-ReaderStack *GenIR::createStack(uint32_t MaxStack, ReaderBase *Reader) {
-  void *Buffer = Reader->getTempMemory(sizeof(GenStack));
+ReaderStack *GenIR::createStack() {
+  uint32_t MaxStack =
+      std::min(MethodInfo->maxStack, std::min(100U, MethodInfo->ILCodeSize));
+  void *Buffer = getTempMemory(sizeof(GenStack));
   // extra 16 should reduce frequency of reallocation when inlining / jmp
-  return new (Buffer) GenStack(MaxStack + 16, Reader);
+  return new (Buffer) GenStack(MaxStack + 16, this);
 }
 
 #pragma endregion
@@ -5412,10 +5414,7 @@ void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
         // We need to create a new stack for the Successor and populate it
         // with PHI instructions corresponding to the values on the current
         // stack.
-        SuccessorStack =
-            createStack(std::min(MethodInfo->maxStack,
-                                 std::min(100U, MethodInfo->ILCodeSize)),
-                        this);
+        SuccessorStack = createStack();
         fgNodeSetOperandStack(SuccessorBlock, SuccessorStack);
         CreatePHIs = true;
       }
