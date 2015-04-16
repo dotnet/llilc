@@ -107,10 +107,11 @@ private:
   std::list<MethodName> *MethodList = nullptr;
 };
 
-/// \brief Class implementing a platform independent wchar_t to utf8.
+/// \brief Class implementing miscellaneous conversion functions.
 class Convert {
 public:
-  static std::unique_ptr<std::string> wideToUtf8(const wchar_t *wideStr);
+  /// Convert a UTF-16 string to a UTF-8 string.
+  static std::unique_ptr<std::string> utf16ToUtf8(const char16_t *wideStr);
 };
 
 #endif // UTILITY_H

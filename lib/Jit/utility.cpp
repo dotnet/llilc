@@ -43,8 +43,13 @@ bool MethodSet::contains(const char *Name, const char *ClassName,
   return false;
 }
 
-std::unique_ptr<std::string> Convert::wideToUtf8(const wchar_t *WideStr) {
-  ArrayRef<char> SrcBytes((const char *)WideStr, (2 * wcslen(WideStr)));
+std::unique_ptr<std::string> Convert::utf16ToUtf8(const char16_t *WideStr) {
+  // Get the length of the input
+  size_t SrcLen = 0;
+  for (; WideStr[SrcLen] != (char16_t)0; SrcLen++)
+    ;
+
+  ArrayRef<char> SrcBytes((const char *)WideStr, 2 * SrcLen);
   std::unique_ptr<std::string> OutString(new std::string);
   llvm::convertUTF16ToUTF8String(SrcBytes, *OutString);
 
