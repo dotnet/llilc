@@ -31,7 +31,7 @@ namespace ReaderBaseNS {
 /// The operations indicated by these opcodes expect a single argument and
 /// produce a single result.
 enum UnaryOpcode {
-  Neg = 0, ///< Produces the two's copmlement of its argument.
+  Neg = 0, ///< Produces the two's complement of its argument.
   Not,     ///< Produces the one's complement of its argument.
 
   LastUnaryOpcode
@@ -44,7 +44,7 @@ enum UnaryOpcode {
 enum BinaryOpcode {
   Add = 0, ///< Produces the sum of its arguments.
 
-  AddOvf, ///< Produces the sum of its arugments and throws an exception if
+  AddOvf, ///< Produces the sum of its arguments and throws an exception if
           ///< the result is out of range.
 
   AddOvfUn, ///< Produces the sum of its arguments (treating both as unsigned
@@ -64,16 +64,16 @@ enum BinaryOpcode {
   MulOvf, ///< Produces the product of its arguments and throws an exception
           ///< if the result is out of range.
 
-  MulOvfUn, ///< Priduces the product of its arguments (treating both as
+  MulOvfUn, ///< Produces the product of its arguments (treating both as
             ///< unsigned integers) and throws an exception if the result is
             ///< out of range.
 
   Or, ///< Produces the bitwise or of its arguments.
 
-  Rem, ///< Produces the quotient of its first argument divided by its
+  Rem, ///< Produces the remainder of its first argument divided by its
        ///< second argument.
 
-  RemUn, ///< Produces the quotient of its first argument divided by its
+  RemUn, ///< Produces the remainder of its first argument divided by its
          ///< second argument, treating both arguments as unsigned integers.
 
   Sub, ///< Produces the difference of its arguments.
@@ -350,8 +350,8 @@ enum LdElemOpcode {
   LdelemI8, ///< Produces the 8-byte signed integer at the given index of
             ///< the given array.
 
-  LdelemI, ///< Produces the 8-byte unsigned integer at the given index of
-           ///< the given array.
+  LdelemI, ///< Produces the natively sized signed integer at the given index
+           ///< of the given array.
 
   LdelemR4, ///< Produces the 4-byte IEC 60559:1989 floating-point number at
             ///< the given index of the given array.
