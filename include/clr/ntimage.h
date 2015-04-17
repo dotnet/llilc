@@ -1367,7 +1367,7 @@ typedef struct _IMAGE_RESOURCE_DIRECTORY_ENTRY {
         struct {
             ULONG NameOffset:31;
             ULONG NameIsString:1;
-        };
+        } NameInfo;
         ULONG   Name;
         USHORT  Id;
     };
@@ -1376,7 +1376,7 @@ typedef struct _IMAGE_RESOURCE_DIRECTORY_ENTRY {
         struct {
             ULONG   OffsetToDirectory:31;
             ULONG   DataIsDirectory:1;
-        };
+        } DirectoryInfo;
     };
 } IMAGE_RESOURCE_DIRECTORY_ENTRY, *PIMAGE_RESOURCE_DIRECTORY_ENTRY;
 

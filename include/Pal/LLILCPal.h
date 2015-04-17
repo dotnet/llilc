@@ -157,8 +157,10 @@ extern "C" {
 
 #define UNALIGNED
 
-#if defined(__GNUC__)
+#if defined(__GNUC__) && !defined(BIT64)
 #define __cdecl __attribute__((cdecl))
+#else
+#define __cdecl
 #endif
 
 #define PALIMPORT EXTERN_C
