@@ -436,7 +436,7 @@ public:
   };
 
   void rethrow() override { throw NotYetImplementedException("rethrow"); };
-  void returnOpcode(IRNode *Opr, bool SynchronousMethod) override;
+  void returnOpcode(IRNode *Opr, bool IsSynchronizedMethod) override;
   IRNode *shift(ReaderBaseNS::ShiftOpcode Opcode, IRNode *ShiftAmount,
                 IRNode *ShiftOperand) override;
   IRNode *sizeofOpcode(CORINFO_RESOLVED_TOKEN *ResolvedToken) override;
@@ -754,6 +754,13 @@ public:
   /// PHI of NullCheckArg and the generated call instruction.
   IRNode *callRuntimeHandleHelper(CorInfoHelpFunc Helper, IRNode *Arg1,
                                   IRNode *Arg2, IRNode *NullCheckArg);
+
+  /// Generate a helper call to enter or exit a monitor used by synchronized
+  /// methods.
+  ///
+  /// \param IsEnter true if the monitor should be entered; false if the monitor
+  /// should be exited.
+  void callMonitorHelper(bool IsEnter);
 
   IRNode *convertToBoxHelperArgumentType(IRNode *Opr,
                                          CorInfoType CorType) override;
@@ -1274,6 +1281,13 @@ private:
   bool NeedsSecurityObject;
   llvm::BasicBlock *EntryBlock;
   llvm::Instruction *TempInsertionPoint;
+  IRNode *MethodSyncHandle; ///< If the method is synchronized, this is
+                            ///< the handle used for entering and exiting
+                            ///< the monitor.
+  llvm::Value *SyncFlag;    ///< For synchronized methods this flag
+                            ///< indicates whether the monitor has been
+                            ///< entered. It is set and checked by monitor
+                            ///< helpers.
   uint32_t TargetPointerSizeInBits;
   const uint32_t UnmanagedAddressSpace = 0;
   const uint32_t ManagedAddressSpace = 1;

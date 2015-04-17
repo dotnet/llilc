@@ -303,9 +303,10 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
       ABIMethodSignature(MethodSignature, *this, *JitContext->TheABIInfo);
   Function = ABIMethodSig.createFunction(*this, *JitContext->CurrentModule);
 
-  EntryBlock = BasicBlock::Create(*JitContext->LLVMContext, "entry", Function);
+  llvm::LLVMContext &LLVMContext = *JitContext->LLVMContext;
+  EntryBlock = BasicBlock::Create(LLVMContext, "entry", Function);
 
-  LLVMBuilder = new IRBuilder<>(*this->JitContext->LLVMContext);
+  LLVMBuilder = new IRBuilder<>(LLVMContext);
   LLVMBuilder->SetInsertPoint(EntryBlock);
 
   // Note numArgs may exceed the IL argument count when there
@@ -367,9 +368,26 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   // Check for special cases where the Jit needs to do extra work.
   const uint32_t MethodFlags = getCurrentMethodAttribs();
 
-  // TODO: support for synchronized methods
+  // Check for synchronized method. If a method is synchronized the JIT is
+  // required to insert a helper call to MONITOR_ENTER before we start the user
+  // code. A similar call to MONITOR_EXIT will be placed at the return site.
+  // TODO: when we start catching exceptions we should create a try/fault for
+  // the entire method so that we can exit the monitor on unhandled exceptions.
+  MethodSyncHandle = nullptr;
+  SyncFlag = nullptr;
   if (MethodFlags & CORINFO_FLG_SYNCH) {
-    throw NotYetImplementedException("synchronized method");
+    MethodSyncHandle = rdrGetCritSect();
+    Type *SyncFlagType = Type::getInt8Ty(LLVMContext);
+
+    // Create address taken local SyncFlag. This will be passed by address to
+    // MONITOR_ENTER and MONITOR_EXIT. MONITOR_ENTER will set SyncFlag once lock
+    // has been obtained, MONITOR_EXIT only releases lock if SyncFlag is set.
+    SyncFlag = createTemporary(SyncFlagType, "SyncFlag");
+    Constant *ZeroConst = Constant::getNullValue(SyncFlagType);
+    LLVMBuilder->CreateStore(ZeroConst, SyncFlag);
+
+    const bool IsEnter = true;
+    callMonitorHelper(IsEnter);
   }
 
   if ((JitFlags & CORJIT_FLG_DEBUG_CODE) && !(JitFlags & CORJIT_FLG_IL_STUB)) {
@@ -537,6 +555,19 @@ void GenIR::insertIRForSecurityObject() {
 
   // TODO: we must convey the offset of the security object to the runtime
   // via the GC encoding.
+}
+
+void GenIR::callMonitorHelper(bool IsEnter) {
+  CorInfoHelpFunc HelperId;
+  const uint32_t MethodFlags = getCurrentMethodAttribs();
+  if (MethodFlags & CORINFO_FLG_STATIC) {
+    HelperId =
+        IsEnter ? CORINFO_HELP_MON_ENTER_STATIC : CORINFO_HELP_MON_EXIT_STATIC;
+  } else {
+    HelperId = IsEnter ? CORINFO_HELP_MON_ENTER : CORINFO_HELP_MON_EXIT;
+  }
+  callHelperImpl(HelperId, Type::getVoidTy(*JitContext->LLVMContext),
+                 MethodSyncHandle, (IRNode *)SyncFlag);
 }
 
 #pragma endregion
@@ -4236,44 +4267,56 @@ bool GenIR::fgOptRecurse(mdToken Token) {
   return true;
 }
 
-void GenIR::returnOpcode(IRNode *Opr, bool IsSynchronousMethod) {
+void GenIR::returnOpcode(IRNode *Opr, bool IsSynchronizedMethod) {
   const ABIArgInfo &ResultInfo = ABIMethodSig.getResultInfo();
   const CallArgType &ResultArgType = MethodSignature.getResultType();
   CorInfoType ResultCorType = ResultArgType.CorType;
+  Value *ResultValue = nullptr;
+  bool IsVoidReturn = ResultCorType == CORINFO_TYPE_VOID;
 
-  if (ResultCorType == CORINFO_TYPE_VOID) {
+  if (IsVoidReturn) {
     assert(Opr == nullptr);
     assert(ResultInfo.getType()->isVoidTy());
-    LLVMBuilder->CreateRetVoid();
-    return;
-  }
-
-  assert(Opr != nullptr);
-
-  Value *ResultValue = nullptr;
-  if (ResultInfo.getKind() == ABIArgInfo::Indirect) {
-    Type *ResultTy = ResultInfo.getType();
-    ResultValue = convertFromStackType(Opr, ResultCorType, ResultTy);
-
-    CORINFO_CLASS_HANDLE ResultClass = ResultArgType.Class;
-    if (JitContext->JitInfo->isStructRequiringStackAllocRetBuf(ResultClass) ==
-        TRUE) {
-      // The return buffer must be on the stack; a simple store will suffice.
-      LLVMBuilder->CreateStore(ResultValue, IndirectResult);
-    } else {
-      const bool IsVolatile = false;
-      storeIndirectArg(ResultArgType, ResultValue, IndirectResult, IsVolatile);
-    }
-
-    ResultValue = IndirectResult;
   } else {
-    Type *ResultTy = getType(ResultCorType, ResultArgType.Class);
-    ResultValue = convertFromStackType(Opr, ResultCorType, ResultTy);
-    ResultValue =
-        ABISignature::coerce(*this, ResultInfo.getType(), ResultValue);
+    assert(Opr != nullptr);
+
+    if (ResultInfo.getKind() == ABIArgInfo::Indirect) {
+      Type *ResultTy = ResultInfo.getType();
+      ResultValue = convertFromStackType(Opr, ResultCorType, ResultTy);
+
+      CORINFO_CLASS_HANDLE ResultClass = ResultArgType.Class;
+      if (JitContext->JitInfo->isStructRequiringStackAllocRetBuf(ResultClass) ==
+          TRUE) {
+        // The return buffer must be on the stack; a simple store will suffice.
+        LLVMBuilder->CreateStore(ResultValue, IndirectResult);
+      } else {
+        const bool IsVolatile = false;
+        storeIndirectArg(ResultArgType, ResultValue, IndirectResult,
+                         IsVolatile);
+      }
+
+      ResultValue = IndirectResult;
+    } else {
+      Type *ResultTy = getType(ResultCorType, ResultArgType.Class);
+      ResultValue = convertFromStackType(Opr, ResultCorType, ResultTy);
+      ResultValue =
+          ABISignature::coerce(*this, ResultInfo.getType(), ResultValue);
+    }
   }
 
-  LLVMBuilder->CreateRet(ResultValue);
+  // If the method is synchronized, then we must insert a call to MONITOR_EXIT
+  // before returning. The call to MONITOR_EXIT must occur after the return
+  // value has been calculated.
+  if (IsSynchronizedMethod) {
+    const bool IsEnter = false;
+    callMonitorHelper(IsEnter);
+  }
+
+  if (IsVoidReturn) {
+    LLVMBuilder->CreateRetVoid();
+  } else {
+    LLVMBuilder->CreateRet(ResultValue);
+  }
 }
 
 bool GenIR::needSequencePoints() { return false; }
