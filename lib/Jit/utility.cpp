@@ -18,6 +18,8 @@
 #include "utility.h"
 #include "llvm/Support/ConvertUTF.h"
 
+using namespace llvm;
+
 // Checks given parsed representation to see if method is in the set.
 
 bool MethodSet::contains(const char *Name, const char *ClassName,
@@ -51,7 +53,7 @@ std::unique_ptr<std::string> Convert::utf16ToUtf8(const char16_t *WideStr) {
 
   ArrayRef<char> SrcBytes((const char *)WideStr, 2 * SrcLen);
   std::unique_ptr<std::string> OutString(new std::string);
-  llvm::convertUTF16ToUTF8String(SrcBytes, *OutString);
+  convertUTF16ToUTF8String(SrcBytes, *OutString);
 
   return OutString;
 }

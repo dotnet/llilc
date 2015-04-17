@@ -23,8 +23,6 @@
 #include "llvm/Support/Atomic.h"
 #include "llvm/Config/llvm-config.h"
 
-using namespace llvm;
-
 /// \brief MethodName struct representing a particular method on a type.
 ///
 /// MethodNames are the elements of MethodSet and are used to do filtering of
@@ -87,8 +85,8 @@ public:
 
     // This write should be atomic, delete if we're not the first.
 
-    sys::cas_flag Value =
-        sys::CompareAndSwap((sys::cas_flag *)&(this->Initialized), 0x1, 0x0);
+    llvm::sys::cas_flag Value = llvm::sys::CompareAndSwap(
+        (llvm::sys::cas_flag *)&(this->Initialized), 0x1, 0x0);
 
     if (Value != 0x0) {
       delete ML;
