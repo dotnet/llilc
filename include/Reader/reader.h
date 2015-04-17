@@ -2846,7 +2846,7 @@ public:
   virtual IRNode *refAnyType(IRNode *Arg1) = 0;
   virtual IRNode *refAnyVal(IRNode *Val, CORINFO_RESOLVED_TOKEN *ResolvedToken);
   virtual void rethrow() = 0;
-  virtual void returnOpcode(IRNode *Opr, bool IsSynchronousMethod) = 0;
+  virtual void returnOpcode(IRNode *Opr, bool IsSynchronizedMethod) = 0;
   virtual IRNode *shift(ReaderBaseNS::ShiftOpcode Opcode, IRNode *ShiftAmount,
                         IRNode *ShiftOperand) = 0;
   virtual IRNode *sizeofOpcode(CORINFO_RESOLVED_TOKEN *ResolvedToken) = 0;
