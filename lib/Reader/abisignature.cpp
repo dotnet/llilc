@@ -238,7 +238,7 @@ Function *ABIMethodSignature::createFunction(GenIR &Reader, Module &M) {
   }
   F->setCallingConv(CC);
 
-  if (!LLILCJit::TheJit->ShouldUseConservativeGC) {
+  if (LLILCJit::TheJit->ShouldInsertStatepoints) {
     F->setGC("statepoint-example");
   }
 

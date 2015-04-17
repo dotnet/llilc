@@ -53,6 +53,12 @@ bool shouldUseConservativeGC() {
   return (LevelCStr != nullptr) && (strcmp(LevelCStr, "1") == 0);
 }
 
+// Determine if GC statepoints should be inserted.
+bool shouldInsertStatepoints() {
+  const char *LevelCStr = getenv("COMPLUS_INSERTSTATEPOINTS");
+  return (LevelCStr != nullptr) && (strcmp(LevelCStr, "1") == 0);
+}
+
 // The one and only Jit Object.
 LLILCJit *LLILCJit::TheJit = nullptr;
 
@@ -84,7 +90,9 @@ LLILCJit::LLILCJit() {
   InitializeNativeTargetAsmParser();
   llvm::linkStatepointExampleGC();
 
-  ShouldUseConservativeGC = shouldUseConservativeGC();
+  ShouldInsertStatepoints = shouldInsertStatepoints();
+  assert(ShouldInsertStatepoints ||
+         shouldUseConservativeGC() && "Statepoints required for precise-GC");
 }
 
 #ifdef LLVM_ON_WIN32
@@ -211,7 +219,7 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
 
   if (HasMethod) {
 
-    if (!ShouldUseConservativeGC) {
+    if (ShouldInsertStatepoints) {
       // If using Precise GC, run the GC-Safepoint insertion
       // and lowering passes before generating code.
       legacy::PassManager Passes;
