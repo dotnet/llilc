@@ -8011,7 +8011,8 @@ void ReaderBase::msilToIR(void) {
         // Check that CurrentNode is the only predecessor of Successor that
         // propagates stack.
         ASSERTNR(!fgNodeHasMultiplePredsPropagatingStack(Successor));
-        ASSERTNR(fgNodePropagatesOperandStack(CurrentNode));
+        ASSERTNR(fgNodePropagatesOperandStack(CurrentNode) ||
+                 fgNodeHasNoPredsPropagatingStack(Successor));
 
         // The two checks above ensure that it's safe to insert Successor after
         // CurrentNode even if that breaks MSIL offset order.
@@ -8084,6 +8085,20 @@ bool ReaderBase::fgNodeHasMultiplePredsPropagatingStack(FlowGraphNode *Node) {
     }
   }
   return false;
+}
+
+bool ReaderBase::fgNodeHasNoPredsPropagatingStack(FlowGraphNode *Node) {
+  for (FlowGraphEdgeList *NodePredecessorList =
+           fgNodeGetPredecessorListActual(Node);
+       NodePredecessorList != nullptr;
+       NodePredecessorList =
+           fgEdgeListGetNextPredecessorActual(NodePredecessorList)) {
+    FlowGraphNode *PredecessorNode = fgEdgeListGetSource(NodePredecessorList);
+    if (fgNodePropagatesOperandStack(PredecessorNode)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 // Checks to see if a given offset is the start of an instruction. If
