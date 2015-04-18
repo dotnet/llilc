@@ -368,9 +368,7 @@ public:
                     ReaderAlignType Alignment, bool IsVolatile) override;
 
   IRNode *loadNull() override;
-  IRNode *localAlloc(IRNode *Arg, bool ZeroInit) override {
-    throw NotYetImplementedException("localAlloc");
-  };
+  IRNode *localAlloc(IRNode *Arg, bool ZeroInit) override;
   IRNode *loadFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                            IRNode *Obj) override;
 

@@ -5424,6 +5424,29 @@ bool GenIR::abs(IRNode *Argument, IRNode **Result) {
   return false;
 }
 
+IRNode *GenIR::localAlloc(IRNode *Arg, bool ZeroInit) {
+  // Note that we've seen a localloc in this method, since it has repercussions
+  // on other aspects of code generation.
+  this->HasLocAlloc = true;
+
+  // Arg is the number of bytes to allocate. Result must be pointer-aligned.
+  const unsigned int Alignment = TargetPointerSizeInBits / 8;
+  LLVMContext &Context = *JitContext->LLVMContext;
+  Type *Ty = Type::getInt8Ty(Context);
+  AllocaInst *LocAlloc = LLVMBuilder->CreateAlloca(Ty, Arg, "LocAlloc");
+  LocAlloc->setAlignment(Alignment);
+
+  // Zero the allocated region if so requested.
+  if (ZeroInit) {
+    Value *ZeroByte = ConstantInt::get(Context, APInt(8, 0, true));
+    Type *VoidTy = Type::getVoidTy(Context);
+    callHelperImpl(CORINFO_HELP_MEMSET, VoidTy, (IRNode *)LocAlloc,
+                   (IRNode *)ZeroByte, Arg);
+  }
+
+  return (IRNode *)LocAlloc;
+}
+
 #pragma endregion
 
 #pragma region STACK MAINTENANCE
