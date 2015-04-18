@@ -1309,7 +1309,8 @@ void ReaderBase::insertHelperCall(
     HelperArgNodes[Index] = CurrentArg;
   }
 
-  callHelper(AccessAllowedInfo.helperNum, nullptr, HelperArgNodes[0],
+  const bool MayThrow = true;
+  callHelper(AccessAllowedInfo.helperNum, MayThrow, nullptr, HelperArgNodes[0],
              HelperArgNodes[1], HelperArgNodes[2], HelperArgNodes[3]);
 }
 
@@ -3685,8 +3686,9 @@ void ReaderBase::cpBlk(IRNode *Count,    // byte count
                        IRNode *SrcAddr,  // source address
                        IRNode *DestAddr, // dest address
                        ReaderAlignType Alignment, bool IsVolatile) {
-  callHelper(CORINFO_HELP_MEMCPY, nullptr, DestAddr, SrcAddr, Count, nullptr,
-             Alignment, IsVolatile);
+  const bool MayThrow = true;
+  callHelper(CORINFO_HELP_MEMCPY, MayThrow, nullptr, DestAddr, SrcAddr, Count,
+             nullptr, Alignment, IsVolatile);
 }
 
 // InitBlk - Creates a memset helper call/intrinsic.
@@ -3694,8 +3696,9 @@ void ReaderBase::initBlk(IRNode *Count,    // byte count
                          IRNode *Value,    // Value
                          IRNode *DestAddr, // dest address
                          ReaderAlignType Alignment, bool IsVolatile) {
-  callHelper(CORINFO_HELP_MEMSET, nullptr, DestAddr, Value, Count, nullptr,
-             Alignment, IsVolatile);
+  const bool MayThrow = true;
+  callHelper(CORINFO_HELP_MEMSET, MayThrow, nullptr, DestAddr, Value, Count,
+             nullptr, Alignment, IsVolatile);
 }
 
 void ReaderBase::initObj(CORINFO_RESOLVED_TOKEN *ResolvedToken,
@@ -3738,7 +3741,8 @@ IRNode *ReaderBase::box(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg2,
   // from the token.
   Arg1 = genericTokenToNode(ResolvedToken, true);
 
-  RetVal = callHelper(getBoxHelper(Class), Dst, Arg1, Arg2);
+  const bool MayThrow = true;
+  RetVal = callHelper(getBoxHelper(Class), MayThrow, Dst, Arg1, Arg2);
 
   return RetVal;
 }
@@ -3770,12 +3774,14 @@ IRNode *ReaderBase::refAnyVal(IRNode *RefAny,
   Dst = makePtrDstGCOperand(true);
 
   // Make the helper call
-  return callHelper(CORINFO_HELP_GETREFANY, Dst, Arg1, RefAny);
+  const bool MayThrow = true;
+  return callHelper(CORINFO_HELP_GETREFANY, MayThrow, Dst, Arg1, RefAny);
 }
 
 void ReaderBase::storeElemRefAny(IRNode *Value, IRNode *Index, IRNode *Obj) {
   // Make the helper call
-  callHelper(CORINFO_HELP_ARRADDR_ST, nullptr, Obj, Index, Value);
+  const bool MayThrow = true;
+  callHelper(CORINFO_HELP_ARRADDR_ST, MayThrow, nullptr, Obj, Index, Value);
 }
 
 // StoreIndir - Creates an instruction to assign the value on
@@ -3921,7 +3927,8 @@ IRNode *ReaderBase::unboxAny(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg,
 // Break - Default reader processing for CEE_BREAK.
 void ReaderBase::breakOpcode() {
   // Make the helper call
-  callHelper(CORINFO_HELP_USER_BREAKPOINT, nullptr);
+  const bool MayThrow = true;
+  callHelper(CORINFO_HELP_USER_BREAKPOINT, MayThrow, nullptr);
 }
 
 // InsertClassConstructor - Insert a call to the class constructor helper.
@@ -3944,30 +3951,38 @@ void ReaderBase::insertClassConstructor() {
     methodNeedsToKeepAliveGenericsContext(true);
 
     switch (Kind.runtimeLookupKind) {
-    case CORINFO_LOOKUP_THISOBJ:
+    case CORINFO_LOOKUP_THISOBJ: {
       // call CORINFO_HELP_INITINSTCLASS(thisobj, embedMethodHandle(M))
       Method = embedMethodHandle(Method, &IsIndirect);
       // TODO: Aliasing -- always readonly?
       MethodNode = handleToIRNode(MethodToken, Method, 0, IsIndirect,
                                   IsIndirect, true, false);
       ClassNode = derefAddress(thisObj(), false, false);
-      callHelper(CORINFO_HELP_INITINSTCLASS, nullptr, ClassNode, MethodNode);
+      const bool MayThrow = true;
+      callHelper(CORINFO_HELP_INITINSTCLASS, MayThrow, nullptr, ClassNode,
+                 MethodNode);
       return;
-    case CORINFO_LOOKUP_CLASSPARAM:
+    }
+    case CORINFO_LOOKUP_CLASSPARAM: {
       // will only be returned when you are compiling code that takes
       // a hidden parameter P.  You should emit a call
       // CORINFO_HELP_INITCLASS(P)
       ClassNode = instParam();
-      callHelper(CORINFO_HELP_INITCLASS, nullptr, ClassNode);
+      const bool MayThrow = true;
+      callHelper(CORINFO_HELP_INITCLASS, MayThrow, nullptr, ClassNode);
       return;
-    case CORINFO_LOOKUP_METHODPARAM:
+    }
+    case CORINFO_LOOKUP_METHODPARAM: {
       // will only be returned when you are compiling code that takes
       // a hidden parameter P.  You should emit a call
       // CORINFO_HELP_INITINSTCLASS(nullptr, P)
       MethodNode = instParam();
       ClassNode = loadConstantI8(0);
-      callHelper(CORINFO_HELP_INITINSTCLASS, nullptr, ClassNode, MethodNode);
+      const bool MayThrow = true;
+      callHelper(CORINFO_HELP_INITINSTCLASS, MayThrow, nullptr, ClassNode,
+                 MethodNode);
       return;
+    }
     default:
       ASSERTNR(!"NYI");
     }
@@ -3987,7 +4002,8 @@ void ReaderBase::insertClassConstructor() {
       ClassNode = handleToIRNode(MethodToken, ClassHandle, Class, IsIndirect,
                                  IsIndirect, true, false);
 
-      callHelper(HelperId, nullptr, ClassNode);
+      const bool MayThrow = false;
+      callHelper(HelperId, MayThrow, nullptr, ClassNode);
     } else {
       rdrCallGetStaticBase(Class, MethodToken, HelperId, false, false, nullptr);
     }
@@ -4032,14 +4048,16 @@ IRNode *ReaderBase::rdrGetCritSect() {
       // In this case, the hidden param is the class handle.
       HandleNode = instParam();
       break;
-    case CORINFO_LOOKUP_METHODPARAM:
+    case CORINFO_LOOKUP_METHODPARAM: {
       // In this case, the hidden param is the method handle.
       HandleNode = instParam();
       // Call helper CORINFO_HELP_GETCLASSFROMMETHODPARAM to get the
       // class handle from the method handle.
-      HandleNode = callHelper(CORINFO_HELP_GETCLASSFROMMETHODPARAM,
+      const bool MayThrow = false;
+      HandleNode = callHelper(CORINFO_HELP_GETCLASSFROMMETHODPARAM, MayThrow,
                               makePtrNode(), HandleNode);
       break;
+    }
     default:
       ASSERTNR(!"Unknown LOOKUP_KIND");
       break;
@@ -4049,8 +4067,9 @@ IRNode *ReaderBase::rdrGetCritSect() {
                           // CORINFO_CLASS_HANDLE for the exact class.
 
     // Given the class handle, get the pointer to the Monitor.
-    HandleNode = callHelper(CORINFO_HELP_GETSYNCFROMCLASSHANDLE, makePtrNode(),
-                            HandleNode);
+    const bool MayThrow = false;
+    HandleNode = callHelper(CORINFO_HELP_GETSYNCFROMCLASSHANDLE, MayThrow,
+                            makePtrNode(), HandleNode);
   }
 
   ASSERTNR(HandleNode);
@@ -4101,7 +4120,8 @@ void ReaderBase::rdrCallFieldHelper(
                             IsIndirect, IsIndirect, true, false);
 
       // Make the helper call
-      callHelper(HelperId, nullptr, Arg1, Arg2, Arg3, Arg4, Alignment,
+      const bool MayThrow = true;
+      callHelper(HelperId, MayThrow, nullptr, Arg1, Arg2, Arg3, Arg4, Alignment,
                  IsVolatile);
     } else {
       // OTHER LOAD
@@ -4113,8 +4133,9 @@ void ReaderBase::rdrCallFieldHelper(
       Arg1 = Obj;
 
       // Make the helper call
-      callHelper(HelperId, Dst, Arg1, Arg2, nullptr, nullptr, Alignment,
-                 IsVolatile);
+      const bool MayThrow = true;
+      callHelper(HelperId, MayThrow, Dst, Arg1, Arg2, nullptr, nullptr,
+                 Alignment, IsVolatile);
     }
   } else {
     // STORE
@@ -4147,7 +4168,8 @@ void ReaderBase::rdrCallFieldHelper(
       Arg1 = Obj;
 
       // Make the helper call
-      callHelper(HelperId, nullptr, Arg1, Arg2, Arg3, Arg4, Alignment,
+      const bool MayThrow = true;
+      callHelper(HelperId, MayThrow, nullptr, Arg1, Arg2, Arg3, Arg4, Alignment,
                  IsVolatile);
     } else {
       // assert that the helper id is expected
@@ -4168,8 +4190,9 @@ void ReaderBase::rdrCallFieldHelper(
       Arg1 = Obj;
 
       // Make the helper call
-      callHelper(HelperId, nullptr, Arg1, Arg2, Arg3, nullptr, Alignment,
-                 IsVolatile);
+      const bool MayThrow = true;
+      callHelper(HelperId, MayThrow, nullptr, Arg1, Arg2, Arg3, nullptr,
+                 Alignment, IsVolatile);
     }
   }
 }
@@ -4202,9 +4225,10 @@ void ReaderBase::rdrCallWriteBarrierHelper(
     // writing to a field in a class which happens to be a GC pointer.
     //
     // HCIMPL2(void, JIT_CheckedWriteBarrier, Object** dest, Object * value)
-    callHelper(IsUnchecked ? CORINFO_HELP_ASSIGN_REF
-                           : CORINFO_HELP_CHECKED_ASSIGN_REF,
-               nullptr, Dst, Src, nullptr, nullptr, Alignment, IsVolatile);
+    const bool MayThrow = true;
+    callHelper(
+        IsUnchecked ? CORINFO_HELP_ASSIGN_REF : CORINFO_HELP_CHECKED_ASSIGN_REF,
+        MayThrow, nullptr, Dst, Src, nullptr, nullptr, Alignment, IsVolatile);
   } else {
     // This is the case in which we will be copying a value class into
     // the field of this struct.  The runtime will need to be passed
@@ -4242,13 +4266,15 @@ void ReaderBase::rdrCallWriteBarrierHelper(
           handleToIRNode(ResolvedToken->token, ClassHandle, Class, IsIndirect,
                          IsIndirect, true, false);
 
-      callHelper(CORINFO_HELP_ASSIGN_STRUCT, nullptr, Dst, Src, ClassHandleNode,
-                 nullptr, Alignment, IsVolatile);
+      const bool MayThrow = true;
+      callHelper(CORINFO_HELP_ASSIGN_STRUCT, MayThrow, nullptr, Dst, Src,
+                 ClassHandleNode, nullptr, Alignment, IsVolatile);
     } else {
       // If the class doesn't have a gc layout then use a memcopy
       IRNode *Size = loadConstantI4(getClassSize(Class));
-      callHelper(CORINFO_HELP_MEMCPY, nullptr, Dst, Src, Size, nullptr,
-                 Alignment, IsVolatile);
+      const bool MayThrow = true;
+      callHelper(CORINFO_HELP_MEMCPY, MayThrow, nullptr, Dst, Src, Size,
+                 nullptr, Alignment, IsVolatile);
     }
   }
 }
@@ -4285,9 +4311,10 @@ IRNode *ReaderBase::rdrCallGetStaticBase(CORINFO_CLASS_HANDLE Class,
       Token, EmbedClassDomainID, (CORINFO_CLASS_HANDLE)((size_t)Class | 1),
       IsIndirect2, IsIndirect2, IsIndirect2, false);
 
-  return callHelper(HelperId, Dst, ModuleDomainIDNode, ClassDomainIDNode,
-                    nullptr, nullptr, Reader_AlignUnknown, false, NoCtor,
-                    CanMoveUp);
+  const bool MayThrow = false;
+  return callHelper(HelperId, MayThrow, Dst, ModuleDomainIDNode,
+                    ClassDomainIDNode, nullptr, nullptr, Reader_AlignUnknown,
+                    false, NoCtor, CanMoveUp);
 }
 
 IRNode *
@@ -4308,7 +4335,9 @@ ReaderBase::rdrGetStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
     IRNode *PointerNode = makePtrDstGCOperand(true);
 
     // Now make the call and attach the arguments.
-    return callHelper(FieldInfo->helper, PointerNode, FieldHandleNode);
+    const bool MayThrow = false;
+    return callHelper(FieldInfo->helper, MayThrow, PointerNode,
+                      FieldHandleNode);
   }
 
   case CORINFO_FIELD_STATIC_SHARED_STATIC_HELPER:
@@ -4331,8 +4360,9 @@ ReaderBase::rdrGetStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
       IRNode *TempNode = makePtrNode(Reader_PtrGcInterior);
 
       // Now make the call and attach the arguments.
+      const bool MayThrow = false;
       SharedStaticsBaseNode =
-          callHelper(FieldInfo->helper, TempNode, ClassHandleNode);
+          callHelper(FieldInfo->helper, MayThrow, TempNode, ClassHandleNode);
     } else {
       CorInfoHelpFunc HelperId = FieldInfo->helper;
       CORINFO_CLASS_HANDLE Class = ResolvedToken->hClass;
@@ -4585,7 +4615,8 @@ IRNode *ReaderBase::rdrGetFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
       Dst = makePtrNode();
     }
 
-    return callHelper(FieldInfo->helper, Dst, Arg1, Arg2);
+    const bool MayThrow = true;
+    return callHelper(FieldInfo->helper, MayThrow, Dst, Arg1, Arg2);
   } else {
     // Get the offset, add it to the this pointer to calculate the
     // actual address of the field.
@@ -4812,6 +4843,7 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
   // For certain intrinsics, we can determine that the call has no
   // side effects ...
   bool CallCanSideEffect = true;
+  bool MayThrow = true;
 
   // TODO: readonly work for calls
 
@@ -5304,7 +5336,7 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
   }
 
   // Ask GenIR to emit call, optionally returns a ReturnNode.
-  ReturnNode = genCall(Data, Arguments, CallNode);
+  ReturnNode = genCall(Data, MayThrow, Arguments, CallNode);
 
   if (Data->isNewObj()) {
     ReturnNode = rdrMakeNewObjReturnNode(Data, NewObjThisArg, ReturnNode);
@@ -5508,7 +5540,8 @@ IRNode *ReaderBase::rdrGetIndirectVirtualCallTarget(
   // Get the address of the target function by calling helper.
   // Type it as a native int, it will be recast later.
   IRNode *Dst = loadConstantI(0);
-  return callHelper(CORINFO_HELP_VIRTUAL_FUNC_PTR, Dst, ThisPtrCopy,
+  const bool MayThrow = true;
+  return callHelper(CORINFO_HELP_VIRTUAL_FUNC_PTR, MayThrow, Dst, ThisPtrCopy,
                     ClassHandle, MethodHandle);
 }
 
@@ -5635,7 +5668,9 @@ void ReaderBase::rdrInsertCalloutForDelegate(CORINFO_CLASS_HANDLE DelegateType,
                           IsIndirect, IsIndirect, true, false);
 
     // Make the helper call
-    callHelper(CORINFO_HELP_DELEGATE_SECURITY_CHECK, nullptr, Arg1, Arg2);
+    const bool MayThrow = true;
+    callHelper(CORINFO_HELP_DELEGATE_SECURITY_CHECK, MayThrow, nullptr, Arg1,
+               Arg2);
   }
 }
 
@@ -6191,7 +6226,8 @@ void ReaderBase::domInfoRecordClassInit(FlowGraphNode *Fg,
 // Default routine to insert verification throw.
 void ReaderBase::insertThrow(CorInfoHelpFunc ThrowHelper, uint32_t Offset) {
   IRNode *IntConstant = loadConstantI4(Offset);
-  callHelper(ThrowHelper, nullptr, IntConstant);
+  const bool MayThrow = true;
+  callHelper(ThrowHelper, MayThrow, nullptr, IntConstant);
 }
 
 // Macro used by main reader loop for distinguishing verify-only passes

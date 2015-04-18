@@ -87,7 +87,7 @@ ABICallSignature::ABICallSignature(const ReaderCallSignature &TheSignature,
     : ABISignature(TheSignature, Reader, TheABIInfo), Signature(TheSignature) {}
 
 Value *ABICallSignature::emitCall(GenIR &Reader, llvm::Value *Target,
-                                  llvm::ArrayRef<Value *> Args,
+                                  bool MayThrow, llvm::ArrayRef<Value *> Args,
                                   llvm::Value *IndirectionCell,
                                   llvm::Value **CallNode) const {
   assert(Target->getType()->isIntegerTy(Reader.TargetPointerSizeInBits));
@@ -150,7 +150,7 @@ Value *ABICallSignature::emitCall(GenIR &Reader, llvm::Value *Target,
   Type *FunctionPtrTy = Reader.getUnmanagedPointerType(FunctionTy);
 
   Target = Builder.CreateIntToPtr(Target, FunctionPtrTy);
-  CallInst *Call = Builder.CreateCall(Target, Arguments);
+  CallSite Call = Reader.makeCall(Target, MayThrow, Arguments);
 
   CallingConv::ID CC;
   if (HasIndirectionCell) {
@@ -159,18 +159,18 @@ Value *ABICallSignature::emitCall(GenIR &Reader, llvm::Value *Target,
   } else {
     CC = getLLVMCallingConv(Signature.getCallingConvention());
   }
-  Call->setCallingConv(CC);
+  Call.setCallingConv(CC);
 
   if (ResultNode == nullptr) {
     assert(!HasIndirectResult);
     const CallArgType &SigResultType = Signature.getResultType();
     Type *Ty = Reader.getType(SigResultType.CorType, SigResultType.Class);
-    ResultNode = coerce(Reader, Ty, Call);
+    ResultNode = coerce(Reader, Ty, Call.getInstruction());
   } else {
     ResultNode = Builder.CreateLoad(ResultNode);
   }
 
-  *CallNode = Call;
+  *CallNode = Call.getInstruction();
   return ResultNode;
 }
 

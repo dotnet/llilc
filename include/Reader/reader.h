@@ -3134,15 +3134,16 @@ public:
                                       IRNode *ThisArg) = 0;
 
   // Helper callback used by rdrCall to emit call code.
-  virtual IRNode *genCall(ReaderCallTargetData *CallTargetData,
+  virtual IRNode *genCall(ReaderCallTargetData *CallTargetData, bool MayThrow,
                           std::vector<IRNode *> Args, IRNode **CallNode) = 0;
 
   virtual bool canMakeDirectCall(ReaderCallTargetData *CallTargetData) = 0;
 
   // Generate call to helper
-  virtual IRNode *callHelper(CorInfoHelpFunc HelperID, IRNode *Dst,
-                             IRNode *Arg1 = nullptr, IRNode *Arg2 = nullptr,
-                             IRNode *Arg3 = nullptr, IRNode *Arg4 = nullptr,
+  virtual IRNode *callHelper(CorInfoHelpFunc HelperID, bool MayThrow,
+                             IRNode *Dst, IRNode *Arg1 = nullptr,
+                             IRNode *Arg2 = nullptr, IRNode *Arg3 = nullptr,
+                             IRNode *Arg4 = nullptr,
                              ReaderAlignType Alignment = Reader_AlignUnknown,
                              bool IsVolatile = false, bool NoCtor = false,
                              bool CanMoveUp = false) = 0;

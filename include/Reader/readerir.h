@@ -24,6 +24,7 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/IR/CFG.h"
+#include "llvm/IR/CallSite.h"
 #include "reader.h"
 #include "abi.h"
 #include "abisignature.h"
@@ -719,13 +720,13 @@ public:
                               IRNode *ThisArg) override;
 
   // Helper callback used by rdrCall to emit call code.
-  IRNode *genCall(ReaderCallTargetData *CallTargetInfo,
+  IRNode *genCall(ReaderCallTargetData *CallTargetInfo, bool MayThrow,
                   std::vector<IRNode *> Args, IRNode **CallNode) override;
 
   bool canMakeDirectCall(ReaderCallTargetData *CallTargetData) override;
 
   // Generate call to helper
-  IRNode *callHelper(CorInfoHelpFunc HelperID, IRNode *Dst,
+  IRNode *callHelper(CorInfoHelpFunc HelperID, bool MayThrow, IRNode *Dst,
                      IRNode *Arg1 = nullptr, IRNode *Arg2 = nullptr,
                      IRNode *Arg3 = nullptr, IRNode *Arg4 = nullptr,
                      ReaderAlignType Alignment = Reader_AlignUnknown,
@@ -733,12 +734,13 @@ public:
                      bool CanMoveUp = false) override;
 
   // Generate call to helper
-  IRNode *callHelperImpl(CorInfoHelpFunc HelperID, llvm::Type *ReturnType,
-                         IRNode *Arg1 = nullptr, IRNode *Arg2 = nullptr,
-                         IRNode *Arg3 = nullptr, IRNode *Arg4 = nullptr,
-                         ReaderAlignType Alignment = Reader_AlignUnknown,
-                         bool IsVolatile = false, bool NoCtor = false,
-                         bool CanMoveUp = false);
+  llvm::CallSite callHelperImpl(CorInfoHelpFunc HelperID, bool MayThrow,
+                                llvm::Type *ReturnType, IRNode *Arg1 = nullptr,
+                                IRNode *Arg2 = nullptr, IRNode *Arg3 = nullptr,
+                                IRNode *Arg4 = nullptr,
+                                ReaderAlignType Alignment = Reader_AlignUnknown,
+                                bool IsVolatile = false, bool NoCtor = false,
+                                bool CanMoveUp = false);
 
   /// Generate special generics helper that might need to insert flow. The
   /// helper is called if NullCheckArg is null at compile-time or if it
@@ -1031,17 +1033,19 @@ private:
   ///
   /// \param Condition Condition that will trigger the call.
   /// \param HelperId Id of the call helper.
+  /// \param MayThrow true if the helper call may raise an exception.
   /// \param ReturnType Return type of the call helper.
   /// \param Arg1 First helper argument.
   /// \param Arg2 Second helper argument.
   /// \param CallReturns true iff the helper call returns.
   /// \param CallBlockName Name of the basic block that will contain the call.
-  /// \returns Generated call instruction.
-  llvm::CallInst *genConditionalHelperCall(llvm::Value *Condition,
-                                           CorInfoHelpFunc HelperId,
-                                           llvm::Type *ReturnType, IRNode *Arg1,
-                                           IRNode *Arg2, bool CallReturns,
-                                           const llvm::Twine &CallBlockName);
+  /// \returns Generated call/invoke instruction.
+  llvm::CallSite genConditionalHelperCall(llvm::Value *Condition,
+                                          CorInfoHelpFunc HelperId,
+                                          bool MayThrow, llvm::Type *ReturnType,
+                                          IRNode *Arg1, IRNode *Arg2,
+                                          bool CallReturns,
+                                          const llvm::Twine &CallBlockName);
 
   /// Generate a call to the throw helper if the condition is met.
   ///
@@ -1143,6 +1147,17 @@ private:
   llvm::LoadInst *makeLoadNonNull(llvm::Value *Address, bool IsVolatile) {
     return makeLoad(Address, IsVolatile, false);
   }
+
+  /// \brief Create a call or invoke instruction
+  ///
+  /// The call is inserted at the LLVMBuilder's current insertion point.
+  ///
+  /// \param Callee    Target of the call
+  /// \param MayThrow  True if the callee may raise an exception
+  /// \param Args      Arguments to pass to the callee
+  /// \returns         A \p CallSite wrapping the CallInst or InvokeInst
+  llvm::CallSite makeCall(llvm::Value *Callee, bool MayThrow,
+                          llvm::ArrayRef<llvm::Value *> Args);
 
   /// Store a value to an argument passed indirectly.
   ///
