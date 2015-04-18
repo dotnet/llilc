@@ -420,9 +420,8 @@ public:
 
   IRNode *loadNonPrimitiveObj(IRNode *Addr, CORINFO_CLASS_HANDLE ClassHandle,
                               ReaderAlignType Alignment, bool IsVolatile,
-                              bool AddressMayBeNull = true) override {
-    throw NotYetImplementedException("loadNonPrimitiveObj");
-  };
+                              bool AddressMayBeNull = true) override;
+
   IRNode *makeRefAny(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                      IRNode *Object) override {
     throw NotYetImplementedException("makeRefAny");
@@ -880,8 +879,19 @@ private:
                              CORINFO_RESOLVED_TOKEN *ResolvedToken,
                              CORINFO_FIELD_INFO *FieldInfo) override;
 
-  IRNode *getPrimitiveAddress(IRNode *Addr, CorInfoType CorInfoType,
-                              ReaderAlignType Alignment, uint32_t *Align);
+  /// Get a node with the same value as Addr but typed as a pointer to the type
+  /// corresponding to CorInfoType and ClassHandle.
+  ///
+  /// \param Addr Address to change the type on.
+  /// \param  CorInfoType Type that Addr should point to.
+  /// \param ClassHandle Class handle corresponding to CorInfoType.
+  /// \param ReaderAlignment Reader alignment of the Addr access.
+  /// \param Alignment [out] Converted alignment corresponding to
+  /// ReaderAlignment.
+  /// \returns Address pointing to a value of the specified type.
+  IRNode *getTypedAddress(IRNode *Addr, CorInfoType CorInfoType,
+                          CORINFO_CLASS_HANDLE ClassHandle,
+                          ReaderAlignType ReaderAlignment, uint32_t *Alignment);
   /// Generate instructions for loading value of the specified type at the
   /// specified address.
   ///
