@@ -3004,7 +3004,9 @@ void GenIR::storePrimitiveType(IRNode *Value, IRNode *Addr,
   ASSERTNR(isPrimitiveType(CorInfoType));
 
   uint32_t Align;
-  IRNode *TypedAddr = getPrimitiveAddress(Addr, CorInfoType, Alignment, &Align);
+  const CORINFO_CLASS_HANDLE ClassHandle = nullptr;
+  IRNode *TypedAddr =
+      getTypedAddress(Addr, CorInfoType, ClassHandle, Alignment, &Align);
   Type *ExpectedTy =
       cast<PointerType>(TypedAddr->getType())->getPointerElementType();
   IRNode *ValueToStore = convertFromStackType(Value, CorInfoType, ExpectedTy);
@@ -4983,10 +4985,9 @@ IRNode *GenIR::loadVirtFunc(IRNode *Arg1, CORINFO_RESOLVED_TOKEN *ResolvedToken,
   return CodeAddress;
 }
 
-IRNode *GenIR::getPrimitiveAddress(IRNode *Addr, CorInfoType CorInfoType,
-                                   ReaderAlignType Alignment, uint32_t *Align) {
-  ASSERTNR(isPrimitiveType(CorInfoType) || CorInfoType == CORINFO_TYPE_REFANY);
-
+IRNode *GenIR::getTypedAddress(IRNode *Addr, CorInfoType CorInfoType,
+                               CORINFO_CLASS_HANDLE ClassHandle,
+                               ReaderAlignType Alignment, uint32_t *Align) {
   // Get type of the result.
   Type *AddressTy = Addr->getType();
   IRNode *TypedAddr = Addr;
@@ -5011,8 +5012,8 @@ IRNode *GenIR::getPrimitiveAddress(IRNode *Addr, CorInfoType CorInfoType,
     // GC pointers are always naturally aligned
     Alignment = Reader_AlignNatural;
   } else {
-    // For the true primitve case we may need to cast the address.
-    Type *ExpectedTy = this->getType(CorInfoType, nullptr);
+    // For other cases we may need to cast the address.
+    Type *ExpectedTy = this->getType(CorInfoType, ClassHandle);
     PointerType *PointerTy = dyn_cast<PointerType>(AddressTy);
     if (PointerTy != nullptr) {
       Type *ReferentTy = PointerTy->getPointerElementType();
@@ -5038,12 +5039,28 @@ IRNode *GenIR::loadPrimitiveType(IRNode *Addr, CorInfoType CorInfoType,
                                  ReaderAlignType Alignment, bool IsVolatile,
                                  bool IsInterfReadOnly, bool AddressMayBeNull) {
   uint32_t Align;
-  IRNode *TypedAddr = getPrimitiveAddress(Addr, CorInfoType, Alignment, &Align);
+  const CORINFO_CLASS_HANDLE ClassHandle = nullptr;
+  IRNode *TypedAddr =
+      getTypedAddress(Addr, CorInfoType, ClassHandle, Alignment, &Align);
   LoadInst *LoadInst = makeLoad(TypedAddr, IsVolatile, AddressMayBeNull);
   LoadInst->setAlignment(Align);
 
   return convertToStackType((IRNode *)LoadInst, CorInfoType);
 }
+
+IRNode *GenIR::loadNonPrimitiveObj(IRNode *Addr,
+                                   CORINFO_CLASS_HANDLE ClassHandle,
+                                   ReaderAlignType Alignment, bool IsVolatile,
+                                   bool AddressMayBeNull) {
+  uint32_t Align;
+  CorInfoType CorType = JitContext->JitInfo->asCorInfoType(ClassHandle);
+  IRNode *TypedAddr =
+      getTypedAddress(Addr, CorType, ClassHandle, Alignment, &Align);
+  LoadInst *LoadInst = makeLoad(TypedAddr, IsVolatile, AddressMayBeNull);
+  LoadInst->setAlignment(Align);
+
+  return (IRNode *)LoadInst;
+};
 
 void GenIR::classifyCmpType(Type *Ty, uint32_t &Size, bool &IsPointer,
                             bool &IsFloat) {
