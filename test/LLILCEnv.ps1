@@ -859,6 +859,25 @@ function Global:ExcludeTest([string]$Arch="x64", [string]$Build="Release")
   del 339415*
   del 143837*
   popd
+
+  # Excluding JIT\jit64\opt\cse\arrayexpr2*, fieldexpr2*,
+  # fieldExprUnchecked1*, HugeArray*, HugeArray1*
+  # hugeexpr1*, HugeField1*, HugeField2*, hugeSimpleExpr1*
+  # mixedexpr1*, simpleexpr4*, staticFieldExprUnchecked1*
+  pushd $CoreCLRTest\JIT\jit64\opt\cse
+  del arrayexpr2*
+  del fieldexpr2*
+  del fieldExprUnchecked1*
+  del HugeArray*
+  del HugeArray1*
+  del hugeexpr1*
+  del HugeField1*
+  del HugeField2*
+  del hugeSimpleExpr1*
+  del mixedexpr1*
+  del simpleexpr4*
+  del staticFieldExprUnchecked1*
+  popd 
 }
 
 # -------------------------------------------------------------------------

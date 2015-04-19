@@ -17,3 +17,15 @@ JIT\jit64\gc\misc\structret6_2
 JIT\jit64\gc\misc\structret6_3
 JIT\jit64\gc\regress\vswhidbey\339415
 JIT\jit64\gc\regress\vswhidbey\143837
+JIT\jit64\opt\cse\arrayexpr2
+JIT\jit64\opt\cse\fieldexpr2
+JIT\jit64\opt\cse\fieldExprUnchecked1
+JIT\jit64\opt\cse\HugeArray
+JIT\jit64\opt\cse\HugeArray1
+JIT\jit64\opt\cse\hugeexpr1
+JIT\jit64\opt\cse\HugeField1
+JIT\jit64\opt\cse\HugeField2
+JIT\jit64\opt\cse\hugeSimpleExpr1
+JIT\jit64\opt\cse\mixedexpr1
+JIT\jit64\opt\cse\simpleexpr4
+JIT\jit64\opt\cse\staticFieldExprUnchecked1
