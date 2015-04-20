@@ -458,10 +458,7 @@ public:
                         IRNode *ValueToStore, bool IsVolatile) override;
 
   IRNode *stringGetChar(IRNode *Arg1, IRNode *Arg2) override;
-
-  bool sqrt(IRNode *Arg1, IRNode **RetVal) override {
-    throw NotYetImplementedException("sqrt");
-  };
+  bool sqrt(IRNode *Argument, IRNode **Result) override;
 
   // The callTarget node is only required on IA64.
   bool interlockedIntrinsicBinOp(IRNode *Arg1, IRNode *Arg2, IRNode **RetVal,
