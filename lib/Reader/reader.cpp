@@ -42,45 +42,6 @@ extern int _cdecl dbPrint(const char *Form, ...);
 // Max elements per entry in FlowGraphNodeListArray.
 #define FLOW_GRAPH_NODE_LIST_ARRAY_STRIDE 32
 
-// Macro to determine the default behavior of automatically
-// detecting tail calls (without the "tail." opcode in MSIL).
-#define DEFAULT_TAIL_CALL_OPT 1
-
-static uint32_t doTailCallOpt() {
-#ifndef CC_PEVERIFY
-  if (HaveEnvConfigTailCallOpt) {
-    return EnvConfigTailCallOpt;
-  }
-  return DEFAULT_TAIL_CALL_OPT;
-#else
-  return 0;
-#endif // !CC_PEVERIFY
-}
-
-#ifndef NODEBUG
-static bool checkTailCallMax() {
-#ifndef CC_PEVERIFY
-  uint32_t TailCallMax = 0;
-  static uint32_t TailCallCount = 0;
-
-  if (HaveEnvConfigTailCallMax) {
-    TailCallMax = EnvConfigTailCallMax;
-  }
-
-  if (TailCallMax) {
-    if (++TailCallCount > TailCallMax) {
-      return false;
-    }
-    dbPrint("**** TailCallCount = %d\n", TailCallCount);
-  }
-
-  return true;
-#else
-  return false;
-#endif
-}
-#endif // !NODEBUG
-
 #define CANONICAL_EXIT_INIT_VAL (-2)
 
 // OPCODE REMAP
@@ -6356,13 +6317,6 @@ bool ReaderBase::isUnmarkedTailCallHelper(uint8_t *ILInput,
         return false;
       }
     }
-
-#ifndef NODEBUG
-    if (!checkTailCallMax()) {
-      return false;
-    }
-#endif
-
     return true;
   }
 

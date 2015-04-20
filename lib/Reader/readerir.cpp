@@ -279,7 +279,7 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
     ASSERTNR(UNREACHED);
   }
 
-  if (LLILCJit::TheJit->ShouldInsertStatepoints) {
+  if (JitContext->Options->DoInsertStatepoints) {
     createSafepointPoll();
   }
 
@@ -451,7 +451,7 @@ void GenIR::readerPostPass(bool IsImportOnly) {
     insertIRForSecurityObject();
   }
 
-  if (LLILCJit::TheJit->ShouldInsertStatepoints) {
+  if (JitContext->Options->DoInsertStatepoints) {
 
     // Precise GC using statepoints cannot handle aggregates that contain
     // managed pointers yet. So, check if this function deals with such values
@@ -770,6 +770,8 @@ void GenIR::createSafepointPoll() {
   CallInst::Create(Target, "", EntryBlock);
   ReturnInst::Create(*LLVMContext, EntryBlock);
 }
+
+bool GenIR::doTailCallOpt() { return JitContext->Options->DoTailCallOpt; }
 
 #pragma endregion
 

@@ -238,7 +238,7 @@ Function *ABIMethodSignature::createFunction(GenIR &Reader, Module &M) {
   }
   F->setCallingConv(CC);
 
-  if (LLILCJit::TheJit->ShouldInsertStatepoints) {
+  if (Reader.JitContext->Options->DoInsertStatepoints) {
     F->setGC("statepoint-example");
   }
 

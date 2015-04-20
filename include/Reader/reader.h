@@ -138,28 +138,6 @@ extern void _cdecl fatal(int Errnum, ...);
 
 // Environment config variables
 
-#if !defined(CC_PEVERIFY)
-extern uint32_t EnvConfigTailCallOpt;
-#if !defined(NODEBUG)
-extern uint32_t EnvConfigDebugVerify;
-extern uint32_t EnvConfigTailCallMax;
-#endif // !NODEBUG
-#endif // !CC_PEVERIFY
-extern uint32_t EnvConfigPInvokeInline;
-extern uint32_t EnvConfigPInvokeCalliOpt;
-extern uint32_t EnvConfigTurnOffDebugInfo;
-
-#if !defined(CC_PEVERIFY)
-extern bool HaveEnvConfigTailCallOpt;
-#if !defined(NODEBUG)
-extern bool HaveEnvConfigDebugVerify;
-extern bool HaveEnvConfigTailCallMax;
-#endif // !NODEBUG
-#endif // !CC_PEVERIFY
-extern bool HaveEnvConfigPInvokeInline;
-extern bool HaveEnvConfigPInvokeCalliOpt;
-extern bool HaveEnvConfigTurnOffDebugInfo;
-
 #ifdef CC_PEVERIFY
 extern HRESULT VerLastError;
 #endif
@@ -1597,6 +1575,14 @@ public:
   /// \param Push [out] Number of operands pushed onto the stack.
   void getMSILInstrStackDelta(ReaderBaseNS::OPCODE Opcode, uint8_t *Operand,
                               uint16_t *Pop, uint16_t *Push);
+
+  /// \brief Check options to as to whether to do the tail call opt
+  ///
+  /// Derived class will provide an implementation that is correct for the
+  /// client.
+  ///
+  /// \returns true if tail call opt is enabled.
+  virtual bool doTailCallOpt() = 0;
 
 private:
   /// \brief Determine if a call instruction is a candidate to be a tail call.

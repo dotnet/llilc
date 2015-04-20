@@ -63,7 +63,7 @@ add_llilcjit_library(
   jitpch.cpp
   LLILCJit.cpp
   EEMemoryManager.cpp
-  options.cpp
+  jitoptions.cpp
   utility.cpp
   ${LLILCJIT_EXPORTS_DEF}
   )

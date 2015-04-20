@@ -1187,8 +1187,8 @@ private:
 
   /// Store a value to an argument passed indirectly.
   ///
-  /// The storage backing such arguments may be loacted on the heap; any stores
-  /// to these loactions may need write barriers.
+  /// The storage backing such arguments may be located on the heap; any stores
+  /// to these locations may need write barriers.
   ///
   /// \param ValueArgType  EE type info for the value to store.
   /// \param ValueToStore  The value to store.
@@ -1285,6 +1285,10 @@ private:
   /// current module. This helper is required by the LLVM GC-Statepoint
   /// insertion phase.
   void createSafepointPoll();
+
+  /// \brief Override of doTailCallOpt method
+  /// Provides client specific Options look up.
+  bool doTailCallOpt() override;
 
 private:
   LLILCJitContext *JitContext;
