@@ -5479,6 +5479,22 @@ bool GenIR::abs(IRNode *Argument, IRNode **Result) {
   return false;
 }
 
+bool GenIR::sqrt(IRNode *Argument, IRNode **Result) {
+  Type *Ty = Argument->getType();
+
+  if (Ty->isFloatingPointTy()) {
+    Type *Types[] = {Ty};
+    Value *FSqrt = Intrinsic::getDeclaration(JitContext->CurrentModule,
+                                             Intrinsic::sqrt, Types);
+    bool MayThrow = false;
+    Value *Sqrt = makeCall(FSqrt, MayThrow, Argument).getInstruction();
+    *Result = (IRNode *)Sqrt;
+    return true;
+  }
+
+  return false;
+}
+
 IRNode *GenIR::localAlloc(IRNode *Arg, bool ZeroInit) {
   // Note that we've seen a localloc in this method, since it has repercussions
   // on other aspects of code generation.

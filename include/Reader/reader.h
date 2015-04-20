@@ -2894,7 +2894,13 @@ public:
   virtual void storeStaticField(CORINFO_RESOLVED_TOKEN *FieldToken,
                                 IRNode *ValueToStore, bool IsVolatile) = 0;
   virtual IRNode *stringGetChar(IRNode *Arg1, IRNode *Arg2) = 0;
-  virtual bool sqrt(IRNode *Arg1, IRNode **RetVal) = 0;
+
+  /// Optionally generate inline code for the \p sqrt operation
+  ///
+  /// \param Argument      input value for sqrt
+  /// \param Result [out]  resulting sqrt value, iff reader decided to expand
+  /// \returns             true iff Result represents the sqrt
+  virtual bool sqrt(IRNode *Argument, IRNode **Result) = 0;
 
   virtual bool interlockedIntrinsicBinOp(IRNode *Arg1, IRNode *Arg2,
                                          IRNode **RetVal,
