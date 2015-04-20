@@ -1855,6 +1855,10 @@ bool GenIR::isManagedType(Type *Type) {
   return isManagedPointerType(Type) || isManagedAggregateType(Type);
 }
 
+bool GenIR::isUnmanagedPointerType(llvm::Type *Type) {
+  return Type->isPointerTy() && !isManagedPointerType(Type);
+}
+
 #pragma endregion
 
 #pragma region FLOW GRAPH
@@ -5645,8 +5649,14 @@ Value *GenIR::ChangePHIOperandType(Value *Operand, BasicBlock *OperandBlock,
                                    Type *NewTy) {
   LLVMBuilder->SetInsertPoint(OperandBlock->getTerminator());
   if (NewTy->isIntegerTy()) {
-    bool IsSigned = true;
-    return LLVMBuilder->CreateIntCast(Operand, NewTy, IsSigned);
+    Type *OperandTy = Operand->getType();
+    if (OperandTy->isIntegerTy()) {
+      bool IsSigned = true;
+      return LLVMBuilder->CreateIntCast(Operand, NewTy, IsSigned);
+    } else {
+      assert(isUnmanagedPointerType(OperandTy));
+      return LLVMBuilder->CreatePtrToInt(Operand, NewTy);
+    }
   } else if (NewTy->isFloatingPointTy()) {
     return LLVMBuilder->CreateFPCast(Operand, NewTy);
   } else {
@@ -5675,6 +5685,12 @@ Type *GenIR::getStackMergeType(Type *Ty1, Type *Ty2) {
   if (((Ty1 == FloatTy) && (Ty2 == DoubleTy)) ||
       ((Ty2 == FloatTy) && (Ty1 == DoubleTy))) {
     return DoubleTy;
+  }
+
+  // If we have unmanaged pointer and nativeint the result is nativeint.
+  if ((isUnmanagedPointerType(Ty1) && (Ty2 == NativeIntTy)) ||
+      (isUnmanagedPointerType(Ty2) && (Ty1 == NativeIntTy))) {
+    return NativeIntTy;
   }
 
   // If we have GC pointers, the result is the closest common supertype.

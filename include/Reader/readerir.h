@@ -1142,6 +1142,12 @@ private:
   bool isManagedPointerType(llvm::Type *Type);
   bool isManagedAggregateType(llvm::Type *Type);
 
+  /// \brief Check whether Type is an unmanaged pointer type.
+  ///
+  /// \param Type Type to check.
+  /// \returns true iff \p Type is an unmanaged pointer type.
+  bool isUnmanagedPointerType(llvm::Type *Type);
+
   llvm::StoreInst *makeStore(llvm::Value *ValueToStore, llvm::Value *Address,
                              bool IsVolatile, bool AddressMayBeNull = true);
   llvm::StoreInst *makeStoreNonNull(llvm::Value *ValueToStore,
