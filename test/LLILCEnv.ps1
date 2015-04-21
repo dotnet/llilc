@@ -878,6 +878,26 @@ function Global:ExcludeTest([string]$Arch="x64", [string]$Build="Release")
   del simpleexpr4*
   del staticFieldExprUnchecked1*
   popd 
+
+  # Excluding JIT\Directed\cmov\Bool_Or_Op*, Double_Or_Op*
+  # Bool_And_Op*, Bool_No_Op*, Int_Or_Op*, Float_Xor_Op*,
+  # Int_And_Op*, Float_And_Op*, Bool_Xor_Op*, Double_And_Op*,
+  # Float_Or_Op*, Int_Xor_Op*, Double_Xor_Op*
+  pushd $CoreCLRTest\JIT\Directed\cmov
+  del Bool_Or_Op*
+  del Double_Or_Op*
+  del Bool_And_Op*
+  del Bool_No_Op*
+  del Int_Or_Op*
+  del Float_Xor_Op*
+  del Int_And_Op*
+  del Float_And_Op*
+  del Bool_Xor_Op*
+  del Double_And_Op*
+  del Float_Or_Op*
+  del Int_Xor_Op*
+  del Double_Xor_Op*
+  popd
 }
 
 # -------------------------------------------------------------------------
