@@ -104,8 +104,11 @@ public:
   EHRegionList *Children;
   uint32_t StartMsilOffset;
   uint32_t EndMsilOffset;
+  union {
+    llvm::SwitchInst *EndFinallySwitch; // Only used for Finally regions
+    mdToken CatchClassToken;            // Only used for Catch regions
+  };
   ReaderBaseNS::RegionKind Kind;
-  llvm::SwitchInst *EndFinallySwitch;
 };
 
 struct EHRegionList {
@@ -242,8 +245,12 @@ EHRegion *rgnGetCatchTryRegion(EHRegion *CatchRegion) { return nullptr; }
 void rgnSetCatchTryRegion(EHRegion *CatchRegion, EHRegion *TryRegion) {
   return;
 }
-mdToken rgnGetCatchClassToken(EHRegion *CatchRegion) { return 0; }
-void rgnSetCatchClassToken(EHRegion *CatchRegion, mdToken Token) { return; }
+mdToken rgnGetCatchClassToken(EHRegion *CatchRegion) {
+  return CatchRegion->CatchClassToken;
+}
+void rgnSetCatchClassToken(EHRegion *CatchRegion, mdToken Token) {
+  CatchRegion->CatchClassToken = Token;
+}
 
 #pragma endregion
 
