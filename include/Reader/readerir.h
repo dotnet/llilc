@@ -164,10 +164,11 @@ public:
   /// Construct a flow graph edge list for iterating over the successors
   /// of the \p Fg node.
   /// \param Fg The node whose successors are desired.
+  /// \param Region The region containing node \p Fg
   /// \pre \p Fg != nullptr.
   /// \post **this** is a successor edge list representing the successors
   /// of \p Fg.
-  FlowGraphSuccessorEdgeList(FlowGraphNode *Fg);
+  FlowGraphSuccessorEdgeList(FlowGraphNode *Fg, EHRegion *Region);
 
   /// Move the current location in the flow graph edge list to the next edge.
   /// \pre The current edge has not reached the end of the edge list.
@@ -187,6 +188,7 @@ public:
 private:
   llvm::succ_iterator SuccIterator;
   llvm::succ_iterator SuccIteratorEnd;
+  llvm::BasicBlock *NominalSucc;
 };
 
 /// \brief A stack of IRNode pointers representing the MSIL operand stack.
@@ -560,6 +562,30 @@ public:
   FlowGraphNode *fgGetHeadBlock(void) override;
   FlowGraphNode *fgGetTailBlock(void) override;
   FlowGraphNode *fgNodeGetIDom(FlowGraphNode *Fg) override;
+
+  void fgEnterRegion(EHRegion *Region) override;
+
+  /// Make a landing pad suitable as an unwind label for code in the given try
+  /// region.
+  ///
+  /// \param TryRegion         Protected region we need to build a landing pad
+  ///                          for.
+  /// \param OuterLandingPad   Outer region's LandingPad (where to branch to
+  ///                          when propagating an exception).
+  /// \returns A new \p LandingPadInst in a populated landing-pad block.
+  llvm::LandingPadInst *createLandingPad(EHRegion *TryRegion,
+                                         llvm::LandingPadInst *OuterLandingPad);
+
+  /// Generate a single catch clause for a protected region
+  ///
+  /// \param CatchRegion   Handler that needs a clause and dispatch code
+  /// \param LandingPad    \p LandingPadInst under construction
+  /// \param FauxException \p Value representing the caught exception in the
+  ///                      dispatch code
+  /// \param Selector      \p Value representing the exception selector in the
+  ///                      dispatch code
+  void genCatchDispatch(EHRegion *CatchRegion, llvm::LandingPadInst *LandingPad,
+                        llvm::Value *FauxException, llvm::Value *Selector);
 
   IRNode *fgNodeFindStartLabel(FlowGraphNode *Block) override;
 
@@ -1317,6 +1343,9 @@ private:
   llvm::DenseMap<uint32_t, llvm::StoreInst *> ContinuationStoreMap;
   FlowGraphNode *FirstMSILBlock;
   llvm::BasicBlock *UnreachableContinuationBlock;
+  llvm::Function *PersonalityFunction; ///< Personality routine reported on
+                                       ///< LandingPads in this function.
+                                       ///< Lazily created/cached.
   bool KeepGenericContextAlive;
   bool NeedsSecurityObject;
   bool DoneBuildingFlowGraph;

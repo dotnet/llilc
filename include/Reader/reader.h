@@ -1661,14 +1661,12 @@ protected:
   ///          that includes \p Offset, if such a region exists; else nullptr.
   EHRegion *getInnerEnclosingRegion(EHRegion *OuterRegion, uint32_t Offset);
 
-private:
-  /// \brief Perform special processing for blocks that start EH regions.
+  /// Process first entry to a region during 1st-pass flow-graph construction
   ///
-  /// Uses the \p CurrentFgNode to determine which block to process. Ensures
-  /// the operand stack and debugger info is in the proper state for blocks
-  /// that start EH regions.
-  void setupBlockForEH();
+  /// \param Region   \p EHRegion being entered
+  virtual void fgEnterRegion(EHRegion *Region) = 0;
 
+private:
   /// \brief Check if this offset is the start of an MSIL instruction.
   ///
   /// Helper used to check whether branch targets and similar are referring
@@ -1949,7 +1947,8 @@ private:
 
   /// \brief Process a region transition during 1st-pass flow-graph construction
   ///
-  /// Computes the new current region and the MSIL offset where the next region
+  /// Does any processing necessary for entering the new region and computes
+  /// the new current region and the MSIL offset where the next region
   /// transition will occur (in a forward lexical walk).
   ///
   /// \param OldRegion   The region that was current before reaching \p Offset

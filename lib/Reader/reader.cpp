@@ -1830,66 +1830,6 @@ void ReaderBase::rgnCreateRegionTree(void) {
   EhRegionTree = RegionTreeRoot;
 }
 
-//
-// setupBlockForEH
-//
-// Called from ReaderBase::readBytesForFlowGraphNode to ensure that
-// only exception object is on operand stack on entry to funclet.
-//
-// If GenIR needs a callback whenever a new region is entered, then
-// this is the place to put it.
-//
-// (1) If we are entering a catch, except, or filter region for the first time,
-//     we assert that the stack is empty and push a GenIR'd ExceptionObject.
-// (2) Set a debug sequence point at the start of the an catch/filter/except.
-//
-// This is required since the stack is not empty at these points.
-void ReaderBase::setupBlockForEH() {
-  FlowGraphNode *Fg = CurrentFgNode;
-
-  if (CurrentRegion != nullptr) {
-    rgnSetIsLive(CurrentRegion, true);
-
-    if (isRegionStartBlock(Fg)) {
-      ReaderBaseNS::RegionKind RegionKind = rgnGetRegionType(CurrentRegion);
-      switch (RegionKind) {
-      case ReaderBaseNS::RGN_MCatch:
-      case ReaderBaseNS::RGN_MExcept:
-      case ReaderBaseNS::RGN_Filter:
-
-        // SEQUENCE POINTS: ensure sequence point at eh region start
-        if (needSequencePoints()) {
-          setSequencePoint(fgNodeGetStartMSILOffset(Fg),
-                           ICorDebugInfo::SOURCE_TYPE_INVALID);
-        }
-
-        // If we are currently entering a handler, we must reset the evaluation
-        // stack so that the only item on the stack is the exception object.
-        IRNode *ExceptionObject;
-
-        // Note, for example, that web prop might have dumped something here.
-        // It wouldn't get used anyway so clearing it is no harm.
-        ReaderOperandStack->clearStack();
-
-        // Make the exception object and push it onto the empty stack.
-        ExceptionObject = makeExceptionObject();
-        ReaderOperandStack->push(ExceptionObject);
-        break;
-
-      case ReaderBaseNS::RGN_Try:
-        // Entering a try region, the evaluation stack is required to be empty.
-        if (!ReaderOperandStack->empty()) {
-          BADCODE(MVER_E_TRY_N_EMPTY_STACK);
-        }
-        break;
-      default:
-        // reached
-        break;
-      }
-    }
-  }
-}
-
 void ReaderBase::fgFixRecursiveEdges(FlowGraphNode *HeadBlock) {
   // As a special case, localloc is incompatible with the recursive
   // tail call optimization, and any branches that we initially set up
@@ -2871,6 +2811,7 @@ EHRegion *ReaderBase::fgSwitchRegion(EHRegion *OldRegion, uint32_t Offset,
 
     if (Offset < ChildEndOffset) {
       // Enter this region; recursively check it (may need to enter descendant)
+      fgEnterRegion(ChildRegion);
       return fgSwitchRegion(ChildRegion, Offset, NextOffset);
     }
 
@@ -2899,8 +2840,9 @@ EHRegion *ReaderBase::fgSwitchRegion(EHRegion *OldRegion, uint32_t Offset,
         uint32_t GrandchildEndOffset = rgnGetEndMSILOffset(Grandchild);
 
         if (Offset < GrandchildEndOffset) {
-          // Enter this region; recursively check it (may need to enter
-          // descendant)
+          // Recursively check this region (it may need to enter a descendant).
+          // Don't call fgEnterRegion here, since we already processed the
+          // region entry for this try when we visited it the first time.
           return fgSwitchRegion(Grandchild, Offset, NextOffset);
         }
       }
@@ -7836,11 +7778,6 @@ void ReaderBase::readBytesForFlowGraphNode(FlowGraphNode *Fg,
            isOffsetInstrStart(TheParam.CurrentOffset));
 
   beginFlowGraphNode(Fg, TheParam.CurrentOffset, IsVerifyOnly);
-
-  if (!IsVerifyOnly) {
-    // TODO: Re-incorporate whatever portion of this is relevant for LLILC.
-    // setupBlockForEH();
-  }
 
   PAL_TRY(ReadBytesForFlowGraphNodeHelperParam *, Param, &TheParam) {
     Param->This->readBytesForFlowGraphNodeHelper(Param);
