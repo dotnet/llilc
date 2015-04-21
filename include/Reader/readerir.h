@@ -322,6 +322,8 @@ public:
     throw NotYetImplementedException("endFilter");
   };
 
+  FlowGraphEdgeList *fgNodeGetSuccessorList(FlowGraphNode *FgNode) override;
+  FlowGraphEdgeList *fgNodeGetPredecessorList(FlowGraphNode *FgNode) override;
   FlowGraphNode *fgNodeGetNext(FlowGraphNode *FgNode) override;
   uint32_t fgNodeGetStartMSILOffset(FlowGraphNode *Fg) override;
   void fgNodeSetStartMSILOffset(FlowGraphNode *Fg, uint32_t Offset) override;

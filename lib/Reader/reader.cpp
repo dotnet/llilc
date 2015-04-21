@@ -259,7 +259,7 @@ fgEdgeListGetNextPredecessorActual(FlowGraphEdgeList *FgEdge) {
   return FgEdge;
 }
 
-FlowGraphEdgeList *fgNodeGetSuccessorListActual(FlowGraphNode *Fg) {
+FlowGraphEdgeList *ReaderBase::fgNodeGetSuccessorListActual(FlowGraphNode *Fg) {
   FlowGraphEdgeList *FgEdge;
 
   FgEdge = fgNodeGetSuccessorList(Fg);
@@ -269,7 +269,8 @@ FlowGraphEdgeList *fgNodeGetSuccessorListActual(FlowGraphNode *Fg) {
   return FgEdge;
 }
 
-FlowGraphEdgeList *fgNodeGetPredecessorListActual(FlowGraphNode *Fg) {
+FlowGraphEdgeList *
+ReaderBase::fgNodeGetPredecessorListActual(FlowGraphNode *Fg) {
   FlowGraphEdgeList *FgEdge;
 
   FgEdge = fgNodeGetPredecessorList(Fg);

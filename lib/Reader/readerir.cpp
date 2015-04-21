@@ -2180,7 +2180,7 @@ FlowGraphNode *GenIR::fgNodeGetIDom(FlowGraphNode *FgNode) {
   return Idom;
 }
 
-FlowGraphEdgeList *fgNodeGetSuccessorList(FlowGraphNode *FgNode) {
+FlowGraphEdgeList *GenIR::fgNodeGetSuccessorList(FlowGraphNode *FgNode) {
   FlowGraphEdgeList *FgEdge = new FlowGraphSuccessorEdgeList(FgNode);
   if (fgEdgeListGetSink(FgEdge) == nullptr) {
     return nullptr;
@@ -2196,7 +2196,7 @@ FlowGraphEdgeList *fgEdgeListGetNextSuccessor(FlowGraphEdgeList *FgEdge) {
   return FgEdge;
 }
 
-FlowGraphEdgeList *fgNodeGetPredecessorList(FlowGraphNode *Fg) {
+FlowGraphEdgeList *GenIR::fgNodeGetPredecessorList(FlowGraphNode *Fg) {
   FlowGraphEdgeList *FgEdge = new FlowGraphPredecessorEdgeList(Fg);
   if (fgEdgeListGetSource(FgEdge) == nullptr) {
     return nullptr;

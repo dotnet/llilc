@@ -1019,20 +1019,6 @@ EHRegion *getFinallyRegion(EHRegion *TryRegion);
 ///
 ///@{
 
-/// \brief Obtain a list of the successor edges of a FlowGraphNode
-///
-/// \param FgNode   The FlowGraphNode of interest.
-/// \returns        A list of the successor edges, or nullptr if there are no
-///                 successors.
-FlowGraphEdgeList *fgNodeGetSuccessorList(FlowGraphNode *FgNode);
-
-/// \brief Obtain a list of the predecessor edges of a FlowGraphNode
-///
-/// \param FgNode   The FlowGraphNode of interest.
-/// \returns        A list of the predecessor edges, or nullptr if there are no
-///                 predecessors.
-FlowGraphEdgeList *fgNodeGetPredecessorList(FlowGraphNode *FgNode);
-
 /// \brief Get the IRNode that is the label for a flow graph node.
 ///
 /// \param  FgNode  The FlowGraphNode of interest.
@@ -1120,22 +1106,6 @@ FlowGraphEdgeList *fgEdgeListGetNextSuccessorActual(FlowGraphEdgeList *FgEdge);
 ///                  if there are no more predecessor edges.
 FlowGraphEdgeList *
 fgEdgeListGetNextPredecessorActual(FlowGraphEdgeList *FgEdge);
-
-/// \brief Obtain a list of the actual (non-exceptional) successor edges of a
-/// FlowGraphNode
-///
-/// \param FgNode   The FlowGraphNode of interest.
-/// \returns        A list of the actual successor edges, or nullptr if there
-///                 are no such successors.
-FlowGraphEdgeList *fgNodeGetSuccessorListActual(FlowGraphNode *Fg);
-
-/// \brief Obtain a list of the actual (non-exceptional) predecessor edges of a
-/// FlowGraphNode
-///
-/// \param FgNode   The FlowGraphNode of interest.
-/// \returns        A list of the actual predecessor edges, or nullptr if there
-///                 are no such predecessors.
-FlowGraphEdgeList *fgNodeGetPredecessorListActual(FlowGraphNode *Fg);
 
 ///@}
 
@@ -2689,6 +2659,37 @@ public:
                      IRNode *Arg2, ReaderAlignType Alignment, bool IsVolatile);
   virtual void dup(IRNode *Opr, IRNode **Result1, IRNode **Result2) = 0;
   virtual void endFilter(IRNode *Arg1) = 0;
+
+  /// \brief Obtain a list of the successor edges of a FlowGraphNode
+  ///
+  /// \param FgNode   The FlowGraphNode of interest.
+  /// \returns        A list of the successor edges, or nullptr if there are no
+  ///                 successors.
+  virtual FlowGraphEdgeList *fgNodeGetSuccessorList(FlowGraphNode *FgNode) = 0;
+
+  /// \brief Obtain a list of the predecessor edges of a FlowGraphNode
+  ///
+  /// \param FgNode   The FlowGraphNode of interest.
+  /// \returns        A list of the predecessor edges, or nullptr if there are
+  ///                 no predecessors.
+  virtual FlowGraphEdgeList *
+  fgNodeGetPredecessorList(FlowGraphNode *FgNode) = 0;
+
+  /// \brief Obtain a list of the actual (non-exceptional) successor edges of a
+  /// FlowGraphNode
+  ///
+  /// \param FgNode   The FlowGraphNode of interest.
+  /// \returns        A list of the actual successor edges, or nullptr if there
+  ///                 are no such successors.
+  FlowGraphEdgeList *fgNodeGetSuccessorListActual(FlowGraphNode *Fg);
+
+  /// \brief Obtain a list of the actual (non-exceptional) predecessor edges of
+  /// a FlowGraphNode
+  ///
+  /// \param FgNode   The FlowGraphNode of interest.
+  /// \returns        A list of the actual predecessor edges, or nullptr if
+  ///                 there are no such predecessors.
+  FlowGraphEdgeList *fgNodeGetPredecessorListActual(FlowGraphNode *Fg);
 
   virtual FlowGraphNode *fgNodeGetNext(FlowGraphNode *FgNode) = 0;
   virtual uint32_t fgNodeGetStartMSILOffset(FlowGraphNode *Fg) = 0;
