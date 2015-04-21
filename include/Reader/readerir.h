@@ -167,29 +167,22 @@ public:
   /// \pre \p Fg != nullptr.
   /// \post **this** is a successor edge list representing the successors
   /// of \p Fg.
-  FlowGraphSuccessorEdgeList(FlowGraphNode *Fg)
-      : FlowGraphEdgeList(), SuccIterator(Fg->getTerminator()),
-        SuccIteratorEnd(Fg->getTerminator(), true) {}
+  FlowGraphSuccessorEdgeList(FlowGraphNode *Fg);
 
   /// Move the current location in the flow graph edge list to the next edge.
   /// \pre The current edge has not reached the end of the edge list.
   /// \post The current edge has been advanced to the next, or has possibly
   /// reached the end iterator (meaning no more successors).
-  void moveNext() override { SuccIterator++; }
+  void moveNext() override;
 
   /// \return The sink of the current edge which will be one of the successors
   /// of the \p Fg node, unless the list has been exhausted in which case
   /// return nullptr.
-  FlowGraphNode *getSink() override {
-    return (SuccIterator == SuccIteratorEnd) ? nullptr
-                                             : (FlowGraphNode *)*SuccIterator;
-  }
+  FlowGraphNode *getSink() override;
 
   /// \return The source of the current edge which will be \p Fg node.
   /// \pre The current edge has not reached the end of the edge list.
-  FlowGraphNode *getSource() override {
-    return (FlowGraphNode *)SuccIterator.getSource();
-  }
+  FlowGraphNode *getSource() override;
 
 private:
   llvm::succ_iterator SuccIterator;

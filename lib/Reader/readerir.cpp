@@ -2220,6 +2220,21 @@ FlowGraphNode *fgEdgeListGetSource(FlowGraphEdgeList *FgEdge) {
   return FgEdge->getSource();
 }
 
+FlowGraphSuccessorEdgeList::FlowGraphSuccessorEdgeList(FlowGraphNode *Fg)
+    : FlowGraphEdgeList(), SuccIterator(Fg->getTerminator()),
+      SuccIteratorEnd(Fg->getTerminator(), true) {}
+
+void FlowGraphSuccessorEdgeList::moveNext() { SuccIterator++; }
+
+FlowGraphNode *FlowGraphSuccessorEdgeList::getSink() {
+  return (SuccIterator == SuccIteratorEnd) ? nullptr
+                                           : (FlowGraphNode *)*SuccIterator;
+}
+
+FlowGraphNode *FlowGraphSuccessorEdgeList::getSource() {
+  return (FlowGraphNode *)SuccIterator.getSource();
+}
+
 void GenIR::fgNodeSetOperandStack(FlowGraphNode *Fg, ReaderStack *Stack) {
   FlowGraphInfoMap[Fg].TheReaderStack = Stack;
 }
