@@ -3374,8 +3374,35 @@ LoadInst *GenIR::makeLoad(Value *Address, bool IsVolatile,
 
 CallSite GenIR::makeCall(Value *Callee, bool MayThrow, ArrayRef<Value *> Args) {
   if (MayThrow) {
-    // TODO: Generate an invoke with an appropriate unwind label.
+    LandingPadInst *LandingPad =
+        (CurrentRegion == nullptr ? nullptr : CurrentRegion->HandlerLandingPad);
+    if (LandingPad == nullptr) {
+      // The call may throw but is not in a protected region.
+      // For something like an explicit null check, where we've generated a
+      // conditional branch to this noreturn call (which must throw), falling
+      // down and generating a CallInst should be correct because the control
+      // dependence on the pointer test and the data dependence of the noreturn
+      // call model the precise exception constraints correctly.
+      // For a plain call which may or may not throw an exception, it's
+      // possible that we'll eventually need to model these as invokes with
+      // exception edges to resume or something.  For the time being, we're
+      // relying on the modeling of call aliases to be conservative enough
+      // to prevent reordering another exception-raising call across this one
+      // or speculating an unsafe dereference above this call.
+      // So fall down and generate a CallInst in both cases.
+    } else {
+      BasicBlock *ExceptionSuccessor = LandingPad->getParent();
+      TerminatorInst *Goto;
+      BasicBlock *NormalSuccessor = splitCurrentBlock(&Goto);
+      InvokeInst *Invoke =
+          InvokeInst::Create(Callee, NormalSuccessor, ExceptionSuccessor, Args);
+      replaceInstruction(Goto, Invoke);
+
+      return Invoke;
+    }
   }
+
+  // Generate a simple call.
   return LLVMBuilder->CreateCall(Callee, Args);
 }
 
@@ -5208,9 +5235,16 @@ BasicBlock *GenIR::insertConditionalPointBlock(Value *Condition,
   replaceInstruction(Goto, Branch);
 
   if (Rejoin) {
-    ASSERT(PointBlock->getTerminator() == nullptr);
+    BasicBlock *RejoinFromBlock = PointBlock;
+    // Allow that the point block may have been split to insert invoke
+    // instructions.
+    TerminatorInst *Terminator;
+    while ((Terminator = PointBlock->getTerminator()) != nullptr) {
+      assert(isa<InvokeInst>(Terminator));
+      RejoinFromBlock = cast<InvokeInst>(Terminator)->getNormalDest();
+    }
     IRBuilder<>::InsertPoint SavedInsertPoint = LLVMBuilder->saveIP();
-    LLVMBuilder->SetInsertPoint(PointBlock);
+    LLVMBuilder->SetInsertPoint(RejoinFromBlock);
     LLVMBuilder->CreateBr(ContinueBlock);
     LLVMBuilder->restoreIP(SavedInsertPoint);
   }
