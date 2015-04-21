@@ -319,6 +319,7 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   LocalVarCorTypes.resize(NumLocals);
   KeepGenericContextAlive = false;
   NeedsSecurityObject = false;
+  DoneBuildingFlowGraph = false;
   UnreachableContinuationBlock = nullptr;
 
   initParamsAndAutos(MethodSignature);
@@ -1884,9 +1885,12 @@ FlowGraphNode *GenIR::fgGetTailBlock() {
 }
 
 FlowGraphNode *GenIR::makeFlowGraphNode(uint32_t TargetOffset,
+                                        FlowGraphNode *PreviousNode,
                                         EHRegion *Region) {
+  BasicBlock *NextBlock =
+      (PreviousNode == nullptr ? nullptr : PreviousNode->getNextNode());
   FlowGraphNode *Node = (FlowGraphNode *)BasicBlock::Create(
-      *JitContext->LLVMContext, "", Function);
+      *JitContext->LLVMContext, "", Function, NextBlock);
   fgNodeSetStartMSILOffset(Node, TargetOffset);
   return Node;
 }
@@ -2035,21 +2039,14 @@ IRNode *GenIR::fgMakeEndFinally(IRNode *InsertNode, EHRegion *FinallyRegion,
   BasicBlock *TargetBlock = Switch->getParent();
   if (TargetBlock == nullptr) {
     // This is the first endfinally for this finally.  Generate a block to
-    // hold the switch.
-    TargetBlock = BasicBlock::Create(*JitContext->LLVMContext, "endfinally",
-                                     Function, Block->getNextNode());
+    // hold the switch. Use the finally end offset as the switch block's
+    // begin/end.
+    TargetBlock = createPointBlock(FinallyRegion->EndMsilOffset, "endfinally");
     LLVMBuilder->SetInsertPoint(TargetBlock);
 
     // Insert the load of the selector variable and the switch.
     LLVMBuilder->Insert((LoadInst *)Switch->getCondition());
     LLVMBuilder->Insert(Switch);
-
-    // Use the finally end offset as the switch block's begin/end.
-    FlowGraphNode *TargetNode = (FlowGraphNode *)TargetBlock;
-    uint32_t EndOffset = FinallyRegion->EndMsilOffset;
-    fgNodeSetStartMSILOffset(TargetNode, EndOffset);
-    fgNodeSetEndMSILOffset(TargetNode, EndOffset);
-    fgNodeSetPropagatesOperandStack(TargetNode, false);
   }
 
   // Generate and return branch to the block that holds the switch
@@ -2087,9 +2084,25 @@ IRNode *GenIR::fgNodeGetEndInsertIRNode(FlowGraphNode *FgNode) {
   return (IRNode *)InsertInst;
 }
 
+void GenIR::movePointBlocks(BasicBlock *OldBlock, BasicBlock *NewBlock) {
+  BasicBlock *MoveBeforeBlock = NewBlock;
+  uint32_t PointOffset = fgNodeGetStartMSILOffset((FlowGraphNode *)OldBlock);
+  BasicBlock *PointBlock = OldBlock->getPrevNode();
+  BasicBlock *PrevBlock = PointBlock->getPrevNode();
+  while (
+      (PointOffset == fgNodeGetStartMSILOffset((FlowGraphNode *)PointBlock)) &&
+      (PointOffset == fgNodeGetEndMSILOffset((FlowGraphNode *)PointBlock))) {
+    PointBlock->moveBefore(MoveBeforeBlock);
+    MoveBeforeBlock = PointBlock;
+    PointBlock = PrevBlock;
+    PrevBlock = PrevBlock->getPrevNode();
+  }
+}
+
 void GenIR::replaceFlowGraphNodeUses(FlowGraphNode *OldNode,
                                      FlowGraphNode *NewNode) {
   BasicBlock *OldBlock = (BasicBlock *)OldNode;
+  movePointBlocks(OldBlock, NewNode);
   OldBlock->replaceAllUsesWith(NewNode);
   OldBlock->eraseFromParent();
 }
@@ -2210,7 +2223,7 @@ FlowGraphNode *GenIR::fgNodeGetNext(FlowGraphNode *FgNode) {
 
 FlowGraphNode *GenIR::fgPrePhase(FlowGraphNode *Fg) { return FirstMSILBlock; }
 
-void GenIR::fgPostPhase() { return; }
+void GenIR::fgPostPhase() { DoneBuildingFlowGraph = true; }
 
 void GenIR::fgAddLabelToBranchList(IRNode *LabelNode, IRNode *BranchNode) {
   return;
@@ -4655,7 +4668,7 @@ uint32_t GenIR::updateLeaveOffset(EHRegion *Region, uint32_t LeaveOffset,
         // First finally for this function; generate an unreachable block
         // that can be used as the default switch target.
         UnreachableContinuationBlock =
-            BasicBlock::Create(Context, "NullDefault", Function);
+            createPointBlock(MethodInfo->ILCodeSize, "NullDefault");
         new UnreachableInst(Context, UnreachableContinuationBlock);
         fgNodeSetPropagatesOperandStack(
             (FlowGraphNode *)UnreachableContinuationBlock, false);
@@ -4840,6 +4853,22 @@ BasicBlock *GenIR::createPointBlock(uint32_t PointOffset,
   // any successor block will get the stack propagated from the other
   // predecessor.
   fgNodeSetPropagatesOperandStack(PointFlowGraphNode, false);
+
+  if (!DoneBuildingFlowGraph) {
+    // Position this block in the list so that it will get moved to its point
+    // at the end of flow-graph construction.
+    if (PointOffset == MethodInfo->ILCodeSize) {
+      // The point is the end of the function, which is already where this
+      // block is.
+    } else {
+      // Request a split at PointOffset, and move this block before the temp
+      // target so it will get moved after the split is created (in
+      // movePointBlocks).
+      FlowGraphNode *Next = nullptr;
+      fgAddNodeMSILOffset(&Next, PointOffset);
+      Block->moveBefore(Next);
+    }
+  }
 
   return Block;
 }

@@ -636,6 +636,7 @@ public:
     throw NotYetImplementedException("insertEHAnnotationNode");
   };
   FlowGraphNode *makeFlowGraphNode(uint32_t TargetOffset,
+                                   FlowGraphNode *PreviousNode,
                                    EHRegion *Region) override;
   void markAsEHLabel(IRNode *LabelNode) override {
     throw NotYetImplementedException("markAsEHLabel");
@@ -1005,6 +1006,18 @@ private:
   /// \returns          The newly-created successor block
   llvm::BasicBlock *splitCurrentBlock(llvm::TerminatorInst **Goto = nullptr);
 
+  /// \brief Move point blocks preceding \p OldBlock to just before \p NewBlock
+  ///
+  /// Point blocks created during the first pass flow-graph construction are
+  /// inserted before temp blocks created for their point.  Then they are moved
+  /// to the appropriate spot when branches to temp blocks are being rewritten.
+  /// This is the routine invoked during branch rewriting to move them.
+  ///
+  /// \param OldBlock Temporary block whose associated point blocks are to be
+  ///                 fixed up
+  /// \param NewBlock "Real" block that begins at the point in question
+  void movePointBlocks(llvm::BasicBlock *OldBlock, llvm::BasicBlock *NewBlock);
+
   /// Insert one instruction in place of another.
   ///
   /// \param OldInstruction The instruction to be removed.  Must have no uses.
@@ -1305,6 +1318,7 @@ private:
   llvm::BasicBlock *UnreachableContinuationBlock;
   bool KeepGenericContextAlive;
   bool NeedsSecurityObject;
+  bool DoneBuildingFlowGraph;
   llvm::BasicBlock *EntryBlock;
   llvm::Instruction *TempInsertionPoint;
   IRNode *MethodSyncHandle; ///< If the method is synchronized, this is

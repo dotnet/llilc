@@ -3054,7 +3054,16 @@ public:
                                       uint32_t Element) = 0;
   virtual void insertEHAnnotationNode(IRNode *InsertionPointNode,
                                       IRNode *Node) = 0;
+  /// Construct a new FlowGraphNode
+  ///
+  /// \param TargetOffset  The start MSIL offset for the new node
+  /// \param PreviousNode  The new node will follow \p PreviousNode in the
+  ///                      node list if specified (may be nullptr, in which case
+  ///                      the new node will simply be appended)
+  /// \param Region        EHRegion to apply to the new node
+  /// \returns The new FlowGraphNode
   virtual FlowGraphNode *makeFlowGraphNode(uint32_t TargetOffset,
+                                           FlowGraphNode *PreviousNode,
                                            EHRegion *Region) = 0;
   virtual void markAsEHLabel(IRNode *LabelNode) = 0;
   virtual IRNode *makeTryEndNode(void) = 0;
