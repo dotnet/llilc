@@ -1305,7 +1305,7 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
       // causes trouble with certain recursive type graphs, for example:
       //
       // class A { B b; }
-      // class B : extends A { int c };
+      // class B : extends A { int c; }
       //
       // We need to know the size of A before we can finish B. So we can't
       // ask for B's details while filling out A.
@@ -1403,6 +1403,15 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
       Type *ArrayOfElementTy = ArrayType::get(ElementTy, 0);
       Fields.push_back(ArrayOfElementTy);
     }
+  }
+
+  // It's possible that while adding the fields to this struct we already
+  // completed the struct. For example:
+  // class A { B b; }
+  // struct B { A a; }
+  // In that case we are already done.
+  if (!StructTy->isOpaque()) {
+    return ResultTy;
   }
 
   // Install the field list (even if empty) to complete the struct.
