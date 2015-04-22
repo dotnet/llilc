@@ -42,3 +42,6 @@ JIT\jit64\opt\cse\hugeSimpleExpr1
 JIT\jit64\opt\cse\mixedexpr1
 JIT\jit64\opt\cse\simpleexpr4
 JIT\jit64\opt\cse\staticFieldExprUnchecked1
+JIT\opt\Inline\Inline_Handler
+JIT\opt\Inline\Inline_Vars
+JIT\opt\Inline\InlineThrow

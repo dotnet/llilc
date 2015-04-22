@@ -898,6 +898,14 @@ function Global:ExcludeTest([string]$Arch="x64", [string]$Build="Release")
   del Int_Xor_Op*
   del Double_Xor_Op*
   popd
+
+  # Excluding JIT\opt\Inline\Inline_Handler*, Inline_Vars*, InlineThrow*
+  pushd $CoreCLRTest\JIT\opt\Inline
+  del Inline_Handler*
+  del Inline_Vars*
+  del InlineThrow*
+  popd
+
 }
 
 # -------------------------------------------------------------------------
