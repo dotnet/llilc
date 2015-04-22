@@ -1919,7 +1919,7 @@ FlowGraphNode *ReaderBase::buildFlowGraph(FlowGraphNode **FgTail) {
 // fgAddNodeMSILOffset
 //
 //  The FlowGraphNodeOffsetList acts as a work list. Each time a
-//  branch is added to the the IR stream a temporary target nodeis
+//  branch is added to the the IR stream a temporary target node is
 //  added to the FlowGraphNodeOffsetList.  After all the branches have
 //  been added the worklist is traversed and each temporary node is
 //  replaced with a real one.
@@ -1969,7 +1969,7 @@ FlowGraphNodeOffsetList *ReaderBase::fgAddNodeMSILOffset(
   NewElement->setOffset(TargetOffset);
 
   if (*Node == nullptr) {
-    *Node = makeFlowGraphNode(TargetOffset,
+    *Node = makeFlowGraphNode(TargetOffset, nullptr,
                               fgGetRegionFromMSILOffset(TargetOffset));
   }
   NewElement->setNode(*Node);
@@ -2292,17 +2292,11 @@ ReaderBase::fgReplaceBranchTarget(uint32_t Offset,
     Start = fgNodeGetStartMSILOffset(Block);
     End = fgNodeGetEndMSILOffset(Block);
 
-    // There are blocks at the top of the flow graph that both Start and
-    // End at offset 0.  These don't correspond to MSIL blocks, though,
-    // so we never want to insert labels in those blocks.
-    // Note that this routine is used to insert labels *before* EH regions
-    // are applied, and that branch targets can only be valid
-    // MSIL offsets, which each have distinct instructions and hence
-    // have non-zero block sizes.  Another special case is the final
-    // block, which may have a label but contain no MSIL due, for example,
-    // to an Endfinally instruction.
-    if ((Offset >= Start && Offset < End) ||
-        (Offset == Start && Offset == End && !NextBlock)) {
+    // Find the MSIL block corresponding to the branch target.  Note that the
+    // test used here precludes selecting a point block as the branch target;
+    // point blocks created in the first pass are only reachable by branches
+    // explicitly made to target them in the first pass.
+    if (Offset >= Start && Offset < End) {
 
       // Branch targets must be at the begining of basic blocks. Thus,
       // if this branch target does not Start the block we must split
@@ -2899,11 +2893,6 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
     StackOffset = 0;
   }
 
-  NodeOffsetListArraySize =
-      (ILInputSize / FLOW_GRAPH_NODE_LIST_ARRAY_STRIDE) + 1;
-  NodeOffsetListArray = (FlowGraphNodeOffsetList **)getTempMemory(
-      sizeof(FlowGraphNodeOffsetList *) * NodeOffsetListArraySize);
-
   // init stuff prior to loop
   IsShortInstr = false;
   IsConditional = false;
@@ -3127,7 +3116,7 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
       verifyReturnFlow(CurrentOffset);
       fgNodeSetEndMSILOffset(Block, NextOffset);
       if (NextOffset < ILInputSize) {
-        Block = makeFlowGraphNode(NextOffset, nullptr);
+        Block = makeFlowGraphNode(NextOffset, Block, nullptr);
       }
       break;
 
@@ -7894,6 +7883,13 @@ void ReaderBase::msilToIR(void) {
   FlowGraphNodeWorkList *Worklist;
   FlowGraphNode *FgHead, *FgTail;
 
+  // Initialize the NodeOffsetListArray so it can be used even in the
+  // reader pre-pass
+  NodeOffsetListArraySize =
+      (MethodInfo->ILCodeSize / FLOW_GRAPH_NODE_LIST_ARRAY_STRIDE) + 1;
+  NodeOffsetListArray = (FlowGraphNodeOffsetList **)getTempMemory(
+      sizeof(FlowGraphNodeOffsetList *) * NodeOffsetListArraySize);
+
   // Compiler dependent pre-pass
   readerPrePass(MethodInfo->ILCode, MethodInfo->ILCodeSize);
 
@@ -8009,15 +8005,8 @@ void ReaderBase::msilToIR(void) {
     uint32_t StartOffset = fgNodeGetStartMSILOffset(Block);
     uint32_t EndOffset = fgNodeGetEndMSILOffset(Block);
     if (fgNodeIsVisited(Block)) {
-      if (LastInsertedInOrderBlockEndOffset <= StartOffset) {
-        LastInsertedInOrderBlockEndOffset = EndOffset;
-      } else {
-        // This is a block that's not in MSIL offset order.
-        // Assert that this block doesn't propagate operand stack and
-        // doesn't have any msil and, therefore, can be processed out-of-order.
-        ASSERTNR(!fgNodePropagatesOperandStack(Block));
-        ASSERTNR(StartOffset == EndOffset);
-      }
+      assert(LastInsertedInOrderBlockEndOffset <= StartOffset);
+      LastInsertedInOrderBlockEndOffset = EndOffset;
       FlowGraphMSILOffsetOrder.push_back(Block);
     }
   }
