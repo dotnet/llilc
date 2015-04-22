@@ -361,6 +361,17 @@ bool LLILCJit::readMethod(LLILCJitContext *JitContext) {
 
   JitContext->MethodName = FuncName;
 
+  if (IsOk) {
+    for (BasicBlock &BB : *Func) {
+      if (BB.getLandingPadInst() != nullptr) {
+        // Don't try to push the EH code downstream (we'll currently fail on
+        // the first method with EH if we do that, which prevents being able
+        // to see IR for later methods)
+        return false;
+      }
+    }
+  }
+
   return IsOk;
 }
 
