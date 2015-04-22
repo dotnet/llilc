@@ -3632,8 +3632,11 @@ IRNode *GenIR::genNewMDArrayCall(ReaderCallTargetData *CallTargetData,
 
   // The helper is variadic; we only want the types of the two fixed arguments
   // but need the values of all the arguments.
-  Type *ArgumentTypes[2];
-  SmallVector<Value *, 16> Arguments(ArgCount + 2);
+  const uint32_t FixedArgCount = 2;
+  const uint32_t VariableArgCount = ArgCount - 1;
+  const uint32_t TotalArgCount = FixedArgCount + VariableArgCount;
+  Type *ArgumentTypes[FixedArgCount];
+  SmallVector<Value *, 16> Arguments(TotalArgCount);
   uint32_t Index = 0;
 
   // The first argument is the class handle.
