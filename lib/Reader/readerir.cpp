@@ -104,8 +104,12 @@ public:
   EHRegionList *Children;
   uint32_t StartMsilOffset;
   uint32_t EndMsilOffset;
+  llvm::LandingPadInst *HandlerLandingPad;
+  union {
+    llvm::SwitchInst *EndFinallySwitch; // Only used for Finally regions
+    mdToken CatchClassToken;            // Only used for Catch regions
+  };
   ReaderBaseNS::RegionKind Kind;
-  llvm::SwitchInst *EndFinallySwitch;
 };
 
 struct EHRegionList {
@@ -180,6 +184,19 @@ void rgnSetParent(EHRegion *Region, EHRegion *Parent) {
 
 EHRegion *rgnGetParent(EHRegion *Region) { return Region->Parent; }
 
+bool rgnIsOutsideParent(EHRegion *Region) {
+  switch (Region->Kind) {
+  case ReaderBaseNS::RegionKind::RGN_Fault:
+  case ReaderBaseNS::RegionKind::RGN_Finally:
+  case ReaderBaseNS::RegionKind::RGN_Filter:
+  case ReaderBaseNS::RegionKind::RGN_MExcept:
+  case ReaderBaseNS::RegionKind::RGN_MCatch:
+    return true;
+  default:
+    return false;
+  }
+}
+
 void rgnSetChildList(EHRegion *Region, EHRegionList *Children) {
   Region->Children = Children;
 }
@@ -229,8 +246,12 @@ EHRegion *rgnGetCatchTryRegion(EHRegion *CatchRegion) { return nullptr; }
 void rgnSetCatchTryRegion(EHRegion *CatchRegion, EHRegion *TryRegion) {
   return;
 }
-mdToken rgnGetCatchClassToken(EHRegion *CatchRegion) { return 0; }
-void rgnSetCatchClassToken(EHRegion *CatchRegion, mdToken Token) { return; }
+mdToken rgnGetCatchClassToken(EHRegion *CatchRegion) {
+  return CatchRegion->CatchClassToken;
+}
+void rgnSetCatchClassToken(EHRegion *CatchRegion, mdToken Token) {
+  CatchRegion->CatchClassToken = Token;
+}
 
 #pragma endregion
 
@@ -321,6 +342,8 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   NeedsSecurityObject = false;
   DoneBuildingFlowGraph = false;
   UnreachableContinuationBlock = nullptr;
+  // Personality function is created on-demand.
+  PersonalityFunction = nullptr;
 
   initParamsAndAutos(MethodSignature);
 
@@ -1879,11 +1902,18 @@ bool GenIR::isUnmanagedPointerType(llvm::Type *Type) {
 //
 //===----------------------------------------------------------------------===//
 
-EHRegion *fgNodeGetRegion(FlowGraphNode *Node) { return nullptr; }
+EHRegion *GenIR::fgNodeGetRegion(FlowGraphNode *Node) {
+  return FlowGraphInfoMap[Node].Region;
+}
 
-EHRegion *fgNodeGetRegion(llvm::Function *Function) { return nullptr; }
+void GenIR::fgNodeSetRegion(FlowGraphNode *Node, EHRegion *Region) {
+  assert(fgNodeGetRegion(Node) == nullptr && "unexpected region change");
+  FlowGraphInfoMap[Node].Region = Region;
+}
 
-void fgNodeSetRegion(FlowGraphNode *Node, EHRegion *Region) { return; }
+void GenIR::fgNodeChangeRegion(FlowGraphNode *Node, EHRegion *Region) {
+  FlowGraphInfoMap[Node].Region = Region;
+}
 
 FlowGraphNode *GenIR::fgGetHeadBlock() {
   return ((FlowGraphNode *)&Function->getEntryBlock());
@@ -1894,8 +1924,7 @@ FlowGraphNode *GenIR::fgGetTailBlock() {
 }
 
 FlowGraphNode *GenIR::makeFlowGraphNode(uint32_t TargetOffset,
-                                        FlowGraphNode *PreviousNode,
-                                        EHRegion *Region) {
+                                        FlowGraphNode *PreviousNode) {
   BasicBlock *NextBlock =
       (PreviousNode == nullptr ? nullptr : PreviousNode->getNextNode());
   FlowGraphNode *Node = (FlowGraphNode *)BasicBlock::Create(
@@ -2073,6 +2102,214 @@ void GenIR::beginFlowGraphNode(FlowGraphNode *Fg, uint32_t CurrOffset,
   }
 }
 
+// Allow filtering which try regions we support (during EH bring-up)
+static bool hasNYIClause(EHRegion *TryRegion) {
+  for (EHRegionList *ChildNode = rgnGetChildList(TryRegion); ChildNode;
+       ChildNode = rgnListGetNext(ChildNode)) {
+    EHRegion *Child = rgnListGetRgn(ChildNode);
+    switch (Child->Kind) {
+    case ReaderBaseNS::RegionKind::RGN_Try:
+      // This is a nested region, not an attached handler.  It doesn't require
+      // any code in the landing pad.
+      break;
+    case ReaderBaseNS::RegionKind::RGN_MCatch:
+      // This handler type is implemented.
+      break;
+    case ReaderBaseNS::RegionKind::RGN_MExcept:
+    case ReaderBaseNS::RegionKind::RGN_Finally:
+    case ReaderBaseNS::RegionKind::RGN_Fault:
+      // These are not yet implemented.
+      return true;
+    default:
+      llvm_unreachable("Unexpected region kind");
+    }
+  }
+  // No NYI clause found.
+  return false;
+}
+
+void GenIR::fgEnterRegion(EHRegion *Region) {
+  // Find the outer region handler first.
+  EHRegion *Parent = rgnGetParent(Region);
+
+  if (rgnIsOutsideParent(Region)) {
+    // Get the nearest enclosing ancestor, not the immediate parent
+    Parent = rgnGetParent(Parent);
+  }
+
+  LandingPadInst *LandingPad = Parent->HandlerLandingPad;
+
+  if (Region->Kind == ReaderBaseNS::RegionKind::RGN_Try &&
+      !SuppressExceptionHandlers && !hasNYIClause(Region)) {
+    // Create a new inner landing pad
+    LandingPad = createLandingPad(Region, LandingPad);
+  }
+
+  // Record the handler so we can hook up exception edges later.
+  Region->HandlerLandingPad = LandingPad;
+}
+
+LandingPadInst *GenIR::createLandingPad(EHRegion *TryRegion,
+                                        LandingPadInst *OuterLandingPad) {
+  LLVMContext &LLVMContext = *JitContext->LLVMContext;
+  BasicBlock *LandingBlock =
+      createPointBlock(TryRegion->EndMsilOffset, "ExceptionDispatch");
+  IRBuilder<>::InsertPoint SavedInsertPoint = LLVMBuilder->saveIP();
+  LLVMBuilder->SetInsertPoint(LandingBlock);
+
+  // The landingpad expects a pointer to the personality routine.
+  if (PersonalityFunction == nullptr) {
+    // The EE provides a CorInfoHelpFunc handle for the actual personality
+    // routine (CORINFO_HELP_EE_PERSONALITY_ROUTINE), but
+    // A) the handle is opqaue, and we need an llvm::Function, and
+    // B) LLVM's EH lowering expects the personality routine to have one of a
+    //    few known names.
+    // Eventually, we want to be able to create llvm::Functions for
+    // CorInfoHelpFunc handles, and either get rid of the name matching in the
+    // EH lowering or teach it about the CLR's personality routine
+    // (ProcessCLRException).  For now, just pretend to be Windows MSVCRT C++
+    // since it triggers the most appropriate paths in WinEHPrepare.
+    // Use a dummy function type.
+    FunctionType *PersonalityTy =
+        FunctionType::get(Type::getVoidTy(LLVMContext), false);
+    PersonalityFunction =
+        Function::Create(PersonalityTy, Function::ExternalLinkage,
+                         "__CxxFrameHandler3", JitContext->CurrentModule);
+  }
+  // Landingpad defines an i8* (in addrspace 0) which is intended to be a
+  // pointer to the exception object.  An actual pointer to a CLR exception
+  // object would need to be a GC pointer, but since the pointer here isn't
+  // used for actual codegen (but rather is just used to connect the dataflow
+  // between the LandingPad and the begincatch intrinsic call), use i8* to
+  // match LLVM's expectations.
+  Type *FauxExceptionType = Type::getInt8PtrTy(LLVMContext);
+  // Use i32 as selector type to match Clang.
+  IntegerType *SelectorType = IntegerType::getInt32Ty(LLVMContext);
+  // The LandingPad instruction itself defines an (exception, selector) pair
+  StructType *PairType =
+      llvm::StructType::get(FauxExceptionType, SelectorType, nullptr);
+  LandingPadInst *LandingPad = LLVMBuilder->CreateLandingPad(
+      PairType, PersonalityFunction, 1, "ExnData");
+  // Extract the exception and selector.  Clang spills these to locals, but
+  // that seems unnecessary for us (WinEHPrepare explicitly promotes them
+  // to registers if it sees them spilled).
+  Value *FauxException =
+      LLVMBuilder->CreateExtractValue(LandingPad, 0, "ExceptionToken");
+  Value *Selector =
+      LLVMBuilder->CreateExtractValue(LandingPad, 1, "SelectorToken");
+
+  // Walk the list of attached handlers, adding clauses as appropriate.
+  for (EHRegionList *ChildNode = rgnGetChildList(TryRegion); ChildNode;
+       ChildNode = rgnListGetNext(ChildNode)) {
+    EHRegion *Child = rgnListGetRgn(ChildNode);
+    switch (Child->Kind) {
+    case ReaderBaseNS::RegionKind::RGN_Try:
+      // This is a nested region, not an attached handler.  It doesn't require
+      // any code in the landing pad.
+      break;
+    case ReaderBaseNS::RegionKind::RGN_MCatch:
+      genCatchDispatch(Child, LandingPad, FauxException, Selector);
+      break;
+    case ReaderBaseNS::RegionKind::RGN_MExcept:
+    case ReaderBaseNS::RegionKind::RGN_Finally:
+    case ReaderBaseNS::RegionKind::RGN_Fault:
+      // These are not yet implemented.  Omit the dispatch code for them, so
+      // they will be discarded as unreachable and we can still compile these
+      // functions cleanly (though they will not run correctly if an exception
+      // is thrown that needed to be processed by one of these handlers).
+      // Mark the landing pad as a cleanup to indicate that it ought to process
+      // exceptions for which we're not adding clauses.
+      LandingPad->setCleanup(true);
+      break;
+    default:
+      llvm_unreachable("Unexpected region kind");
+    }
+  }
+
+  // If we didn't break out to a handler, continue propagating the exception.
+  LLVMBuilder->CreateResume(FauxException);
+
+  // Return the insertion point to where the caller had it.
+  LLVMBuilder->restoreIP(SavedInsertPoint);
+
+  return LandingPad;
+}
+
+void GenIR::genCatchDispatch(EHRegion *CatchRegion, LandingPadInst *LandingPad,
+                             Value *FauxException, Value *Selector) {
+  LLVMContext &LLVMContext = *JitContext->LLVMContext;
+  // Get the token representing the type that the catch handles.
+  mdToken ClassToken = rgnGetCatchClassToken(CatchRegion);
+  CORINFO_RESOLVED_TOKEN ResolvedToken;
+  resolveToken(ClassToken, CORINFO_TOKENKIND_Class, &ResolvedToken);
+  Type *CaughtType = getType(CORINFO_TYPE_CLASS, ResolvedToken.hClass);
+  // Generate a global variable that represents the caught exception type
+  // handle.
+  // TODO: This will need to be a value that can be mapped back to the class
+  // token.  Creating a dummy placeholder GlobalVariable for now.  Use i8 for
+  // tye type because we need to cast the address to i8* to form a well-typed
+  // LandingPad anyway.
+  Type *Int8Ty = Type::getInt8Ty(LLVMContext);
+  StructType *ExnClassType =
+      cast<StructType>(cast<PointerType>(CaughtType)->getElementType());
+  const bool IsConstant = true;
+  GlobalVariable *TokenValue = new GlobalVariable(
+      *JitContext->CurrentModule, Int8Ty, IsConstant,
+      GlobalVariable::ExternalLinkage, nullptr, ExnClassType->getName());
+  // Register this clause with the LandingPad instruction.
+  LandingPad->addClause(TokenValue);
+  // In LLVM, the landing pad clause entry (which for us is the class
+  // token) is not identical to dispatch selector (which is an i32); the
+  // @llvm.eh.typeid.for intrinsic is used to convert from the clause
+  // entry to the selector value.  Emit the call to get the selector value
+  // that will identify this catch type.
+  Value *IntrinsicCallee = Intrinsic::getDeclaration(JitContext->CurrentModule,
+                                                     Intrinsic::eh_typeid_for);
+  Value *ClassSelector =
+      LLVMBuilder->CreateCall(IntrinsicCallee, TokenValue, "ClassSelector");
+
+  // Generate the test to see if the dynamically-provided selector matches
+  // the selector for this clause.
+  Value *Match = LLVMBuilder->CreateICmpEQ(Selector, ClassSelector, "DoCatch");
+  // Create the successor blocks for the true/false cases of the match.
+  BasicBlock *EnterCatchBlock =
+      createPointBlock(CatchRegion->StartMsilOffset, "EnterCatch");
+  EHRegion *TryRegion = CatchRegion->Parent;
+  BasicBlock *ContinueBlock =
+      createPointBlock(TryRegion->EndMsilOffset, "ContinueDispatch");
+  // Branch to the appropriate successor.
+  LLVMBuilder->CreateCondBr(Match, EnterCatchBlock, ContinueBlock);
+  // Populate the enter-catch block
+  LLVMBuilder->SetInsertPoint(EnterCatchBlock);
+  // SEQUENCE POINTS: ensure sequence point at eh region start
+  if (needSequencePoints()) {
+    setSequencePoint(CatchRegion->StartMsilOffset,
+                     ICorDebugInfo::SOURCE_TYPE_INVALID);
+  }
+  // Generate a local to hold the pointer to the caught exception.
+  Value *ExnPtrAddr = createTemporary(CaughtType, "CaughtException");
+  // The begincatch intrinsic takes the address of the local as i8*
+  Type *Int8PtrTy = Type::getInt8PtrTy(LLVMContext);
+  Value *CastExnPtrAddr = LLVMBuilder->CreateBitCast(ExnPtrAddr, Int8PtrTy);
+  Value *BeginCatchCallee = Intrinsic::getDeclaration(JitContext->CurrentModule,
+                                                      Intrinsic::eh_begincatch);
+  Value *BeginCatch =
+      LLVMBuilder->CreateCall2(BeginCatchCallee, FauxException, CastExnPtrAddr);
+  // The catch handler code itself expects the exception pointer to be on
+  // the evaluation stack.
+  IRNode *ExnPtr = (IRNode *)LLVMBuilder->CreateLoad(ExnPtrAddr);
+  ReaderStack *EnterBlockStack = createStack();
+  EnterBlockStack->push(ExnPtr);
+  fgNodeSetOperandStack((FlowGraphNode *)EnterCatchBlock, EnterBlockStack);
+  fgNodeSetPropagatesOperandStack((FlowGraphNode *)EnterCatchBlock, true);
+  // Branch to the handler code.
+  FlowGraphNode *HandlerNode = nullptr;
+  fgAddNodeMSILOffset(&HandlerNode, CatchRegion->StartMsilOffset);
+  LLVMBuilder->CreateBr((BasicBlock *)HandlerNode);
+  // Reset the insert point to continue exception dispatch.
+  LLVMBuilder->SetInsertPoint(ContinueBlock);
+}
+
 void GenIR::endFlowGraphNode(FlowGraphNode *Fg, uint32_t CurrOffset) { return; }
 
 IRNode *GenIR::findBlockSplitPointAfterNode(IRNode *Node) {
@@ -2117,8 +2354,8 @@ void GenIR::replaceFlowGraphNodeUses(FlowGraphNode *OldNode,
 }
 
 bool fgEdgeListIsNominal(FlowGraphEdgeList *FgEdge) {
-  // This is supposed to return true for exception edges.
-  return false;
+  BasicBlock *Successor = (BasicBlock *)fgEdgeListGetSink(FgEdge);
+  return Successor->isLandingPad();
 }
 
 // Hook called from reader fg builder to identify potential inline candidates.
@@ -2146,8 +2383,7 @@ FlowGraphNode *GenIR::fgNodeGetIDom(FlowGraphNode *FgNode) {
   //  is not a true dominance relationship. Progress to the next
   //  dominator in the chain until we reach a true dominating
   //  block or there are no more blocks.
-  while (nullptr != Idom &&
-         fgNodeGetRegion(Idom) != fgNodeGetRegion(Function) &&
+  while (nullptr != Idom && fgNodeGetRegion(Idom) != EhRegionTree &&
          fgNodeGetRegion(Idom) != fgNodeGetRegion(FgNode)) {
     Idom = getNextIDom(Idom);
   }
@@ -2155,8 +2391,9 @@ FlowGraphNode *GenIR::fgNodeGetIDom(FlowGraphNode *FgNode) {
   return Idom;
 }
 
-FlowGraphEdgeList *fgNodeGetSuccessorList(FlowGraphNode *FgNode) {
-  FlowGraphEdgeList *FgEdge = new FlowGraphSuccessorEdgeList(FgNode);
+FlowGraphEdgeList *GenIR::fgNodeGetSuccessorList(FlowGraphNode *FgNode) {
+  EHRegion *Region = fgNodeGetRegion(FgNode);
+  FlowGraphEdgeList *FgEdge = new FlowGraphSuccessorEdgeList(FgNode, Region);
   if (fgEdgeListGetSink(FgEdge) == nullptr) {
     return nullptr;
   }
@@ -2171,7 +2408,7 @@ FlowGraphEdgeList *fgEdgeListGetNextSuccessor(FlowGraphEdgeList *FgEdge) {
   return FgEdge;
 }
 
-FlowGraphEdgeList *fgNodeGetPredecessorList(FlowGraphNode *Fg) {
+FlowGraphEdgeList *GenIR::fgNodeGetPredecessorList(FlowGraphNode *Fg) {
   FlowGraphEdgeList *FgEdge = new FlowGraphPredecessorEdgeList(Fg);
   if (fgEdgeListGetSource(FgEdge) == nullptr) {
     return nullptr;
@@ -2193,6 +2430,38 @@ FlowGraphNode *fgEdgeListGetSink(FlowGraphEdgeList *FgEdge) {
 
 FlowGraphNode *fgEdgeListGetSource(FlowGraphEdgeList *FgEdge) {
   return FgEdge->getSource();
+}
+
+FlowGraphSuccessorEdgeList::FlowGraphSuccessorEdgeList(FlowGraphNode *Fg,
+                                                       EHRegion *Region)
+    : FlowGraphEdgeList(), SuccIterator(Fg->getTerminator()),
+      SuccIteratorEnd(Fg->getTerminator(), true), NominalSucc(nullptr) {
+  if (Region != nullptr) {
+    LandingPadInst *LandingPad = Region->HandlerLandingPad;
+    if (LandingPad != nullptr) {
+      NominalSucc = LandingPad->getParent();
+    }
+  }
+}
+
+void FlowGraphSuccessorEdgeList::moveNext() {
+  if (NominalSucc == nullptr) {
+    SuccIterator++;
+  } else {
+    NominalSucc = nullptr;
+  }
+}
+
+FlowGraphNode *FlowGraphSuccessorEdgeList::getSink() {
+  if (NominalSucc != nullptr) {
+    return (FlowGraphNode *)NominalSucc;
+  }
+  return (SuccIterator == SuccIteratorEnd) ? nullptr
+                                           : (FlowGraphNode *)*SuccIterator;
+}
+
+FlowGraphNode *FlowGraphSuccessorEdgeList::getSource() {
+  return (FlowGraphNode *)SuccIterator.getSource();
 }
 
 void GenIR::fgNodeSetOperandStack(FlowGraphNode *Fg, ReaderStack *Stack) {
@@ -3105,8 +3374,35 @@ LoadInst *GenIR::makeLoad(Value *Address, bool IsVolatile,
 
 CallSite GenIR::makeCall(Value *Callee, bool MayThrow, ArrayRef<Value *> Args) {
   if (MayThrow) {
-    // TODO: Generate an invoke with an appropriate unwind label.
+    LandingPadInst *LandingPad =
+        (CurrentRegion == nullptr ? nullptr : CurrentRegion->HandlerLandingPad);
+    if (LandingPad == nullptr) {
+      // The call may throw but is not in a protected region.
+      // For something like an explicit null check, where we've generated a
+      // conditional branch to this noreturn call (which must throw), falling
+      // down and generating a CallInst should be correct because the control
+      // dependence on the pointer test and the data dependence of the noreturn
+      // call model the precise exception constraints correctly.
+      // For a plain call which may or may not throw an exception, it's
+      // possible that we'll eventually need to model these as invokes with
+      // exception edges to resume or something.  For the time being, we're
+      // relying on the modeling of call aliases to be conservative enough
+      // to prevent reordering another exception-raising call across this one
+      // or speculating an unsafe dereference above this call.
+      // So fall down and generate a CallInst in both cases.
+    } else {
+      BasicBlock *ExceptionSuccessor = LandingPad->getParent();
+      TerminatorInst *Goto;
+      BasicBlock *NormalSuccessor = splitCurrentBlock(&Goto);
+      InvokeInst *Invoke =
+          InvokeInst::Create(Callee, NormalSuccessor, ExceptionSuccessor, Args);
+      replaceInstruction(Goto, Invoke);
+
+      return Invoke;
+    }
   }
+
+  // Generate a simple call.
   return LLVMBuilder->CreateCall(Callee, Args);
 }
 
@@ -4724,10 +5020,50 @@ uint32_t GenIR::updateLeaveOffset(EHRegion *Region, uint32_t LeaveOffset,
   return InnermostTargetOffset;
 }
 
+static EHRegion *getCommonAncestor(EHRegion *Region1, EHRegion *Region2) {
+  if ((Region1 == nullptr) || (Region2 == nullptr)) {
+    return nullptr;
+  }
+  int Depth1 = 0;
+  for (EHRegion *Ancestor1 = Region1->Parent; Ancestor1 != nullptr;
+       Ancestor1 = Ancestor1->Parent) {
+    ++Depth1;
+  }
+  int Depth2 = 0;
+  for (EHRegion *Ancestor2 = Region2->Parent; Ancestor2 != nullptr;
+       Ancestor2 = Ancestor2->Parent) {
+    ++Depth2;
+  }
+  while (Depth1 > Depth2) {
+    Region1 = Region1->Parent;
+    --Depth1;
+  }
+  while (Depth2 > Depth1) {
+    Region2 = Region2->Parent;
+    --Depth2;
+  }
+  while (Region1 != Region2) {
+    Region1 = Region1->Parent;
+    Region2 = Region2->Parent;
+  }
+  return Region1;
+}
+
 void GenIR::leave(uint32_t TargetOffset, bool IsNonLocal,
                   bool EndsWithNonLocalGoto) {
-  // TODO: handle leaves from handler regions
-  return;
+  // Check if this leave exits any catch regions
+  BasicBlock *CurrentBlock = LLVMBuilder->GetInsertBlock();
+  BasicBlock *TargetBlock = CurrentBlock->getUniqueSuccessor();
+  EHRegion *TargetRegion = fgNodeGetRegion((FlowGraphNode *)TargetBlock);
+  EHRegion *ExitToRegion = getCommonAncestor(CurrentRegion, TargetRegion);
+  for (EHRegion *Leaving = CurrentRegion; Leaving != ExitToRegion;
+       Leaving = Leaving->Parent) {
+    if (Leaving->Kind == ReaderBaseNS::RegionKind::RGN_MCatch) {
+      Value *ExitCatchIntrinsic = Intrinsic::getDeclaration(
+          JitContext->CurrentModule, Intrinsic::eh_endcatch);
+      LLVMBuilder->CreateCall(ExitCatchIntrinsic);
+    }
+  }
 }
 
 IRNode *GenIR::loadStr(mdToken Token) {
@@ -4858,6 +5194,9 @@ BasicBlock *GenIR::createPointBlock(uint32_t PointOffset,
   fgNodeSetStartMSILOffset(PointFlowGraphNode, PointOffset);
   fgNodeSetEndMSILOffset(PointFlowGraphNode, PointOffset);
 
+  // Make the point block part of the current region
+  fgNodeSetRegion(PointFlowGraphNode, CurrentRegion);
+
   // Point blocks don't need an operand stack: they don't have any MSIL and
   // any successor block will get the stack propagated from the other
   // predecessor.
@@ -4896,9 +5235,16 @@ BasicBlock *GenIR::insertConditionalPointBlock(Value *Condition,
   replaceInstruction(Goto, Branch);
 
   if (Rejoin) {
-    ASSERT(PointBlock->getTerminator() == nullptr);
+    BasicBlock *RejoinFromBlock = PointBlock;
+    // Allow that the point block may have been split to insert invoke
+    // instructions.
+    TerminatorInst *Terminator;
+    while ((Terminator = PointBlock->getTerminator()) != nullptr) {
+      assert(isa<InvokeInst>(Terminator));
+      RejoinFromBlock = cast<InvokeInst>(Terminator)->getNormalDest();
+    }
     IRBuilder<>::InsertPoint SavedInsertPoint = LLVMBuilder->saveIP();
-    LLVMBuilder->SetInsertPoint(PointBlock);
+    LLVMBuilder->SetInsertPoint(RejoinFromBlock);
     LLVMBuilder->CreateBr(ContinueBlock);
     LLVMBuilder->restoreIP(SavedInsertPoint);
   }
