@@ -4457,6 +4457,44 @@ void GenIR::dup(IRNode *Opr, IRNode **Result1, IRNode **Result2) {
   *Result2 = Opr;
 }
 
+bool GenIR::interlockedCmpXchg(IRNode *Destination, IRNode *Exchange,
+                               IRNode *Comparand, IRNode **Result,
+                               CorInfoIntrinsics IntrinsicID) {
+  ASSERT(Exchange->getType() == Comparand->getType());
+  switch (IntrinsicID) {
+  case CORINFO_INTRINSIC_InterlockedCmpXchg32:
+    ASSERT(Exchange->getType() == Type::getInt32Ty(*JitContext->LLVMContext));
+    break;
+  case CORINFO_INTRINSIC_InterlockedCmpXchg64:
+    ASSERT(Exchange->getType() == Type::getInt64Ty(*JitContext->LLVMContext));
+    break;
+  default:
+    throw NotYetImplementedException("interlockedCmpXchg");
+  }
+
+  Type *ComparandTy = Comparand->getType();
+  Type *DestinationTy = Destination->getType();
+
+  if (DestinationTy->isIntegerTy()) {
+    Type *CastTy = getManagedPointerType(ComparandTy);
+    Destination = (IRNode *)LLVMBuilder->CreateIntToPtr(Destination, CastTy);
+  } else {
+    ASSERT(DestinationTy->isPointerTy());
+    Type *CastTy = isManagedPointerType(DestinationTy)
+                       ? getManagedPointerType(ComparandTy)
+                       : getUnmanagedPointerType(ComparandTy);
+    Destination = (IRNode *)LLVMBuilder->CreatePointerCast(Destination, CastTy);
+  }
+
+  Value *Pair = LLVMBuilder->CreateAtomicCmpXchg(
+      Destination, Comparand, Exchange, llvm::SequentiallyConsistent,
+      llvm::SequentiallyConsistent);
+  *Result =
+      (IRNode *)LLVMBuilder->CreateExtractValue(Pair, 0, "cmpxchg_result");
+
+  return true;
+}
+
 bool GenIR::memoryBarrier() {
   // TODO: Here we emit mfence which is stronger than sfence
   // that CLR needs.

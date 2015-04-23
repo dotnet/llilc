@@ -465,11 +465,11 @@ public:
                                  CorInfoIntrinsics IntrinsicID) override {
     throw NotYetImplementedException("interlockedIntrinsicBinOp");
   };
-  bool interlockedCmpXchg(IRNode *Arg1, IRNode *Arg2, IRNode *Arg3,
-                          IRNode **RetVal,
-                          CorInfoIntrinsics IntrinsicID) override {
-    throw NotYetImplementedException("interlockedCmpXchg");
-  };
+
+  bool interlockedCmpXchg(IRNode *Destination, IRNode *Exchange,
+                          IRNode *Comparand, IRNode **Result,
+                          CorInfoIntrinsics IntrinsicID) override;
+
   bool memoryBarrier() override;
 
   void switchOpcode(IRNode *Opr) override;
