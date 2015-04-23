@@ -96,7 +96,7 @@ public:
 
   /// \name Per invocation JIT Options
   //@{
-  ::Options Options;
+  ::Options *Options;
   //@}
 
   /// \name Jit output sizes
@@ -238,11 +238,6 @@ private:
 public:
   /// A pointer to the singleton jit instance.
   static LLILCJit *TheJit;
-
-  /// \name CoreCLR GC information
-  //@{
-  bool ShouldInsertStatepoints; ///< Whether to insert gc.statepoint intrinsics
-  //@}
 
 private:
   /// Thread local storage for the jit's per-thread state.
