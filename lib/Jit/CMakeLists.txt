@@ -1,9 +1,9 @@
 get_filename_component(LLILC_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR}/../../include ABSOLUTE)
 
 include_directories(${LLILC_INCLUDES}/clr
+                    ${LLILC_INCLUDES}/GcInfo					
                     ${LLILC_INCLUDES}/Pal
                     ${LLILC_INCLUDES}/Jit
-                    ${LLILC_INCLUDES}/GcInfo					
                     ${LLILC_INCLUDES}/Reader)
 
 set(LLVM_LINK_COMPONENTS
