@@ -57,13 +57,33 @@ class ABICallSignature : public ABISignature {
 private:
   const ReaderCallSignature &Signature; ///< The target function signature.
 
+  /// \brief Emits a call to an unmanaged function.
+  ///
+  /// This method is called by \p emitCall when emitting a call that targets an
+  /// unmanaged function. It is responsible for emitting the IR required to
+  /// perform any necessary bookkeeping for the GC as well as the call itself.
+  /// The arguments must already have been arranged as per the calling
+  /// convention and target ABI.
+  ///
+  /// \param Reader        The \p GenIR instance that will be used to emit IR.
+  /// \param Target        The call target.
+  /// \oaram MayThrow      True iff the callee may raise an exception.
+  /// \param Args          The arguments to the call, arranged as per the
+  ///                      calling convention and target ABI.
+  /// \param Result [out]  The result of the call, if any.
+  ///
+  /// \returns The call site corresponding to the unmanaged call.
+  llvm::CallSite emitUnmanagedCall(GenIR &Reader, llvm::Value *Target,
+                                   bool MayThrow,
+                                   llvm::ArrayRef<llvm::Value *> Args,
+                                   llvm::Value *&Result) const;
+
 public:
   ABICallSignature(const ReaderCallSignature &Signature, GenIR &Reader,
                    const ABIInfo &TheABIInfo);
 
-  /// \brief Emits a call to a function with using the argument and result
-  ///        passing information for the signature provided when this value
-  ///        was created.
+  /// \brief Emits a call to a function using the argument and result passing
+  ///        information for the signature provided when this value was created.
   ///
   /// \param Reader           The \p GenIR instance that will be used to emit
   ///                         IR.
@@ -75,7 +95,7 @@ public:
   /// \param CallNode [out]   The call instruction.
   ///
   /// \returns The result of the call to the target.
-  llvm::Value *emitCall(GenIR &Reader, llvm::Value *Target, bool mayThrow,
+  llvm::Value *emitCall(GenIR &Reader, llvm::Value *Target, bool MayThrow,
                         llvm::ArrayRef<llvm::Value *> Args,
                         llvm::Value *IndirectionCell,
                         llvm::Value **CallNode) const;
