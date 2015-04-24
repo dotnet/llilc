@@ -820,96 +820,6 @@ function Global:ApplyFilter([string]$File)
 
 # -------------------------------------------------------------------------
 #
-# Exclude test cases from running
-#
-# -------------------------------------------------------------------------
-
-function Global:ExcludeTest([string]$Arch="x64", [string]$Build="Release")
-{
-  # Excluding Interop\ICastable\Castable*
-  # remove ICastable until it can be debugged
-  pushd $CoreCLRTest\Interop\ICastable
-  del Castable*
-  popd
-
-  # Excluding JIT\CodeGenBringUpTests\div2*,localloc*
-  pushd $CoreCLRTest\JIT\CodeGenBringUpTests
-  del div2*
-  del localloc*
-  popd
-
-  # Excluding JIT\jit64\gc\misc\eh1*,funclet*,fgtest1*,
-  # struct6_5*,struct7_1*,structfpseh5_1*,structfpseh6_1*,
-  # structret6_1*,structret6_2*,structret6_3*
-  pushd $CoreCLRTest\JIT\jit64\gc\misc
-  del eh1*
-  del funclet*
-  del fgtest1*
-  del struct6_5*
-  del struct7_1*
-  del structfpseh5_1*
-  del structfpseh6_1*
-  del structret6_1*
-  del structret6_2*
-  del structret6_3*
-  popd
-
-  # Excluding JIT\jit64\gc\regress\vswhidbey\339415*,143837*
-  pushd $CoreCLRTest\JIT\jit64\gc\regress\vswhidbey
-  del 339415*
-  del 143837*
-  popd
-
-  # Excluding JIT\jit64\opt\cse\arrayexpr2*, fieldexpr2*,
-  # fieldExprUnchecked1*, HugeArray*, HugeArray1*
-  # hugeexpr1*, HugeField1*, HugeField2*, hugeSimpleExpr1*
-  # mixedexpr1*, simpleexpr4*, staticFieldExprUnchecked1*
-  pushd $CoreCLRTest\JIT\jit64\opt\cse
-  del arrayexpr2*
-  del fieldexpr2*
-  del fieldExprUnchecked1*
-  del HugeArray*
-  del HugeArray1*
-  del hugeexpr1*
-  del HugeField1*
-  del HugeField2*
-  del hugeSimpleExpr1*
-  del mixedexpr1*
-  del simpleexpr4*
-  del staticFieldExprUnchecked1*
-  popd 
-
-  # Excluding JIT\Directed\cmov\Bool_Or_Op*, Double_Or_Op*
-  # Bool_And_Op*, Bool_No_Op*, Int_Or_Op*, Float_Xor_Op*,
-  # Int_And_Op*, Float_And_Op*, Bool_Xor_Op*, Double_And_Op*,
-  # Float_Or_Op*, Int_Xor_Op*, Double_Xor_Op*
-  pushd $CoreCLRTest\JIT\Directed\cmov
-  del Bool_Or_Op*
-  del Double_Or_Op*
-  del Bool_And_Op*
-  del Bool_No_Op*
-  del Int_Or_Op*
-  del Float_Xor_Op*
-  del Int_And_Op*
-  del Float_And_Op*
-  del Bool_Xor_Op*
-  del Double_And_Op*
-  del Float_Or_Op*
-  del Int_Xor_Op*
-  del Double_Xor_Op*
-  popd
-
-  # Excluding JIT\opt\Inline\Inline_Handler*, Inline_Vars*, InlineThrow*
-  pushd $CoreCLRTest\JIT\opt\Inline
-  del Inline_Handler*
-  del Inline_Vars*
-  del InlineThrow*
-  popd
-
-}
-
-# -------------------------------------------------------------------------
-#
 # Build CoreCLR regression tests
 #
 # -------------------------------------------------------------------------
@@ -918,7 +828,6 @@ function Global:BuildTest([string]$Arch="x64", [string]$Build="Debug")
 {
   pushd $CoreCLRSource\tests
   .\buildtest $Arch $Build clean
-  ExcludeTest $Arch $Build
   popd
 }
 
@@ -992,7 +901,7 @@ function Global:RunTest
   # Run the test
   pushd .
   cd $CoreCLRSource\tests
-  .\runtest $Arch $Build TestEnv $LLILCTest\LLILCTestEnv.cmd $CoreCLRRuntime | Write-Host
+  .\runtest $Arch $Build Exclude $LLILCTest\exclusion.targets TestEnv $LLILCTest\LLILCTestEnv.cmd $CoreCLRRuntime | Write-Host
   popd
 
   # Restore old value for DUMPLLVMIR

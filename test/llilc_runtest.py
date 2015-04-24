@@ -12,7 +12,7 @@
 # It is required to run this script from tests directory in a CoreCLR
 # repository.
 #
-# To exclude undesired test cases, please edit exclusion file.
+# To exclude undesired test cases, please edit exclusion.targets file.
 #
 # usage: llilc_runtest.py [-h] [-a {x64,x86}] [-b {debug,release}]
 #                         [-d {summary,verbose}] [-r RESULT_PATH] -j JIT_PATH -c
@@ -63,26 +63,7 @@ def BuiltTestPath(arch, build):
 
 # Exculde top level test directories
 def ExcludeTopLevelTestDirectories():
-    exclusion = os.path.join(os.path.dirname(__file__), 'exclusion')
-    with open(str(exclusion)) as excl:
-        content = excl.readlines()
-        os.environ['SkipTestAssemblies'] = content[1]
-
-# Exclude individual test cases
-def ExcludeIndividualTestCases(path):
-    exclusion = os.path.join(os.path.dirname(__file__), 'exclusion')
-    with open(str(exclusion)) as excl:
-        try:
-            glob_files_to_delete = []
-            content = excl.read().splitlines()
-            for line in range(4, len(content)):
-                all = content[line] + '*'
-                files_to_delete = os.path.join(path, all) 
-                glob_files_to_delete.extend(glob.glob(files_to_delete))
-            for file_to_delete in glob_files_to_delete:
-                os.remove(file_to_delete)
-        except OSError:
-            pass
+    os.environ['SkipTestAssemblies'] = 'Common;Exceptions;GC;Loader;managed;packages;Regressions;runtime;Tests;TestWrappers_x64_release;Threading'
 
 # Remove unwanted test result files
 def CleanUpResultFiles(path):
@@ -181,7 +162,6 @@ def main(argv):
 
         # Exclude undesired tests from running
         ExcludeTopLevelTestDirectories()
-        ExcludeIndividualTestCases(build_test_path)
     except:
         e = sys.exc_info()[0]
         print('Error: RunTest failed due to ', e)
@@ -189,7 +169,9 @@ def main(argv):
 
     # Run the test
     return_code = const.RunTestOK
+    exclusion = os.path.join(os.path.dirname(__file__), 'exclusion.targets')
     runtest_command = 'runtest ' + args.arch + ' ' + args.build 
+    runtest_command = runtest_command + ' Exclude ' + exclusion
     runtest_command = runtest_command + ' Testenv ' + time_stamped_test_env_path
     runtest_command = runtest_command + ' ' + args.coreclr_runtime_path 
     print(runtest_command)
@@ -215,7 +197,6 @@ def main(argv):
             if os.path.exists(args.result_path):
                 shutil.rmtree(args.result_path, onerror=del_rw)            
             shutil.copytree(coreclr_result_path, args.result_path)
-            ExcludeIndividualTestCases(args.result_path)
             CleanUpResultFiles(args.result_path)
             total = CountFiles(args.result_path, 'error.txt')
             if args.dump_level == 'verbose':
