@@ -2891,9 +2891,18 @@ public:
   virtual bool interlockedIntrinsicBinOp(IRNode *Arg1, IRNode *Arg2,
                                          IRNode **RetVal,
                                          CorInfoIntrinsics IntrinsicID) = 0;
-  virtual bool interlockedCmpXchg(IRNode *Arg1, IRNode *Arg2, IRNode *Arg3,
-                                  IRNode **RetVal,
+
+  /// Generate inline code for the \p interlockedCmpXchg operation
+  ///
+  /// \param Destination    A pointer to the destination
+  /// \param Exchange       The exchange value
+  /// \param Comparand      The value to compare to the destination
+  /// \param Result [out]   The result is the initial destination
+  /// \returns              true iff the client expanded the interlockedCmpXchg
+  virtual bool interlockedCmpXchg(IRNode *Destination, IRNode *Exchange,
+                                  IRNode *Comparand, IRNode **Result,
                                   CorInfoIntrinsics IntrinsicID) = 0;
+
   virtual bool memoryBarrier() = 0;
   virtual void switchOpcode(IRNode *Opr) = 0;
   virtual void throwOpcode(IRNode *Arg1) = 0;
