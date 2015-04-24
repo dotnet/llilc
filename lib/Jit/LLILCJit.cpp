@@ -318,7 +318,7 @@ bool LLILCJit::readMethod(LLILCJitContext *JitContext) {
   try {
     Reader.msilToIR();
   } catch (NotYetImplementedException &Nyi) {
-    if (DumpLevel >= DumpLevel::SUMMARY) {
+    if (DumpLevel >= ::DumpLevel::SUMMARY) {
       errs() << "Failed to read " << FuncName << '[' << Nyi.reason() << "]\n";
     }
     return false;
@@ -328,16 +328,16 @@ bool LLILCJit::readMethod(LLILCJitContext *JitContext) {
   bool IsOk = !verifyFunction(*Func, &dbgs());
 
   if (IsOk) {
-    if (DumpLevel >= DumpLevel::SUMMARY) {
+    if (DumpLevel >= ::DumpLevel::SUMMARY) {
       errs() << "Successfully read " << FuncName << '\n';
     }
   } else {
-    if (DumpLevel >= DumpLevel::SUMMARY) {
+    if (DumpLevel >= ::DumpLevel::SUMMARY) {
       errs() << "Read " << FuncName << " but failed verification\n";
     }
   }
 
-  if (DumpLevel == DumpLevel::VERBOSE) {
+  if (DumpLevel == ::DumpLevel::VERBOSE) {
     Func->dump();
   }
 
