@@ -139,7 +139,7 @@ bool JitOptions::queryIsAltJit(LLILCJitContext &Context) {
 }
 
 ::DumpLevel JitOptions::queryDumpLevel(LLILCJitContext &Context) {
-  ::DumpLevel JitDumpLevel = DumpLevel::NODUMP;
+  ::DumpLevel JitDumpLevel = ::DumpLevel::NODUMP;
 
   char16_t *LevelWStr =
       getStringConfigValue(Context.JitInfo, UTF16("DUMPLLVMIR"));
@@ -147,9 +147,9 @@ bool JitOptions::queryIsAltJit(LLILCJitContext &Context) {
     std::unique_ptr<std::string> Level = Convert::utf16ToUtf8(LevelWStr);
     std::transform(Level->begin(), Level->end(), Level->begin(), ::toupper);
     if (Level->compare("VERBOSE") == 0) {
-      JitDumpLevel = DumpLevel::VERBOSE;
+      JitDumpLevel = ::DumpLevel::VERBOSE;
     } else if (Level->compare("SUMMARY") == 0) {
-      JitDumpLevel = DumpLevel::SUMMARY;
+      JitDumpLevel = ::DumpLevel::SUMMARY;
     }
   }
 
@@ -171,11 +171,11 @@ bool JitOptions::queryDoInsertStatepoints(LLILCJitContext &Context) {
 }
 
 OptLevel JitOptions::queryOptLevel(LLILCJitContext &Context) {
-  ::OptLevel JitOptLevel = OptLevel::INVALID;
+  ::OptLevel JitOptLevel = ::OptLevel::INVALID;
   // Currently we only check for the debug flag but this will be extended
   // to account for further opt levels as we move forward.
   if ((Context.Flags & CORJIT_FLG_DEBUG_CODE) != 0) {
-    JitOptLevel = OptLevel::DEBUG_CODE;
+    JitOptLevel = ::OptLevel::DEBUG_CODE;
   }
 
   return JitOptLevel;

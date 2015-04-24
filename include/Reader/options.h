@@ -48,8 +48,8 @@ enum class DumpLevel {
 /// the ConfigValue queries but no query logic is exposed here.
 ///
 struct Options {
-  DumpLevel DumpLevel;      ///< Dump level for this JIT invocation.
-  OptLevel OptLevel;        ///< Optimization level for this JIT invocation.
+  ::DumpLevel DumpLevel;    ///< Dump level for this JIT invocation.
+  ::OptLevel OptLevel;      ///< Optimization level for this JIT invocation.
   bool UseConservativeGC;   ///< True if the environment is set to use CGC.
   bool DoInsertStatepoints; ///< True if the environment calls for statepoints.
   bool DoTailCallOpt;       ///< Tail call optimization.
