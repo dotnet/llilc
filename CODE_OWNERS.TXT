@@ -1,0 +1,36 @@
+The following is a list of owners for different areas of the LLILC code. 
+Each of the owners is responsible for ensuring that changes in their areas 
+are reviewed, either by themselves or by someone they designate, in 
+addition to being the final word for the architecture and content of an area.
+
+List sorted by last name and the fields are Name (N), GitHub user account (G), 
+Description (D).
+
+Note: If you don't find the area in the below list, or you have a general 
+question, send a message to Andy Ayers and Russell Hadley. They can ensure 
+that the question gets forwarded to the right person or answer it themselves.  
+
+N: Andy Ayers
+G: AndyAyersMS
+D: JIT context/multi-threading, MSIL types in bitcode, test harness, 
+   everything else.
+
+N: Pat Gavlin
+G: pgavlin
+D: CLR/Target ABI processing.
+
+N: Russell C Hadley
+G: Russell Hadley
+D: JIT infrastructure, everything else.
+
+N: Eugene Rozenfeld
+G: erozenfeld
+D: MSIL reader.
+
+N: Swaroop Sridhar
+G: swaroop-sridhar
+D: CLR GC support
+
+N: Joseph Tremoulet
+G: JosephTremoulet
+D: CLR EH support.
