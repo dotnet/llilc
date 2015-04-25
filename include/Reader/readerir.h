@@ -703,7 +703,6 @@ public:
 
   // Asks GenIR to make operand value accessible by address, and return a node
   // that references the incoming operand by address.
-  IRNode *addressOfLeaf(IRNode *Leaf) override;
   IRNode *addressOfValue(IRNode *Leaf) override;
 
   IRNode *genNewMDArrayCall(ReaderCallTargetData *CallTargetData,

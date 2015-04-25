@@ -2993,7 +2993,7 @@ IRNode *GenIR::loadField(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Obj,
   Type *AddressTy = Obj->getType();
 
   if (AddressTy->isStructTy() || AddressTy->isFloatingPointTy()) {
-    Obj = addressOfLeaf(Obj);
+    Obj = addressOfValue(Obj);
   }
 
   if (CorInfoType == CORINFO_TYPE_VALUECLASS ||
@@ -3316,10 +3316,6 @@ IRNode *GenIR::makeBoxDstOperand(CORINFO_CLASS_HANDLE Class) {
   Type *Ty = getBoxedType(Class);
   Value *Ptr = llvm::Constant::getNullValue(getManagedPointerType(Ty));
   return (IRNode *)Ptr;
-}
-
-IRNode *GenIR::addressOfLeaf(IRNode *Leaf) {
-  throw NotYetImplementedException("AddressOfLeaf");
 }
 
 IRNode *GenIR::loadElem(ReaderBaseNS::LdElemOpcode Opcode,
