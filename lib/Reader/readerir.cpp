@@ -367,6 +367,8 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
     J++;
   }
 
+  zeroInitLocals();
+
   // Check for special cases where the Jit needs to do extra work.
   const uint32_t MethodFlags = getCurrentMethodAttribs();
 
@@ -740,6 +742,51 @@ void GenIR::createSym(uint32_t Num, bool IsAuto, CorInfoType CorType,
   } else {
     Arguments[Num] = AllocaInst;
   }
+}
+
+void GenIR::zeroInitLocals() {
+  bool InitAllLocals = isZeroInitLocals();
+  for (const auto &LocalVar : LocalVars) {
+    Type *LocalTy = LocalVar->getType()->getPointerElementType();
+    if (InitAllLocals || isManagedType(LocalTy)) {
+      // TODO: if InitAllLocals is false we only have to zero initialize
+      // GC pointers and GC pointer fields on structs. For now we are zero
+      // initalizing all fields in structs that have gc fields.
+      // TODO: We should try to lay out GC pointers contiguously on the stack
+      // frame and use memset to initialize them.
+      // TODO: We can avoid zero-initializing some gc pointers if we can
+      // ensure that we are not reporting uninitialized GC pointers at gc-safe
+      // points.
+      StructType *StructTy = dyn_cast<StructType>(LocalTy);
+      if (StructTy != nullptr) {
+        const DataLayout *DataLayout = JitContext->EE->getDataLayout();
+        const StructLayout *TheStructLayout =
+            DataLayout->getStructLayout(StructTy);
+        zeroInitBlock(LocalVar, TheStructLayout->getSizeInBytes());
+      } else {
+        Constant *ZeroConst = Constant::getNullValue(LocalTy);
+        LLVMBuilder->CreateStore(ZeroConst, LocalVar);
+      }
+    }
+  }
+}
+
+void GenIR::zeroInitBlock(Value *Address, uint64_t Size) {
+  bool IsSigned = false;
+  ConstantInt *BlockSize = ConstantInt::get(
+      *JitContext->LLVMContext, APInt(TargetPointerSizeInBits, Size, IsSigned));
+  zeroInitBlock(Address, BlockSize);
+}
+
+void GenIR::zeroInitBlock(Value *Address, Value *Size) {
+  // TODO: For small structs we may want to generate an integer StoreInst
+  // instead of calling a helper.
+  LLVMContext &LLVMContext = *JitContext->LLVMContext;
+  const bool MayThrow = false;
+  Type *VoidTy = Type::getVoidTy(LLVMContext);
+  Value *ZeroByte = ConstantInt::get(LLVMContext, APInt(8, 0, true));
+  callHelperImpl(CORINFO_HELP_MEMSET, MayThrow, VoidTy, (IRNode *)Address,
+                 (IRNode *)ZeroByte, (IRNode *)Size);
 }
 
 // Return true if this IR node is a reference to the
@@ -3829,10 +3876,7 @@ IRNode *GenIR::genNewObjThisArg(ReaderCallTargetData *CallTargetData,
     Instruction *AllocaInst = createTemporary(StructType);
 
     // Initialize the struct to zero.
-    LLVMContext &LLVMContext = *this->JitContext->LLVMContext;
-    Value *ZeroByte = Constant::getNullValue(Type::getInt8Ty(LLVMContext));
-    uint32_t Align = 0;
-    LLVMBuilder->CreateMemSet(AllocaInst, ZeroByte, MbSize, Align);
+    zeroInitBlock(AllocaInst, MbSize);
 
     // Create a managed pointer to the struct instance and pass it as the 'this'
     // argument to the constructor call.
@@ -5691,11 +5735,7 @@ IRNode *GenIR::localAlloc(IRNode *Arg, bool ZeroInit) {
 
   // Zero the allocated region if so requested.
   if (ZeroInit) {
-    const bool MayThrow = false;
-    Type *VoidTy = Type::getVoidTy(Context);
-    Value *ZeroByte = ConstantInt::get(Context, APInt(8, 0, true));
-    callHelperImpl(CORINFO_HELP_MEMSET, MayThrow, VoidTy, (IRNode *)LocAlloc,
-                   (IRNode *)ZeroByte, Arg);
+    zeroInitBlock(LocAlloc, Arg);
   }
 
   return (IRNode *)LocAlloc;
