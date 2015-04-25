@@ -1295,6 +1295,22 @@ private:
   /// Provides client specific Options look up.
   bool doTailCallOpt() override;
 
+  /// If isZeroInitLocals() returns true, zero intitialize all locals;
+  /// otherwise, zero initialize all gc pointers and structs with gc pointers.
+  void zeroInitLocals();
+
+  /// Zero initialize the block.
+  ///
+  /// \param Address Address of the block.
+  /// \param Size Size of the block.
+  void zeroInitBlock(llvm::Value *Address, uint64_t Size);
+
+  /// Zero initialize the block.
+  ///
+  /// \param Address Address of the block.
+  /// \param Size Size of the block.
+  void zeroInitBlock(llvm::Value *Address, llvm::Value *Size);
+
 private:
   LLILCJitContext *JitContext;
   ABIInfo *TheABIInfo;
