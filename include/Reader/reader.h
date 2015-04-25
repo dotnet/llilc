@@ -3100,9 +3100,7 @@ public:
   // //////////////////////////////////////////////////////////////////////////
 
   // Asks GenIR to make operand value accessible by address, and return a node
-  // that references
-  // the incoming operand by address.
-  virtual IRNode *addressOfLeaf(IRNode *Leaf) = 0;
+  // that references the incoming operand by address.
   virtual IRNode *addressOfValue(IRNode *Leaf) = 0;
 
   /// \brief Delegate to GenIR to generate code to instantiate a new MDArray.
