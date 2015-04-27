@@ -98,7 +98,10 @@ void EEMemoryManager::reserveAllocationSpace(uintptr_t CodeSize,
   CorJitAllocMemFlag Flag =
       CorJitAllocMemFlag::CORJIT_ALLOCMEM_DEFAULT_CODE_ALIGN;
 
-  assert(DataSizeRW == 0);
+  // We allow the amount of RW data to be nonzero to work around the fact that
+  // MCJIT will not report a size of zero for any section, even if that
+  // section does not, in fact, contain any data. allocateDataSection will
+  // catch any RW sections that are actually allocated.
 
   uint8_t *HotBlock = nullptr;
   uint8_t *ColdBlock = nullptr;
@@ -135,6 +138,9 @@ void EEMemoryManager::registerEHFrames(uint8_t *Addr, uint64_t LoadAddr,
       this->HotCodeBlock, nullptr, StartOffset, EndOffset, Size,
       (BYTE *)LoadAddr, CorJitFuncKind::CORJIT_FUNC_ROOT);
 }
+
+void EEMemoryManager::deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr,
+                                         size_t Size) {}
 
 EEMemoryManager::~EEMemoryManager() {
   // nothing yet.
