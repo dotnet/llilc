@@ -4222,9 +4222,7 @@ void ReaderBase::rdrCallWriteBarrierHelper(
     } else {
       // If the class doesn't have a gc layout then use a memcopy
       IRNode *Size = loadConstantI4(getClassSize(Class));
-      const bool MayThrow = true;
-      callHelper(CORINFO_HELP_MEMCPY, MayThrow, nullptr, Dst, Src, Size,
-                 nullptr, Alignment, IsVolatile);
+      cpBlk(Size, Src, Dst, Alignment, IsVolatile);
     }
   }
 }

@@ -3271,32 +3271,35 @@ void GenIR::storeStaticField(CORINFO_RESOLVED_TOKEN *FieldToken,
   ValueToStore = convertFromStackType(ValueToStore, FieldCorType, FieldTy);
 
   // Get the address of the field.
-  Value *Address = rdrGetStaticFieldAddress(FieldToken, &FieldInfo);
+  Value *DstAddress = rdrGetStaticFieldAddress(FieldToken, &FieldInfo);
 
   // If the runtime asks us to use a helper for the store, do so.
   const bool NeedsWriteBarrier =
       JitContext->JitInfo->isWriteBarrierHelperRequired(FieldHandle);
   if (NeedsWriteBarrier) {
     // Statics are always on the heap, so we can use an unchecked write barrier
-    rdrCallWriteBarrierHelper((IRNode *)Address, ValueToStore,
+    rdrCallWriteBarrierHelper((IRNode *)DstAddress, ValueToStore,
                               Reader_AlignNatural, IsVolatile, FieldToken,
                               !IsStructTy, false, true, true);
     return;
   }
 
   Type *PtrToFieldTy = getUnmanagedPointerType(FieldTy);
-  if (Address->getType()->isIntegerTy()) {
-    Address = LLVMBuilder->CreateIntToPtr(Address, PtrToFieldTy);
+  if (DstAddress->getType()->isIntegerTy()) {
+    DstAddress = LLVMBuilder->CreateIntToPtr(DstAddress, PtrToFieldTy);
   } else {
-    ASSERT(Address->getType()->isPointerTy());
-    Address = LLVMBuilder->CreatePointerCast(Address, PtrToFieldTy);
+    ASSERT(DstAddress->getType()->isPointerTy());
+    DstAddress = LLVMBuilder->CreatePointerCast(DstAddress, PtrToFieldTy);
   }
 
   // Create an assignment which stores the value into the static field.
   if (!IsStructTy) {
-    makeStoreNonNull(ValueToStore, Address, IsVolatile);
+    makeStoreNonNull(ValueToStore, DstAddress, IsVolatile);
   } else {
-    throw NotYetImplementedException("Store value type to static field");
+    IRNode *SrcAddress = (IRNode *)addressOfValue(ValueToStore);
+    IRNode *FieldSize = loadConstantI4(getClassSize(FieldClassHandle));
+    cpBlk(FieldSize, SrcAddress, (IRNode *)DstAddress, Reader_AlignNatural,
+          IsVolatile);
   }
 }
 
