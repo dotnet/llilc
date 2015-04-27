@@ -44,5 +44,18 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\opt\Inline\Inline_Handler.cmd"/>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\opt\Inline\Inline_Vars.cmd"/>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\opt\Inline\InlineThrow.cmd"/>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Exceptions\general_class_instance01.cmd"/>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Exceptions\general_class_static01.cmd"/>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Exceptions\general_struct_instance01.cmd"/>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Exceptions\general_struct_static01.cmd"/>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Exceptions\specific_class_instance01.cmd"/>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Exceptions\specific_class_instance02.cmd"/>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Exceptions\specific_class_static01.cmd"/>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Exceptions\specific_class_static02.cmd"/>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Exceptions\specific_struct_instance01.cmd"/>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Exceptions\specific_struct_instance02.cmd"/>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Exceptions\specific_struct_static01.cmd"/>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Exceptions\specific_struct_static02.cmd"/>
+
     </ItemGroup>
 </Project>
