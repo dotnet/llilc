@@ -108,12 +108,24 @@ public:
   ///
   /// This is currently invoked once per .xdata section. The EE uses this info
   /// to build and register the appropriate .pdata with the OS.
-  /// \param Addr           The address of the data in the pre-loaded image.
-  /// \param LoadAddr       The address the data will have once loaded.
-  /// \param Size           Size of the unwind data in bytes.
+  ///
+  /// \param Addr      The address of the data in the pre-loaded image.
+  /// \param LoadAddr  The address the data will have once loaded.
+  /// \param Size      Size of the unwind data in bytes.
+  ///
   /// \note Because we're not relocating data during loading, \p Addr and
   /// \p LoadAddr are currently identical.
   void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
+
+  /// \brief Callback to handle unregistering unwind data.
+  ///
+  /// This is currently a no-op.
+  ///
+  /// \param Addr      The address of the data in the image.
+  /// \param LoadAddr  The address the data has after loading.
+  /// \param Size      Size of the unwind data in bytes.
+  void deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr,
+                          size_t Size) override;
 
 private:
   LLILCJitContext *Context;         ///< LLVM context for types, etc.

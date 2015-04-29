@@ -22,7 +22,7 @@
 struct LLILCJitContext;
 
 /// \brief Enum for JIT optimization level.
-enum OptLevel {
+enum class OptLevel {
   INVALID,
   DEBUG_CODE,   ///< No/Low optimization to preserve debug semantics.
   BLENDED_CODE, ///< Fast code that remains sensitive to code size.
@@ -31,51 +31,27 @@ enum OptLevel {
 };
 
 /// \brief Enum for LLVM IR Dump Level
-enum LLVMDumpLevel {
+enum class DumpLevel {
   NODUMP,  ///< Do not dump any LLVM IR or summary.
   SUMMARY, ///< Only dump one line summary per method.
   VERBOSE  ///< Dump full LLVM IR and method summary.
 };
 
+// Macro to determine the default behavior of automatically
+// detecting tail calls (without the "tail." opcode in MSIL).
+#define DEFAULT_TAIL_CALL_OPT 1
+
 /// \brief The JIT options provided via CoreCLR configurations.
 ///
-/// This class implements the JIT options flags.  The CoreCLR interface
-/// is queried and results are cached in this object.
+/// This class exposes the JIT options flags. This interface is passed
+/// around to Options consumers to give them access to the results of
+/// the ConfigValue queries but no query logic is exposed here.
 ///
-class Options {
-public:
-  /// Construct an Options object based on the passed JitContext.
-  Options(LLILCJitContext *Context);
-
-  /// Destruct Options object.
-  ~Options();
-
-  // Initialize object after full Context is established.
-  void initialize();
-
-  /// Set current JIT invocation as "AltJit".  This sets up
-  /// the JIT to filter based on the AltJit flag contents.
-  void setIsAltJit();
-
-  /// \brief Compute dump level for the JIT
-  ///
-  /// Dump level requested via CLR config for the JIT
-  void setDumpLevel();
-
-  /// \brief Set optimization level for the JIT.
-  ///
-  /// Opt Level based on CLR provided flags and environment.
-  void setOptLevel();
-
-public:
-  LLILCJitContext *Context; ///< Invocation CLR Execution Engine flags.
-  LLVMDumpLevel DumpLevel;  ///< Dump level for this JIT invocation.
+struct Options {
+  ::DumpLevel DumpLevel;    ///< Dump level for this JIT invocation.
   ::OptLevel OptLevel;      ///< Optimization level for this JIT invocation.
-  bool IsAltJit;            ///< True if compiling as the alternative JIT.
-
-private:
-  static MethodSet AltJitMethodSet;     ///< Singleton AltJit MethodSet.
-  static MethodSet AltJitNgenMethodSet; ///< Singleton AltJitNgen MethodSet.
+  bool UseConservativeGC;   ///< True if the environment is set to use CGC.
+  bool DoInsertStatepoints; ///< True if the environment calls for statepoints.
+  bool DoTailCallOpt;       ///< Tail call optimization.
 };
-
 #endif // OPTIONS_H

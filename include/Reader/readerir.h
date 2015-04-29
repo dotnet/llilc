@@ -255,7 +255,8 @@ public:
                  llvm::Type *> *ArrayTypeMap,
         std::map<CORINFO_FIELD_HANDLE, uint32_t> *FieldIndexMap)
       : ReaderBase(JitContext->JitInfo, JitContext->MethodInfo,
-                   JitContext->Flags) {
+                   JitContext->Flags),
+        UnmanagedCallFrame(nullptr), ThreadPointer(nullptr) {
     this->JitContext = JitContext;
     this->ClassTypeMap = ClassTypeMap;
     this->ReverseClassTypeMap = ReverseClassTypeMap;
@@ -469,11 +470,11 @@ public:
                                  CorInfoIntrinsics IntrinsicID) override {
     throw NotYetImplementedException("interlockedIntrinsicBinOp");
   };
-  bool interlockedCmpXchg(IRNode *Arg1, IRNode *Arg2, IRNode *Arg3,
-                          IRNode **RetVal,
-                          CorInfoIntrinsics IntrinsicID) override {
-    throw NotYetImplementedException("interlockedCmpXchg");
-  };
+
+  bool interlockedCmpXchg(IRNode *Destination, IRNode *Exchange,
+                          IRNode *Comparand, IRNode **Result,
+                          CorInfoIntrinsics IntrinsicID) override;
+
   bool memoryBarrier() override;
 
   void switchOpcode(IRNode *Opr) override;
@@ -729,7 +730,6 @@ public:
 
   // Asks GenIR to make operand value accessible by address, and return a node
   // that references the incoming operand by address.
-  IRNode *addressOfLeaf(IRNode *Leaf) override;
   IRNode *addressOfValue(IRNode *Leaf) override;
 
   IRNode *genNewMDArrayCall(ReaderCallTargetData *CallTargetData,
@@ -1214,8 +1214,8 @@ private:
 
   /// Store a value to an argument passed indirectly.
   ///
-  /// The storage backing such arguments may be loacted on the heap; any stores
-  /// to these loactions may need write barriers.
+  /// The storage backing such arguments may be located on the heap; any stores
+  /// to these locations may need write barriers.
   ///
   /// \param ValueArgType  EE type info for the value to store.
   /// \param ValueToStore  The value to store.
@@ -1307,11 +1307,35 @@ private:
   /// \brief Insert IR to setup the security object
   void insertIRForSecurityObject();
 
+  /// \brief Insert IR to setup the unmanaged call frame (PInvoke frame) and
+  ///        the thread pointer.
+  void insertIRForUnmanagedCallFrame();
+
   /// \brief Create the @gc.safepoint_poll() method
   /// Creates the @gc.safepoint_poll() method and insertes it into the
   /// current module. This helper is required by the LLVM GC-Statepoint
   /// insertion phase.
   void createSafepointPoll();
+
+  /// \brief Override of doTailCallOpt method
+  /// Provides client specific Options look up.
+  bool doTailCallOpt() override;
+
+  /// If isZeroInitLocals() returns true, zero intitialize all locals;
+  /// otherwise, zero initialize all gc pointers and structs with gc pointers.
+  void zeroInitLocals();
+
+  /// Zero initialize the block.
+  ///
+  /// \param Address Address of the block.
+  /// \param Size Size of the block.
+  void zeroInitBlock(llvm::Value *Address, uint64_t Size);
+
+  /// Zero initialize the block.
+  ///
+  /// \param Address Address of the block.
+  /// \param Size Size of the block.
+  void zeroInitBlock(llvm::Value *Address, llvm::Value *Size);
 
 private:
   LLILCJitContext *JitContext;
@@ -1337,6 +1361,12 @@ private:
   std::map<CORINFO_FIELD_HANDLE, uint32_t> *FieldIndexMap;
   std::map<llvm::BasicBlock *, FlowGraphNodeInfo> FlowGraphInfoMap;
   std::vector<llvm::Value *> LocalVars;
+  llvm::Value *UnmanagedCallFrame; ///< If the method contains unmanaged calls,
+                                   ///< this is the address of the unmanaged
+                                   ///< call frame.
+  llvm::Value *ThreadPointer;      ///< If the method contains unmanaged calls,
+                                   ///< this is the address of the pointer to
+                                   ///< the runtime thread.
   std::vector<CorInfoType> LocalVarCorTypes;
   std::vector<llvm::Value *> Arguments;
   llvm::Value *IndirectResult;

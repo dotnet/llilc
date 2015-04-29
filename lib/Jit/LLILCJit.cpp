@@ -15,7 +15,7 @@
 
 #include "jitpch.h"
 #include "LLILCJit.h"
-#include "options.h"
+#include "jitoptions.h"
 #include "readerir.h"
 #include "abi.h"
 #include "EEMemoryManager.h"
@@ -44,20 +44,6 @@
 #include <string>
 
 using namespace llvm;
-
-// Get the GC-Scheme used by the runtime -- conservative/precise
-// For now this is done by directly accessing environment variable.
-// When CLR config support is included, update it here.
-bool shouldUseConservativeGC() {
-  const char *LevelCStr = getenv("COMPLUS_GCCONSERVATIVE");
-  return (LevelCStr != nullptr) && (strcmp(LevelCStr, "1") == 0);
-}
-
-// Determine if GC statepoints should be inserted.
-bool shouldInsertStatepoints() {
-  const char *LevelCStr = getenv("COMPLUS_INSERTSTATEPOINTS");
-  return (LevelCStr != nullptr) && (strcmp(LevelCStr, "1") == 0);
-}
 
 // The one and only Jit Object.
 LLILCJit *LLILCJit::TheJit = nullptr;
@@ -89,10 +75,6 @@ LLILCJit::LLILCJit() {
   InitializeNativeTargetAsmPrinter();
   InitializeNativeTargetAsmParser();
   llvm::linkStatepointExampleGC();
-
-  ShouldInsertStatepoints = shouldInsertStatepoints();
-  assert(ShouldInsertStatepoints ||
-         shouldUseConservativeGC() && "Statepoints required for precise-GC");
 }
 
 #ifdef LLVM_ON_WIN32
@@ -123,7 +105,7 @@ void LLILCJitContext::outputDebugMethodName() {
 }
 
 LLILCJitContext::LLILCJitContext(LLILCJitPerThreadState *PerThreadState)
-    : State(PerThreadState), HasLoadedBitCode(false), Options(this) {
+    : State(PerThreadState), HasLoadedBitCode(false) {
   this->Next = State->JitContext;
   State->JitContext = this;
 }
@@ -171,12 +153,15 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
   std::unique_ptr<Module> M = Context.getModuleForMethod(MethodInfo);
   Context.CurrentModule = M.get();
   Context.CurrentModule->setTargetTriple(LLILC_TARGET_TRIPLE);
+  Context.MethodName = Context.CurrentModule->getModuleIdentifier();
   Context.TheABIInfo = ABIInfo::get(*Context.CurrentModule);
 
   // Initialize per invocation JIT options. This should be done after the
-  // rest of the Context is filled out as it has dependencies on Flags and
-  // MethodInfo
-  Context.Options.initialize();
+  // rest of the Context is filled out as it has dependencies on JitInfo,
+  // Flags and MethodInfo.
+  JitOptions JitOptions(Context);
+
+  Context.Options = &JitOptions;
 
   EngineBuilder Builder(std::move(M));
   std::string ErrStr;
@@ -190,7 +175,7 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
   // Statepoint GC does not support FastIsel yet.
   Options.EnableFastISel = false;
 
-  if (Context.Options.OptLevel != OptLevel::DEBUG_CODE) {
+  if (Context.Options->OptLevel != OptLevel::DEBUG_CODE) {
     Builder.setOptLevel(CodeGenOpt::Level::Default);
   } else {
     Builder.setOptLevel(CodeGenOpt::Level::None);
@@ -212,14 +197,14 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
 
   // Now jit the method.
   CorJitResult Result = CORJIT_INTERNALERROR;
-  if (Context.Options.DumpLevel == VERBOSE) {
+  if (Context.Options->DumpLevel == DumpLevel::VERBOSE) {
     Context.outputDebugMethodName();
   }
   bool HasMethod = this->readMethod(&Context);
 
   if (HasMethod) {
 
-    if (ShouldInsertStatepoints) {
+    if (Context.Options->DoInsertStatepoints) {
       // If using Precise GC, run the GC-Safepoint insertion
       // and lowering passes before generating code.
       legacy::PassManager Passes;
@@ -320,7 +305,7 @@ bool LLILCJit::readMethod(LLILCJitContext *JitContext) {
     return true;
   }
 
-  LLVMDumpLevel DumpLevel = JitContext->Options.DumpLevel;
+  DumpLevel DumpLevel = JitContext->Options->DumpLevel;
 
   LLILCJitPerThreadState *PerThreadState = State.get();
   GenIR Reader(JitContext, &PerThreadState->ClassTypeMap,
@@ -328,12 +313,12 @@ bool LLILCJit::readMethod(LLILCJitContext *JitContext) {
                &PerThreadState->BoxedTypeMap, &PerThreadState->ArrayTypeMap,
                &PerThreadState->FieldIndexMap);
 
-  std::string FuncName = JitContext->CurrentModule->getModuleIdentifier();
+  std::string FuncName = JitContext->MethodName;
 
   try {
     Reader.msilToIR();
   } catch (NotYetImplementedException &Nyi) {
-    if (DumpLevel >= SUMMARY) {
+    if (DumpLevel >= ::DumpLevel::SUMMARY) {
       errs() << "Failed to read " << FuncName << '[' << Nyi.reason() << "]\n";
     }
     return false;
@@ -342,24 +327,19 @@ bool LLILCJit::readMethod(LLILCJitContext *JitContext) {
   Function *Func = JitContext->CurrentModule->getFunction(FuncName);
   bool IsOk = !verifyFunction(*Func, &dbgs());
 
-  assert(IsOk);
-
   if (IsOk) {
-    if (DumpLevel >= SUMMARY) {
+    if (DumpLevel >= ::DumpLevel::SUMMARY) {
       errs() << "Successfully read " << FuncName << '\n';
     }
   } else {
-    if (DumpLevel >= SUMMARY) {
-      errs() << "Failed to read " << FuncName << "[verification error]\n";
+    if (DumpLevel >= ::DumpLevel::SUMMARY) {
+      errs() << "Read " << FuncName << " but failed verification\n";
     }
-    return false;
   }
 
-  if (DumpLevel == VERBOSE) {
+  if (DumpLevel == ::DumpLevel::VERBOSE) {
     Func->dump();
   }
-
-  JitContext->MethodName = FuncName;
 
   if (IsOk) {
     for (BasicBlock &BB : *Func) {

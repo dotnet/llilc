@@ -138,28 +138,6 @@ extern void _cdecl fatal(int Errnum, ...);
 
 // Environment config variables
 
-#if !defined(CC_PEVERIFY)
-extern uint32_t EnvConfigTailCallOpt;
-#if !defined(NODEBUG)
-extern uint32_t EnvConfigDebugVerify;
-extern uint32_t EnvConfigTailCallMax;
-#endif // !NODEBUG
-#endif // !CC_PEVERIFY
-extern uint32_t EnvConfigPInvokeInline;
-extern uint32_t EnvConfigPInvokeCalliOpt;
-extern uint32_t EnvConfigTurnOffDebugInfo;
-
-#if !defined(CC_PEVERIFY)
-extern bool HaveEnvConfigTailCallOpt;
-#if !defined(NODEBUG)
-extern bool HaveEnvConfigDebugVerify;
-extern bool HaveEnvConfigTailCallMax;
-#endif // !NODEBUG
-#endif // !CC_PEVERIFY
-extern bool HaveEnvConfigPInvokeInline;
-extern bool HaveEnvConfigPInvokeCalliOpt;
-extern bool HaveEnvConfigTurnOffDebugInfo;
-
 #ifdef CC_PEVERIFY
 extern HRESULT VerLastError;
 #endif
@@ -1569,6 +1547,14 @@ public:
   void getMSILInstrStackDelta(ReaderBaseNS::OPCODE Opcode, uint8_t *Operand,
                               uint16_t *Pop, uint16_t *Push);
 
+  /// \brief Check options to as to whether to do the tail call opt
+  ///
+  /// Derived class will provide an implementation that is correct for the
+  /// client.
+  ///
+  /// \returns true if tail call opt is enabled.
+  virtual bool doTailCallOpt() = 0;
+
 private:
   /// \brief Determine if a call instruction is a candidate to be a tail call.
   ///
@@ -2923,9 +2909,18 @@ public:
   virtual bool interlockedIntrinsicBinOp(IRNode *Arg1, IRNode *Arg2,
                                          IRNode **RetVal,
                                          CorInfoIntrinsics IntrinsicID) = 0;
-  virtual bool interlockedCmpXchg(IRNode *Arg1, IRNode *Arg2, IRNode *Arg3,
-                                  IRNode **RetVal,
+
+  /// Generate inline code for the \p interlockedCmpXchg operation
+  ///
+  /// \param Destination    A pointer to the destination
+  /// \param Exchange       The exchange value
+  /// \param Comparand      The value to compare to the destination
+  /// \param Result [out]   The result is the initial destination
+  /// \returns              true iff the client expanded the interlockedCmpXchg
+  virtual bool interlockedCmpXchg(IRNode *Destination, IRNode *Exchange,
+                                  IRNode *Comparand, IRNode **Result,
                                   CorInfoIntrinsics IntrinsicID) = 0;
+
   virtual bool memoryBarrier() = 0;
   virtual void switchOpcode(IRNode *Opr) = 0;
   virtual void throwOpcode(IRNode *Arg1) = 0;
@@ -3121,9 +3116,7 @@ public:
   // //////////////////////////////////////////////////////////////////////////
 
   // Asks GenIR to make operand value accessible by address, and return a node
-  // that references
-  // the incoming operand by address.
-  virtual IRNode *addressOfLeaf(IRNode *Leaf) = 0;
+  // that references the incoming operand by address.
   virtual IRNode *addressOfValue(IRNode *Leaf) = 0;
 
   /// \brief Delegate to GenIR to generate code to instantiate a new MDArray.

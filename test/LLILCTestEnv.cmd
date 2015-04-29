@@ -7,3 +7,4 @@ REM -------------------------------------------------------------------------
 set COMPLUS_AltJit=*
 set COMPLUS_AltJitName=LLILCJit.dll
 set COMPLUS_GCCONSERVATIVE=1
+set COMPLUS_ZapDisable=1
