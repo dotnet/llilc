@@ -3763,6 +3763,26 @@ IRNode *GenIR::getTypeFromHandle(IRNode *Arg1) {
   return (IRNode *)LLVMBuilder->CreateLoad(FieldAddress, IsVolatile);
 }
 
+CORINFO_CLASS_HANDLE GenIR::inferThisClass(IRNode *ThisArgument) {
+  Type *Ty = ((Value *)ThisArgument)->getType();
+  assert(Ty->isPointerTy());
+
+  // Check for a ref class first.
+  auto MapElem = ReverseClassTypeMap->find(Ty);
+  if (MapElem != ReverseClassTypeMap->end()) {
+    return MapElem->second;
+  }
+
+  // No hit, check for a value class.
+  Ty = Ty->getPointerElementType();
+  MapElem = ReverseClassTypeMap->find(Ty);
+  if (MapElem != ReverseClassTypeMap->end()) {
+    return MapElem->second;
+  }
+
+  return nullptr;
+}
+
 bool GenIR::canMakeDirectCall(ReaderCallTargetData *CallTargetData) {
   return !CallTargetData->isJmp();
 }
