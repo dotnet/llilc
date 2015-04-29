@@ -370,7 +370,7 @@ underflow:
   return ILSize;
 }
 
-#if !defined(NODEBUG) || defined(CC_PEVERIFY)
+#if !defined(NDEBUG) || defined(CC_PEVERIFY)
 
 const char *OpcodeName[] = {
 #define OPDEF_HELPER OPDEF_OPCODENAME
@@ -380,7 +380,7 @@ const char *OpcodeName[] = {
 
 #endif
 
-#ifndef NODEBUG
+#if !defined(NDEBUG)
 void ReaderBase::printMSIL(uint8_t *Buf, uint32_t StartOffset,
                            uint32_t EndOffset) {
   uint8_t *Operand;
