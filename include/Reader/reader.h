@@ -1550,7 +1550,7 @@ public:
   FlowGraphNode *fgSplitBlock(FlowGraphNode *Block, uint32_t Offset,
                               IRNode *Node);
 
-#if defined(_DEBUG)
+#if !defined(NDEBUG)
   /// \brief Debug-only reader function to print range of MSIL.
   ///
   /// Print the MSIL in the buffer for the given range. Output emitted via
