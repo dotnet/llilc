@@ -796,6 +796,8 @@ public:
 
   IRNode *makeDirectCallTargetNode(void *CodeAddr) override;
 
+  CORINFO_CLASS_HANDLE inferThisClass(IRNode *ThisArgument) override;
+
   // Called once region tree has been built.
   void setEHInfo(EHRegion *EhRegionTree, EHRegionList *EhRegionList) override;
 

@@ -3209,6 +3209,13 @@ public:
 
   virtual IRNode *makeDirectCallTargetNode(void *CodeAddress) = 0;
 
+  /// \brief Infer the type of the 'this' argument to an indirect call from
+  ///        the given IR node.
+  ///
+  /// \param ThisArgument  The IR node that represents the 'this' argument.
+  /// \returns The class handle that corresponds to the type of the node.
+  virtual CORINFO_CLASS_HANDLE inferThisClass(IRNode *ThisArgument) = 0;
+
   // Called once region tree has been built.
   virtual void setEHInfo(EHRegion *EhRegionTree,
                          EHRegionList *EhRegionList) = 0;

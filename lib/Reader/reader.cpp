@@ -5151,18 +5151,23 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
     CORINFO_ARG_LIST_HANDLE Args;
     CorInfoType CorType;
     CORINFO_CLASS_HANDLE ArgType, Class;
+    bool HasInferredThisType = false;
 
     Args = SigInfo->args;
     Index = 0;
 
     // If this call passes a this ptr, then it is first in array.
     if (HasThis) {
-      ArgumentTypes[Index].CorType = CORINFO_TYPE_BYREF;
-      ArgumentTypes[Index].Class = Data->getClassHandle();
       if (Data->getMethodHandle() != nullptr) {
         if ((Data->getClassAttribs() & CORINFO_FLG_VALUECLASS) == 0) {
-          ArgumentTypes[Index].CorType = CORINFO_TYPE_CLASS;
+          CorType = CORINFO_TYPE_CLASS;
+        } else {
+          CorType = CORINFO_TYPE_BYREF;
         }
+
+        ArgumentTypes[Index] = {CorType, Data->getClassHandle()};
+      } else {
+        HasInferredThisType = true;
       }
       Index++;
     }
@@ -5174,8 +5179,7 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
 
     // If this call has a type arg, then it's right before fixed params.
     if (HasTypeArg) {
-      ArgumentTypes[Index].CorType = CORINFO_TYPE_NATIVEINT;
-      ArgumentTypes[Index].Class = nullptr;
+      ArgumentTypes[Index] = {CORINFO_TYPE_NATIVEINT, nullptr};
       Index++;
     }
 
@@ -5207,8 +5211,7 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
       }
 #endif // CC_PEVERIFY
 
-      ArgumentTypes[Index].CorType = CorType;
-      ArgumentTypes[Index].Class = Class;
+      ArgumentTypes[Index] = {CorType, Class};
       Args = JitInfo->getArgNext(Args);
     }
 
@@ -5239,6 +5242,20 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
         Arguments[0] = NewObjThisArg;
       } else {
         Arguments[0] = Data->applyThisTransform(Arguments[0]);
+      }
+
+      if (HasInferredThisType) {
+        CorInfoType CorType = CORINFO_TYPE_CLASS;
+
+        CORINFO_CLASS_HANDLE Class = inferThisClass(Arguments[0]);
+        if (Class == nullptr) {
+          // Default to (CORINFO_TYPE_CLASS, Object)
+          Class = getBuiltinClass(CorInfoClassId::CLASSID_SYSTEM_OBJECT);
+        } else if (JitInfo->isValueClass(Class)) {
+          CorType = CORINFO_TYPE_BYREF;
+        }
+
+        ArgumentTypes[0] = {CorType, Class};
       }
     }
   }
@@ -8215,8 +8232,11 @@ uint32_t ReaderCallTargetData::getClassAttribs() {
 
 CORINFO_CLASS_HANDLE
 ReaderCallTargetData::getClassHandle() {
-  if (!TargetClassHandle) {
-    TargetClassHandle = Reader->getMethodClass(getMethodHandle());
+  if (TargetClassHandle == nullptr) {
+    CORINFO_METHOD_HANDLE Method = getMethodHandle();
+    assert(Method != nullptr);
+    TargetClassHandle = Reader->getMethodClass(Method);
+    assert(TargetClassHandle != nullptr);
   }
   return TargetClassHandle;
 }
