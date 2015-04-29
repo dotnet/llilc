@@ -156,6 +156,7 @@ def main(argv):
             test_env.write('set COMPlus_AltJit=*\n')
             test_env.write('set COMPlus_AltJitName=' + time_stamped_jit_name + '\n')
             test_env.write('set COMPlus_GCConservative=1\n')
+            test_env.write('set COMPlus_ZapDisable=1\n')
             test_env.write('chcp 65001\n')
             if args.dump_level is not None:
                 test_env.write('set COMPlus_DumpLLVMIR=' + args.dump_level + '\n')
