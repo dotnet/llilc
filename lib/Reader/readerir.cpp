@@ -1369,26 +1369,32 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
     if (IsRefClass) {
       CORINFO_CLASS_HANDLE ParentClassHandle =
           JitContext->JitInfo->getParentType(ClassHandle);
-      // It's always ok to ask for the details of a parent type.
-      Type *PointerToParentTy = getClassType(ParentClassHandle, true, true);
-      // It's possible that we added the fields to this struct if a parent
-      // had fields of this type. In that case we are already done.
-      if (!StructTy->isOpaque()) {
-        return ResultTy;
+
+      if (ParentClassHandle != nullptr) {
+        // It's always ok to ask for the details of a parent type.
+        Type *PointerToParentTy = getClassType(ParentClassHandle, true, true);
+        // It's possible that we added the fields to this struct if a parent
+        // had fields of this type. In that case we are already done.
+        if (!StructTy->isOpaque()) {
+          return ResultTy;
+        }
+
+        StructType *ParentTy =
+            cast<StructType>(PointerToParentTy->getPointerElementType());
+
+        // Add all the parent fields into the current struct.
+        for (auto FieldIterator = ParentTy->subtype_begin();
+             FieldIterator != ParentTy->subtype_end(); FieldIterator++) {
+          Fields.push_back(*FieldIterator);
+        }
+
+        // Set number of parent fields and cumulative offset into this object.
+        NumParentFields = getClassNumInstanceFields(ParentClassHandle);
+        ByteOffset = DataLayout->getTypeSizeInBits(ParentTy) / 8;
+      } else {
+        NumParentFields = 0;
+        ByteOffset = 0;
       }
-
-      StructType *ParentTy =
-          cast<StructType>(PointerToParentTy->getPointerElementType());
-
-      // Add all the parent fields into the current struct.
-      for (auto FieldIterator = ParentTy->subtype_begin();
-           FieldIterator != ParentTy->subtype_end(); FieldIterator++) {
-        Fields.push_back(*FieldIterator);
-      }
-
-      // Set number of parent fields and cumulative offset into this object.
-      NumParentFields = getClassNumInstanceFields(ParentClassHandle);
-      ByteOffset = DataLayout->getTypeSizeInBits(ParentTy) / 8;
     }
 
     // Determine how many fields are added at this level of derivation.
