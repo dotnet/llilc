@@ -5394,7 +5394,7 @@ IRNode *GenIR::cmp(ReaderBaseNS::CmpOpcode Opcode, IRNode *Arg1, IRNode *Arg2) {
     Cmp = LLVMBuilder->CreateICmp(IntCmpMap[Opcode], Arg1, Arg2);
   }
 
-  IRNode *Result = convertToStackType((IRNode *)Cmp, CORINFO_TYPE_INT);
+  IRNode *Result = convertToStackType((IRNode *)Cmp, CORINFO_TYPE_UINT);
 
   return Result;
 }
