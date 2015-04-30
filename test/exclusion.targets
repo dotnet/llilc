@@ -69,5 +69,6 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\MDArray\DataTypes\uint.cmd"/>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\MDArray\DataTypes\ulong.cmd"/>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\MDArray\DataTypes\ushort.cmd"/>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\gc\misc\fgtest2.cmd"/>
     </ItemGroup>
 </Project>

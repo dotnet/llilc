@@ -18,9 +18,10 @@
 #include "newvstate.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/IR/Intrinsics.h"
-#include "llvm/Support/Debug.h"       // for dbgs()
-#include "llvm/Support/raw_ostream.h" // for errs()
-#include "llvm/Support/ConvertUTF.h"  // for ConvertUTF16toUTF8
+#include "llvm/Support/Debug.h"          // for dbgs()
+#include "llvm/Support/raw_ostream.h"    // for errs()
+#include "llvm/Support/ConvertUTF.h"     // for ConvertUTF16toUTF8
+#include "llvm/Transforms/Utils/Local.h" // for removeUnreachableBlocks
 #include <cstdlib>
 #include <new>
 
@@ -2133,6 +2134,10 @@ FlowGraphNode *GenIR::fgSplitBlock(FlowGraphNode *Block, IRNode *Node) {
   }
   fgNodeSetPropagatesOperandStack((FlowGraphNode *)NewBlock, PropagatesStack);
   return (FlowGraphNode *)NewBlock;
+}
+
+void GenIR::fgRemoveUnusedBlocks(FlowGraphNode *FgHead) {
+  removeUnreachableBlocks(*this->Function);
 }
 
 void GenIR::fgDeleteBlock(FlowGraphNode *Node) {
@@ -5841,7 +5846,20 @@ void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
         if (CreatePHIs) {
           // The Successor has at least 2 predecessors so we use 2 as the
           // hint for the number of PHI sources.
+          // TODO: Could be nice to have actual pred. count here instead, but
+          // there's no simple way of fetching that, AFAICT.
           PHI = createPHINode(SuccessorBlock, CurrentValue->getType(), 2, "");
+
+          // Preemptively add all predecessors to the PHI node to ensure
+          // that we don't forget any once we're done.
+          FlowGraphEdgeList *PredecessorList =
+              fgNodeGetPredecessorListActual(SuccessorBlock);
+          while (PredecessorList != nullptr) {
+            PHI->addIncoming(UndefValue::get(CurrentValue->getType()),
+                             fgEdgeListGetSource(PredecessorList));
+            PredecessorList =
+                fgEdgeListGetNextPredecessorActual(PredecessorList);
+          }
         } else {
           // PHI instructions should have been inserted already
           PHI = cast<PHINode>(CurrentInst);
@@ -5877,9 +5895,11 @@ void GenIR::AddPHIOperand(PHINode *PHI, Value *NewOperand,
       PHI->mutateType(NewPHITy);
       for (int i = 0; i < PHI->getNumOperands(); ++i) {
         Value *Operand = PHI->getIncomingValue(i);
-        BasicBlock *OperandBlock = PHI->getIncomingBlock(i);
-        Operand = ChangePHIOperandType(Operand, OperandBlock, NewPHITy);
-        PHI->setIncomingValue(i, Operand);
+        if (!isa<UndefValue>(Operand)) {
+          BasicBlock *OperandBlock = PHI->getIncomingBlock(i);
+          Operand = ChangePHIOperandType(Operand, OperandBlock, NewPHITy);
+          PHI->setIncomingValue(i, Operand);
+        }
       }
     }
     if (NewPHITy != NewOperandTy) {
@@ -5889,7 +5909,11 @@ void GenIR::AddPHIOperand(PHINode *PHI, Value *NewOperand,
     LLVMBuilder->restoreIP(SavedInsertPoint);
   }
 
-  PHI->addIncoming(NewOperand, NewBlock);
+  int BlockIndex = PHI->getBasicBlockIndex(NewBlock);
+  if (BlockIndex >= 0)
+    PHI->setIncomingValue(BlockIndex, NewOperand);
+  else
+    PHI->addIncoming(NewOperand, NewBlock);
 }
 
 Value *GenIR::ChangePHIOperandType(Value *Operand, BasicBlock *OperandBlock,

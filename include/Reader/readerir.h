@@ -580,6 +580,7 @@ public:
   };
   bool fgBlockHasFallThrough(FlowGraphNode *Block) override;
 
+  void fgRemoveUnusedBlocks(FlowGraphNode *FgHead) override;
   void fgDeleteBlock(FlowGraphNode *Block) override;
   void fgDeleteEdge(FlowGraphEdgeList *Arc) override {
     throw NotYetImplementedException("fgDeleteEdge");

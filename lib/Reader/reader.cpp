@@ -1983,9 +1983,6 @@ void ReaderBase::fgRemoveUnusedBlocks(FlowGraphNode *FgHead) {
       // TODO - possibly more cleanup checking is warranted.
       // Also need to issue warning when nontrivial code is removed.
       fgDeleteBlockAndNodes(Block);
-    } else {
-      ASSERTNR(fgNodeIsVisited(Block));
-      fgNodeSetVisited(Block, false);
     }
     Block = NextBlock;
   }
@@ -8043,6 +8040,18 @@ void ReaderBase::msilToIR(void) {
 
   // Remove blocks that weren't marked as visited.
   fgRemoveUnusedBlocks(FgHead);
+
+  // Verify that all blocks that remain were, in fact, visited.
+  // Also, unset the visited bit on these blocks.
+  for (FlowGraphNode *Block = FgHead; Block != nullptr;) {
+    FlowGraphNode *NextBlock;
+    NextBlock = fgNodeGetNext(Block);
+#if !defined(NDEBUG)
+    ASSERTNR(fgNodeIsVisited(Block));
+#endif
+    fgNodeSetVisited(Block, false);
+    Block = NextBlock;
+  }
 
   // Report result of verification to the VM
   if ((Flags & CORJIT_FLG_SKIP_VERIFICATION) == 0) {

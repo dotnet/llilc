@@ -1870,8 +1870,11 @@ private:
   /// Walk the flow graph and remove any block that cannot be reached from the
   /// head block. Blocks are removed by calling \p fgDeleteBlockAndNodes.
   ///
+  /// Clients can override this if they have their own global dead block
+  /// removal.
+  ///
   /// \param FgHead     the head block of the flow graph.
-  void fgRemoveUnusedBlocks(FlowGraphNode *FgHead);
+  virtual void fgRemoveUnusedBlocks(FlowGraphNode *FgHead);
 
   /// Find the canonical landing point for leaves from an EH region.
   ///
