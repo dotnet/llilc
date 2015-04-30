@@ -13,6 +13,7 @@
 ///
 //===----------------------------------------------------------------------===//
 
+#include "gcinfo.h"
 #include "jitpch.h"
 #include "LLILCJit.h"
 #include "jitoptions.h"
@@ -347,25 +348,18 @@ bool LLILCJit::readMethod(LLILCJitContext *JitContext) {
   return IsOk;
 }
 
-// Stop gap function to allocate and emit stub GCInfo for the method.
-// This avoids a crash in the EE.
-// Assuming that this will be replaced by an override of the GCMetaData
-// or similar writer in LLVM once we move to the safepoint design.
-bool LLILCJit::outputGCInfo(LLILCJitContext *JitContext) {
-  size_t Size = 5;
-  void *GCInfoBuffer = JitContext->JitInfo->allocGCInfo(Size);
+void LLILCJit::outputGCInfo(LLILCJitContext *JitContext) {
+  GcInfoAllocator Allocator;
+  GcInfoEncoder gcInfoEncoder(JitContext->JitInfo, 
+    JitContext->MethodInfo, &Allocator);
 
-  if (GCInfoBuffer == nullptr) {
-    return false;
-  }
+  // The Encoder currently only encodes the CodeSize
+  // TODO: Encode pointer liveness information for GC-safepoints in the method
 
-  // First word of the GCInfoBuffer should be the size of the method.
-  *(uint32_t *)GCInfoBuffer = JitContext->HotCodeSize;
+  gcInfoEncoder.SetCodeLength(JitContext->HotCodeSize);
 
-  // 0x8 is the end sentinel of the buffer.
-  *(((char *)GCInfoBuffer) + 4) = 0x8;
-
-  return true;
+  gcInfoEncoder.Build();
+  gcInfoEncoder.Emit();
 }
 
 // Notification from the runtime that any caches should be cleaned up.

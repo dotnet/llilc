@@ -233,8 +233,7 @@ private:
 
   /// Output GC info to the EE.
   /// \param JitContext Context record for the method's jit request.
-  /// \returns \p true if GC info was successfully reported.
-  bool outputGCInfo(LLILCJitContext *JitContext);
+  void outputGCInfo(LLILCJitContext *JitContext);
 
 public:
   /// A pointer to the singleton jit instance.
