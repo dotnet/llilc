@@ -5775,6 +5775,35 @@ IRNode *GenIR::localAlloc(IRNode *Arg, bool ZeroInit) {
   return (IRNode *)LocAlloc;
 }
 
+IRNode *GenIR::loadAndBox(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Addr,
+                          ReaderAlignType Alignment) {
+  // Get the type of the value being loaded
+  CORINFO_CLASS_HANDLE ClassHandle = ResolvedToken->hClass;
+  CorInfoType CorInfoType = ReaderBase::getClassType(ClassHandle);
+  IRNode *Value = nullptr;
+  const bool IsVolatile = false;
+  const bool IsReadOnly = false;
+
+  // Handle the various cases
+  if (isPrimitiveType(CorInfoType)) {
+    Value = GenIR::loadPrimitiveType(Addr, CorInfoType, Alignment, IsVolatile,
+                                     IsReadOnly);
+  } else if ((getClassAttribs(ClassHandle) & CORINFO_FLG_VALUECLASS)) {
+    uint32_t Align;
+    IRNode *UpdatedAddress =
+        getTypedAddress(Addr, CorInfoType, ClassHandle, Alignment, &Align);
+    Value = loadObj(ResolvedToken, UpdatedAddress, Alignment, IsVolatile,
+                    IsReadOnly);
+  } else {
+    Value = GenIR::loadIndir(ReaderBaseNS::LdindRef, Addr, Alignment,
+                             IsVolatile, IsReadOnly);
+  }
+  // TODO: Instead of loading the value above, just pass its address through
+  // to the box helper (for primitives and value classes) and let it do the
+  // load. Otherwise we end up with a redundant store/load in the path.
+  return box(ResolvedToken, Value);
+}
+
 #pragma endregion
 
 #pragma region STACK MAINTENANCE

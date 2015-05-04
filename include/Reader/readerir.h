@@ -392,9 +392,8 @@ public:
   };
 
   IRNode *loadAndBox(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Addr,
-                     ReaderAlignType AlignmentPrefix) override {
-    throw NotYetImplementedException("loadAndBox");
-  };
+                     ReaderAlignType AlignmentPrefix) override;
+
   IRNode *convertHandle(IRNode *RuntimeTokenNode, CorInfoHelpFunc HelperID,
                         CORINFO_CLASS_HANDLE ClassHandle) override;
   void
