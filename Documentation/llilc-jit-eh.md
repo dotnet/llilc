@@ -307,33 +307,19 @@ operators.  Somewhat related, the CLR has traditionally used machine traps
 to actually raise NullReferenceExceptions and DivideByZeroExceptions at
 runtime.  The idea of allowing implicit exceptions in LLVM IR has been
 [discussed on llvmdev](http://thread.gmane.org/gmane.comp.compilers.llvm.devel/71773),
-resulting in consensus opinion that it's best to keep the IR model simpler
-in the absence of compelling performance data.  Accordingly, the plan for
-LLILC is to insert explicit tests and throws in the IR for implicit MSIL
-exceptions, to be lowered to explicit compares and branches, at least
-initially.  This can be revisited when LLILC is in a mature enough state to
-prototype other approaches and gather performance data.
-
-Should this be revisited, the following points should be kept in mind:
- * The choice whether to use implicit or explicit exceptions in the IR can
-   be made somewhat independently of the choice whether to use machine traps
-   or emit explicit tests in the generated machine code; code generation
-   passes could translate from one model to the other.
- * Machine traps may not be as easy to appropriate on other platforms, so
-   generating explicit sequences eases the task of porting the runtime.
- * Keeping both options available (under some configuration option) would
-   therefore be preferable to retiring the explicit sequence generation.
- * Making exceptions implicit in the IR may require adding a top-level
-   landing pad with unconditional `resume`, to enforce precise exception
-   semantics.  An explicit branch to a noreturn function
-   (`CORINFO_HELP_THROW`) enforces those semantics with the explicit model.
-
-Note also that the current MSIL reader code is built to expect an implicit
-model.  E.g. it begins by building a control flow graph with the assumption
-that basic blocks will not be split at implicit exception points.
-Implementing the explicit approach will therefore take some up-front work to
-ferret out bad assumptions in the reader, split blocks at exception points,
-etc.
+resulting in consensus opinion that it's not desirable to conflate the check
+and load/store operations in LLVM IR.  More recently, [an RFC](http://thread.gmane.org/gmane.comp.compilers.llvm.devel/84837)
+has been introduced to allow folding null checks onto loads at the machine IR
+level (after using explicit checks throughout optimization).  Accordingly,
+the plan for LLILC is to insert explicit tests and throws in the IR for
+implicit MSIL exceptions, and run the null check folding pass as an
+optimization on targets that support it.  This allows the null checks and
+loads/stores to be optimized independently, and allows the runtime to be
+ported to new targets without also needing to appropriate machine traps on
+those targets.  This will require extending the null check folding
+optimization (the current plan is to fold away the compare and branch; for
+CoreCLR we also want to fold away the call to the helper that raises the
+NullReferenceException).
 
 ### One-Pass vs. Two-Pass Exception Handling
 LLVM IR is set up to model cleanups that occur en route, working from inner
@@ -519,7 +505,7 @@ In summary, the plan/status is:
      - [x] Array store checks
  2. [ ] Handler bring-up in EH branch
    - [ ] Catch handler support
-     - [ ] In reader (includes updating throws to use `invoke` rather than
+     - [x] In reader (includes updating throws to use `invoke` rather than
            `call` with EH edge to `landingpad`)
      - [ ] Funclet prolog/epilog generation, Previous Stack Pointer Symbol
            handshake implemented
@@ -536,6 +522,7 @@ In summary, the plan/status is:
  3. [ ] Migrate changes back into master branch
  4. [ ] EH-specific optimizations
    - [ ] Finally cloning
+   - [ ] Null check folding
    - [ ] Others TBD
  5. [ ] Support for other target architectures
  6. [ ] Support for ahead-of-time compilation
