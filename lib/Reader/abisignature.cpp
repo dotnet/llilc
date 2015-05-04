@@ -17,10 +17,12 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/IR/CallingConv.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/Statepoint.h"
 #include "reader.h"
 #include "readerir.h"
 #include "abi.h"
@@ -209,7 +211,7 @@ CallSite ABICallSignature::emitUnmanagedCall(GenIR &Reader, Value *Target,
   // @llvm.experimental_gc_transition(
   //   fn_ptr target,
   //   i32 numCallArgs,
-  //   i32 unused,
+  //   i32 flags,
   //   ... call args ...,
   //   i32 numTransitionArgs,
   //   ... transition args...,
@@ -226,7 +228,7 @@ CallSite ABICallSignature::emitUnmanagedCall(GenIR &Reader, Value *Target,
   Module *M = Reader.Function->getParent();
   Type *CallTypeArgs[] = {Target->getType()};
   Function *CallIntrinsic = Intrinsic::getDeclaration(
-      M, Intrinsic::experimental_gc_transition, CallTypeArgs);
+      M, Intrinsic::experimental_gc_statepoint, CallTypeArgs);
 
   const uint32_t PrefixArgCount = 3;
   const uint32_t TransitionArgCount = 4;
@@ -238,7 +240,8 @@ CallSite ABICallSignature::emitUnmanagedCall(GenIR &Reader, Value *Target,
   // Call target and target arguments
   IntrinsicArgs[0] = Target;
   IntrinsicArgs[1] = ConstantInt::get(Int32Ty, TargetArgCount);
-  IntrinsicArgs[2] = ConstantInt::get(Int32Ty, 0);
+  IntrinsicArgs[2] =
+      ConstantInt::get(Int32Ty, (uint32_t)StatepointFlags::GCTransition);
 
   uint32_t I, J;
   for (I = 0, J = 3; I < TargetArgCount; I++, J++) {
