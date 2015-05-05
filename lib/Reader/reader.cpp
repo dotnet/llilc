@@ -2589,19 +2589,20 @@ void ReaderBase::fgInsertEHAnnotations(EHRegion *Region) {
   }
 }
 
-EHRegion *ReaderBase::getInnermostFinallyRegion(uint32_t Offset) {
-  EHRegion *FinallyRegion = nullptr;
+EHRegion *ReaderBase::getInnermostFaultOrFinallyRegion(uint32_t Offset) {
+  EHRegion *HandlerRegion = nullptr;
   // Walk from outer to inner regions
   for (EHRegion *TestRegion = EhRegionTree; TestRegion != nullptr;
        TestRegion = getInnerEnclosingRegion(TestRegion, Offset)) {
     // TestRegion encloses Offset
-    if (rgnGetRegionType(TestRegion) == ReaderBaseNS::RGN_Finally) {
-      // Found a finally region nested inside our previous best
-      FinallyRegion = TestRegion;
+    if ((rgnGetRegionType(TestRegion) == ReaderBaseNS::RGN_Fault) ||
+        (rgnGetRegionType(TestRegion) == ReaderBaseNS::RGN_Finally)) {
+      // Found a fault or finally region nested inside our previous best
+      HandlerRegion = TestRegion;
     }
   }
 
-  return FinallyRegion;
+  return HandlerRegion;
 }
 
 EHRegion *ReaderBase::getInnerEnclosingRegion(EHRegion *OuterRegion,
@@ -2661,16 +2662,6 @@ IRNode *ReaderBase::fgMakeBranchHelper(IRNode *LabelNode, IRNode *BlockNode,
   irNodeSetRegion(BranchNode, fgGetRegionFromMSILOffset(CurrentOffset));
   fgAddLabelToBranchList(LabelNode, BranchNode);
   return BranchNode;
-}
-
-IRNode *ReaderBase::fgMakeEndFinallyHelper(IRNode *BlockNode,
-                                           EHRegion *FinallyRegion,
-                                           uint32_t CurrentOffset) {
-  IRNode *EndFinallyNode;
-
-  EndFinallyNode = fgMakeEndFinally(BlockNode, FinallyRegion, CurrentOffset);
-  irNodeSetRegion(EndFinallyNode, fgGetRegionFromMSILOffset(CurrentOffset));
-  return EndFinallyNode;
 }
 
 // getRegionFromOffset
@@ -2824,7 +2815,6 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
   IRNode *BranchNode, *BlockNode, *TheExitLabel;
   FlowGraphNode *GraphNode;
   uint32_t CurrentOffset, BranchOffset, TargetOffset, NextOffset, NumCases;
-  EHRegion *FinallyRegion;
   bool IsShortInstr, IsConditional, IsTailCall, IsReadOnly, PreviousWasPrefix;
   bool LoadFtnToken;
   mdToken TokenConstrained;
@@ -3020,29 +3010,34 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
       // Do nothing...
       break;
 
-    case ReaderBaseNS::CEE_ENDFINALLY:
+    case ReaderBaseNS::CEE_ENDFINALLY: {
       // Treat EndFinally as a a goto to the end of the finally.
       //
       // if this endfinally is not in a finally don't do anything
       // verification will catch it later and insert throw
-      FinallyRegion = getInnermostFinallyRegion(CurrentOffset);
-
+      //
       // note endfinally is same instruction as endfault
-      if (FinallyRegion == nullptr ||
-          (rgnGetRegionType(FinallyRegion) != ReaderBaseNS::RGN_Finally &&
-           rgnGetRegionType(FinallyRegion) != ReaderBaseNS::RGN_Fault)) {
+      EHRegion *HandlerRegion = getInnermostFaultOrFinallyRegion(CurrentOffset);
+
+      if (HandlerRegion == nullptr ||
+          (rgnGetRegionType(HandlerRegion) != ReaderBaseNS::RGN_Finally &&
+           rgnGetRegionType(HandlerRegion) != ReaderBaseNS::RGN_Fault)) {
         BADCODE(MVER_E_ENDFINALLY);
       }
 
       // Make/insert end finally
       BlockNode = fgNodeGetStartIRNode(Block);
-      BranchNode =
-          fgMakeEndFinallyHelper(BlockNode, FinallyRegion, CurrentOffset);
+      if (rgnGetRegionType(HandlerRegion) == ReaderBaseNS::RGN_Finally) {
+        BranchNode = fgMakeEndFinally(BlockNode, HandlerRegion, CurrentOffset);
+      } else {
+        BranchNode = fgMakeEndFault(BlockNode, HandlerRegion, CurrentOffset);
+      }
 
       // And split the block
       fgNodeSetEndMSILOffset(Block, NextOffset);
       Block = fgSplitBlock(Block, NextOffset, nullptr);
       break;
+    }
 
     case ReaderBaseNS::CEE_JMP:
       // The MSIL jmp instruction will cause us to never return to the
