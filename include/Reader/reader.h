@@ -1661,12 +1661,12 @@ protected:
   FlowGraphNodeOffsetList *fgAddNodeMSILOffset(FlowGraphNode **Node,
                                                uint32_t TargetOffset);
 
-  /// Get the innermost finally region enclosing the given \p Offset.
+  /// Get the innermost fault or finally region enclosing the given \p Offset.
   ///
   /// \param Offset  MSIL offset of interest.
-  /// \returns The innermost finally region enclosing \p Offset if one exists;
-  ///          nullptr otherwise.
-  EHRegion *getInnermostFinallyRegion(uint32_t Offset);
+  /// \returns The innermost fault or finally region enclosing \p Offset if one
+  ///          exists; nullptr otherwise.
+  EHRegion *getInnermostFaultOrFinallyRegion(uint32_t Offset);
 
   /// Find the next-innermost region enclosing the given \p Offset.
   ///
@@ -1852,18 +1852,6 @@ private:
   IRNode *fgMakeBranchHelper(IRNode *LabelNode, IRNode *BlockNode,
                              uint32_t Offset, bool IsConditional,
                              bool IsNominal);
-
-  /// \brief Create IR for an endfinally instruction.
-  ///
-  /// Have the client create IR for an endfinally instruction. Note
-  /// there can be more than one of these in a finally region.
-  ///
-  /// \param BlockNode     the block that is the end of the finally.
-  /// \param FinallyRegion the finally region being ended.
-  /// \param Offset        msil offset for the endfinally instruction.
-  /// \returns the branch generated to terminate the block for this endfinally.
-  IRNode *fgMakeEndFinallyHelper(IRNode *BlockNode, EHRegion *FinallyRegion,
-                                 uint32_t Offset);
 
   /// \brief Remove all unreachable blocks.
   ///
@@ -3038,8 +3026,28 @@ public:
   virtual IRNode *fgMakeBranch(IRNode *LabelNode, IRNode *BlockNode,
                                uint32_t CurrentOffset, bool IsConditional,
                                bool IsNominal) = 0;
+  /// \brief Create IR for an endfinally instruction.
+  ///
+  /// Have the client create IR for an endfinally instruction. Note
+  /// there can be more than one of these in a finally region.
+  ///
+  /// \param BlockNode     the block that is the end of the finally.
+  /// \param FinallyRegion the finally region being ended.
+  /// \param Offset        msil offset for the endfinally instruction.
+  /// \returns the branch generated to terminate the block for this endfinally.
   virtual IRNode *fgMakeEndFinally(IRNode *BlockNode, EHRegion *FinallyRegion,
                                    uint32_t CurrentOffset) = 0;
+  /// \brief Create IR for an endfault instruction.
+  ///
+  /// Have the client create IR for an endfault instruction. Note
+  /// there can be more than one of these in a fault region.
+  ///
+  /// \param BlockNode     the block that is the end of the fault.
+  /// \param FaultRegion   the fault region being ended.
+  /// \param Offset        msil offset for the endfault instruction.
+  /// \returns the branch generated to terminate the block for this endfault.
+  virtual IRNode *fgMakeEndFault(IRNode *BlockNode, EHRegion *FaultRegion,
+                                 uint32_t CurrentOffset) = 0;
 
   // turns an unconditional branch to the entry label into a fall-through
   // or a branch to the exit label, depending on whether it was a recursive

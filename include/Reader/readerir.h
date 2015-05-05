@@ -618,6 +618,8 @@ public:
                        bool IsNominal) override;
   IRNode *fgMakeEndFinally(IRNode *InsertNode, EHRegion *FinallyRegion,
                            uint32_t CurrentOffset) override;
+  IRNode *fgMakeEndFault(IRNode *InsertNode, EHRegion *FaultRegion,
+                         uint32_t CurrentOffset) override;
 
   // turns an unconditional branch to the entry label into a fall-through
   // or a branch to the exit label, depending on whether it was a recursive

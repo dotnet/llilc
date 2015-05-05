@@ -2188,9 +2188,7 @@ IRNode *GenIR::fgMakeThrow(IRNode *Insert) {
 
 IRNode *GenIR::fgMakeEndFinally(IRNode *InsertNode, EHRegion *FinallyRegion,
                                 uint32_t CurrentOffset) {
-  if (FinallyRegion == nullptr) {
-    throw NotYetImplementedException("endfinally null region");
-  }
+  assert(FinallyRegion != nullptr);
 
   BasicBlock *Block = (BasicBlock *)InsertNode;
   SwitchInst *Switch = FinallyRegion->EndFinallySwitch;
@@ -2216,6 +2214,19 @@ IRNode *GenIR::fgMakeEndFinally(IRNode *InsertNode, EHRegion *FinallyRegion,
   // Generate and return branch to the block that holds the switch
   LLVMBuilder->SetInsertPoint(Block);
   return (IRNode *)LLVMBuilder->CreateBr(TargetBlock);
+}
+
+IRNode *GenIR::fgMakeEndFault(IRNode *InsertNode, EHRegion *FaultRegion,
+                              uint32_t CurrentOffset) {
+  // Fault handlers can only be reached by exceptions, and we don't
+  // yet support handling exceptions, so this can't be reached.
+  // Generate an UnreachableInst to keep the IR well-formed.
+  // When we do support handlers, this will become a branch to the
+  // next outer handler.
+
+  BasicBlock *Block = (BasicBlock *)InsertNode;
+  LLVMBuilder->SetInsertPoint(Block);
+  return (IRNode *)LLVMBuilder->CreateUnreachable();
 }
 
 void GenIR::beginFlowGraphNode(FlowGraphNode *Fg, uint32_t CurrOffset,
