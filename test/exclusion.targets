@@ -20,17 +20,10 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\gc\misc\eh1.cmd"/>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\gc\misc\funclet.cmd"/>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\gc\misc\fgtest1.cmd"/>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\gc\misc\struct6_5.cmd"/>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\gc\misc\struct7_1.cmd"/>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\gc\misc\structfpseh5_1.cmd"/>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\gc\misc\structfpseh6_1.cmd"/>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\gc\misc\structret6_1.cmd"/>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\gc\misc\structret6_2.cmd"/>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\gc\misc\structret6_3.cmd"/>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\gc\regress\vswhidbey\339415.cmd"/>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\gc\regress\vswhidbey\143837.cmd"/>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\arrayexpr2.cmd"/>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\fieldexpr2.cmd"/>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\fieldExprUnchecked1.cmd"/>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\HugeArray.cmd"/>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\HugeArray1.cmd"/>
@@ -38,8 +31,6 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\HugeField1.cmd"/>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\HugeField2.cmd"/>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\hugeSimpleExpr1.cmd"/>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\mixedexpr1.cmd"/>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\simpleexpr4.cmd"/>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\staticFieldExprUnchecked1.cmd"/>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\opt\Inline\Inline_Handler.cmd"/>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\opt\Inline\Inline_Vars.cmd"/>
@@ -69,5 +60,6 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\MDArray\DataTypes\uint.cmd"/>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\MDArray\DataTypes\ulong.cmd"/>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\MDArray\DataTypes\ushort.cmd"/>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\gc\misc\fgtest2.cmd"/>
     </ItemGroup>
 </Project>

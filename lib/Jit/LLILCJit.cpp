@@ -32,6 +32,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/IR/PassManager.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/Timer.h"
@@ -64,6 +65,12 @@ ICorJitCompiler *__stdcall getJit() {
 
     // Allow LLVM to pick up options via the environment
     cl::ParseEnvironmentOptions("LLILCJit", "COMplus_altjitOptions");
+
+    // Statepoint GC does not support Fast ISel yet.
+    auto &Opts = cl::getRegisteredOptions();
+    if (Opts["fast-isel"]->getNumOccurrences() == 0) {
+      Opts["fast-isel"]->addOccurrence(0, "fast-isel", "false");
+    }
   }
 
   return LLILCJit::TheJit;
@@ -171,10 +178,6 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
   Builder.setMCJITMemoryManager(std::move(MM));
 
   TargetOptions Options;
-
-  // Statepoint GC does not support FastIsel yet.
-  Options.EnableFastISel = false;
-
   if (Context.Options->OptLevel != OptLevel::DEBUG_CODE) {
     Builder.setOptLevel(CodeGenOpt::Level::Default);
   } else {

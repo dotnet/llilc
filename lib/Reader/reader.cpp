@@ -371,7 +371,7 @@ underflow:
   return ILSize;
 }
 
-#if !defined(NODEBUG) || defined(CC_PEVERIFY)
+#if !defined(NDEBUG) || defined(CC_PEVERIFY)
 
 const char *OpcodeName[] = {
 #define OPDEF_HELPER OPDEF_OPCODENAME
@@ -381,7 +381,7 @@ const char *OpcodeName[] = {
 
 #endif
 
-#ifndef NODEBUG
+#if !defined(NDEBUG)
 void ReaderBase::printMSIL(uint8_t *Buf, uint32_t StartOffset,
                            uint32_t EndOffset) {
   uint8_t *Operand;
@@ -1923,9 +1923,6 @@ void ReaderBase::fgRemoveUnusedBlocks(FlowGraphNode *FgHead) {
       // TODO - possibly more cleanup checking is warranted.
       // Also need to issue warning when nontrivial code is removed.
       fgDeleteBlockAndNodes(Block);
-    } else {
-      ASSERTNR(fgNodeIsVisited(Block));
-      fgNodeSetVisited(Block, false);
     }
     Block = NextBlock;
   }
@@ -5174,18 +5171,23 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
     CORINFO_ARG_LIST_HANDLE Args;
     CorInfoType CorType;
     CORINFO_CLASS_HANDLE ArgType, Class;
+    bool HasInferredThisType = false;
 
     Args = SigInfo->args;
     Index = 0;
 
     // If this call passes a this ptr, then it is first in array.
     if (HasThis) {
-      ArgumentTypes[Index].CorType = CORINFO_TYPE_BYREF;
-      ArgumentTypes[Index].Class = Data->getClassHandle();
       if (Data->getMethodHandle() != nullptr) {
         if ((Data->getClassAttribs() & CORINFO_FLG_VALUECLASS) == 0) {
-          ArgumentTypes[Index].CorType = CORINFO_TYPE_CLASS;
+          CorType = CORINFO_TYPE_CLASS;
+        } else {
+          CorType = CORINFO_TYPE_BYREF;
         }
+
+        ArgumentTypes[Index] = {CorType, Data->getClassHandle()};
+      } else {
+        HasInferredThisType = true;
       }
       Index++;
     }
@@ -5197,8 +5199,7 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
 
     // If this call has a type arg, then it's right before fixed params.
     if (HasTypeArg) {
-      ArgumentTypes[Index].CorType = CORINFO_TYPE_NATIVEINT;
-      ArgumentTypes[Index].Class = nullptr;
+      ArgumentTypes[Index] = {CORINFO_TYPE_NATIVEINT, nullptr};
       Index++;
     }
 
@@ -5230,8 +5231,7 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
       }
 #endif // CC_PEVERIFY
 
-      ArgumentTypes[Index].CorType = CorType;
-      ArgumentTypes[Index].Class = Class;
+      ArgumentTypes[Index] = {CorType, Class};
       Args = JitInfo->getArgNext(Args);
     }
 
@@ -5262,6 +5262,20 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
         Arguments[0] = NewObjThisArg;
       } else {
         Arguments[0] = Data->applyThisTransform(Arguments[0]);
+      }
+
+      if (HasInferredThisType) {
+        CorInfoType CorType = CORINFO_TYPE_CLASS;
+
+        CORINFO_CLASS_HANDLE Class = inferThisClass(Arguments[0]);
+        if (Class == nullptr) {
+          // Default to (CORINFO_TYPE_CLASS, Object)
+          Class = getBuiltinClass(CorInfoClassId::CLASSID_SYSTEM_OBJECT);
+        } else if (JitInfo->isValueClass(Class)) {
+          CorType = CORINFO_TYPE_BYREF;
+        }
+
+        ArgumentTypes[0] = {CorType, Class};
       }
     }
   }
@@ -8046,6 +8060,18 @@ void ReaderBase::msilToIR(void) {
   // Remove blocks that weren't marked as visited.
   fgRemoveUnusedBlocks(FgHead);
 
+  // Verify that all blocks that remain were, in fact, visited.
+  // Also, unset the visited bit on these blocks.
+  for (FlowGraphNode *Block = FgHead; Block != nullptr;) {
+    FlowGraphNode *NextBlock;
+    NextBlock = fgNodeGetNext(Block);
+#if !defined(NDEBUG)
+    ASSERTNR(fgNodeIsVisited(Block));
+#endif
+    fgNodeSetVisited(Block, false);
+    Block = NextBlock;
+  }
+
   // Report result of verification to the VM
   if ((Flags & CORJIT_FLG_SKIP_VERIFICATION) == 0) {
     ASSERTNR(VerificationNeeded || !IsVerifiableCode);
@@ -8234,8 +8260,11 @@ uint32_t ReaderCallTargetData::getClassAttribs() {
 
 CORINFO_CLASS_HANDLE
 ReaderCallTargetData::getClassHandle() {
-  if (!TargetClassHandle) {
-    TargetClassHandle = Reader->getMethodClass(getMethodHandle());
+  if (TargetClassHandle == nullptr) {
+    CORINFO_METHOD_HANDLE Method = getMethodHandle();
+    assert(Method != nullptr);
+    TargetClassHandle = Reader->getMethodClass(Method);
+    assert(TargetClassHandle != nullptr);
   }
   return TargetClassHandle;
 }

@@ -18,9 +18,10 @@
 #include "newvstate.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/IR/Intrinsics.h"
-#include "llvm/Support/Debug.h"       // for dbgs()
-#include "llvm/Support/raw_ostream.h" // for errs()
-#include "llvm/Support/ConvertUTF.h"  // for ConvertUTF16toUTF8
+#include "llvm/Support/Debug.h"          // for dbgs()
+#include "llvm/Support/raw_ostream.h"    // for errs()
+#include "llvm/Support/ConvertUTF.h"     // for ConvertUTF16toUTF8
+#include "llvm/Transforms/Utils/Local.h" // for removeUnreachableBlocks
 #include <cstdlib>
 #include <new>
 
@@ -1392,26 +1393,32 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
     if (IsRefClass) {
       CORINFO_CLASS_HANDLE ParentClassHandle =
           JitContext->JitInfo->getParentType(ClassHandle);
-      // It's always ok to ask for the details of a parent type.
-      Type *PointerToParentTy = getClassType(ParentClassHandle, true, true);
-      // It's possible that we added the fields to this struct if a parent
-      // had fields of this type. In that case we are already done.
-      if (!StructTy->isOpaque()) {
-        return ResultTy;
+
+      if (ParentClassHandle != nullptr) {
+        // It's always ok to ask for the details of a parent type.
+        Type *PointerToParentTy = getClassType(ParentClassHandle, true, true);
+        // It's possible that we added the fields to this struct if a parent
+        // had fields of this type. In that case we are already done.
+        if (!StructTy->isOpaque()) {
+          return ResultTy;
+        }
+
+        StructType *ParentTy =
+            cast<StructType>(PointerToParentTy->getPointerElementType());
+
+        // Add all the parent fields into the current struct.
+        for (auto FieldIterator = ParentTy->subtype_begin();
+             FieldIterator != ParentTy->subtype_end(); FieldIterator++) {
+          Fields.push_back(*FieldIterator);
+        }
+
+        // Set number of parent fields and cumulative offset into this object.
+        NumParentFields = getClassNumInstanceFields(ParentClassHandle);
+        ByteOffset = DataLayout->getTypeSizeInBits(ParentTy) / 8;
+      } else {
+        NumParentFields = 0;
+        ByteOffset = 0;
       }
-
-      StructType *ParentTy =
-          cast<StructType>(PointerToParentTy->getPointerElementType());
-
-      // Add all the parent fields into the current struct.
-      for (auto FieldIterator = ParentTy->subtype_begin();
-           FieldIterator != ParentTy->subtype_end(); FieldIterator++) {
-        Fields.push_back(*FieldIterator);
-      }
-
-      // Set number of parent fields and cumulative offset into this object.
-      NumParentFields = getClassNumInstanceFields(ParentClassHandle);
-      ByteOffset = DataLayout->getTypeSizeInBits(ParentTy) / 8;
     }
 
     // Determine how many fields are added at this level of derivation.
@@ -2156,6 +2163,10 @@ FlowGraphNode *GenIR::fgSplitBlock(FlowGraphNode *Block, IRNode *Node) {
   }
   fgNodeSetPropagatesOperandStack((FlowGraphNode *)NewBlock, PropagatesStack);
   return (FlowGraphNode *)NewBlock;
+}
+
+void GenIR::fgRemoveUnusedBlocks(FlowGraphNode *FgHead) {
+  removeUnreachableBlocks(*this->Function);
 }
 
 void GenIR::fgDeleteBlock(FlowGraphNode *Node) {
@@ -4057,6 +4068,26 @@ IRNode *GenIR::getTypeFromHandle(IRNode *Arg1) {
   // Return the field's value (of type RuntimeType).
   const bool IsVolatile = false;
   return (IRNode *)LLVMBuilder->CreateLoad(FieldAddress, IsVolatile);
+}
+
+CORINFO_CLASS_HANDLE GenIR::inferThisClass(IRNode *ThisArgument) {
+  Type *Ty = ((Value *)ThisArgument)->getType();
+  assert(Ty->isPointerTy());
+
+  // Check for a ref class first.
+  auto MapElem = ReverseClassTypeMap->find(Ty);
+  if (MapElem != ReverseClassTypeMap->end()) {
+    return MapElem->second;
+  }
+
+  // No hit, check for a value class.
+  Ty = Ty->getPointerElementType();
+  MapElem = ReverseClassTypeMap->find(Ty);
+  if (MapElem != ReverseClassTypeMap->end()) {
+    return MapElem->second;
+  }
+
+  return nullptr;
 }
 
 bool GenIR::canMakeDirectCall(ReaderCallTargetData *CallTargetData) {
@@ -6090,6 +6121,35 @@ IRNode *GenIR::localAlloc(IRNode *Arg, bool ZeroInit) {
   return (IRNode *)LocAlloc;
 }
 
+IRNode *GenIR::loadAndBox(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Addr,
+                          ReaderAlignType Alignment) {
+  // Get the type of the value being loaded
+  CORINFO_CLASS_HANDLE ClassHandle = ResolvedToken->hClass;
+  CorInfoType CorInfoType = ReaderBase::getClassType(ClassHandle);
+  IRNode *Value = nullptr;
+  const bool IsVolatile = false;
+  const bool IsReadOnly = false;
+
+  // Handle the various cases
+  if (isPrimitiveType(CorInfoType)) {
+    Value = GenIR::loadPrimitiveType(Addr, CorInfoType, Alignment, IsVolatile,
+                                     IsReadOnly);
+  } else if ((getClassAttribs(ClassHandle) & CORINFO_FLG_VALUECLASS)) {
+    uint32_t Align;
+    IRNode *UpdatedAddress =
+        getTypedAddress(Addr, CorInfoType, ClassHandle, Alignment, &Align);
+    Value = loadObj(ResolvedToken, UpdatedAddress, Alignment, IsVolatile,
+                    IsReadOnly);
+  } else {
+    Value = GenIR::loadIndir(ReaderBaseNS::LdindRef, Addr, Alignment,
+                             IsVolatile, IsReadOnly);
+  }
+  // TODO: Instead of loading the value above, just pass its address through
+  // to the box helper (for primitives and value classes) and let it do the
+  // load. Otherwise we end up with a redundant store/load in the path.
+  return box(ResolvedToken, Value);
+}
+
 #pragma endregion
 
 #pragma region STACK MAINTENANCE
@@ -6161,7 +6221,20 @@ void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
         if (CreatePHIs) {
           // The Successor has at least 2 predecessors so we use 2 as the
           // hint for the number of PHI sources.
+          // TODO: Could be nice to have actual pred. count here instead, but
+          // there's no simple way of fetching that, AFAICT.
           PHI = createPHINode(SuccessorBlock, CurrentValue->getType(), 2, "");
+
+          // Preemptively add all predecessors to the PHI node to ensure
+          // that we don't forget any once we're done.
+          FlowGraphEdgeList *PredecessorList =
+              fgNodeGetPredecessorListActual(SuccessorBlock);
+          while (PredecessorList != nullptr) {
+            PHI->addIncoming(UndefValue::get(CurrentValue->getType()),
+                             fgEdgeListGetSource(PredecessorList));
+            PredecessorList =
+                fgEdgeListGetNextPredecessorActual(PredecessorList);
+          }
         } else {
           // PHI instructions should have been inserted already
           PHI = cast<PHINode>(CurrentInst);
@@ -6197,9 +6270,11 @@ void GenIR::AddPHIOperand(PHINode *PHI, Value *NewOperand,
       PHI->mutateType(NewPHITy);
       for (int i = 0; i < PHI->getNumOperands(); ++i) {
         Value *Operand = PHI->getIncomingValue(i);
-        BasicBlock *OperandBlock = PHI->getIncomingBlock(i);
-        Operand = ChangePHIOperandType(Operand, OperandBlock, NewPHITy);
-        PHI->setIncomingValue(i, Operand);
+        if (!isa<UndefValue>(Operand)) {
+          BasicBlock *OperandBlock = PHI->getIncomingBlock(i);
+          Operand = ChangePHIOperandType(Operand, OperandBlock, NewPHITy);
+          PHI->setIncomingValue(i, Operand);
+        }
       }
     }
     if (NewPHITy != NewOperandTy) {
@@ -6209,7 +6284,11 @@ void GenIR::AddPHIOperand(PHINode *PHI, Value *NewOperand,
     LLVMBuilder->restoreIP(SavedInsertPoint);
   }
 
-  PHI->addIncoming(NewOperand, NewBlock);
+  int BlockIndex = PHI->getBasicBlockIndex(NewBlock);
+  if (BlockIndex >= 0)
+    PHI->setIncomingValue(BlockIndex, NewOperand);
+  else
+    PHI->addIncoming(NewOperand, NewBlock);
 }
 
 Value *GenIR::ChangePHIOperandType(Value *Operand, BasicBlock *OperandBlock,

@@ -1521,7 +1521,7 @@ public:
   FlowGraphNode *fgSplitBlock(FlowGraphNode *Block, uint32_t Offset,
                               IRNode *Node);
 
-#if defined(_DEBUG)
+#if !defined(NDEBUG)
   /// \brief Debug-only reader function to print range of MSIL.
   ///
   /// Print the MSIL in the buffer for the given range. Output emitted via
@@ -1839,8 +1839,11 @@ private:
   /// Walk the flow graph and remove any block that cannot be reached from the
   /// head block. Blocks are removed by calling \p fgDeleteBlockAndNodes.
   ///
+  /// Clients can override this if they have their own global dead block
+  /// removal.
+  ///
   /// \param FgHead     the head block of the flow graph.
-  void fgRemoveUnusedBlocks(FlowGraphNode *FgHead);
+  virtual void fgRemoveUnusedBlocks(FlowGraphNode *FgHead);
 
   /// Find the canonical landing point for leaves from an EH region.
   ///
@@ -3224,6 +3227,13 @@ public:
   virtual IRNode *makeStackTypeNode(IRNode *Node) = 0;
 
   virtual IRNode *makeDirectCallTargetNode(void *CodeAddress) = 0;
+
+  /// \brief Infer the type of the 'this' argument to an indirect call from
+  ///        the given IR node.
+  ///
+  /// \param ThisArgument  The IR node that represents the 'this' argument.
+  /// \returns The class handle that corresponds to the type of the node.
+  virtual CORINFO_CLASS_HANDLE inferThisClass(IRNode *ThisArgument) = 0;
 
   // Called once region tree has been built.
   virtual void setEHInfo(EHRegion *EhRegionTree,
