@@ -4661,6 +4661,33 @@ bool GenIR::interlockedCmpXchg(IRNode *Destination, IRNode *Exchange,
   return true;
 }
 
+bool GenIR::interlockedIntrinsicBinOp(IRNode *Arg1, IRNode *Arg2,
+                                      IRNode **RetVal,
+                                      CorInfoIntrinsics IntrinsicID) {
+  AtomicRMWInst::BinOp Op = AtomicRMWInst::BinOp::BAD_BINOP;
+
+  switch (IntrinsicID) {
+  case CORINFO_INTRINSIC_InterlockedXAdd32:
+  case CORINFO_INTRINSIC_InterlockedXAdd64:
+    Op = AtomicRMWInst::BinOp::Add;
+    break;
+  case CORINFO_INTRINSIC_InterlockedXchg32:
+  case CORINFO_INTRINSIC_InterlockedXchg64:
+    Op = AtomicRMWInst::BinOp::Xchg;
+    break;
+  }
+
+  if (Op != AtomicRMWInst::BinOp::BAD_BINOP) {
+    Value *Result = LLVMBuilder->CreateAtomicRMW(
+        Op, Arg1, Arg2, AtomicOrdering::SequentiallyConsistent);
+    *RetVal = (IRNode *)Result;
+    return true;
+  } else {
+    *RetVal = nullptr;
+    return false;
+  }
+}
+
 bool GenIR::memoryBarrier() {
   // TODO: Here we emit mfence which is stronger than sfence
   // that CLR needs.
