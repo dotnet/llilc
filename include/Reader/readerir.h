@@ -257,7 +257,8 @@ public:
         std::map<CORINFO_FIELD_HANDLE, uint32_t> *FieldIndexMap)
       : ReaderBase(JitContext->JitInfo, JitContext->MethodInfo,
                    JitContext->Flags),
-        UnmanagedCallFrame(nullptr), ThreadPointer(nullptr) {
+        UnmanagedCallFrame(nullptr), ThreadPointer(nullptr),
+        ArrayOfReferenceType(nullptr) {
     this->JitContext = JitContext;
     this->ClassTypeMap = ClassTypeMap;
     this->ReverseClassTypeMap = ReverseClassTypeMap;
@@ -1314,6 +1315,41 @@ private:
   /// \param Size Size of the block.
   void zeroInitBlock(llvm::Value *Address, llvm::Value *Size);
 
+  /// Check if this LLVM type appears to be a CLR array type.
+  ///
+  /// \param Type   Type to examine.
+  /// \returns      True if this type looks like a CLR array type.
+  bool isArrayType(llvm::Type *Type);
+
+  /// Get the LLVM type for the built-in string type.
+  ///
+  /// \returns    LLVM type that models the built-in string type.
+  llvm::Type *getBuiltInStringType();
+
+  /// Get the LLVM type for an array of references.
+  ///
+  /// Used when we know that some type must be an array but our local
+  /// type information thinks otherwise.
+  ///
+  /// \returns    LLVM type that models array of references.
+  llvm::PointerType *getArrayOfReferenceType();
+
+  /// Create the LLVM type for an array of references.
+  void createArrayOfReferenceType();
+
+  /// Create the length, padding, and elements fields for an array type.
+  ///
+  /// \param Fields             Field collection for the array. On input,
+  ///                           should contain only the vtable pointer.
+  /// \param ElementCorType     CorType for the array elements.
+  /// \param ElementClassHandle Class handle for the array elements.
+  /// \returns                  Byte size of the fields added. Fields updated
+  ///                           with length, padding (if needed), and the array
+  ///                           itself.
+  uint32_t addArrayFields(std::vector<llvm::Type *> &Fields,
+                          CorInfoType ElementCorType,
+                          CORINFO_CLASS_HANDLE ElementClassHandle);
+
 private:
   LLILCJitContext *JitContext;
   ABIInfo *TheABIInfo;
@@ -1365,6 +1401,9 @@ private:
   uint32_t TargetPointerSizeInBits;
   const uint32_t UnmanagedAddressSpace = 0;
   const uint32_t ManagedAddressSpace = 1;
+  llvm::PointerType *ArrayOfReferenceType; ///< Array type for use in casting
+                                           ///< non-array types seen in array
+                                           ///< contexts.
 };
 
 #endif // MSIL_READER_IR_H
