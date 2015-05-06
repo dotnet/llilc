@@ -3882,6 +3882,18 @@ IRNode *GenIR::getTypeFromHandle(IRNode *Arg1) {
   return (IRNode *)LLVMBuilder->CreateLoad(FieldAddress, IsVolatile);
 }
 
+IRNode *GenIR::getValueFromRuntimeHandle(IRNode *Arg1) {
+  // TODO: other JITs either
+  // a) do not optimize this path, or
+  // b) only optimize here if the incoming argument is the result of lowering
+  //    a ldtoken instruction.
+  //
+  // We don't yet have the ability do detect (b) yet; stick with (a) in the
+  // meantime.
+
+  return nullptr;
+}
+
 CORINFO_CLASS_HANDLE GenIR::inferThisClass(IRNode *ThisArgument) {
   Type *Ty = ((Value *)ThisArgument)->getType();
   assert(Ty->isPointerTy());

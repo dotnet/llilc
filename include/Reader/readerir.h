@@ -384,9 +384,8 @@ public:
 
   IRNode *getTypeFromHandle(IRNode *HandleNode) override;
 
-  IRNode *getValueFromRuntimeHandle(IRNode *Arg1) override {
-    throw NotYetImplementedException("getValueFromRuntimeHandle");
-  };
+  IRNode *getValueFromRuntimeHandle(IRNode *Arg1) override;
+
   IRNode *arrayGetDimLength(IRNode *Arg1, IRNode *Arg2,
                             CORINFO_CALL_INFO *CallInfo) override {
     throw NotYetImplementedException("arrayGetDimLength");
