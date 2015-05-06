@@ -119,7 +119,9 @@ def runFormat(args):
   llilcSrc = expandPath(args.llilc_source)
   for dirname,subdir,files in os.walk(llilcSrc):
     if ".git" in dirname \
-        or dirname == os.path.join(llilcSrc, "include", "clr"):
+        or dirname == os.path.join(llilcSrc, "include", "clr") \
+		or dirname == os.path.join(llilcSrc, "include", "GcInfo") \
+		or dirname == os.path.join(llilcSrc, "lib", "GcInfo"):
       continue
     for filename in files:
       if filename.endswith(".c") or filename.endswith(".cpp") or \

@@ -1,6 +1,7 @@
 get_filename_component(LLILC_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR}/../../include ABSOLUTE)
 
 include_directories(${LLILC_INCLUDES}/clr
+                    ${LLILC_INCLUDES}/GcInfo					
                     ${LLILC_INCLUDES}/Pal
                     ${LLILC_INCLUDES}/Jit
                     ${LLILC_INCLUDES}/Reader)
@@ -18,7 +19,7 @@ set(LLVM_LINK_COMPONENTS
   native
   )
 
-set(LLILCJIT_LINK_LIBRARIES LLILCReader)
+set(LLILCJIT_LINK_LIBRARIES LLILCReader GcInfo)
 
 if (WIN32)
   set(CMAKE_CXX_FLAGS "-EHsc")
@@ -68,7 +69,7 @@ add_llilcjit_library(
   ${LLILCJIT_EXPORTS_DEF}
   )
 
-add_dependencies(llilcjit LLILCReader)
+add_dependencies(llilcjit LLILCReader GcInfo)
 
 target_link_libraries(
   llilcjit
