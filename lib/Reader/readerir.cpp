@@ -4141,6 +4141,10 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo, bool MayThrow,
       // For now just treat as a normal call.
       break;
     }
+    case CORINFO_INTRINSIC_GetManagedThreadId: {
+      // For now just treat as a normal call.
+      break;
+    }
     default:
       throw NotYetImplementedException("Call intrinsic");
     }
