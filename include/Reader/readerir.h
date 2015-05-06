@@ -461,11 +461,8 @@ public:
   IRNode *stringGetChar(IRNode *Arg1, IRNode *Arg2) override;
   bool sqrt(IRNode *Argument, IRNode **Result) override;
 
-  // The callTarget node is only required on IA64.
   bool interlockedIntrinsicBinOp(IRNode *Arg1, IRNode *Arg2, IRNode **RetVal,
-                                 CorInfoIntrinsics IntrinsicID) override {
-    throw NotYetImplementedException("interlockedIntrinsicBinOp");
-  };
+                                 CorInfoIntrinsics IntrinsicID) override;
 
   bool interlockedCmpXchg(IRNode *Destination, IRNode *Exchange,
                           IRNode *Comparand, IRNode **Result,
