@@ -4538,6 +4538,10 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo, bool MayThrow,
     case CORINFO_INTRINSIC_GetManagedThreadId: {
       break;
     }
+    case CORINFO_INTRINSIC_RTH_GetValueInternal: {
+      // For now just treat as a normal call.
+      break;
+    }
     default:
       break;
     }
