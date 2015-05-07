@@ -143,8 +143,9 @@ public:
   /// them.
   ///
   /// \note Arrays can't be looked up via the \p ClassTypeMap. Instead they
-  /// are looked up via element type, element handle, and array rank.
-  std::map<std::tuple<CorInfoType, CORINFO_CLASS_HANDLE, uint32_t>,
+  /// are looked up via element type, element handle, array rank, and whether
+  /// this array is a vector (single-dimensional array with zero lower bound).
+  std::map<std::tuple<CorInfoType, CORINFO_CLASS_HANDLE, uint32_t, bool>,
            llvm::Type *> ArrayTypeMap;
 
   /// \brief Map from a field handle to the index of that field in the overall

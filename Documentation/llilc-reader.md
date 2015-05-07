@@ -140,7 +140,7 @@ LLVM Types.
     single LLVM Type: ClassTypeMap and ArrayTypeMap.  ClassTypeMap is
     indexed by CORINFO\_CLASS\_HANDLE and is used for non-array types.
     ArrayTypeMap is indexed by `<element type, element handle, array
-    rank>` tuple.  The reason for that is that two different
+    rank, is vector>` tuple.  The reason for that is that two different
     CORINFO\_CLASS\_HANDLEs can identify the same array: the actual
     array handle and the handle for its MethodTable.
 

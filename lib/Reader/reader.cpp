@@ -381,6 +381,10 @@ const char *OpcodeName[] = {
 #endif
 
 #if !defined(NDEBUG)
+void ReaderBase::printMSIL() {
+  printMSIL(MethodInfo->ILCode, 0, MethodInfo->ILCodeSize);
+}
+
 void ReaderBase::printMSIL(uint8_t *Buf, uint32_t StartOffset,
                            uint32_t EndOffset) {
   uint8_t *Operand;
