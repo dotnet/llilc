@@ -445,7 +445,6 @@ endif()
 if ("${CMAKE_SIZEOF_VOID_P}" EQUAL "8")
   add_definitions( -DBIT64 )
   add_definitions( -D_WIN64 )
-  add_definitions( -D_TARGET_AMD64_=1 )
 endif()
 
 # LLILCJit version information

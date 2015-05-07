@@ -133,6 +133,20 @@
 
 #else // defined(_MSC_VER)
 
+// Force inline
+
+#if !defined(__has_attribute)
+#define __has_attribute(x) 0
+#endif
+
+#if !defined(__forceinline)
+#if __has_attribute(always_inline)
+#define __forceinline __attribute__((always_inline)) inline 
+#else
+#define __forceinline inline
+#endif
+#endif
+
 // SAL
 #define _In_
 #define _Out_opt_
@@ -265,8 +279,15 @@ typedef double DOUBLE;
 
 typedef BYTE BOOLEAN;
 
-typedef signed __int32 INT32;
-typedef unsigned __int32 UINT32;
+typedef signed char         INT8, *PINT8;
+typedef signed short        INT16, *PINT16;
+typedef signed int          INT32, *PINT32;
+typedef signed __int64      INT64, *PINT64;
+typedef unsigned char       UINT8, *PUINT8;
+typedef unsigned short      UINT16, *PUINT16;
+typedef unsigned int        UINT32, *PUINT32;
+typedef unsigned __int64    UINT64, *PUINT64;
+
 typedef unsigned __int32 ULONG32;
 typedef __int64 LONGLONG;
 typedef unsigned __int64 ULONGLONG;
@@ -278,12 +299,21 @@ typedef ULONGLONG DWORD64, *PDWORD64;
 #if _WIN64
 typedef unsigned __int64 UINT_PTR;
 typedef unsigned __int64 ULONG_PTR;
+typedef __int64 INT_PTR;
+typedef __int64 LONG_PTR;
 #else
 typedef _W64 unsigned __int32 UINT_PTR;
 typedef _W64 unsigned __int32 ULONG_PTR;
+typedef _W64 __int32 INT_PTR;
+typedef _W64 __int32 LONG_PTR;
 #endif
 
 typedef ULONG_PTR SIZE_T;
+typedef LONG_PTR SSIZE_T;
+
+#define MAXSIZE_T   ((SIZE_T)~((SIZE_T)0))
+#define MAXSSIZE_T  ((SSIZE_T)(MAXSIZE_T >> 1))
+#define MINSSIZE_T  ((SSIZE_T)~MAXSSIZE_T)
 
 #ifndef TRUE
 #define TRUE 1
@@ -292,6 +322,19 @@ typedef ULONG_PTR SIZE_T;
 #ifndef FALSE
 #define FALSE 0
 #endif
+
+// Offset Computation
+
+#if defined(__GNUC__) && (__GNUC__ == 3 && __GNUC_MINOR__ >= 5 || __GNUC__ > 3)
+#define FIELD_OFFSET(type, field) __builtin_offsetof(type, field)
+#define PAL_safe_offsetof(type, field) __builtin_offsetof(type, field)
+#else
+#define FIELD_OFFSET(type, field) (((LONG)(LONG_PTR)&(((type *)64)->field)) - 64)
+#define PAL_safe_offsetof(s,m) ((size_t)((ptrdiff_t)&(char&)(((s *)64)->m))-64)
+#endif
+
+#define CONTAINING_RECORD(address, type, field) \
+  ((type *)((LONG_PTR)(address)-FIELD_OFFSET(type, field)))
 
 // Handles
 typedef VOID *HANDLE;

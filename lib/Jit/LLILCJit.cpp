@@ -13,7 +13,7 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#include "gcinfo.h"
+#include "GcInfo.h"
 #include "jitpch.h"
 #include "LLILCJit.h"
 #include "jitoptions.h"
@@ -350,8 +350,8 @@ bool LLILCJit::readMethod(LLILCJitContext *JitContext) {
 
 void LLILCJit::outputGCInfo(LLILCJitContext *JitContext) {
   GcInfoAllocator Allocator;
-  GcInfoEncoder gcInfoEncoder(JitContext->JitInfo, 
-    JitContext->MethodInfo, &Allocator);
+  GcInfoEncoder gcInfoEncoder(JitContext->JitInfo, JitContext->MethodInfo,
+                              &Allocator);
 
   // The Encoder currently only encodes the CodeSize
   // TODO: Encode pointer liveness information for GC-safepoints in the method

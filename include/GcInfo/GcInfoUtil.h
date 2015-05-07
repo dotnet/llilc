@@ -16,13 +16,28 @@
 #ifndef GCINFOUTIL_H
 #define GCINFOUTIL_H
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <assert.h>
 #include <limits.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <new>
 #include <unordered_map>
+
+#include "global.h"
 #include "LLILCPal.h"
+
+#if defined(_MSC_VER)
+#include <windows.h>
+#else
+#include <cstddef>
+#include <cstdarg>
+#include "ntimage.h"
+#include "misc.h"
+#endif
+
+#include "corjit.h"
+#include "eexcp.h"
 
 //*****************************************************************************
 //  Helper Macros
@@ -93,35 +108,9 @@ inline BOOL IS_ALIGNED(const void *val, size_t alignment) {
 //
 // Return Value:
 //    The position (0 is LSB) of bit that is set in 'value'
-//
-// Notes:
-//    'value' must have exactly one bit set.
-//    The algorithm is as follows:
-//    - PRIME is a prime bigger than sizeof(unsigned int), which is not of the
-//      form 2^n-1.
-//    - Taking the modulo of 'value' with this will produce a unique hash for
-//      all powers of 2 (which is what "value" is).
-//    - Entries in hashTable[] which are -1 should never be used. There
-//      should be PRIME-8*sizeof(value) entries which are -1 .
 //------------------------------------------------------------------------
 
-inline unsigned BitPosition(unsigned value) {
-  _ASSERTE((value != 0) && ((value & (value - 1)) == 0));
-  const unsigned PRIME = 37;
-
-  static const char hashTable[PRIME] = {
-      -1, 0,  1,  26, 2,  23, 27, -1, 3, 16, 24, 30, 28, 11, -1, 13, 4,  7, 17,
-      -1, 25, 22, 31, 15, 29, 10, 12, 6, -1, 21, 14, 9,  5,  20, 8,  19, 18};
-
-  _ASSERTE(PRIME >= 8 * sizeof(value));
-  _ASSERTE(sizeof(hashTable) == PRIME);
-
-  unsigned hash = value % PRIME;
-  unsigned index = hashTable[hash];
-  _ASSERTE(index != (unsigned char)-1);
-
-  return index;
-}
+unsigned BitPosition(unsigned value);
 
 //*****************************************************************************
 //  Overflow Checking
@@ -229,19 +218,19 @@ public:
 };
 
 class GcInfoAllocator : public IAllocator {
-public:
-  const static int ZeroLenthAlloc = 0;
+  static int ZeroLengthAlloc;
 
+public:
   void *Alloc(size_t sz) {
     if (sz == 0) {
-      return (void *)(&ZeroLenthAlloc);
+      return (void *)(&ZeroLengthAlloc);
     }
 
     return ::operator new(sz);
   }
 
   virtual void Free(void *p) {
-    if (p != (void *)(&ZeroLenthAlloc)) {
+    if (p != (void *)(&ZeroLengthAlloc)) {
       ::operator delete(p);
     }
   }
@@ -269,14 +258,14 @@ public:
 
 protected:
   // Override this function to do the comparison.
-  virtual FORCEINLINE int Compare( // -1, 0, or 1
-      T *psFirst,                  // First item to compare.
-      T *psSecond)                 // Second item to compare.
+  __forceinline virtual int Compare( // -1, 0, or 1
+      T *psFirst,                    // First item to compare.
+      T *psSecond)                   // Second item to compare.
   {
     return (memcmp(psFirst, psSecond, sizeof(T)));
   }
 
-  virtual FORCEINLINE void Swap(SSIZE_T iFirst, SSIZE_T iSecond) {
+  __forceinline virtual void Swap(SSIZE_T iFirst, SSIZE_T iSecond) {
     if (iFirst == iSecond)
       return;
     T sTemp(m_pBase[iFirst]);
@@ -473,7 +462,7 @@ protected:
     m_nTotalItems = 0;
   }
 
-  inline void StructArrayListBase::Destruct(FreeProc *pfnFree) {
+  void Destruct(FreeProc *pfnFree) {
     StructArrayListEntryBase *pList = m_pChunkListHead;
     while (pList) {
       StructArrayListEntryBase *pTrash = pList;
@@ -488,56 +477,13 @@ protected:
     return (size + (mult - 1)) & ~(mult - 1);
   }
 
-  void StructArrayListBase::CreateNewChunk(SIZE_T InitialChunkLength,
-                                           SIZE_T ChunkLengthGrowthFactor,
-                                           SIZE_T cbElement,
-                                           AllocProc *pfnAlloc,
-                                           SIZE_T alignment) {
-    _ASSERTE(InitialChunkLength > 0);
-    _ASSERTE(ChunkLengthGrowthFactor > 0);
-    _ASSERTE(cbElement > 0);
-
-    SIZE_T cbBaseSize =
-        SIZE_T(roundUp(sizeof(StructArrayListEntryBase), alignment));
-    SIZE_T maxChunkCapacity = (MAXSIZE_T - cbBaseSize) / cbElement;
-
-    _ASSERTE(maxChunkCapacity > 0);
-
-    SIZE_T nChunkCapacity;
-    if (!m_pChunkListHead)
-      nChunkCapacity = InitialChunkLength;
-    else
-      nChunkCapacity = m_nLastChunkCapacity * ChunkLengthGrowthFactor;
-
-    if (nChunkCapacity > maxChunkCapacity) {
-      // Limit nChunkCapacity such that cbChunk computation does not overflow.
-      nChunkCapacity = maxChunkCapacity;
-    }
-
-    SIZE_T cbChunk = cbBaseSize + SIZE_T(cbElement) * SIZE_T(nChunkCapacity);
-
-    StructArrayListEntryBase *pNewChunk =
-        (StructArrayListEntryBase *)pfnAlloc(this, cbChunk);
-
-    if (m_pChunkListTail) {
-      _ASSERTE(m_pChunkListHead);
-      m_pChunkListTail->pNext = pNewChunk;
-    } else {
-      _ASSERTE(!m_pChunkListHead);
-      m_pChunkListHead = pNewChunk;
-    }
-
-    pNewChunk->pNext = NULL;
-    m_pChunkListTail = pNewChunk;
-
-    m_nItemsInLastChunk = 0;
-    m_nLastChunkCapacity = nChunkCapacity;
-  }
+  void CreateNewChunk(SIZE_T InitialChunkLength, SIZE_T ChunkLengthGrowthFactor,
+                      SIZE_T cbElement, AllocProc *pfnAlloc, SIZE_T alignment);
 
   class ArrayIteratorBase {
   protected:
-    void StructArrayListBase::ArrayIteratorBase::SetCurrentChunk(
-        StructArrayListEntryBase *pChunk, SIZE_T nChunkCapacity) {
+    void SetCurrentChunk(StructArrayListEntryBase *pChunk,
+                         SIZE_T nChunkCapacity) {
       m_pCurrentChunk = pChunk;
 
       if (pChunk) {
@@ -684,14 +630,13 @@ private:
   };
 
   typedef std::unordered_map<Key, Value, Hasher, Comparer> HashMap;
-
   HashMap payload;
 
 public:
   SimplerHashTable(IAllocator *allocator) : payload() {}
 
   bool Lookup(Key key, Value *pVal) {
-    HashMap::const_iterator iterator = payload.find(key);
+    typename HashMap::const_iterator iterator = payload.find(key);
 
     if (iterator != payload.end()) {
       if (pVal != NULL) {
