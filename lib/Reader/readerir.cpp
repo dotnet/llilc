@@ -1418,16 +1418,74 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
     // default comparator here.
     std::sort(DerivedFields.begin(), DerivedFields.end());
 
+    // If we find overlapping fields, we'll stash them here so we can look
+    // at them collectively.
+    std::vector<std::pair<uint32_t, Type *>> OverlappingFields;
+
     // Now walk the fields in increasing offset order, adding
     // them and padding to the struct as we go.
     for (const auto &FieldPair : DerivedFields) {
       const uint32_t FieldOffset = FieldPair.first;
       CORINFO_FIELD_HANDLE FieldHandle = FieldPair.second;
 
-      // Bail out for now if we see a union type.
+      // Prepare to add this field to the collection.
+      //
+      // If this field is a ref class reference, we don't need the full
+      // details on the referred-to class, and asking for the details here
+      // causes trouble with certain recursive type graphs, for example:
+      //
+      // class A { B b; }
+      // class B : extends A { int c; }
+      //
+      // We need to know the size of A before we can finish B. So we can't
+      // ask for B's details while filling out A.
+      CORINFO_CLASS_HANDLE FieldClassHandle;
+      CorInfoType CorInfoType = getFieldType(FieldHandle, &FieldClassHandle);
+      bool GetFieldDetails = (CorInfoType != CORINFO_TYPE_CLASS);
+      Type *FieldTy = getType(CorInfoType, FieldClassHandle, GetFieldDetails);
+      // If we don't get the details now, make sure to ask
+      // for them later.
+      if (!GetFieldDetails) {
+        DeferredDetailClasses.push_back(FieldClassHandle);
+      }
+
+      // If we see an overlapping field, we need to handle it specially.
       if (FieldOffset < ByteOffset) {
-        ASSERT(IsUnion);
-        throw NotYetImplementedException("union types");
+        assert(IsUnion && "unexpected overlapping fields");
+        // TypedByref and String get special treatement which we will skip
+        // in processing overlaps.
+        assert(!IsTypedByref && "No overlap expected in this type");
+        assert(!IsString && "No overlap expected in this type");
+        if (OverlappingFields.empty()) {
+          // The previously processed field is also part of the overlap
+          // set. Back it out of the main field collection and add it to the
+          // overlap collection instead.
+          Type *PreviousFieldTy = Fields.back();
+          Fields.pop_back();
+          uint32_t PreviousSize =
+              DataLayout->getTypeSizeInBits(PreviousFieldTy) / 8;
+          uint32_t PreviousOffset = ByteOffset - PreviousSize;
+          addFieldsRecursively(OverlappingFields, PreviousOffset,
+                               PreviousFieldTy);
+        }
+
+        // Add the current field to the overlap set.
+        uint32_t FieldSize = DataLayout->getTypeSizeInBits(FieldTy) / 8;
+        addFieldsRecursively(OverlappingFields, FieldOffset, FieldTy);
+
+        // Determine new extent of the overlap region.
+        ByteOffset = std::max(ByteOffset, FieldOffset + FieldSize);
+
+        // Defer further processing until we find the end of the overlap
+        // region.
+        continue;
+      }
+
+      // This new field begins after any existing field. If we have an overlap
+      // set in the works, we need to process it now.
+      if (!OverlappingFields.empty()) {
+        createOverlapFields(OverlappingFields, Fields);
+        assert(OverlappingFields.empty());
       }
 
       // Account for padding by injecting a field.
@@ -1437,6 +1495,9 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
         Fields.push_back(PadTy);
         ByteOffset += DataLayout->getTypeSizeInBits(PadTy) / 8;
       }
+
+      // We should be at the field offset now.
+      ASSERT(FieldOffset == ByteOffset);
 
       // Validate or record this field's index in the map.
       auto FieldMapEntry = FieldIndexMap->find(FieldHandle);
@@ -1448,29 +1509,6 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
         ASSERT(FieldMapEntry->second == Fields.size());
       } else {
         (*FieldIndexMap)[FieldHandle] = Fields.size();
-      }
-
-      // Add this field to the collection.
-      //
-      // If this field is a ref class reference, we don't need the full
-      // details on the referred-to class, and asking for the details here
-      // causes trouble with certain recursive type graphs, for example:
-      //
-      // class A { B b; }
-      // class B : extends A { int c; }
-      //
-      // We need to know the size of A before we can finish B. So we can't
-      // ask for B's details while filling out A.
-
-      ASSERT(FieldOffset == ByteOffset);
-      CORINFO_CLASS_HANDLE FieldClassHandle;
-      CorInfoType CorInfoType = getFieldType(FieldHandle, &FieldClassHandle);
-      bool GetFieldDetails = (CorInfoType != CORINFO_TYPE_CLASS);
-      Type *FieldTy = getType(CorInfoType, FieldClassHandle, GetFieldDetails);
-      // If we don't get the details now, make sure to ask
-      // for them later.
-      if (!GetFieldDetails) {
-        DeferredDetailClasses.push_back(FieldClassHandle);
       }
 
       // The first field of a typed byref is really GC (interior)
@@ -1494,8 +1532,11 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
       ByteOffset += DataLayout->getTypeSizeInBits(FieldTy) / 8;
     }
 
-    // We should have detected unions up above and bailed.
-    ASSERT(!IsUnion);
+    // If we have one final overlap set in the works, we need to process it now.
+    if (!OverlappingFields.empty()) {
+      createOverlapFields(OverlappingFields, Fields);
+      assert(OverlappingFields.empty());
+    }
 
     // If this is a value class, account for any additional end
     // padding that the runtime sees fit to add.
@@ -1614,11 +1655,10 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
         }
       }
 
-      const bool IsGCPointer = FieldTy->isPointerTy() &&
-                               isManagedPointerType(cast<PointerType>(FieldTy));
-
       // LLVM's type and the runtime must agree here.
-      ASSERT(ExpectGCPointer == IsGCPointer);
+      const bool IsGCPointer = isManagedPointerType(FieldTy);
+      assert((ExpectGCPointer == IsGCPointer) &&
+             "llvm type incorrectly describes location of gc references");
     }
   }
 
@@ -1632,6 +1672,82 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
 
   // Return the struct or a pointer to it as requested.
   return ResultTy;
+}
+
+void GenIR::addFieldsRecursively(
+    std::vector<std::pair<uint32_t, llvm::Type *>> &Fields, uint32_t Offset,
+    llvm::Type *Ty) {
+  StructType *StructTy = dyn_cast<StructType>(Ty);
+  if (StructTy != nullptr) {
+    const DataLayout *DataLayout = JitContext->EE->getDataLayout();
+    for (Type *SubTy : StructTy->subtypes()) {
+      addFieldsRecursively(Fields, Offset, SubTy);
+      Offset += DataLayout->getTypeSizeInBits(SubTy) / 8;
+    }
+  } else {
+    Fields.push_back(std::make_pair(Offset, Ty));
+  }
+}
+
+void GenIR::createOverlapFields(
+    std::vector<std::pair<uint32_t, llvm::Type *>> &OverlapFields,
+    std::vector<llvm::Type *> &Fields) {
+
+  // Prepare to create and measure types.
+  LLVMContext &LLVMContext = *JitContext->LLVMContext;
+  const DataLayout *DataLayout = JitContext->EE->getDataLayout();
+
+  // Order the OverlapFields by offset.
+  std::sort(OverlapFields.begin(), OverlapFields.end());
+
+  // Walk the fields, accumulating the unique starting offsets of the gc
+  // references in increasing offset order.
+  std::vector<uint32_t> GcOffsets;
+  uint32_t OverlapEndOffset = 0;
+  for (const auto &OverlapField : OverlapFields) {
+    uint32_t Offset = OverlapField.first;
+    uint32_t Size = DataLayout->getTypeSizeInBits(OverlapField.second) / 8;
+    OverlapEndOffset = std::max(OverlapEndOffset, Offset + Size);
+    if (isManagedPointerType(OverlapField.second)) {
+      assert(((Offset % getPointerByteSize()) == 0) &&
+             "expect aligned gc pointers");
+      if (GcOffsets.empty()) {
+        GcOffsets.push_back(Offset);
+      } else {
+        uint32_t LastOffset = GcOffsets.back();
+        assert((Offset >= LastOffset) && "expect offsets to be sorted");
+        if (Offset > LastOffset) {
+          GcOffsets.push_back(Offset);
+        }
+      }
+    }
+  }
+
+  // Walk the GC reference offsets, creating representative fields.
+  uint32_t FirstOffset = OverlapFields.begin()->first;
+  uint32_t CurrentOffset = FirstOffset;
+  for (const auto &GcOffset : GcOffsets) {
+    assert((GcOffset >= CurrentOffset) && "expect offsets to be sorted");
+    uint32_t NonGcPreambleSize = GcOffset - CurrentOffset;
+    if (NonGcPreambleSize > 0) {
+      Type *NonGcTy =
+          ArrayType::get(Type::getInt8Ty(LLVMContext), NonGcPreambleSize);
+      Fields.push_back(NonGcTy);
+    }
+    Fields.push_back(getBuiltInObjectType());
+    CurrentOffset += getPointerByteSize();
+  }
+
+  // Create a trailing non-gc field if needed.
+  assert((CurrentOffset <= OverlapEndOffset) && "overlap size overflow");
+  if (CurrentOffset < OverlapEndOffset) {
+    uint32_t RemainingSize = OverlapEndOffset - CurrentOffset;
+    Type *NonGcTy = ArrayType::get(Type::getInt8Ty(LLVMContext), RemainingSize);
+    Fields.push_back(NonGcTy);
+  }
+
+  // Clear out the overlap fields as promised.
+  OverlapFields.clear();
 }
 
 Type *GenIR::getBoxedType(CORINFO_CLASS_HANDLE Class) {
@@ -2091,6 +2207,12 @@ void GenIR::createArrayOfReferenceType() {
 
   // Set result as managed pointer to the struct
   ArrayOfReferenceType = getManagedPointerType(StructTy);
+}
+
+Type *GenIR::getBuiltInObjectType() {
+  CORINFO_CLASS_HANDLE ObjectClassHandle =
+      getBuiltinClass(CorInfoClassId::CLASSID_SYSTEM_OBJECT);
+  return getType(CORINFO_TYPE_CLASS, ObjectClassHandle);
 }
 
 Type *GenIR::getBuiltInStringType() {
