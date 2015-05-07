@@ -20,89 +20,150 @@
 #include <cassert>
 #include <memory>
 
+#include "cor.h"
+#include "utility.h"
+
 #include "llvm/Support/Atomic.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/Config/llvm-config.h"
 
-/// \brief MethodName struct representing a particular method on a type.
+// The MethodID.NumArgs field may hold either of 2 values:
+//   EMPTY   => the input string was all-blank, or empty.
+//   ANYARGS => the pattern did not specify any constraint on the number of
+//              arguments.  Eg: "foo" as opposed to "foo()", "foo(3)", etc
+
+enum MethodIDState { EMPTY = -7, ANYARGS = -1 };
+
+/// \brief MethodID struct represents a Method Signature.
 ///
-/// MethodNames are the elements of MethodSet and are used to do filtering of
-/// methods when running as an "alt" JIT.
-struct MethodName {
-  /// Name
-  std::unique_ptr<std::string> Name;
-  /// Class name
+/// MethodIDs are held in a MethodSet and are used to decide which
+/// methods should be compiled when running as an "alt" JIT.
+
+class MethodID {
+public:
+  /// Class name.
   std::unique_ptr<std::string> ClassName;
-  ///  Number of method arguments.
+  /// Method Name
+  std::unique_ptr<std::string> MethodName;
+  ///  Number of method arguments.  MethodIDState::ANYARGS => not specified
   int NumArgs;
 
   /// Default constructor.
-  MethodName() : Name(nullptr), ClassName(nullptr), NumArgs(0) {}
+  MethodID()
+      : ClassName(nullptr), MethodName(nullptr),
+        NumArgs(MethodIDState::ANYARGS) {}
 
-  /// Copy constructor for move semantics.
-  MethodName(MethodName &&M) {
-    Name = std::move(M.Name);
-    ClassName = std::move(M.ClassName);
-    NumArgs = M.NumArgs;
+  /// Copy constructor.
+  MethodID(const MethodID &other) {
+    if (other.ClassName) {
+      ClassName = llvm::make_unique<std::string>(*other.ClassName);
+    } else {
+      ClassName == nullptr;
+    }
+    if (other.MethodName) {
+      MethodName = llvm::make_unique<std::string>(*other.MethodName);
+    } else {
+      MethodName = nullptr;
+    }
+    this->NumArgs = other.NumArgs;
   }
+
+  /// Copy assignment operator.
+
+  MethodID &operator=(const MethodID &other) {
+    if (this == &other)
+      return *this;
+    if (other.ClassName) {
+      ClassName = llvm::make_unique<std::string>(*other.ClassName);
+    } else {
+      ClassName = nullptr;
+    }
+    if (other.MethodName) {
+      MethodName = llvm::make_unique<std::string>(*other.MethodName);
+    } else {
+      MethodName = nullptr;
+    }
+    NumArgs = other.NumArgs;
+    return *this;
+  }
+
+  /// Parse a string into a MethodID.
+  /// Parse string S, starting at index I, into a MethodID.  The string can be
+  /// any of the following patterns:
+  /// *   => any method.
+  /// M   => method M, with any number of arguments.
+  /// C:M => method M in class C.
+  ///
+  /// C can be a simple class name, or a namespace.classname.  For example,
+  /// "Sort" or "System.Array:Sort".  (The dots in a namespace are ignored).
+  ///
+  /// M can be followed by the pattern (number) to specify its number of
+  /// arguments.  For example, .ctor(0) or Adjust(2)
+  ///
+  /// If the parse encounters an invalid pattern, we return nullptr.
+  ///
+  /// In actual use, S may consist of several such patterns, separated by one
+  /// or more spaces.  Therefore, leading spaces are skipped, but subsequent
+  /// space is significant.
+  ///
+  //  Eg: "  foo  Ns.MyClass:bar System.Array.Sort " holds 3 patterns.
+
+  static std::unique_ptr<MethodID> parse(const std::string &S, size_t &I);
+
+  // Scan the string S, starting at index I, for the next lexical token.
+  // A token is terminated by any of {space, end-of-string, :, (, )}.
+  //
+  // Return the token, or empty string if none found.  Update I to index
+  // the character just past the end of the token.
+
+  std::string scan(const std::string &S, size_t &I);
+
+  // Parse string S, starting at index I, to determine how many arguments
+  // the function specifies.  On entry, S[I] holds the character '('.
+
+  int parseArgs(const std::string &S, size_t &I);
 };
 
-/// \brief MethodSet comprising a set of MethodName objects
+/// \brief MethodSet comprises a set of MethodID objects
 ///
-/// Method set containing methods to filter for if running as the "alt" JIT.
+/// MethodSet specifies the methods to compile with the "alt" JIT.
+
 class MethodSet {
 public:
   /// Test if the MethodSet is empty.
   /// \returns true if MethodSet is empty.
+
   bool isEmpty() {
     assert(this->isInitialized());
-
-    return (this->MethodList->size() == 0);
+    return (this->MethodIDList->size() == 0);
   }
 
-  /// Test of MethodSet contains Method.
-  /// \param MethodName        Name of the method
-  /// \param ClassName         Encapsulating class of the method.
+  /// Test whether specified method is matched in current MethodSet.
+  /// \param MethodName        Name of method
+  /// \param ClassName         Encapsulating namespace+class of the method.
   /// \param sig               Pointer to method signature.
   /// \return true if Method is contained in Set.
+
   bool contains(const char *MethodName, const char *ClassName,
                 PCCOR_SIGNATURE sig);
 
-  void init(std::unique_ptr<std::string> ConfigValue) {
-    if (this->isInitialized()) {
-      return;
-    }
+  /// Initialize a new MethodSet - once only.
+  void init(std::unique_ptr<std::string> ConfigValue);
 
-    // ISSUE-TODO:1/16/2015 - Parse config value returned by the CLR
-    // into methods if any.
+  /// Check whether current MethodSet has been initialized.
+  bool isInitialized() { return MethodIDList != nullptr; }
 
-    MethodName M;
-
-    M.Name = std::move(ConfigValue);
-
-    std::list<MethodName> *ML = new std::list<MethodName>;
-
-    ML->push_front(std::move(M));
-
-    // This write should be atomic, delete if we're not the first.
-
-    llvm::sys::cas_flag Value = llvm::sys::CompareAndSwap(
-        (llvm::sys::cas_flag *)&(this->Initialized), 0x1, 0x0);
-
-    if (Value != 0x0) {
-      delete ML;
-    } else {
-      this->MethodList = ML;
-    }
-  }
-
-  bool isInitialized() { return MethodList != nullptr; }
+  /// \brief Parse the string S into one or more MethodIDs, and insert
+  /// them into current MethodSet.
+  void insert(std::unique_ptr<std::string> S);
 
 private:
-  /// Internal initialized flag.  This should only be accessed via
-  /// interlocked exchange operations.
+  /// Internal initialized flag.  This should only be accessed via interlocked
+  /// exchange operations, since several methods may be JIT'ing concurrently.
   uint32_t Initialized = 0;
-  /// MethodList implementing the set.
-  std::list<MethodName> *MethodList = nullptr;
+
+  /// MethodSigList implementing the set.
+  std::list<MethodID> *MethodIDList = nullptr;
 };
 
 /// \brief Class implementing miscellaneous conversion functions.
