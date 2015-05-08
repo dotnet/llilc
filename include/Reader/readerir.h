@@ -1322,6 +1322,11 @@ private:
   /// \returns    LLVM type that models the built-in string type.
   llvm::Type *getBuiltInStringType();
 
+  /// Get the LLVM type for the built-in object type.
+  ///
+  /// \returns    LLVM type that models the built-in object type.
+  llvm::Type *getBuiltInObjectType();
+
   /// Get the LLVM type for an array of references.
   ///
   /// Used when we know that some type must be an array but our local
@@ -1345,6 +1350,32 @@ private:
   uint32_t addArrayFields(std::vector<llvm::Type *> &Fields,
                           CorInfoType ElementCorType,
                           CORINFO_CLASS_HANDLE ElementClassHandle);
+
+  /// Add fields of a type to the field vector, expanding structures
+  /// (recursively) to the types they contain.
+  ///
+  /// \param Fields    vector of offset, type info for overlapping fields.
+  /// \param Offset    offset of the new type to add.
+  /// \param Ty        the new type to add.
+  void
+  addFieldsRecursively(std::vector<std::pair<uint32_t, llvm::Type *>> &Fields,
+                       uint32_t Offset, llvm::Type *Ty);
+
+  /// Given a set of overlapping primitive typed fields, determine the set of
+  /// representative fields to used to describe these in an LLVM type and add
+  /// them to the field collection for that type. Ensure that any GC
+  /// references are properly described. Non-GC fields will be represented by
+  /// suitably sized byte arrays.
+  ///
+  /// \param OverlapFields [in, out]  On input, vector of offset, type info for
+  ///                                 overlapping fields. Empty on on exit.
+  /// \param Fields [in, out]         On input, vector of field types found so
+  ///                                 far for the ultimate type being
+  ///                                 constructed. On exit, extended with
+  ///                                 representative fields for the overlap set.
+  void createOverlapFields(
+      std::vector<std::pair<uint32_t, llvm::Type *>> &OverlapFields,
+      std::vector<llvm::Type *> &Fields);
 
 private:
   LLILCJitContext *JitContext;
