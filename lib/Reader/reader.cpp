@@ -2485,7 +2485,6 @@ void ReaderBase::fgInsertTryEnd(EHRegion *Region) {
   irNodeExceptSetMSILOffset(TryEndNode,
                             irNodeGetMSILOffset(rgnGetLast(Region)));
   irNodeInsertAfter(rgnGetLast(Region), TryEndNode);
-  irNodeSetRegion(TryEndNode, rgnGetParent(Region));
   rgnSetLast(Region, TryEndNode);
 
   EndOfClausesNode = findTryRegionEndOfClauses(Region);
@@ -2533,14 +2532,12 @@ void ReaderBase::fgInsertEHAnnotations(EHRegion *Region) {
     // Add the region starting marker
     RegionStartNode = makeRegionStartNode(RegionType);
     rgnSetHead(Region, RegionStartNode);
-    irNodeSetRegion(RegionStartNode, Region);
 
     fgInsertBeginRegionExceptionNode(OffsetStart, RegionStartNode);
 
     // Add the region ending marker.
     RegionEndNode = makeRegionEndNode(rgnGetRegionType(Region));
     rgnSetLast(Region, RegionEndNode);
-    irNodeSetRegion(RegionEndNode, Region);
     fgInsertEndRegionExceptionNode(OffsetEnd, RegionEndNode);
 
     // Patch the REGION_TRYBODY_END field and REGION_LAST field
@@ -2659,7 +2656,6 @@ IRNode *ReaderBase::fgMakeBranchHelper(IRNode *LabelNode, IRNode *BlockNode,
 
   BranchNode = fgMakeBranch(LabelNode, BlockNode, CurrentOffset, IsConditional,
                             IsNominal);
-  irNodeSetRegion(BranchNode, fgGetRegionFromMSILOffset(CurrentOffset));
   fgAddLabelToBranchList(LabelNode, BranchNode);
   return BranchNode;
 }
@@ -2970,8 +2966,6 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
 
       // Make the switch node.
       BranchNode = fgMakeSwitch((IRNode *)GraphNode, BlockNode);
-      irNodeBranchSetMSILOffset(BranchNode, CurrentOffset);
-      irNodeSetRegion(BranchNode, fgNodeGetRegion(Block));
 
       // Create the block to hold the switch node.
       fgNodeSetEndMSILOffset(Block, NextOffset);
@@ -2999,8 +2993,6 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
       // throw/rethrow splits a block
       BlockNode = fgNodeGetStartIRNode(Block);
       fgMakeThrow(BlockNode);
-      irNodeBranchSetMSILOffset(BranchNode, CurrentOffset);
-      irNodeSetRegion(BranchNode, fgNodeGetRegion(Block));
 
       fgNodeSetEndMSILOffset(Block, NextOffset);
       Block = fgSplitBlock(Block, NextOffset, nullptr);

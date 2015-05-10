@@ -1180,12 +1180,6 @@ uint32_t irNodeGetMSILOffset(IRNode *Node);
 /// \param Offset    The MSIL offset to use
 void irNodeLabelSetMSILOffset(IRNode *Node, uint32_t Offset);
 
-/// Set the MSIL offset for this branch IR node
-///
-/// \param BranchNode      The node in question
-/// \param Offset          The MSIL offset to use
-void irNodeBranchSetMSILOffset(IRNode *BranchNode, uint32_t Offset);
-
 /// Set the MSIL offset for this exception branch IR node.
 ///
 /// \param BranchNode      The node in question
@@ -1203,12 +1197,6 @@ void irNodeInsertBefore(IRNode *InsertionPoint, IRNode *NewNode);
 /// \param InsertionPoint    Existing IR to use as insertion point
 /// \param NewNode           New IR to insert after \p InsertionPoint
 void irNodeInsertAfter(IRNode *InsertionPoint, IRNode *NewNode);
-
-/// Set the EH region for an IR node
-///
-/// \param Node        The IR node of interest
-/// \param Region      The EH region to associate with the \p Node
-void irNodeSetRegion(IRNode *Node, EHRegion *Region);
 
 /// Get the EH region for an IR node
 ///

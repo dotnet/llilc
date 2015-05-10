@@ -74,9 +74,6 @@ void irNodeLabelSetMSILOffset(IRNode *Node, uint32_t LabelMSILOffset) {
   throw NotYetImplementedException("irNodeLabelSetMSILOffset");
 }
 
-// TODO: figure out how we're going to communicate this information.
-void irNodeBranchSetMSILOffset(IRNode *BranchNode, uint32_t Offset) { return; }
-
 void irNodeExceptSetMSILOffset(IRNode *BranchNode, uint32_t Offset) {
   throw NotYetImplementedException("irNodeExceptSetMSILOffset");
 }
@@ -88,9 +85,6 @@ void irNodeInsertBefore(IRNode *InsertionPointTuple, IRNode *NewNode) {
 void irNodeInsertAfter(IRNode *InsertionPointTuple, IRNode *NewNode) {
   throw NotYetImplementedException("irNodeInsertAfter");
 }
-
-// TODO: figure out how we're going to communicate this information.
-void irNodeSetRegion(IRNode *Node, EHRegion *Region) { return; }
 
 EHRegion *irNodeGetRegion(IRNode *Node) {
   throw NotYetImplementedException("irNodeGetRegion");
