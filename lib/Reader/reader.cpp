@@ -1555,8 +1555,8 @@ static bool clauseXInsideY(const CORINFO_EH_CLAUSE *X,
 
 #ifdef _DEBUG
 int __cdecl clauseSortFunction(const void *C1, const void *C2) {
-  CORINFO_EH_CLAUSE *Clause1 = *(CORINFO_EH_CLAUSE **)C1;
-  CORINFO_EH_CLAUSE *Clause2 = *(CORINFO_EH_CLAUSE **)C2;
+  const CORINFO_EH_CLAUSE *Clause1 = *(CORINFO_EH_CLAUSE * const *)C1;
+  const CORINFO_EH_CLAUSE *Clause2 = *(CORINFO_EH_CLAUSE * const *)C2;
 
   if (clauseXInsideY(Clause1, Clause2)) {
     return -1;
