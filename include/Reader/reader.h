@@ -1539,6 +1539,9 @@ public:
                               IRNode *Node);
 
 #if !defined(NDEBUG)
+  /// \brief Debug-only reader function to print MSIL of the current method.
+  void printMSIL();
+
   /// \brief Debug-only reader function to print range of MSIL.
   ///
   /// Print the MSIL in the buffer for the given range. Output emitted via

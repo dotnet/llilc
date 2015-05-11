@@ -1189,6 +1189,7 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
   StructType *StructTy = nullptr;
   uint32_t ArrayRank = getArrayRank(ClassHandle);
   bool IsArray = ArrayRank > 0;
+  bool IsVector = isSDArray(ClassHandle);
   CORINFO_CLASS_HANDLE ArrayElementHandle = nullptr;
   CorInfoType ArrayElementType = CorInfoType::CORINFO_TYPE_UNDEF;
 
@@ -1197,8 +1198,8 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
   // for arrays with <element type, element handle, array rank> tuple as key.
   if (IsArray) {
     ArrayElementType = getChildType(ClassHandle, &ArrayElementHandle);
-    auto MapElement = ArrayTypeMap->find(
-        std::make_tuple(ArrayElementType, ArrayElementHandle, ArrayRank));
+    auto MapElement = ArrayTypeMap->find(std::make_tuple(
+        ArrayElementType, ArrayElementHandle, ArrayRank, IsVector));
     if (MapElement != ArrayTypeMap->end()) {
       ResultTy = MapElement->second;
     }
@@ -1250,7 +1251,7 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
         IsRefClass ? (Type *)getManagedPointerType(StructTy) : (Type *)StructTy;
     if (IsArray) {
       (*ArrayTypeMap)[std::make_tuple(ArrayElementType, ArrayElementHandle,
-                                      ArrayRank)] = ResultTy;
+                                      ArrayRank, IsVector)] = ResultTy;
     } else {
       (*ClassTypeMap)[ClassHandle] = ResultTy;
       (*ReverseClassTypeMap)[ResultTy] = ClassHandle;
@@ -1562,19 +1563,20 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
     }
 
     // If this is an array, there is an implicit length field
-    // and an array of elements.
+    // and an array of elements. Multidimensional arrays also
+    // have lengths and lower bounds for each dimension.
     if (IsArray) {
       // Fill in the remaining fields.
       CORINFO_CLASS_HANDLE ArrayElementHandle = nullptr;
       CorInfoType ArrayElementCorTy =
           getChildType(ClassHandle, &ArrayElementHandle);
-      ByteOffset +=
-          addArrayFields(Fields, ArrayElementCorTy, ArrayElementHandle);
+      ByteOffset += addArrayFields(Fields, IsVector, ArrayRank,
+                                   ArrayElementCorTy, ArrayElementHandle);
 
       // Verify that the offset we calculated matches the expected offset
-      // for arrays of objects (note the last field is size zero so ByteOffset
-      // is currently the offset of the array data).
-      if (ArrayElementCorTy == CORINFO_TYPE_CLASS) {
+      // for single-dimensional arrays of objects (note the last field is
+      // size zero so ByteOffset is currently the offset of the array data).
+      if (IsVector && (ArrayElementCorTy == CORINFO_TYPE_CLASS)) {
         ASSERTNR(ByteOffset == JitContext->EEInfo.offsetOfObjArrayData);
       }
     }
@@ -1767,13 +1769,7 @@ Type *GenIR::getBoxedType(CORINFO_CLASS_HANDLE Class) {
 
   // Treat the boxed type as a subclass of Object with a single field of the
   // source type.
-  CORINFO_CLASS_HANDLE ObjectClass =
-      getBuiltinClass(CorInfoClassId::CLASSID_SYSTEM_OBJECT);
-
-  const bool IsRefClass = true;
-  const bool GetRefClassFields = true;
-  Type *ObjectPtrType =
-      getClassType(ObjectClass, IsRefClass, GetRefClassFields);
+  Type *ObjectPtrType = getBuiltInObjectType();
   StructType *ObjectType =
       cast<StructType>(ObjectPtrType->getPointerElementType());
   ArrayRef<Type *> ObjectFields = ObjectType->elements();
@@ -2118,8 +2114,8 @@ bool GenIR::isUnmanagedPointerType(llvm::Type *Type) {
   return Type->isPointerTy() && !isManagedPointerType(Type);
 }
 
-uint32_t GenIR::addArrayFields(std::vector<llvm::Type *> &Fields,
-                               CorInfoType ElementCorType,
+uint32_t GenIR::addArrayFields(std::vector<llvm::Type *> &Fields, bool IsVector,
+                               uint32_t ArrayRank, CorInfoType ElementCorType,
                                CORINFO_CLASS_HANDLE ElementHandle) {
   LLVMContext &LLVMContext = *JitContext->LLVMContext;
   const DataLayout *DataLayout = JitContext->EE->getDataLayout();
@@ -2135,6 +2131,19 @@ uint32_t GenIR::addArrayFields(std::vector<llvm::Type *> &Fields,
     Type *ArrayPadTy = ArrayType::get(Type::getInt8Ty(LLVMContext), 4);
     Fields.push_back(ArrayPadTy);
     FieldByteSize += DataLayout->getTypeSizeInBits(ArrayPadTy) / 8;
+  }
+
+  // For multi-dimensional arrays and single-dimensional arrays with a non-zero
+  // lower bound there are arrays of dimension lengths and lower bounds.
+  if (!IsVector) {
+    Type *Int32Ty = Type::getInt32Ty(LLVMContext);
+    Type *ArrayOfDimLengthsTy = ArrayType::get(Int32Ty, ArrayRank);
+    Fields.push_back(ArrayOfDimLengthsTy);
+    FieldByteSize += DataLayout->getTypeSizeInBits(ArrayOfDimLengthsTy) / 8;
+
+    Type *ArrayOfDimLowerBoundsTy = ArrayType::get(Int32Ty, ArrayRank);
+    Fields.push_back(ArrayOfDimLowerBoundsTy);
+    FieldByteSize += DataLayout->getTypeSizeInBits(ArrayOfDimLowerBoundsTy) / 8;
   }
 
   Type *ElementTy = getType(ElementCorType, ElementHandle);
@@ -2199,7 +2208,10 @@ void GenIR::createArrayOfReferenceType() {
   // Fill in the rest.
   CORINFO_CLASS_HANDLE ObjectClassHandle =
       getBuiltinClass(CorInfoClassId::CLASSID_SYSTEM_OBJECT);
-  addArrayFields(Fields, CORINFO_TYPE_CLASS, ObjectClassHandle);
+  const uint32_t ArrayRank = 1;
+  const bool IsZeroLowerBoundSDArray = true;
+  addArrayFields(Fields, IsZeroLowerBoundSDArray, ArrayRank, CORINFO_TYPE_CLASS,
+                 ObjectClassHandle);
 
   // Install fields and give this a recognizable name.
   StructTy->setBody(Fields, true /* isPacked */);
@@ -3746,7 +3758,9 @@ IRNode *GenIR::genArrayElemAddress(IRNode *Array, IRNode *Index,
                                    Type *ElementTy) {
   // This call will load the array length which will ensure that the array is
   // not null.
-  Array = genBoundsCheck(Array, Index);
+  IRNode *ArrayLength = loadLen(Array);
+
+  genBoundsCheck(ArrayLength, Index);
 
   PointerType *Ty = cast<PointerType>(Array->getType());
   bool NeedToCastAddress = false;
@@ -3782,6 +3796,259 @@ IRNode *GenIR::genArrayElemAddress(IRNode *Array, IRNode *Index,
 
   return (IRNode *)Address;
 }
+
+bool GenIR::arrayGet(CORINFO_SIG_INFO *Sig, IRNode **RetVal) {
+  uint32_t Rank = 0;
+  CorInfoType ElemCorType = CORINFO_TYPE_UNDEF;
+  Type *ElementTy = nullptr;
+  const bool IsStore = false;
+  const bool IsLoadAddr = false;
+
+  if (!canExpandMDArrayRef(Sig, IsStore, IsLoadAddr, &Rank, &ElemCorType,
+                           &ElementTy)) {
+    return false;
+  }
+
+  // This call will null-check the array so the load below can assume a
+  // non-null pointer.
+  IRNode *ElementAddress = mdArrayRefAddr(Rank, ElementTy);
+
+  // Load the value
+  assert(!ElementTy->isStructTy());
+  const bool IsVolatile = false;
+  LoadInst *LoadInst = makeLoadNonNull(ElementAddress, IsVolatile);
+  uint32_t Align = convertReaderAlignment(Reader_AlignNatural);
+  LoadInst->setAlignment(Align);
+  *RetVal = convertToStackType((IRNode *)LoadInst, ElemCorType);
+
+  return true;
+}
+
+bool GenIR::arraySet(CORINFO_SIG_INFO *Sig) {
+  uint32_t Rank = 0;
+  CorInfoType ElemCorType = CORINFO_TYPE_UNDEF;
+  Type *ElementTy = nullptr;
+  const bool IsStore = true;
+  const bool IsLoadAddr = false;
+
+  if (!canExpandMDArrayRef(Sig, IsStore, IsLoadAddr, &Rank, &ElemCorType,
+                           &ElementTy)) {
+    return false;
+  }
+
+  IRNode *Value = ReaderOperandStack->pop();
+
+  // This call will null-check the array so the store below can assume a
+  // non-null pointer.
+  IRNode *ElementAddress = mdArrayRefAddr(Rank, ElementTy);
+
+  const bool IsVolatile = false;
+  // Store the value
+  if (isManagedPointerType(ElementTy)) {
+    // Since arrays are always on the heap, writing a GC pointer into an array
+    // always requires a write barrier.
+    CORINFO_RESOLVED_TOKEN *const ResolvedToken = nullptr;
+    const bool IsNonValueClass = true;
+    const bool IsValueIsPointer = false;
+    const bool IsFieldToken = false;
+    const bool IsUnchecked = true;
+    rdrCallWriteBarrierHelper(ElementAddress, Value, Reader_AlignNatural,
+                              IsVolatile, ResolvedToken, IsNonValueClass,
+                              IsValueIsPointer, IsFieldToken, IsUnchecked);
+  } else {
+    assert(!ElementTy->isStructTy());
+    makeStoreNonNull(Value, ElementAddress, IsVolatile);
+  }
+
+  return true;
+}
+
+bool GenIR::arrayAddress(CORINFO_SIG_INFO *Sig, IRNode **RetVal) {
+  uint32_t Rank = 0;
+  CorInfoType ElemCorType = CORINFO_TYPE_UNDEF;
+  Type *ElementTy = nullptr;
+  const bool IsStore = false;
+  const bool IsLoadAddr = true;
+
+  if (!canExpandMDArrayRef(Sig, IsStore, IsLoadAddr, &Rank, &ElemCorType,
+                           &ElementTy)) {
+    return false;
+  }
+
+  *RetVal = mdArrayRefAddr(Rank, ElementTy);
+  return true;
+}
+
+bool GenIR::canExpandMDArrayRef(CORINFO_SIG_INFO *Sig, bool IsStore,
+                                bool IsLoadAddr, uint32_t *Rank,
+                                CorInfoType *ElemCorType,
+                                llvm::Type **ElemType) {
+  // TODO: legacy jit limits the number of array intrinsics expanded to 50 to
+  // avoid excessive code expansion. Evaluate whether we need such a limit.
+
+  // If it's a store there is an argument for the value
+  // (doesn't count toward the rank).
+  *Rank = IsStore ? Sig->numArgs - 1 : Sig->numArgs;
+
+  // Early out if we don't want to handle it.
+  // NOTE: rank 1 requires special handling (not done here).
+  if (*Rank > ArrayIntrinMaxRank || *Rank <= 1) {
+    return false;
+  }
+
+  // Figure out the element type
+  CorInfoType CorType = CORINFO_TYPE_UNDEF;
+  CORINFO_CLASS_HANDLE Class = nullptr;
+  uint32_t ElemSize = 0;
+  if (IsStore) {
+    CORINFO_ARG_LIST_HANDLE ArgLst = Sig->args;
+    // Skip arguments for each dimension.
+    for (uint32_t R = 0; R < *Rank; R++) {
+      ArgLst = getArgNext(ArgLst);
+    }
+    CORINFO_CLASS_HANDLE ArgType;
+    CorType = strip(getArgType(Sig, ArgLst, &ArgType));
+
+    ASSERTNR(CorType != CORINFO_TYPE_VAR); // common generics trouble
+
+    if (CorType == CORINFO_TYPE_CLASS || CorType == CORINFO_TYPE_VALUECLASS) {
+      Class = getArgClass(Sig, ArgLst);
+    } else if (CorType == CORINFO_TYPE_REFANY) {
+      Class = getBuiltinClass(CLASSID_TYPED_BYREF);
+    } else {
+      Class = nullptr;
+    }
+  } else {
+    CorType = Sig->retType;
+    Class = Sig->retTypeClass;
+  }
+
+  // Bail if the element type is a value class.
+  if (CorType == CORINFO_TYPE_VALUECLASS) {
+    return false;
+  }
+
+  if (IsStore || IsLoadAddr) {
+    CORINFO_CLASS_HANDLE GCClass = Class;
+    CorInfoType GCCorType = CorType;
+
+    // If it is BYREF then we need to find the child type
+    // for the next security check.
+    if (CorType == CORINFO_TYPE_BYREF) {
+      CORINFO_CLASS_HANDLE ClassTmp = nullptr;
+      GCCorType = getChildType(Class, &ClassTmp);
+      GCClass = ClassTmp;
+    }
+
+    // See if the element is an object.
+    if (GCCorType == CORINFO_TYPE_STRING || GCCorType == CORINFO_TYPE_CLASS) {
+      // If it's not final, we can't expand due to security reasons.
+      uint32_t ClassAttribs = getClassAttribs(GCClass);
+      if (!(ClassAttribs & CORINFO_FLG_FINAL)) {
+        return false;
+      }
+    }
+  }
+
+  *ElemCorType = CorType;
+  *ElemType = getType(CorType, Class);
+
+  return true;
+}
+
+IRNode *GenIR::mdArrayRefAddr(uint32_t Rank, llvm::Type *ElemType) {
+  IRNode *Indices[ArrayIntrinMaxRank];
+  for (uint32_t I = Rank; I > 0; --I) {
+    Indices[I - 1] = ReaderOperandStack->pop();
+  }
+
+  IRNode *Array = ReaderOperandStack->pop();
+
+  // The memory layout of the array is as follows:
+  //     PTR          MethodTable for ArrayType
+  //     unsigned     length      Total number of elements in the array
+  //     unsigned     alignpad  for 64 bit alignment
+  //     unsigned     dimLengths[rank]
+  //     unsigned     dimBounds[rank]
+  //     Data elements follow this.
+  //
+  // Note that this layout is somewhat described in corinfo.h,
+  // CORINFO_Array and CORINFO_RefArray.
+  //
+  // Valid indexes are
+  //     dimBounds[i] <= index[i] < dimBounds[i] + dimLengths[i]
+
+  assert(!ElemType->isStructTy());
+
+  // Check whether the array is null. If UseExplicitNullChecks were false, we'd
+  // need to annotate the first load as exception-bearing.
+  if (UseExplicitNullChecks) {
+    Array = genNullCheck(Array);
+  }
+
+  PointerType *Ty = cast<PointerType>(Array->getType());
+  StructType *ReferentTy = cast<StructType>(Ty->getPointerElementType());
+  unsigned ArrayDataIndex = ReferentTy->getNumElements() - 1;
+  unsigned DimensionBoundsIndex = ArrayDataIndex - 1;
+  unsigned DimensionLengthsIndex = ArrayDataIndex - 2;
+
+  LLVMContext &LLVMContext = *this->JitContext->LLVMContext;
+  IRNode *ElementOffset = nullptr;
+  const bool IsVolatile = false;
+  uint32_t NaturalAlignment = convertReaderAlignment(Reader_AlignNatural);
+  Type *Int32Ty = Type::getInt32Ty(LLVMContext);
+  Type *ManagedPointerToInt32 = getManagedPointerType(Int32Ty);
+  for (uint32_t I = 0; I < Rank; ++I) {
+    IRNode *Index = Indices[I];
+
+    // Load the lower bound
+    Value *LowerBoundIndices[] = {
+        ConstantInt::get(Int32Ty, 0),
+        ConstantInt::get(Int32Ty, DimensionBoundsIndex),
+        ConstantInt::get(Int32Ty, I)};
+    Value *LowerBoundAddress =
+        LLVMBuilder->CreateInBoundsGEP(Array, LowerBoundIndices);
+    LoadInst *LowerBound = makeLoadNonNull(LowerBoundAddress, IsVolatile);
+    LowerBound->setAlignment(NaturalAlignment);
+
+    // Subtract the lower bound
+    Index = (IRNode *)LLVMBuilder->CreateSub(Index, LowerBound);
+
+    // Load the dimension length
+    Value *DimensionLengthIndices[] = {
+        ConstantInt::get(Int32Ty, 0),
+        ConstantInt::get(Int32Ty, DimensionLengthsIndex),
+        ConstantInt::get(Int32Ty, I)};
+    Value *DimensionLengthAddress =
+        LLVMBuilder->CreateInBoundsGEP(Array, DimensionLengthIndices);
+    LoadInst *DimensionLength =
+        makeLoadNonNull(DimensionLengthAddress, IsVolatile);
+    DimensionLength->setAlignment(NaturalAlignment);
+
+    // Do the range check
+    genBoundsCheck(DimensionLength, Index);
+
+    // We'll accumulate the address offset as we go
+    if (I == 0) {
+      // On the first dimension, we initialize the offset
+      ElementOffset = Index;
+    } else {
+      // On subsequent dimensions, we compute:
+      //     ElementOffset = ElementOffset*DimensionLength + Index
+      Value *MulResult = LLVMBuilder->CreateMul(ElementOffset, DimensionLength);
+      ElementOffset = (IRNode *)LLVMBuilder->CreateAdd(MulResult, Index);
+    }
+  }
+
+  // Now we are ready to compute the address of the element.
+  Value *ElementAddressIndices[] = {ConstantInt::get(Int32Ty, 0),
+                                    ConstantInt::get(Int32Ty, ArrayDataIndex),
+                                    ElementOffset};
+  Value *ElementAddress =
+      LLVMBuilder->CreateInBoundsGEP(Array, ElementAddressIndices);
+
+  return (IRNode *)ElementAddress;
+};
 
 void GenIR::branch() {
   TerminatorInst *TermInst = LLVMBuilder->GetInsertBlock()->getTerminator();
@@ -4260,31 +4527,19 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo, bool MayThrow,
   CorInfoIntrinsics IntrinsicID = CallTargetInfo->getCorInstrinsic();
   if ((0 <= IntrinsicID) && (IntrinsicID < CORINFO_INTRINSIC_Count)) {
     switch (IntrinsicID) {
-    case CORINFO_INTRINSIC_Object_GetType: {
-      // TODO: note that this method has well known semantics that the jit can
-      // use to optimize in some cases.
-      //
-      // For now just treat as a normal call.
-      break;
-    }
-    case CORINFO_INTRINSIC_GetCurrentManagedThread: {
-      // For now just treat as a normal call.
-      break;
-    }
-    case CORINFO_INTRINSIC_InitializeArray: {
-      // For now just treat as a normal call.
-      break;
-    }
+    // TODO: note that these methods have well-known semantics that the jit can
+    // use to optimize in some cases.
+    // For now treat these intrinsics as normal calls.
+    case CORINFO_INTRINSIC_RTH_GetValueInternal:
+    case CORINFO_INTRINSIC_Object_GetType:
+    case CORINFO_INTRINSIC_TypeEQ:
+    case CORINFO_INTRINSIC_TypeNEQ:
+    case CORINFO_INTRINSIC_GetCurrentManagedThread:
     case CORINFO_INTRINSIC_GetManagedThreadId: {
-      // For now just treat as a normal call.
-      break;
-    }
-    case CORINFO_INTRINSIC_RTH_GetValueInternal: {
-      // For now just treat as a normal call.
       break;
     }
     default:
-      throw NotYetImplementedException("Call intrinsic");
+      break;
     }
   }
 
@@ -5015,13 +5270,8 @@ IRNode *GenIR::genNullCheck(IRNode *Node) {
   return Node;
 }
 
-// Generate array bounds check.
-IRNode *GenIR::genBoundsCheck(IRNode *Array, IRNode *Index) {
+void GenIR::genBoundsCheck(Value *ArrayLength, Value *Index) {
   CorInfoHelpFunc HelperId = CORINFO_HELP_RNGCHKFAIL;
-
-  // This call will load the array length which will ensure that the array is
-  // not null.
-  IRNode *ArrayLength = loadLen(Array);
 
   // Insert the bound compare.
   // The unsigned conversion allows us to also catch negative indices in the
@@ -5035,8 +5285,6 @@ IRNode *GenIR::genBoundsCheck(IRNode *Array, IRNode *Index) {
   Value *UpperBoundCompare =
       LLVMBuilder->CreateICmpUGE(ConvertedIndex, ArrayLength, "BoundsCheck");
   genConditionalThrow(UpperBoundCompare, HelperId, "ThrowIndexOutOfRange");
-
-  return Array;
 }
 
 /// \brief Get the immediate target (innermost exited finally) for this leave.
@@ -5530,20 +5778,32 @@ IRNode *GenIR::getTypedAddress(IRNode *Addr, CorInfoType CorInfoType,
   // For the 'REFANY' case, verify the address carries
   // reasonable typing. Address producer must ensure this.
   if (CorInfoType == CORINFO_TYPE_REFANY) {
-    PointerType *PointerTy = cast<PointerType>(AddressTy);
-    Type *ReferentTy = PointerTy->getPointerElementType();
+    PointerType *PointerTy = dyn_cast<PointerType>(AddressTy);
+    if (PointerTy != nullptr) {
+      Type *ReferentTy = PointerTy->getPointerElementType();
 
-    // The result of the load is an object reference,
-    // So addr should be ptr to managed ptr to struct
-    if (!ReferentTy->isPointerTy()) {
-      // If we hit this we should fix the address producer, not
-      // coerce the type here.
-      throw NotYetImplementedException(
-          "unexpected type in load/store primitive");
+      // The result of the load is an object reference,
+      // So addr should be ptr to managed ptr to struct
+      if (!ReferentTy->isPointerTy()) {
+        // If we hit this we should fix the address producer, not
+        // coerce the type here.
+        throw NotYetImplementedException(
+            "unexpected type in load/store primitive");
+      }
+      PointerType *ReferentPtrTy = cast<PointerType>(ReferentTy);
+      ASSERT(isManagedPointerType(ReferentPtrTy));
+      ASSERT(ReferentTy->getPointerElementType()->isStructTy());
+    } else {
+      // This must be a nativeint, in which case we cast the address
+      // to an address of Object.
+      Type *NativeIntTy =
+          Type::getIntNTy(*JitContext->LLVMContext, TargetPointerSizeInBits);
+      ASSERT(AddressTy == NativeIntTy);
+
+      Type *ObjectType = getBuiltInObjectType();
+      TypedAddr = (IRNode *)LLVMBuilder->CreateIntToPtr(
+          Addr, getUnmanagedPointerType(ObjectType));
     }
-    PointerType *ReferentPtrTy = cast<PointerType>(ReferentTy);
-    ASSERT(isManagedPointerType(ReferentPtrTy));
-    ASSERT(ReferentTy->getPointerElementType()->isStructTy());
     // GC pointers are always naturally aligned
     Alignment = Reader_AlignNatural;
   } else {

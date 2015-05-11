@@ -252,7 +252,7 @@ public:
         std::map<CORINFO_CLASS_HANDLE, llvm::Type *> *ClassTypeMap,
         std::map<llvm::Type *, CORINFO_CLASS_HANDLE> *ReverseClassTypeMap,
         std::map<CORINFO_CLASS_HANDLE, llvm::Type *> *BoxedTypeMap,
-        std::map<std::tuple<CorInfoType, CORINFO_CLASS_HANDLE, uint32_t>,
+        std::map<std::tuple<CorInfoType, CORINFO_CLASS_HANDLE, uint32_t, bool>,
                  llvm::Type *> *ArrayTypeMap,
         std::map<CORINFO_FIELD_HANDLE, uint32_t> *FieldIndexMap)
       : ReaderBase(JitContext->JitInfo, JitContext->MethodInfo,
@@ -377,9 +377,7 @@ public:
 
   IRNode *loadLen(IRNode *Array, bool ArrayMayBeNull = true) override;
 
-  bool arrayAddress(CORINFO_SIG_INFO *Sig, IRNode **RetVal) override {
-    throw NotYetImplementedException("arrayAddress");
-  };
+  bool arrayAddress(CORINFO_SIG_INFO *Sig, IRNode **RetVal);
   IRNode *loadStringLen(IRNode *Arg1) override;
 
   IRNode *getTypeFromHandle(IRNode *HandleNode) override;
@@ -821,12 +819,8 @@ public:
 #endif
 
   // Used to expand multidimensional array access intrinsics
-  bool arrayGet(CORINFO_SIG_INFO *Sig, IRNode **RetVal) override {
-    throw NotYetImplementedException("arrayGet");
-  };
-  bool arraySet(CORINFO_SIG_INFO *Sig) override {
-    throw NotYetImplementedException("arraySet");
-  };
+  bool arrayGet(CORINFO_SIG_INFO *Sig, IRNode **RetVal) override;
+  bool arraySet(CORINFO_SIG_INFO *Sig) override;
 
 #if !defined(NDEBUG)
   void dbDumpFunction(void) override {
@@ -1078,10 +1072,9 @@ private:
 
   /// Generate array bounds check.
   ///
-  /// \param Array Array to be accessed.
+  /// \param ArrayLength Length of the array to be accessed.
   /// \param Index Index to be accessed.
-  /// \returns The input array.
-  IRNode *genBoundsCheck(IRNode *Array, IRNode *Index);
+  void genBoundsCheck(llvm::Value *ArrayLength, llvm::Value *Index);
 
   /// \brief Generate conditional throw for conv.ovf.
   ///
@@ -1228,6 +1221,32 @@ private:
                                   CorInfoType *CorType,
                                   ReaderAlignType *Alignment);
 
+  /// Check whether access to this multidimensional array can be expanded as an
+  /// intrinsic.
+  ///
+  /// \param Sig Intrinsic signature.
+  /// \param IsStore true iff this array access is a store.
+  /// \param IsLoadAddr true iff this array access is a load of an element
+  /// address.
+  /// \param Rank [OUT] Array rank.
+  /// \param ElemCorType [OUT] CorType of the array element.
+  /// \param ElemType [OUT] Type of the array element.
+  /// \returns true iff access to this multidimensional array can be expanded as
+  /// an intrinsic.
+  bool canExpandMDArrayRef(CORINFO_SIG_INFO *Sig, bool IsStore, bool IsLoadAddr,
+                           uint32_t *Rank, CorInfoType *ElemCorType,
+                           llvm::Type **ElemType);
+
+  /// Get address of an element of a multidimensional array.
+  ///
+  /// This method reads array address and indices for each dimensions from the
+  /// operand stack.
+  ///
+  /// \param Rank Array rank.
+  /// \param ElemType Type of the array element.
+  /// \returns Node representing the address of the array element.
+  IRNode *mdArrayRefAddr(uint32_t Rank, llvm::Type *ElemType);
+
   /// Create a PHI node in a block that may or may not have a terminator.
   ///
   /// \param Block Block to create the PHI node in.
@@ -1340,15 +1359,18 @@ private:
 
   /// Create the length, padding, and elements fields for an array type.
   ///
-  /// \param Fields             Field collection for the array. On input,
-  ///                           should contain only the vtable pointer.
-  /// \param ElementCorType     CorType for the array elements.
-  /// \param ElementClassHandle Class handle for the array elements.
-  /// \returns                  Byte size of the fields added. Fields updated
-  ///                           with length, padding (if needed), and the array
-  ///                           itself.
-  uint32_t addArrayFields(std::vector<llvm::Type *> &Fields,
-                          CorInfoType ElementCorType,
+  /// \param Fields                  Field collection for the array. On input,
+  ///                                should contain only the vtable pointer.
+  /// \param IsVector                true iff this is a zero-lower-bound
+  ///                                single-dimensional array.
+  /// \param ArrayRank               Rank of the array.
+  /// \param ElementCorType          CorType for the array elements.
+  /// \param ElementClassHandle      Class handle for the array elements.
+  /// \returns                       Byte size of the fields added. Fields
+  ///                                updated with length, padding (if needed),
+  ///                                and the array itself.
+  uint32_t addArrayFields(std::vector<llvm::Type *> &Fields, bool IsVector,
+                          uint32_t ArrayRank, CorInfoType ElementCorType,
                           CORINFO_CLASS_HANDLE ElementClassHandle);
 
   /// Add fields of a type to the field vector, expanding structures
@@ -1396,7 +1418,7 @@ private:
   std::map<CORINFO_CLASS_HANDLE, llvm::Type *> *ClassTypeMap;
   std::map<llvm::Type *, CORINFO_CLASS_HANDLE> *ReverseClassTypeMap;
   std::map<CORINFO_CLASS_HANDLE, llvm::Type *> *BoxedTypeMap;
-  std::map<std::tuple<CorInfoType, CORINFO_CLASS_HANDLE, uint32_t>,
+  std::map<std::tuple<CorInfoType, CORINFO_CLASS_HANDLE, uint32_t, bool>,
            llvm::Type *> *ArrayTypeMap;
   std::map<CORINFO_FIELD_HANDLE, uint32_t> *FieldIndexMap;
   std::map<llvm::BasicBlock *, FlowGraphNodeInfo> FlowGraphInfoMap;
@@ -1431,6 +1453,15 @@ private:
   llvm::PointerType *ArrayOfReferenceType; ///< Array type for use in casting
                                            ///< non-array types seen in array
                                            ///< contexts.
+  static const uint32_t ArrayIntrinMaxRank = 3; ///< This constant determines
+                                                ///< the maximum rank of an
+                                                ///< array access that we will
+                                                ///< generate code for.
+                                                ///< If the rank is larger,
+                                                ///< we'll call the runtime's
+                                                ///< helper function.
+                                                ///< This constant is from the
+                                                ///< legacy jit.
 };
 
 #endif // MSIL_READER_IR_H
