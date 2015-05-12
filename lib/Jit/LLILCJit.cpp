@@ -330,6 +330,7 @@ bool LLILCJit::readMethod(LLILCJitContext *JitContext) {
 
   Function *Func = JitContext->CurrentModule->getFunction(FuncName);
   bool IsOk = !verifyFunction(*Func, &dbgs());
+  assert(IsOk && "verification failed");
 
   if (IsOk) {
     if (DumpLevel >= ::DumpLevel::SUMMARY) {
@@ -337,8 +338,9 @@ bool LLILCJit::readMethod(LLILCJitContext *JitContext) {
     }
   } else {
     if (DumpLevel >= ::DumpLevel::SUMMARY) {
-      errs() << "Read " << FuncName << " but failed verification\n";
+      errs() << "Failed to read " << FuncName << "[verification error]\n";
     }
+    return false;
   }
 
   if (DumpLevel == ::DumpLevel::VERBOSE) {
