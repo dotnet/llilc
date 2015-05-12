@@ -103,11 +103,13 @@ endif()
 set(WITH_CORECLR  "" CACHE PATH "Path to the directory where CoreCLR was built or installed.")
 set(CORECLR_SEARCH_PATHS "")
 set(CORECLR_INCLUDE "")
+set(CORECLR_GCINFO "")
 
 if( NOT WITH_CORECLR STREQUAL "" )
   get_filename_component(WITH_CORECLR_ABS "${WITH_CORECLR}" ABSOLUTE)
   list(APPEND CORECLR_SEARCH_PATHS "${WITH_CORECLR_ABS}")
   set(CORECLR_INCLUDE "${WITH_CORECLR_ABS}/inc")
+  set(CORECLR_GCINFO "${WITH_CORECLR_ABS}/gcinfo")  
 endif()
 
 # Check for CoreCLR headers
@@ -147,6 +149,21 @@ endif()
 find_path(OPENUM_H "openum.h" PATHS "${CORECLR_INCLUDE}" NO_DEFAULT_PATH)
 if(OPENUM_H STREQUAL OPENUM_H-NOTFOUND)
   message(FATAL_ERROR "Cannot find openum.h. Please set WITH_CORECLR to a directory where CoreCLR was built or installed.")
+endif()
+
+find_path(GCINFOTYPES_H "gcinfotypes.h" PATHS "${CORECLR_INCLUDE}" NO_DEFAULT_PATH)
+if(GCINFOTYPES_H STREQUAL GCINFOENCODER_H-NOTFOUND)
+  message(FATAL_ERROR "Cannot find gcinfotypes.h. Please set WITH_CORECLR to a directory where CoreCLR was built or installed.")
+endif()
+
+find_path(GCINFOENCODER_H "gcinfoencoder.h" PATHS "${CORECLR_INCLUDE}" NO_DEFAULT_PATH)
+if(GCINFOENCODER_H STREQUAL GCINFOENCODER_H-NOTFOUND)
+  message(FATAL_ERROR "Cannot find gcinfoencoder.h. Please set WITH_CORECLR to a directory where CoreCLR was built or installed.")
+endif()
+
+find_path(GCINFOENCODER_CPP "gcinfoencoder.cpp" PATHS "${CORECLR_GCINFO}" NO_DEFAULT_PATH)
+if(GCINFOENCODER_CPP STREQUAL GCINFOENCODER_CPP-NOTFOUND)
+  message(FATAL_ERROR "Cannot find gcinfoencoder.cpp. Please set WITH_CORECLR to a directory where CoreCLR was built or installed.")
 endif()
 
 include_directories("${CORECLR_INCLUDE}")

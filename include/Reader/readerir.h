@@ -251,12 +251,13 @@ public:
         std::map<CORINFO_CLASS_HANDLE, llvm::Type *> *ClassTypeMap,
         std::map<llvm::Type *, CORINFO_CLASS_HANDLE> *ReverseClassTypeMap,
         std::map<CORINFO_CLASS_HANDLE, llvm::Type *> *BoxedTypeMap,
-        std::map<std::tuple<CorInfoType, CORINFO_CLASS_HANDLE, uint32_t>,
+        std::map<std::tuple<CorInfoType, CORINFO_CLASS_HANDLE, uint32_t, bool>,
                  llvm::Type *> *ArrayTypeMap,
         std::map<CORINFO_FIELD_HANDLE, uint32_t> *FieldIndexMap)
       : ReaderBase(JitContext->JitInfo, JitContext->MethodInfo,
                    JitContext->Flags),
-        UnmanagedCallFrame(nullptr), ThreadPointer(nullptr) {
+        UnmanagedCallFrame(nullptr), ThreadPointer(nullptr),
+        ArrayOfReferenceType(nullptr) {
     this->JitContext = JitContext;
     this->ClassTypeMap = ClassTypeMap;
     this->ReverseClassTypeMap = ReverseClassTypeMap;
@@ -380,16 +381,13 @@ public:
 
   IRNode *loadLen(IRNode *Array, bool ArrayMayBeNull = true) override;
 
-  bool arrayAddress(CORINFO_SIG_INFO *Sig, IRNode **RetVal) override {
-    throw NotYetImplementedException("arrayAddress");
-  };
+  bool arrayAddress(CORINFO_SIG_INFO *Sig, IRNode **RetVal);
   IRNode *loadStringLen(IRNode *Arg1) override;
 
   IRNode *getTypeFromHandle(IRNode *HandleNode) override;
 
-  IRNode *getValueFromRuntimeHandle(IRNode *Arg1) override {
-    throw NotYetImplementedException("getValueFromRuntimeHandle");
-  };
+  IRNode *getValueFromRuntimeHandle(IRNode *Arg1) override;
+
   IRNode *arrayGetDimLength(IRNode *Arg1, IRNode *Arg2,
                             CORINFO_CALL_INFO *CallInfo) override {
     throw NotYetImplementedException("arrayGetDimLength");
@@ -464,11 +462,8 @@ public:
   IRNode *stringGetChar(IRNode *Arg1, IRNode *Arg2) override;
   bool sqrt(IRNode *Argument, IRNode **Result) override;
 
-  // The callTarget node is only required on IA64.
   bool interlockedIntrinsicBinOp(IRNode *Arg1, IRNode *Arg2, IRNode **RetVal,
-                                 CorInfoIntrinsics IntrinsicID) override {
-    throw NotYetImplementedException("interlockedIntrinsicBinOp");
-  };
+                                 CorInfoIntrinsics IntrinsicID) override;
 
   bool interlockedCmpXchg(IRNode *Destination, IRNode *Exchange,
                           IRNode *Comparand, IRNode **Result,
@@ -646,6 +641,8 @@ public:
                        bool IsNominal) override;
   IRNode *fgMakeEndFinally(IRNode *InsertNode, EHRegion *FinallyRegion,
                            uint32_t CurrentOffset) override;
+  IRNode *fgMakeEndFault(IRNode *InsertNode, EHRegion *FaultRegion,
+                         uint32_t CurrentOffset) override;
 
   // turns an unconditional branch to the entry label into a fall-through
   // or a branch to the exit label, depending on whether it was a recursive
@@ -849,12 +846,8 @@ public:
 #endif
 
   // Used to expand multidimensional array access intrinsics
-  bool arrayGet(CORINFO_SIG_INFO *Sig, IRNode **RetVal) override {
-    throw NotYetImplementedException("arrayGet");
-  };
-  bool arraySet(CORINFO_SIG_INFO *Sig) override {
-    throw NotYetImplementedException("arraySet");
-  };
+  bool arrayGet(CORINFO_SIG_INFO *Sig, IRNode **RetVal) override;
+  bool arraySet(CORINFO_SIG_INFO *Sig) override;
 
 #if !defined(NDEBUG)
   void dbDumpFunction(void) override {
@@ -1106,10 +1099,9 @@ private:
 
   /// Generate array bounds check.
   ///
-  /// \param Array Array to be accessed.
+  /// \param ArrayLength Length of the array to be accessed.
   /// \param Index Index to be accessed.
-  /// \returns The input array.
-  IRNode *genBoundsCheck(IRNode *Array, IRNode *Index);
+  void genBoundsCheck(llvm::Value *ArrayLength, llvm::Value *Index);
 
   /// \brief Generate conditional throw for conv.ovf.
   ///
@@ -1256,6 +1248,32 @@ private:
                                   CorInfoType *CorType,
                                   ReaderAlignType *Alignment);
 
+  /// Check whether access to this multidimensional array can be expanded as an
+  /// intrinsic.
+  ///
+  /// \param Sig Intrinsic signature.
+  /// \param IsStore true iff this array access is a store.
+  /// \param IsLoadAddr true iff this array access is a load of an element
+  /// address.
+  /// \param Rank [OUT] Array rank.
+  /// \param ElemCorType [OUT] CorType of the array element.
+  /// \param ElemType [OUT] Type of the array element.
+  /// \returns true iff access to this multidimensional array can be expanded as
+  /// an intrinsic.
+  bool canExpandMDArrayRef(CORINFO_SIG_INFO *Sig, bool IsStore, bool IsLoadAddr,
+                           uint32_t *Rank, CorInfoType *ElemCorType,
+                           llvm::Type **ElemType);
+
+  /// Get address of an element of a multidimensional array.
+  ///
+  /// This method reads array address and indices for each dimensions from the
+  /// operand stack.
+  ///
+  /// \param Rank Array rank.
+  /// \param ElemType Type of the array element.
+  /// \returns Node representing the address of the array element.
+  IRNode *mdArrayRefAddr(uint32_t Rank, llvm::Type *ElemType);
+
   /// Create a PHI node in a block that may or may not have a terminator.
   ///
   /// \param Block Block to create the PHI node in.
@@ -1339,6 +1357,75 @@ private:
   /// \param Size Size of the block.
   void zeroInitBlock(llvm::Value *Address, llvm::Value *Size);
 
+  /// Check if this LLVM type appears to be a CLR array type.
+  ///
+  /// \param Type   Type to examine.
+  /// \returns      True if this type looks like a CLR array type.
+  bool isArrayType(llvm::Type *Type);
+
+  /// Get the LLVM type for the built-in string type.
+  ///
+  /// \returns    LLVM type that models the built-in string type.
+  llvm::Type *getBuiltInStringType();
+
+  /// Get the LLVM type for the built-in object type.
+  ///
+  /// \returns    LLVM type that models the built-in object type.
+  llvm::Type *getBuiltInObjectType();
+
+  /// Get the LLVM type for an array of references.
+  ///
+  /// Used when we know that some type must be an array but our local
+  /// type information thinks otherwise.
+  ///
+  /// \returns    LLVM type that models array of references.
+  llvm::PointerType *getArrayOfReferenceType();
+
+  /// Create the LLVM type for an array of references.
+  void createArrayOfReferenceType();
+
+  /// Create the length, padding, and elements fields for an array type.
+  ///
+  /// \param Fields                  Field collection for the array. On input,
+  ///                                should contain only the vtable pointer.
+  /// \param IsVector                true iff this is a zero-lower-bound
+  ///                                single-dimensional array.
+  /// \param ArrayRank               Rank of the array.
+  /// \param ElementCorType          CorType for the array elements.
+  /// \param ElementClassHandle      Class handle for the array elements.
+  /// \returns                       Byte size of the fields added. Fields
+  ///                                updated with length, padding (if needed),
+  ///                                and the array itself.
+  uint32_t addArrayFields(std::vector<llvm::Type *> &Fields, bool IsVector,
+                          uint32_t ArrayRank, CorInfoType ElementCorType,
+                          CORINFO_CLASS_HANDLE ElementClassHandle);
+
+  /// Add fields of a type to the field vector, expanding structures
+  /// (recursively) to the types they contain.
+  ///
+  /// \param Fields    vector of offset, type info for overlapping fields.
+  /// \param Offset    offset of the new type to add.
+  /// \param Ty        the new type to add.
+  void
+  addFieldsRecursively(std::vector<std::pair<uint32_t, llvm::Type *>> &Fields,
+                       uint32_t Offset, llvm::Type *Ty);
+
+  /// Given a set of overlapping primitive typed fields, determine the set of
+  /// representative fields to used to describe these in an LLVM type and add
+  /// them to the field collection for that type. Ensure that any GC
+  /// references are properly described. Non-GC fields will be represented by
+  /// suitably sized byte arrays.
+  ///
+  /// \param OverlapFields [in, out]  On input, vector of offset, type info for
+  ///                                 overlapping fields. Empty on on exit.
+  /// \param Fields [in, out]         On input, vector of field types found so
+  ///                                 far for the ultimate type being
+  ///                                 constructed. On exit, extended with
+  ///                                 representative fields for the overlap set.
+  void createOverlapFields(
+      std::vector<std::pair<uint32_t, llvm::Type *>> &OverlapFields,
+      std::vector<llvm::Type *> &Fields);
+
 private:
   LLILCJitContext *JitContext;
   ABIInfo *TheABIInfo;
@@ -1358,7 +1445,7 @@ private:
   std::map<CORINFO_CLASS_HANDLE, llvm::Type *> *ClassTypeMap;
   std::map<llvm::Type *, CORINFO_CLASS_HANDLE> *ReverseClassTypeMap;
   std::map<CORINFO_CLASS_HANDLE, llvm::Type *> *BoxedTypeMap;
-  std::map<std::tuple<CorInfoType, CORINFO_CLASS_HANDLE, uint32_t>,
+  std::map<std::tuple<CorInfoType, CORINFO_CLASS_HANDLE, uint32_t, bool>,
            llvm::Type *> *ArrayTypeMap;
   std::map<CORINFO_FIELD_HANDLE, uint32_t> *FieldIndexMap;
   std::map<llvm::BasicBlock *, FlowGraphNodeInfo> FlowGraphInfoMap;
@@ -1393,6 +1480,18 @@ private:
   uint32_t TargetPointerSizeInBits;
   const uint32_t UnmanagedAddressSpace = 0;
   const uint32_t ManagedAddressSpace = 1;
+  llvm::PointerType *ArrayOfReferenceType; ///< Array type for use in casting
+                                           ///< non-array types seen in array
+                                           ///< contexts.
+  static const uint32_t ArrayIntrinMaxRank = 3; ///< This constant determines
+                                                ///< the maximum rank of an
+                                                ///< array access that we will
+                                                ///< generate code for.
+                                                ///< If the rank is larger,
+                                                ///< we'll call the runtime's
+                                                ///< helper function.
+                                                ///< This constant is from the
+                                                ///< legacy jit.
 };
 
 #endif // MSIL_READER_IR_H

@@ -1212,6 +1212,7 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
   StructType *StructTy = nullptr;
   uint32_t ArrayRank = getArrayRank(ClassHandle);
   bool IsArray = ArrayRank > 0;
+  bool IsVector = isSDArray(ClassHandle);
   CORINFO_CLASS_HANDLE ArrayElementHandle = nullptr;
   CorInfoType ArrayElementType = CorInfoType::CORINFO_TYPE_UNDEF;
 
@@ -1220,8 +1221,8 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
   // for arrays with <element type, element handle, array rank> tuple as key.
   if (IsArray) {
     ArrayElementType = getChildType(ClassHandle, &ArrayElementHandle);
-    auto MapElement = ArrayTypeMap->find(
-        std::make_tuple(ArrayElementType, ArrayElementHandle, ArrayRank));
+    auto MapElement = ArrayTypeMap->find(std::make_tuple(
+        ArrayElementType, ArrayElementHandle, ArrayRank, IsVector));
     if (MapElement != ArrayTypeMap->end()) {
       ResultTy = MapElement->second;
     }
@@ -1273,7 +1274,7 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
         IsRefClass ? (Type *)getManagedPointerType(StructTy) : (Type *)StructTy;
     if (IsArray) {
       (*ArrayTypeMap)[std::make_tuple(ArrayElementType, ArrayElementHandle,
-                                      ArrayRank)] = ResultTy;
+                                      ArrayRank, IsVector)] = ResultTy;
     } else {
       (*ClassTypeMap)[ClassHandle] = ResultTy;
       (*ReverseClassTypeMap)[ResultTy] = ClassHandle;
@@ -1441,16 +1442,74 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
     // default comparator here.
     std::sort(DerivedFields.begin(), DerivedFields.end());
 
+    // If we find overlapping fields, we'll stash them here so we can look
+    // at them collectively.
+    std::vector<std::pair<uint32_t, Type *>> OverlappingFields;
+
     // Now walk the fields in increasing offset order, adding
     // them and padding to the struct as we go.
     for (const auto &FieldPair : DerivedFields) {
       const uint32_t FieldOffset = FieldPair.first;
       CORINFO_FIELD_HANDLE FieldHandle = FieldPair.second;
 
-      // Bail out for now if we see a union type.
+      // Prepare to add this field to the collection.
+      //
+      // If this field is a ref class reference, we don't need the full
+      // details on the referred-to class, and asking for the details here
+      // causes trouble with certain recursive type graphs, for example:
+      //
+      // class A { B b; }
+      // class B : extends A { int c; }
+      //
+      // We need to know the size of A before we can finish B. So we can't
+      // ask for B's details while filling out A.
+      CORINFO_CLASS_HANDLE FieldClassHandle;
+      CorInfoType CorInfoType = getFieldType(FieldHandle, &FieldClassHandle);
+      bool GetFieldDetails = (CorInfoType != CORINFO_TYPE_CLASS);
+      Type *FieldTy = getType(CorInfoType, FieldClassHandle, GetFieldDetails);
+      // If we don't get the details now, make sure to ask
+      // for them later.
+      if (!GetFieldDetails) {
+        DeferredDetailClasses.push_back(FieldClassHandle);
+      }
+
+      // If we see an overlapping field, we need to handle it specially.
       if (FieldOffset < ByteOffset) {
-        ASSERT(IsUnion);
-        throw NotYetImplementedException("union types");
+        assert(IsUnion && "unexpected overlapping fields");
+        // TypedByref and String get special treatement which we will skip
+        // in processing overlaps.
+        assert(!IsTypedByref && "No overlap expected in this type");
+        assert(!IsString && "No overlap expected in this type");
+        if (OverlappingFields.empty()) {
+          // The previously processed field is also part of the overlap
+          // set. Back it out of the main field collection and add it to the
+          // overlap collection instead.
+          Type *PreviousFieldTy = Fields.back();
+          Fields.pop_back();
+          uint32_t PreviousSize =
+              DataLayout->getTypeSizeInBits(PreviousFieldTy) / 8;
+          uint32_t PreviousOffset = ByteOffset - PreviousSize;
+          addFieldsRecursively(OverlappingFields, PreviousOffset,
+                               PreviousFieldTy);
+        }
+
+        // Add the current field to the overlap set.
+        uint32_t FieldSize = DataLayout->getTypeSizeInBits(FieldTy) / 8;
+        addFieldsRecursively(OverlappingFields, FieldOffset, FieldTy);
+
+        // Determine new extent of the overlap region.
+        ByteOffset = std::max(ByteOffset, FieldOffset + FieldSize);
+
+        // Defer further processing until we find the end of the overlap
+        // region.
+        continue;
+      }
+
+      // This new field begins after any existing field. If we have an overlap
+      // set in the works, we need to process it now.
+      if (!OverlappingFields.empty()) {
+        createOverlapFields(OverlappingFields, Fields);
+        assert(OverlappingFields.empty());
       }
 
       // Account for padding by injecting a field.
@@ -1460,6 +1519,9 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
         Fields.push_back(PadTy);
         ByteOffset += DataLayout->getTypeSizeInBits(PadTy) / 8;
       }
+
+      // We should be at the field offset now.
+      ASSERT(FieldOffset == ByteOffset);
 
       // Validate or record this field's index in the map.
       auto FieldMapEntry = FieldIndexMap->find(FieldHandle);
@@ -1471,29 +1533,6 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
         ASSERT(FieldMapEntry->second == Fields.size());
       } else {
         (*FieldIndexMap)[FieldHandle] = Fields.size();
-      }
-
-      // Add this field to the collection.
-      //
-      // If this field is a ref class reference, we don't need the full
-      // details on the referred-to class, and asking for the details here
-      // causes trouble with certain recursive type graphs, for example:
-      //
-      // class A { B b; }
-      // class B : extends A { int c; }
-      //
-      // We need to know the size of A before we can finish B. So we can't
-      // ask for B's details while filling out A.
-
-      ASSERT(FieldOffset == ByteOffset);
-      CORINFO_CLASS_HANDLE FieldClassHandle;
-      CorInfoType CorInfoType = getFieldType(FieldHandle, &FieldClassHandle);
-      bool GetFieldDetails = (CorInfoType != CORINFO_TYPE_CLASS);
-      Type *FieldTy = getType(CorInfoType, FieldClassHandle, GetFieldDetails);
-      // If we don't get the details now, make sure to ask
-      // for them later.
-      if (!GetFieldDetails) {
-        DeferredDetailClasses.push_back(FieldClassHandle);
       }
 
       // The first field of a typed byref is really GC (interior)
@@ -1517,8 +1556,11 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
       ByteOffset += DataLayout->getTypeSizeInBits(FieldTy) / 8;
     }
 
-    // We should have detected unions up above and bailed.
-    ASSERT(!IsUnion);
+    // If we have one final overlap set in the works, we need to process it now.
+    if (!OverlappingFields.empty()) {
+      createOverlapFields(OverlappingFields, Fields);
+      assert(OverlappingFields.empty());
+    }
 
     // If this is a value class, account for any additional end
     // padding that the runtime sees fit to add.
@@ -1544,39 +1586,22 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
     }
 
     // If this is an array, there is an implicit length field
-    // and an array of elements.
+    // and an array of elements. Multidimensional arrays also
+    // have lengths and lower bounds for each dimension.
     if (IsArray) {
-      // Array length is (u)int32 ....
-      Type *ArrayLengthTy = Type::getInt32Ty(LLVMContext);
-      Fields.push_back(ArrayLengthTy);
-      ByteOffset += DataLayout->getTypeSizeInBits(ArrayLengthTy) / 8;
-
-      // For 64 bit targets there's then a 32 bit pad.
-      const uint32_t PointerSize = DataLayout->getPointerSizeInBits();
-      if (PointerSize == 64) {
-        Type *ArrayPadTy = ArrayType::get(Type::getInt8Ty(LLVMContext), 4);
-        Fields.push_back(ArrayPadTy);
-        ByteOffset += DataLayout->getTypeSizeInBits(ArrayPadTy) / 8;
-      }
-
+      // Fill in the remaining fields.
       CORINFO_CLASS_HANDLE ArrayElementHandle = nullptr;
       CorInfoType ArrayElementCorTy =
           getChildType(ClassHandle, &ArrayElementHandle);
+      ByteOffset += addArrayFields(Fields, IsVector, ArrayRank,
+                                   ArrayElementCorTy, ArrayElementHandle);
 
-      Type *ElementTy = getType(ArrayElementCorTy, ArrayElementHandle);
-
-      // Next comes the array of elements. Nominally 0 size so no
-      // ByteOffset update.
       // Verify that the offset we calculated matches the expected offset
-      // for arrays of objects.
-      if (ArrayElementCorTy == CORINFO_TYPE_CLASS) {
+      // for single-dimensional arrays of objects (note the last field is
+      // size zero so ByteOffset is currently the offset of the array data).
+      if (IsVector && (ArrayElementCorTy == CORINFO_TYPE_CLASS)) {
         ASSERTNR(ByteOffset == JitContext->EEInfo.offsetOfObjArrayData);
       }
-
-      // TODO: There may be some inter-element padding here for arrays
-      // of value classes.
-      Type *ArrayOfElementTy = ArrayType::get(ElementTy, 0);
-      Fields.push_back(ArrayOfElementTy);
     }
   }
 
@@ -1655,11 +1680,10 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
         }
       }
 
-      const bool IsGCPointer = FieldTy->isPointerTy() &&
-                               isManagedPointerType(cast<PointerType>(FieldTy));
-
       // LLVM's type and the runtime must agree here.
-      ASSERT(ExpectGCPointer == IsGCPointer);
+      const bool IsGCPointer = isManagedPointerType(FieldTy);
+      assert((ExpectGCPointer == IsGCPointer) &&
+             "llvm type incorrectly describes location of gc references");
     }
   }
 
@@ -1673,6 +1697,82 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
 
   // Return the struct or a pointer to it as requested.
   return ResultTy;
+}
+
+void GenIR::addFieldsRecursively(
+    std::vector<std::pair<uint32_t, llvm::Type *>> &Fields, uint32_t Offset,
+    llvm::Type *Ty) {
+  StructType *StructTy = dyn_cast<StructType>(Ty);
+  if (StructTy != nullptr) {
+    const DataLayout *DataLayout = JitContext->EE->getDataLayout();
+    for (Type *SubTy : StructTy->subtypes()) {
+      addFieldsRecursively(Fields, Offset, SubTy);
+      Offset += DataLayout->getTypeSizeInBits(SubTy) / 8;
+    }
+  } else {
+    Fields.push_back(std::make_pair(Offset, Ty));
+  }
+}
+
+void GenIR::createOverlapFields(
+    std::vector<std::pair<uint32_t, llvm::Type *>> &OverlapFields,
+    std::vector<llvm::Type *> &Fields) {
+
+  // Prepare to create and measure types.
+  LLVMContext &LLVMContext = *JitContext->LLVMContext;
+  const DataLayout *DataLayout = JitContext->EE->getDataLayout();
+
+  // Order the OverlapFields by offset.
+  std::sort(OverlapFields.begin(), OverlapFields.end());
+
+  // Walk the fields, accumulating the unique starting offsets of the gc
+  // references in increasing offset order.
+  std::vector<uint32_t> GcOffsets;
+  uint32_t OverlapEndOffset = 0;
+  for (const auto &OverlapField : OverlapFields) {
+    uint32_t Offset = OverlapField.first;
+    uint32_t Size = DataLayout->getTypeSizeInBits(OverlapField.second) / 8;
+    OverlapEndOffset = std::max(OverlapEndOffset, Offset + Size);
+    if (isManagedPointerType(OverlapField.second)) {
+      assert(((Offset % getPointerByteSize()) == 0) &&
+             "expect aligned gc pointers");
+      if (GcOffsets.empty()) {
+        GcOffsets.push_back(Offset);
+      } else {
+        uint32_t LastOffset = GcOffsets.back();
+        assert((Offset >= LastOffset) && "expect offsets to be sorted");
+        if (Offset > LastOffset) {
+          GcOffsets.push_back(Offset);
+        }
+      }
+    }
+  }
+
+  // Walk the GC reference offsets, creating representative fields.
+  uint32_t FirstOffset = OverlapFields.begin()->first;
+  uint32_t CurrentOffset = FirstOffset;
+  for (const auto &GcOffset : GcOffsets) {
+    assert((GcOffset >= CurrentOffset) && "expect offsets to be sorted");
+    uint32_t NonGcPreambleSize = GcOffset - CurrentOffset;
+    if (NonGcPreambleSize > 0) {
+      Type *NonGcTy =
+          ArrayType::get(Type::getInt8Ty(LLVMContext), NonGcPreambleSize);
+      Fields.push_back(NonGcTy);
+    }
+    Fields.push_back(getBuiltInObjectType());
+    CurrentOffset += getPointerByteSize();
+  }
+
+  // Create a trailing non-gc field if needed.
+  assert((CurrentOffset <= OverlapEndOffset) && "overlap size overflow");
+  if (CurrentOffset < OverlapEndOffset) {
+    uint32_t RemainingSize = OverlapEndOffset - CurrentOffset;
+    Type *NonGcTy = ArrayType::get(Type::getInt8Ty(LLVMContext), RemainingSize);
+    Fields.push_back(NonGcTy);
+  }
+
+  // Clear out the overlap fields as promised.
+  OverlapFields.clear();
 }
 
 Type *GenIR::getBoxedType(CORINFO_CLASS_HANDLE Class) {
@@ -1692,13 +1792,7 @@ Type *GenIR::getBoxedType(CORINFO_CLASS_HANDLE Class) {
 
   // Treat the boxed type as a subclass of Object with a single field of the
   // source type.
-  CORINFO_CLASS_HANDLE ObjectClass =
-      getBuiltinClass(CorInfoClassId::CLASSID_SYSTEM_OBJECT);
-
-  const bool IsRefClass = true;
-  const bool GetRefClassFields = true;
-  Type *ObjectPtrType =
-      getClassType(ObjectClass, IsRefClass, GetRefClassFields);
+  Type *ObjectPtrType = getBuiltInObjectType();
   StructType *ObjectType =
       cast<StructType>(ObjectPtrType->getPointerElementType());
   ArrayRef<Type *> ObjectFields = ObjectType->elements();
@@ -2043,6 +2137,125 @@ bool GenIR::isUnmanagedPointerType(llvm::Type *Type) {
   return Type->isPointerTy() && !isManagedPointerType(Type);
 }
 
+uint32_t GenIR::addArrayFields(std::vector<llvm::Type *> &Fields, bool IsVector,
+                               uint32_t ArrayRank, CorInfoType ElementCorType,
+                               CORINFO_CLASS_HANDLE ElementHandle) {
+  LLVMContext &LLVMContext = *JitContext->LLVMContext;
+  const DataLayout *DataLayout = JitContext->EE->getDataLayout();
+  uint32_t FieldByteSize = 0;
+  // Array length is (u)int32 ....
+  Type *ArrayLengthTy = Type::getInt32Ty(LLVMContext);
+  Fields.push_back(ArrayLengthTy);
+  FieldByteSize += DataLayout->getTypeSizeInBits(ArrayLengthTy) / 8;
+
+  // For 64 bit targets there's then a 32 bit pad.
+  const uint32_t PointerSize = DataLayout->getPointerSizeInBits();
+  if (PointerSize == 64) {
+    Type *ArrayPadTy = ArrayType::get(Type::getInt8Ty(LLVMContext), 4);
+    Fields.push_back(ArrayPadTy);
+    FieldByteSize += DataLayout->getTypeSizeInBits(ArrayPadTy) / 8;
+  }
+
+  // For multi-dimensional arrays and single-dimensional arrays with a non-zero
+  // lower bound there are arrays of dimension lengths and lower bounds.
+  if (!IsVector) {
+    Type *Int32Ty = Type::getInt32Ty(LLVMContext);
+    Type *ArrayOfDimLengthsTy = ArrayType::get(Int32Ty, ArrayRank);
+    Fields.push_back(ArrayOfDimLengthsTy);
+    FieldByteSize += DataLayout->getTypeSizeInBits(ArrayOfDimLengthsTy) / 8;
+
+    Type *ArrayOfDimLowerBoundsTy = ArrayType::get(Int32Ty, ArrayRank);
+    Fields.push_back(ArrayOfDimLowerBoundsTy);
+    FieldByteSize += DataLayout->getTypeSizeInBits(ArrayOfDimLowerBoundsTy) / 8;
+  }
+
+  Type *ElementTy = getType(ElementCorType, ElementHandle);
+  Type *ArrayOfElementTy = ArrayType::get(ElementTy, 0);
+  Fields.push_back(ArrayOfElementTy);
+  return FieldByteSize;
+}
+
+bool GenIR::isArrayType(llvm::Type *ArrayTy) {
+  // Do some basic sanity checks that this type is one we created to model
+  // a CLR array. Note we can't be 100% sure without keeping a whitelist
+  // when we create these types.
+  assert(isManagedPointerType(ArrayTy) && "expected managed pointer");
+  Type *Type = cast<PointerType>(ArrayTy)->getPointerElementType();
+  if (!Type->isStructTy()) {
+    return false;
+  }
+
+  // An array type may have varying fields depending on pointer size.
+  // Array payload is the last field and is a zero-element LLVM array.
+  unsigned int IndexOfElements = getPointerByteSize() == 4 ? 2 : 3;
+  StructType *ArrayStructType = cast<StructType>(Type);
+  unsigned ElementCount = ArrayStructType->getNumElements();
+  if (ElementCount != (IndexOfElements + 1)) {
+    return false;
+  }
+  llvm::Type *ElementsArrayFieldType =
+      ArrayStructType->getContainedType(IndexOfElements);
+  if (!ElementsArrayFieldType->isArrayTy()) {
+    return false;
+  }
+  ArrayType *ElementsArrayType = cast<ArrayType>(ElementsArrayFieldType);
+  if (!ElementsArrayType->getArrayNumElements() == 0) {
+    return false;
+  }
+
+  return true;
+}
+
+PointerType *GenIR::getArrayOfReferenceType() {
+  if (ArrayOfReferenceType == nullptr) {
+    createArrayOfReferenceType();
+  }
+  assert((ArrayOfReferenceType != nullptr) && "should be initialized");
+  return ArrayOfReferenceType;
+}
+
+void GenIR::createArrayOfReferenceType() {
+  // It might make sense for this to create System.__Canon[]* but there's
+  // no builtin for the canon type. So we create System.Object[] *.
+  assert((ArrayOfReferenceType == nullptr) && "should not be initialized");
+  LLVMContext &LLVMContext = *JitContext->LLVMContext;
+  StructType *StructTy = StructType::create(LLVMContext);
+  std::vector<Type *> Fields;
+
+  // Vtable is an array of pointer-sized things.
+  Type *VtableSlotTy = Type::getIntNPtrTy(LLVMContext, TargetPointerSizeInBits);
+  Type *VtableTy = ArrayType::get(VtableSlotTy, 0);
+  Type *VtablePtrTy = VtableTy->getPointerTo();
+  Fields.push_back(VtablePtrTy);
+
+  // Fill in the rest.
+  CORINFO_CLASS_HANDLE ObjectClassHandle =
+      getBuiltinClass(CorInfoClassId::CLASSID_SYSTEM_OBJECT);
+  const uint32_t ArrayRank = 1;
+  const bool IsZeroLowerBoundSDArray = true;
+  addArrayFields(Fields, IsZeroLowerBoundSDArray, ArrayRank, CORINFO_TYPE_CLASS,
+                 ObjectClassHandle);
+
+  // Install fields and give this a recognizable name.
+  StructTy->setBody(Fields, true /* isPacked */);
+  StructTy->setName("__ArrayOfReferences");
+
+  // Set result as managed pointer to the struct
+  ArrayOfReferenceType = getManagedPointerType(StructTy);
+}
+
+Type *GenIR::getBuiltInObjectType() {
+  CORINFO_CLASS_HANDLE ObjectClassHandle =
+      getBuiltinClass(CorInfoClassId::CLASSID_SYSTEM_OBJECT);
+  return getType(CORINFO_TYPE_CLASS, ObjectClassHandle);
+}
+
+Type *GenIR::getBuiltInStringType() {
+  CORINFO_CLASS_HANDLE StringClassHandle =
+      getBuiltinClass(CorInfoClassId::CLASSID_STRING);
+  return getType(CORINFO_TYPE_CLASS, StringClassHandle);
+}
+
 #pragma endregion
 
 #pragma region FLOW GRAPH
@@ -2217,9 +2430,7 @@ IRNode *GenIR::fgMakeThrow(IRNode *Insert) {
 
 IRNode *GenIR::fgMakeEndFinally(IRNode *InsertNode, EHRegion *FinallyRegion,
                                 uint32_t CurrentOffset) {
-  if (FinallyRegion == nullptr) {
-    throw NotYetImplementedException("endfinally null region");
-  }
+  assert(FinallyRegion != nullptr);
 
   BasicBlock *Block = (BasicBlock *)InsertNode;
   SwitchInst *Switch = FinallyRegion->EndFinallySwitch;
@@ -2245,6 +2456,19 @@ IRNode *GenIR::fgMakeEndFinally(IRNode *InsertNode, EHRegion *FinallyRegion,
   // Generate and return branch to the block that holds the switch
   LLVMBuilder->SetInsertPoint(Block);
   return (IRNode *)LLVMBuilder->CreateBr(TargetBlock);
+}
+
+IRNode *GenIR::fgMakeEndFault(IRNode *InsertNode, EHRegion *FaultRegion,
+                              uint32_t CurrentOffset) {
+  // Fault handlers can only be reached by exceptions, and we don't
+  // yet support handling exceptions, so this can't be reached.
+  // Generate an UnreachableInst to keep the IR well-formed.
+  // When we do support handlers, this will become a branch to the
+  // next outer handler.
+
+  BasicBlock *Block = (BasicBlock *)InsertNode;
+  LLVMBuilder->SetInsertPoint(Block);
+  return (IRNode *)LLVMBuilder->CreateUnreachable();
 }
 
 void GenIR::beginFlowGraphNode(FlowGraphNode *Fg, uint32_t CurrOffset,
@@ -2711,18 +2935,9 @@ IRNode *GenIR::loadConstantR8(double Value) {
 
 // Load the array length field.
 IRNode *GenIR::loadLen(IRNode *Array, bool ArrayMayBeNull) {
-  // Validate address is ptr to struct.
+  // Address should at least be a managed pointer.
   Type *AddressTy = Array->getType();
   ASSERT(AddressTy->isPointerTy());
-  Type *ArrayTy = cast<PointerType>(AddressTy)->getPointerElementType();
-  ASSERT(ArrayTy->isStructTy());
-
-  // TODO: verify this struct looks like an array... field index 1 is at
-  // offset 4 with type i32; last "field" is zero sized array.
-  StructType *ArrayStructTy = cast<StructType>(ArrayTy);
-  if (ArrayStructTy->getNumElements() < 3) {
-    throw NotYetImplementedException("unexpected type to loadlen");
-  }
 
   if (ArrayMayBeNull && UseExplicitNullChecks) {
     // Check whether the array pointer, rather than the pointer to its
@@ -2731,7 +2946,14 @@ IRNode *GenIR::loadLen(IRNode *Array, bool ArrayMayBeNull) {
     ArrayMayBeNull = false;
   }
 
-  // Length field is at field index 1. Get its address.
+  // See if this type looks like the ones we use to describe arrays.
+  if (!isArrayType(AddressTy)) {
+    // This must be System.__Canon or similar. Cast to array of references.
+    Array = (IRNode *)LLVMBuilder->CreatePointerCast(Array,
+                                                     getArrayOfReferenceType());
+  }
+
+  // Length field is at index 1. Get its address.
   Value *LengthFieldAddress = LLVMBuilder->CreateStructGEP(nullptr, Array, 1);
 
   // Load and return the length.
@@ -2746,12 +2968,11 @@ IRNode *GenIR::loadLen(IRNode *Array, bool ArrayMayBeNull) {
 
 // Load the string length field.
 IRNode *GenIR::loadStringLen(IRNode *Address) {
-  // Validate address is ptr to struct.
+  // Address should be a managed pointer type.
   Type *AddressTy = Address->getType();
-  ASSERT(AddressTy->isPointerTy());
-  Type *StringTy = cast<PointerType>(AddressTy)->getPointerElementType();
-  ASSERT(StringTy->isStructTy());
+  ASSERT(isManagedPointerType(AddressTy));
 
+  // Optionally do an explicit null check.
   bool NullCheckBeforeLoad = UseExplicitNullChecks;
   if (NullCheckBeforeLoad) {
     // Check whether the string pointer, rather than the pointer to its
@@ -2759,13 +2980,13 @@ IRNode *GenIR::loadStringLen(IRNode *Address) {
     Address = genNullCheck(Address);
   }
 
-  // Verify this type is a string.
-  StructType *StringStructTy = cast<StructType>(StringTy);
-  if (StringStructTy->getStructNumElements() < 3) {
-    throw NotYetImplementedException("unexpected type in strlen");
+  // See if this type is the one we use to model strings, and if not, do the
+  // requisite cast (note we can see System.__Canon* here, for instance).
+  Type *BuiltInStringType = getBuiltInStringType();
+  if (AddressTy != BuiltInStringType) {
+    Address =
+        (IRNode *)LLVMBuilder->CreatePointerCast(Address, BuiltInStringType);
   }
-  StringRef StringName = StringStructTy->getStructName();
-  ASSERT(StringName.startswith("System.String"));
 
   // Length field is at field index 1. Get its address.
   Value *LengthFieldAddress = LLVMBuilder->CreateStructGEP(nullptr, Address, 1);
@@ -2778,21 +2999,24 @@ IRNode *GenIR::loadStringLen(IRNode *Address) {
 
 // Load a character from a string.
 IRNode *GenIR::stringGetChar(IRNode *Address, IRNode *Index) {
-  // Validate address is ptr to struct.
+  // Address should be a managed pointer type.
   Type *AddressTy = Address->getType();
-  ASSERT(AddressTy->isPointerTy());
-  Type *StringTy = cast<PointerType>(AddressTy)->getPointerElementType();
-  ASSERT(StringTy->isStructTy());
+  ASSERT(isManagedPointerType(AddressTy));
 
-  // Verify this type is a string.
-  StringRef StringName = cast<StructType>(StringTy)->getStructName();
-  ASSERT(StringName.startswith("System.String"));
-
+  // Optionally do an explicit null check.
   bool NullCheckBeforeLoad = UseExplicitNullChecks;
   if (NullCheckBeforeLoad) {
     // Check whether the string pointer, rather than the pointer to its
     // length field, is null.
     Address = genNullCheck(Address);
+  }
+
+  // See if this type is the one we use to model strings, and if not, do the
+  // requisite cast (note we can see System.__Canon* here, for instance).
+  Type *BuiltInStringType = getBuiltInStringType();
+  if (AddressTy != BuiltInStringType) {
+    Address =
+        (IRNode *)LLVMBuilder->CreatePointerCast(Address, BuiltInStringType);
   }
 
   // Cache the context
@@ -3802,6 +4026,10 @@ Type *GenIR::getArrayElementType(IRNode *Array,
   CORINFO_CLASS_HANDLE ClassHandle = nullptr;
   if (*CorType == CorInfoType::CORINFO_TYPE_CLASS) {
     PointerType *Ty = cast<PointerType>(Array->getType());
+    if (!isArrayType(Ty)) {
+      // Likely System.__Canon*. Assume array of object.
+      Ty = getArrayOfReferenceType();
+    }
     StructType *ReferentTy = cast<StructType>(Ty->getPointerElementType());
     unsigned int NumElements = ReferentTy->getNumElements();
     ArrayType *ArrayTy =
@@ -3826,14 +4054,23 @@ IRNode *GenIR::genArrayElemAddress(IRNode *Array, IRNode *Index,
                                    Type *ElementTy) {
   // This call will load the array length which will ensure that the array is
   // not null.
-  Array = genBoundsCheck(Array, Index);
+  IRNode *ArrayLength = loadLen(Array);
+
+  genBoundsCheck(ArrayLength, Index);
 
   PointerType *Ty = cast<PointerType>(Array->getType());
+  bool NeedToCastAddress = false;
+  if (!isArrayType(Ty)) {
+    Ty = getArrayOfReferenceType();
+    Array = (IRNode *)LLVMBuilder->CreatePointerCast(Array, Ty);
+    NeedToCastAddress = true;
+  }
   StructType *ReferentTy = cast<StructType>(Ty->getPointerElementType());
   unsigned int RawArrayStructFieldIndex = ReferentTy->getNumElements() - 1;
   Type *ArrayTy = ReferentTy->getElementType(RawArrayStructFieldIndex);
+
   ASSERTNR(ArrayTy->isArrayTy());
-  ASSERTNR(ArrayTy->getArrayElementType() == ElementTy);
+  ASSERTNR(NeedToCastAddress || (ArrayTy->getArrayElementType() == ElementTy));
 
   LLVMContext &Context = *this->JitContext->LLVMContext;
 
@@ -3846,8 +4083,268 @@ IRNode *GenIR::genArrayElemAddress(IRNode *Array, IRNode *Index,
       ConstantInt::get(Type::getInt32Ty(Context), RawArrayStructFieldIndex),
       Index};
 
-  return (IRNode *)LLVMBuilder->CreateInBoundsGEP(Array, Indices);
+  Value *Address = LLVMBuilder->CreateInBoundsGEP(Array, Indices);
+
+  if (NeedToCastAddress) {
+    Type *ResultTy = getManagedPointerType(ElementTy);
+    Address = LLVMBuilder->CreatePointerCast(Address, ResultTy);
+  }
+
+  return (IRNode *)Address;
 }
+
+bool GenIR::arrayGet(CORINFO_SIG_INFO *Sig, IRNode **RetVal) {
+  uint32_t Rank = 0;
+  CorInfoType ElemCorType = CORINFO_TYPE_UNDEF;
+  Type *ElementTy = nullptr;
+  const bool IsStore = false;
+  const bool IsLoadAddr = false;
+
+  if (!canExpandMDArrayRef(Sig, IsStore, IsLoadAddr, &Rank, &ElemCorType,
+                           &ElementTy)) {
+    return false;
+  }
+
+  // This call will null-check the array so the load below can assume a
+  // non-null pointer.
+  IRNode *ElementAddress = mdArrayRefAddr(Rank, ElementTy);
+
+  // Load the value
+  assert(!ElementTy->isStructTy());
+  const bool IsVolatile = false;
+  LoadInst *LoadInst = makeLoadNonNull(ElementAddress, IsVolatile);
+  uint32_t Align = convertReaderAlignment(Reader_AlignNatural);
+  LoadInst->setAlignment(Align);
+  *RetVal = convertToStackType((IRNode *)LoadInst, ElemCorType);
+
+  return true;
+}
+
+bool GenIR::arraySet(CORINFO_SIG_INFO *Sig) {
+  uint32_t Rank = 0;
+  CorInfoType ElemCorType = CORINFO_TYPE_UNDEF;
+  Type *ElementTy = nullptr;
+  const bool IsStore = true;
+  const bool IsLoadAddr = false;
+
+  if (!canExpandMDArrayRef(Sig, IsStore, IsLoadAddr, &Rank, &ElemCorType,
+                           &ElementTy)) {
+    return false;
+  }
+
+  IRNode *Value = ReaderOperandStack->pop();
+
+  // This call will null-check the array so the store below can assume a
+  // non-null pointer.
+  IRNode *ElementAddress = mdArrayRefAddr(Rank, ElementTy);
+
+  const bool IsVolatile = false;
+  // Store the value
+  if (isManagedPointerType(ElementTy)) {
+    // Since arrays are always on the heap, writing a GC pointer into an array
+    // always requires a write barrier.
+    CORINFO_RESOLVED_TOKEN *const ResolvedToken = nullptr;
+    const bool IsNonValueClass = true;
+    const bool IsValueIsPointer = false;
+    const bool IsFieldToken = false;
+    const bool IsUnchecked = true;
+    rdrCallWriteBarrierHelper(ElementAddress, Value, Reader_AlignNatural,
+                              IsVolatile, ResolvedToken, IsNonValueClass,
+                              IsValueIsPointer, IsFieldToken, IsUnchecked);
+  } else {
+    assert(!ElementTy->isStructTy());
+    makeStoreNonNull(Value, ElementAddress, IsVolatile);
+  }
+
+  return true;
+}
+
+bool GenIR::arrayAddress(CORINFO_SIG_INFO *Sig, IRNode **RetVal) {
+  uint32_t Rank = 0;
+  CorInfoType ElemCorType = CORINFO_TYPE_UNDEF;
+  Type *ElementTy = nullptr;
+  const bool IsStore = false;
+  const bool IsLoadAddr = true;
+
+  if (!canExpandMDArrayRef(Sig, IsStore, IsLoadAddr, &Rank, &ElemCorType,
+                           &ElementTy)) {
+    return false;
+  }
+
+  *RetVal = mdArrayRefAddr(Rank, ElementTy);
+  return true;
+}
+
+bool GenIR::canExpandMDArrayRef(CORINFO_SIG_INFO *Sig, bool IsStore,
+                                bool IsLoadAddr, uint32_t *Rank,
+                                CorInfoType *ElemCorType,
+                                llvm::Type **ElemType) {
+  // TODO: legacy jit limits the number of array intrinsics expanded to 50 to
+  // avoid excessive code expansion. Evaluate whether we need such a limit.
+
+  // If it's a store there is an argument for the value
+  // (doesn't count toward the rank).
+  *Rank = IsStore ? Sig->numArgs - 1 : Sig->numArgs;
+
+  // Early out if we don't want to handle it.
+  // NOTE: rank 1 requires special handling (not done here).
+  if (*Rank > ArrayIntrinMaxRank || *Rank <= 1) {
+    return false;
+  }
+
+  // Figure out the element type
+  CorInfoType CorType = CORINFO_TYPE_UNDEF;
+  CORINFO_CLASS_HANDLE Class = nullptr;
+  uint32_t ElemSize = 0;
+  if (IsStore) {
+    CORINFO_ARG_LIST_HANDLE ArgLst = Sig->args;
+    // Skip arguments for each dimension.
+    for (uint32_t R = 0; R < *Rank; R++) {
+      ArgLst = getArgNext(ArgLst);
+    }
+    CORINFO_CLASS_HANDLE ArgType;
+    CorType = strip(getArgType(Sig, ArgLst, &ArgType));
+
+    ASSERTNR(CorType != CORINFO_TYPE_VAR); // common generics trouble
+
+    if (CorType == CORINFO_TYPE_CLASS || CorType == CORINFO_TYPE_VALUECLASS) {
+      Class = getArgClass(Sig, ArgLst);
+    } else if (CorType == CORINFO_TYPE_REFANY) {
+      Class = getBuiltinClass(CLASSID_TYPED_BYREF);
+    } else {
+      Class = nullptr;
+    }
+  } else {
+    CorType = Sig->retType;
+    Class = Sig->retTypeClass;
+  }
+
+  // Bail if the element type is a value class.
+  if (CorType == CORINFO_TYPE_VALUECLASS) {
+    return false;
+  }
+
+  if (IsStore || IsLoadAddr) {
+    CORINFO_CLASS_HANDLE GCClass = Class;
+    CorInfoType GCCorType = CorType;
+
+    // If it is BYREF then we need to find the child type
+    // for the next security check.
+    if (CorType == CORINFO_TYPE_BYREF) {
+      CORINFO_CLASS_HANDLE ClassTmp = nullptr;
+      GCCorType = getChildType(Class, &ClassTmp);
+      GCClass = ClassTmp;
+    }
+
+    // See if the element is an object.
+    if (GCCorType == CORINFO_TYPE_STRING || GCCorType == CORINFO_TYPE_CLASS) {
+      // If it's not final, we can't expand due to security reasons.
+      uint32_t ClassAttribs = getClassAttribs(GCClass);
+      if (!(ClassAttribs & CORINFO_FLG_FINAL)) {
+        return false;
+      }
+    }
+  }
+
+  *ElemCorType = CorType;
+  *ElemType = getType(CorType, Class);
+
+  return true;
+}
+
+IRNode *GenIR::mdArrayRefAddr(uint32_t Rank, llvm::Type *ElemType) {
+  IRNode *Indices[ArrayIntrinMaxRank];
+  for (uint32_t I = Rank; I > 0; --I) {
+    Indices[I - 1] = ReaderOperandStack->pop();
+  }
+
+  IRNode *Array = ReaderOperandStack->pop();
+
+  // The memory layout of the array is as follows:
+  //     PTR          MethodTable for ArrayType
+  //     unsigned     length      Total number of elements in the array
+  //     unsigned     alignpad  for 64 bit alignment
+  //     unsigned     dimLengths[rank]
+  //     unsigned     dimBounds[rank]
+  //     Data elements follow this.
+  //
+  // Note that this layout is somewhat described in corinfo.h,
+  // CORINFO_Array and CORINFO_RefArray.
+  //
+  // Valid indexes are
+  //     dimBounds[i] <= index[i] < dimBounds[i] + dimLengths[i]
+
+  assert(!ElemType->isStructTy());
+
+  // Check whether the array is null. If UseExplicitNullChecks were false, we'd
+  // need to annotate the first load as exception-bearing.
+  if (UseExplicitNullChecks) {
+    Array = genNullCheck(Array);
+  }
+
+  PointerType *Ty = cast<PointerType>(Array->getType());
+  StructType *ReferentTy = cast<StructType>(Ty->getPointerElementType());
+  unsigned ArrayDataIndex = ReferentTy->getNumElements() - 1;
+  unsigned DimensionBoundsIndex = ArrayDataIndex - 1;
+  unsigned DimensionLengthsIndex = ArrayDataIndex - 2;
+
+  LLVMContext &LLVMContext = *this->JitContext->LLVMContext;
+  IRNode *ElementOffset = nullptr;
+  const bool IsVolatile = false;
+  uint32_t NaturalAlignment = convertReaderAlignment(Reader_AlignNatural);
+  Type *Int32Ty = Type::getInt32Ty(LLVMContext);
+  Type *ManagedPointerToInt32 = getManagedPointerType(Int32Ty);
+  for (uint32_t I = 0; I < Rank; ++I) {
+    IRNode *Index = Indices[I];
+
+    // Load the lower bound
+    Value *LowerBoundIndices[] = {
+        ConstantInt::get(Int32Ty, 0),
+        ConstantInt::get(Int32Ty, DimensionBoundsIndex),
+        ConstantInt::get(Int32Ty, I)};
+    Value *LowerBoundAddress =
+        LLVMBuilder->CreateInBoundsGEP(Array, LowerBoundIndices);
+    LoadInst *LowerBound = makeLoadNonNull(LowerBoundAddress, IsVolatile);
+    LowerBound->setAlignment(NaturalAlignment);
+
+    // Subtract the lower bound
+    Index = (IRNode *)LLVMBuilder->CreateSub(Index, LowerBound);
+
+    // Load the dimension length
+    Value *DimensionLengthIndices[] = {
+        ConstantInt::get(Int32Ty, 0),
+        ConstantInt::get(Int32Ty, DimensionLengthsIndex),
+        ConstantInt::get(Int32Ty, I)};
+    Value *DimensionLengthAddress =
+        LLVMBuilder->CreateInBoundsGEP(Array, DimensionLengthIndices);
+    LoadInst *DimensionLength =
+        makeLoadNonNull(DimensionLengthAddress, IsVolatile);
+    DimensionLength->setAlignment(NaturalAlignment);
+
+    // Do the range check
+    genBoundsCheck(DimensionLength, Index);
+
+    // We'll accumulate the address offset as we go
+    if (I == 0) {
+      // On the first dimension, we initialize the offset
+      ElementOffset = Index;
+    } else {
+      // On subsequent dimensions, we compute:
+      //     ElementOffset = ElementOffset*DimensionLength + Index
+      Value *MulResult = LLVMBuilder->CreateMul(ElementOffset, DimensionLength);
+      ElementOffset = (IRNode *)LLVMBuilder->CreateAdd(MulResult, Index);
+    }
+  }
+
+  // Now we are ready to compute the address of the element.
+  Value *ElementAddressIndices[] = {ConstantInt::get(Int32Ty, 0),
+                                    ConstantInt::get(Int32Ty, ArrayDataIndex),
+                                    ElementOffset};
+  Value *ElementAddress =
+      LLVMBuilder->CreateInBoundsGEP(Array, ElementAddressIndices);
+
+  return (IRNode *)ElementAddress;
+};
 
 void GenIR::branch() {
   TerminatorInst *TermInst = LLVMBuilder->GetInsertBlock()->getTerminator();
@@ -4068,6 +4565,18 @@ IRNode *GenIR::getTypeFromHandle(IRNode *Arg1) {
   // Return the field's value (of type RuntimeType).
   const bool IsVolatile = false;
   return (IRNode *)LLVMBuilder->CreateLoad(FieldAddress, IsVolatile);
+}
+
+IRNode *GenIR::getValueFromRuntimeHandle(IRNode *Arg1) {
+  // TODO: other JITs either
+  // a) do not optimize this path, or
+  // b) only optimize here if the incoming argument is the result of lowering
+  //    a ldtoken instruction.
+  //
+  // We don't yet have the ability do detect (b) yet; stick with (a) in the
+  // meantime.
+
+  return nullptr;
 }
 
 CORINFO_CLASS_HANDLE GenIR::inferThisClass(IRNode *ThisArgument) {
@@ -4314,23 +4823,19 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo, bool MayThrow,
   CorInfoIntrinsics IntrinsicID = CallTargetInfo->getCorInstrinsic();
   if ((0 <= IntrinsicID) && (IntrinsicID < CORINFO_INTRINSIC_Count)) {
     switch (IntrinsicID) {
-    case CORINFO_INTRINSIC_Object_GetType: {
-      // TODO: note that this method has well known semantics that the jit can
-      // use to optimize in some cases.
-      //
-      // For now just treat as a normal call.
-      break;
-    }
-    case CORINFO_INTRINSIC_GetCurrentManagedThread: {
-      // For now just treat as a normal call.
-      break;
-    }
-    case CORINFO_INTRINSIC_InitializeArray: {
-      // For now just treat as a normal call.
+    // TODO: note that these methods have well-known semantics that the jit can
+    // use to optimize in some cases.
+    // For now treat these intrinsics as normal calls.
+    case CORINFO_INTRINSIC_RTH_GetValueInternal:
+    case CORINFO_INTRINSIC_Object_GetType:
+    case CORINFO_INTRINSIC_TypeEQ:
+    case CORINFO_INTRINSIC_TypeNEQ:
+    case CORINFO_INTRINSIC_GetCurrentManagedThread:
+    case CORINFO_INTRINSIC_GetManagedThreadId: {
       break;
     }
     default:
-      throw NotYetImplementedException("Call intrinsic");
+      break;
     }
   }
 
@@ -4957,6 +5462,33 @@ bool GenIR::interlockedCmpXchg(IRNode *Destination, IRNode *Exchange,
   return true;
 }
 
+bool GenIR::interlockedIntrinsicBinOp(IRNode *Arg1, IRNode *Arg2,
+                                      IRNode **RetVal,
+                                      CorInfoIntrinsics IntrinsicID) {
+  AtomicRMWInst::BinOp Op = AtomicRMWInst::BinOp::BAD_BINOP;
+
+  switch (IntrinsicID) {
+  case CORINFO_INTRINSIC_InterlockedXAdd32:
+  case CORINFO_INTRINSIC_InterlockedXAdd64:
+    Op = AtomicRMWInst::BinOp::Add;
+    break;
+  case CORINFO_INTRINSIC_InterlockedXchg32:
+  case CORINFO_INTRINSIC_InterlockedXchg64:
+    Op = AtomicRMWInst::BinOp::Xchg;
+    break;
+  }
+
+  if (Op != AtomicRMWInst::BinOp::BAD_BINOP) {
+    Value *Result = LLVMBuilder->CreateAtomicRMW(
+        Op, Arg1, Arg2, AtomicOrdering::SequentiallyConsistent);
+    *RetVal = (IRNode *)Result;
+    return true;
+  } else {
+    *RetVal = nullptr;
+    return false;
+  }
+}
+
 bool GenIR::memoryBarrier() {
   // TODO: Here we emit mfence which is stronger than sfence
   // that CLR needs.
@@ -5034,13 +5566,8 @@ IRNode *GenIR::genNullCheck(IRNode *Node) {
   return Node;
 }
 
-// Generate array bounds check.
-IRNode *GenIR::genBoundsCheck(IRNode *Array, IRNode *Index) {
+void GenIR::genBoundsCheck(Value *ArrayLength, Value *Index) {
   CorInfoHelpFunc HelperId = CORINFO_HELP_RNGCHKFAIL;
-
-  // This call will load the array length which will ensure that the array is
-  // not null.
-  IRNode *ArrayLength = loadLen(Array);
 
   // Insert the bound compare.
   // The unsigned conversion allows us to also catch negative indices in the
@@ -5054,8 +5581,6 @@ IRNode *GenIR::genBoundsCheck(IRNode *Array, IRNode *Index) {
   Value *UpperBoundCompare =
       LLVMBuilder->CreateICmpUGE(ConvertedIndex, ArrayLength, "BoundsCheck");
   genConditionalThrow(UpperBoundCompare, HelperId, "ThrowIndexOutOfRange");
-
-  return Array;
 }
 
 /// \brief Get the immediate target (innermost exited finally) for this leave.
@@ -5297,9 +5822,7 @@ IRNode *GenIR::stringLiteral(mdToken Token, void *StringHandle,
     IRNode *RawAddress = handleToIRNode(
         Token, StringHandle, 0, (Iat == IAT_PPVALUE), true, true, false);
     // Cast it to the right address type.
-    CORINFO_CLASS_HANDLE StringClassHandle =
-        getBuiltinClass(CorInfoClassId::CLASSID_STRING);
-    Type *StringRefTy = getType(CORINFO_TYPE_CLASS, StringClassHandle);
+    Type *StringRefTy = getBuiltInStringType();
     Type *AddressTy = getUnmanagedPointerType(StringRefTy);
     IRNode *TypedAddress =
         (IRNode *)LLVMBuilder->CreateIntToPtr(RawAddress, AddressTy);
@@ -5601,20 +6124,32 @@ IRNode *GenIR::getTypedAddress(IRNode *Addr, CorInfoType CorInfoType,
   // For the 'REFANY' case, verify the address carries
   // reasonable typing. Address producer must ensure this.
   if (CorInfoType == CORINFO_TYPE_REFANY) {
-    PointerType *PointerTy = cast<PointerType>(AddressTy);
-    Type *ReferentTy = PointerTy->getPointerElementType();
+    PointerType *PointerTy = dyn_cast<PointerType>(AddressTy);
+    if (PointerTy != nullptr) {
+      Type *ReferentTy = PointerTy->getPointerElementType();
 
-    // The result of the load is an object reference,
-    // So addr should be ptr to managed ptr to struct
-    if (!ReferentTy->isPointerTy()) {
-      // If we hit this we should fix the address producer, not
-      // coerce the type here.
-      throw NotYetImplementedException(
-          "unexpected type in load/store primitive");
+      // The result of the load is an object reference,
+      // So addr should be ptr to managed ptr to struct
+      if (!ReferentTy->isPointerTy()) {
+        // If we hit this we should fix the address producer, not
+        // coerce the type here.
+        throw NotYetImplementedException(
+            "unexpected type in load/store primitive");
+      }
+      PointerType *ReferentPtrTy = cast<PointerType>(ReferentTy);
+      ASSERT(isManagedPointerType(ReferentPtrTy));
+      ASSERT(ReferentTy->getPointerElementType()->isStructTy());
+    } else {
+      // This must be a nativeint, in which case we cast the address
+      // to an address of Object.
+      Type *NativeIntTy =
+          Type::getIntNTy(*JitContext->LLVMContext, TargetPointerSizeInBits);
+      ASSERT(AddressTy == NativeIntTy);
+
+      Type *ObjectType = getBuiltInObjectType();
+      TypedAddr = (IRNode *)LLVMBuilder->CreateIntToPtr(
+          Addr, getUnmanagedPointerType(ObjectType));
     }
-    PointerType *ReferentPtrTy = cast<PointerType>(ReferentTy);
-    ASSERT(isManagedPointerType(ReferentPtrTy));
-    ASSERT(ReferentTy->getPointerElementType()->isStructTy());
     // GC pointers are always naturally aligned
     Alignment = Reader_AlignNatural;
   } else {

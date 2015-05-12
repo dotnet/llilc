@@ -547,7 +547,7 @@ A *Reverse PInvoke* is a call to a Jitted method from native code.
 No.  | Implementation | Testing | Issue | Status 
 ---- |--------------- | --------| ------| -------  
 1 | Insert GC Safepoints: Run the PlaceSafepoints and RewriteSafepointsForGC phases before Code generation, and ensure that statepoints are inserted and lowered correctly | LLILC tests pass with Conservative GC | [32](https://github.com/dotnet/llilc/issues/32) | In Progress 
-2 |	Bring GCInfo library to LLILC: Use the GCInfo library to encode Function size correctly; no live pointers reported at GC-safe points | LLILC tests pass with Conservative GC  | [30](https://github.com/dotnet/llilc/issues/30) | In Progress
+2 |	Bring GCInfo library to LLILC: Use the GCInfo library to encode Function size correctly; no live pointers reported at GC-safe points | LLILC tests pass with Conservative GC  | [30](https://github.com/dotnet/llilc/issues/30) | Completed
 3 | Report GC liveness: Encode GC pointer liveness information in the CLR format using the GC-Encoding library | A few functions compiled by LLILC with correct GCInfo, bail out on all other functions | [31](https://github.com/dotnet/llilc/issues/31) |
 4 | Test Pass |  LLILC tests pass with Precise GC, bail out on unimplemented features (see 7,8,9 below). Standard lab testing switched over to use Precise GC | | 
 5 | Add GC-specific stress tests| All existing and new tests pass | | 
