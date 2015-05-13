@@ -2769,7 +2769,7 @@ public:
   /// \param Class  Class handle that corresponds to RuntimeTypeHandle,
   ///               RuntimeMethodHandle, or RuntimeFieldHandle.
   ///
-  /// \returns Runtime handle corresponding to the token node..
+  /// \returns Runtime handle corresponding to the token node.
   virtual IRNode *convertHandle(IRNode *RuntimeTokenNode,
                                 CorInfoHelpFunc HelperID,
                                 CORINFO_CLASS_HANDLE Class) = 0;
@@ -2793,6 +2793,16 @@ public:
     return loadPrimitiveType(Address, CorType, Alignment, IsVolatile,
                              IsInterfConst, false);
   }
+
+  /// \brief Load a non-primitive object (i.e., a struct).
+  ///
+  /// \param Address Address of the struct.
+  /// \param Class Class handle corresponding to the struct.
+  /// \param Alignment Alignment of the load.
+  /// \param IsVolatile true iff this is a volatile load.
+  /// \param AddressMayBeNull true iff Address may be null.
+  ///
+  /// \returns Node representing loaded struct.
   virtual IRNode *loadNonPrimitiveObj(IRNode *Address,
                                       CORINFO_CLASS_HANDLE Class,
                                       ReaderAlignType Alignment,
@@ -3240,6 +3250,13 @@ public:
   // Used to expand multidimensional array access intrinsics
   virtual bool arrayGet(CORINFO_SIG_INFO *Sig, IRNode **RetVal) = 0;
   virtual bool arraySet(CORINFO_SIG_INFO *Sig) = 0;
+
+  /// \brief Check whether structs are represented by pointers on the operand
+  /// stack.
+  ///
+  /// \returns true iff structs are represented by pointers on the operand
+  /// stack.
+  virtual bool structsAreRepresentedByPointers() = 0;
 
 #if !defined(NDEBUG)
   virtual void dbDumpFunction(void) = 0;

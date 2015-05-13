@@ -419,6 +419,25 @@ public:
                               ReaderAlignType Alignment, bool IsVolatile,
                               bool AddressMayBeNull = true) override;
 
+  /// \brief Load a non-primitive object (i.e., a struct).
+  ///
+  /// \param StructTy Type of the struct.
+  /// \param Address Address of the struct.
+  /// \param Alignment Alignment of the load.
+  /// \param IsVolatile true iff this is a volatile load.
+  /// \param AddressMayBeNull true iff Address may be null.
+  ///
+  /// \returns Node representing loaded struct.
+  IRNode *loadNonPrimitiveObj(llvm::StructType *StructTy, IRNode *Address,
+                              ReaderAlignType Alignment, bool IsVolatile,
+                              bool AddressMayBeNull = true);
+
+  IRNode *loadNonPrimitiveObjNonNull(llvm::StructType *StructTy,
+                                     IRNode *Address, ReaderAlignType Alignment,
+                                     bool IsVolatile) {
+    return loadNonPrimitiveObj(StructTy, Address, Alignment, IsVolatile, false);
+  }
+
   IRNode *makeRefAny(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                      IRNode *Object) override {
     throw NotYetImplementedException("makeRefAny");
@@ -822,6 +841,8 @@ public:
   bool arrayGet(CORINFO_SIG_INFO *Sig, IRNode **RetVal) override;
   bool arraySet(CORINFO_SIG_INFO *Sig) override;
 
+  bool structsAreRepresentedByPointers() override { return true; }
+
 #if !defined(NDEBUG)
   void dbDumpFunction(void) override {
     throw NotYetImplementedException("dbDumpFunction");
@@ -922,6 +943,18 @@ private:
                          IsVolatile, false);
   }
 
+  IRNode *loadAtAddress(IRNode *Address, llvm::Type *Ty, CorInfoType CorType,
+                        ReaderAlignType AlignmentPrefix, bool IsVolatile,
+                        bool AddressMayBeNull = true);
+
+  IRNode *loadAtAddressNonNull(IRNode *Address, llvm::Type *Ty,
+                               CorInfoType CorType,
+                               ReaderAlignType AlignmentPrefix,
+                               bool IsVolatile) {
+    return loadAtAddress(Address, Ty, CorType, AlignmentPrefix, IsVolatile,
+                         false);
+  }
+
   /// Generate instructions for storing value of the specified type at the
   /// specified address.
   ///
@@ -947,6 +980,17 @@ private:
     return storeAtAddress(Address, ValueToStore, Ty, ResolvedToken,
                           AlignmentPrefix, IsVolatile, IsField, false);
   }
+
+  /// Generate instructions for storing value of the specified type at the
+  /// specified address. The caller must guarantee that address is not null and
+  /// no write barrier is needed.
+  ///
+  /// \param Address Address to store to.
+  /// \param ValueToStore Value to store.
+  /// \param Ty llvm type of the value to store.
+  /// \param IsVolatile true iff the store is volatile.
+  void storeAtAddressNoBarrierNonNull(IRNode *Address, IRNode *ValueToStore,
+                                      llvm::Type *Ty, bool IsVolatile);
 
   void classifyCmpType(llvm::Type *Ty, uint32_t &Size, bool &IsPointer,
                        bool &IsFloat);
@@ -1145,8 +1189,13 @@ private:
   ///
   /// \param Ty1 Type of the first value.
   /// \param Ty1 Type of the second value.
+  /// \param IsStruct1 true iff value corresponding to Ty1 logically represents
+  /// a struct rather than a pointer to struct.
+  /// \param IsStruct2 true iff value corresponding to Ty2 logically represents
+  /// a struct rather than a pointer to struct.
   /// \returns The result type.
-  llvm::Type *getStackMergeType(llvm::Type *Ty1, llvm::Type *Ty2);
+  llvm::Type *getStackMergeType(llvm::Type *Ty1, llvm::Type *Ty2,
+                                bool IsStruct1, bool isStruct2);
 
   bool objIsThis(IRNode *Obj);
 
@@ -1350,6 +1399,28 @@ private:
   /// \param Size Size of the block.
   void zeroInitBlock(llvm::Value *Address, llvm::Value *Size);
 
+  /// Copy an instance of a struct from SourceAddress to DestinationAddress.
+  ///
+  /// \param StructTy Type of the struct.
+  /// \param DestinationAddress Address to copy to.
+  /// \param SourceAddress Address to copy from.
+  /// \param IsVolatile true iff copy is volatile.
+  /// \param Alignment Alignment of the copy.
+  void copyStruct(llvm::Type *StructTy, llvm::Value *DestinationAddress,
+                  llvm::Value *SourceAddress, bool IsVolatile,
+                  ReaderAlignType Alignment = Reader_AlignNatural);
+
+  /// Check if this value represents a struct.
+  ///
+  /// \param TheValue Value to examine.
+  /// \returns true iff TheValue represents a struct.
+  bool doesValueRepresentStruct(llvm::Value *TheValue);
+
+  /// Records that TheValue represents a struct.
+  ///
+  /// \param TheValue Value to record.
+  void setValueRepresentsStruct(llvm::Value *TheValue);
+
   /// Check if this LLVM type appears to be a CLR array type.
   ///
   /// \param Type   Type to examine.
@@ -1453,6 +1524,14 @@ private:
   std::vector<llvm::Value *> Arguments;
   llvm::Value *IndirectResult;
   llvm::DenseMap<uint32_t, llvm::StoreInst *> ContinuationStoreMap;
+  llvm::SmallPtrSet<llvm::Value *, 5> StructPointers; ///< This set contains
+                                                      ///< pointers to structs
+                                                      ///< that we create
+                                                      ///< to represent structs
+                                                      ///< since we don't allow
+                                                      ///< first-class
+                                                      ///< aggregates in LLVM IR
+                                                      ///< we are generating.
   FlowGraphNode *FirstMSILBlock;
   llvm::BasicBlock *UnreachableContinuationBlock;
   bool KeepGenericContextAlive;

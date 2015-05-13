@@ -96,18 +96,34 @@ ABISignature::ABISignature(const ReaderCallSignature &Signature, GenIR &Reader,
 Value *ABISignature::coerce(GenIR &Reader, Type *TheType, Value *TheValue) {
   assert(!TheType->isVoidTy());
 
-  Type *ValueType = TheValue->getType();
-
-  if (TheType == ValueType) {
-    return TheValue;
+  bool PointerRepresentsStruct = Reader.doesValueRepresentStruct(TheValue);
+  Type *ValueType = nullptr;
+  Value *ValuePtr = nullptr;
+  if (PointerRepresentsStruct) {
+    ValueType = TheValue->getType()->getPointerElementType();
+    if (TheType == ValueType) {
+      assert(TheType->isStructTy());
+      return TheValue;
+    }
+    ValuePtr = TheValue;
+  } else {
+    ValueType = TheValue->getType();
+    if (TheType == ValueType) {
+      return TheValue;
+    }
+    ValuePtr = (Value *)Reader.addressOfValue((IRNode *)TheValue);
   }
 
   // TODO: the code spit could probably be better here.
   IRBuilder<> &Builder = *Reader.LLVMBuilder;
   Type *TargetPtrTy = TheType->getPointerTo();
-  Value *ValuePtr = (Value *)Reader.addressOfValue((IRNode *)TheValue);
   Value *TargetPtr = Builder.CreatePointerCast(ValuePtr, TargetPtrTy);
-  return Builder.CreateLoad(TargetPtr);
+  if (TheType->isStructTy()) {
+    Reader.setValueRepresentsStruct(TargetPtr);
+    return TargetPtr;
+  } else {
+    return Builder.CreateLoad(TargetPtr);
+  }
 }
 
 ABICallSignature::ABICallSignature(const ReaderCallSignature &TheSignature,
@@ -334,10 +350,13 @@ Value *ABICallSignature::emitCall(GenIR &Reader, Value *Target, bool MayThrow,
   int32_t ResultIndex = -1;
   if (HasIndirectResult) {
     ResultIndex = (int32_t)NumSpecialArgs + (Signature.hasThis() ? 1 : 0);
-    ArgumentTypes[ResultIndex] =
-        Reader.getUnmanagedPointerType(Result.getType());
-    Arguments[ResultIndex] = ResultNode =
-        Reader.createTemporary(Result.getType());
+    Type *ResultTy = Result.getType();
+    ArgumentTypes[ResultIndex] = Reader.getUnmanagedPointerType(ResultTy);
+    Arguments[ResultIndex] = ResultNode = Reader.createTemporary(ResultTy);
+
+    if (ResultTy->isStructTy()) {
+      Reader.setValueRepresentsStruct(ResultNode);
+    }
   } else {
     AttrBuilder RetAttrs;
 
@@ -366,9 +385,19 @@ Value *ABICallSignature::emitCall(GenIR &Reader, Value *Target, bool MayThrow,
 
     if (ArgInfo.getKind() == ABIArgInfo::Indirect) {
       // TODO: byval attribute support
-      ArgumentTypes[I] = ArgType->getPointerTo();
-      Value *Temp = Reader.createTemporary(ArgType);
-      Builder.CreateStore(Arg, Temp);
+      Value *Temp = nullptr;
+      if (Reader.doesValueRepresentStruct(Arg)) {
+        StructType *ArgStructTy =
+            cast<StructType>(ArgType->getPointerElementType());
+        ArgumentTypes[I] = ArgType;
+        Temp = Reader.createTemporary(ArgStructTy);
+        const bool IsVolatile = false;
+        Reader.copyStruct(ArgStructTy, Temp, Arg, IsVolatile);
+      } else {
+        ArgumentTypes[I] = ArgType->getPointerTo();
+        Temp = Reader.createTemporary(ArgType);
+        Builder.CreateStore(Arg, Temp);
+      }
       Arguments[I] = Temp;
     } else {
       ArgumentTypes[I] = ArgInfo.getType();
@@ -436,7 +465,9 @@ Value *ABICallSignature::emitCall(GenIR &Reader, Value *Target, bool MayThrow,
       ResultNode = Call.getInstruction();
     }
   } else {
-    ResultNode = Builder.CreateLoad(ResultNode);
+    if (!Reader.doesValueRepresentStruct(ResultNode)) {
+      ResultNode = Builder.CreateLoad(ResultNode);
+    }
   }
 
   *CallNode = Call.getInstruction();
