@@ -2860,7 +2860,7 @@ IRNode *GenIR::binaryOp(ReaderBaseNS::BinaryOpcode Opcode, IRNode *Arg1,
 
   Type *Type1 = Arg1->getType();
   Type *Type2 = Arg2->getType();
-  Type *ResultType = binaryOpType(Type1, Type2);
+  Type *ResultType = binaryOpType(Opcode, Type1, Type2);
 
   // If the result is a pointer, see if we have simple
   // pointer + int op...
@@ -2952,40 +2952,88 @@ IRNode *GenIR::binaryOp(ReaderBaseNS::BinaryOpcode Opcode, IRNode *Arg1,
   return Result;
 }
 
-Type *GenIR::binaryOpType(Type *Type1, Type *Type2) {
-  if (Type1->isPointerTy()) {
-    if (Type2->isPointerTy()) {
-      return Type::getIntNTy(*this->JitContext->LLVMContext,
-                             TargetPointerSizeInBits);
+Type *GenIR::binaryOpType(ReaderBaseNS::BinaryOpcode Opcode, Type *Type1,
+                          Type *Type2) {
+  // Roughly follows ECMA-355, Table III.2.
+  // If both types are floats, the result is the larger float type.
+  if (Type1->isFloatingPointTy() && Type2->isFloatingPointTy()) {
+    uint32_t Size1 = Type1->getPrimitiveSizeInBits();
+    uint32_t Size2 = Type2->getPrimitiveSizeInBits();
+    return (Size1 >= Size2 ? Type1 : Type2);
+  }
+
+  const bool Type1IsInt = Type1->isIntegerTy();
+  const bool Type2IsInt = Type2->isIntegerTy();
+  const bool Type1IsPtr = Type1->isPointerTy();
+  const bool Type2IsPtr = Type2->isPointerTy();
+
+  assert((Type1IsInt || Type1IsPtr) &&
+         "unexpected operand type1 for binary op");
+  assert((Type2IsInt || Type2IsPtr) &&
+         "unexpected operand type2 for binary op");
+
+  const uint32_t Size1 =
+      Type1IsPtr ? TargetPointerSizeInBits : Type1->getPrimitiveSizeInBits();
+  const uint32_t Size2 =
+      Type2IsPtr ? TargetPointerSizeInBits : Type2->getPrimitiveSizeInBits();
+
+  // If both types are integers, sizes must match, or one of the sizes must be
+  // native int and the other must be smaller.
+  if (Type1IsInt && Type2IsInt) {
+    if (Size1 == Size2) {
+      return Type1;
     }
-    ASSERTNR(!Type2->isFloatingPointTy());
-    return Type1;
-  } else if (Type2->isPointerTy()) {
-    ASSERTNR(!Type1->isFloatingPointTy());
-    return Type2;
-  }
-
-  if (Type1 == Type2) {
-    return Type1;
-  }
-
-  uint32_t Size1 = Type1->getPrimitiveSizeInBits();
-  uint32_t Size2 = Type2->getPrimitiveSizeInBits();
-
-  if (Type1->isFloatingPointTy()) {
-    if (Type2->isFloatingPointTy()) {
-      return Size1 > Size2 ? Type1 : Type2;
+    if ((Size1 == TargetPointerSizeInBits) && (Size1 > Size2)) {
+      return Type1;
     }
-    return Type1;
-  } else if (Type2->isFloatingPointTy()) {
-    return Type2;
+    if ((Size2 == TargetPointerSizeInBits) && (Size2 > Size1)) {
+      return Type2;
+    }
   }
 
-  if (Size1 > Size2) {
-    return Type1;
-  } else {
-    return Type2;
+  // If we see a mixture of int and unmanaged pointer, the result
+  // is generally a native int, with a few special cases where we
+  // preserve pointer-ness.
+  const bool Type1IsUnmanagedPointer = isUnmanagedPointerType(Type1);
+  const bool Type2IsUnmanagedPointer = isUnmanagedPointerType(Type2);
+  const bool IsStrictlyAdd = (Opcode == ReaderBaseNS::Add);
+  const bool IsAdd = IsStrictlyAdd || (Opcode == ReaderBaseNS::AddOvf) ||
+                     (Opcode == ReaderBaseNS::AddOvfUn);
+  const bool IsStrictlySub = (Opcode == ReaderBaseNS::Sub);
+  const bool IsSub = IsStrictlySub || (Opcode == ReaderBaseNS::SubOvf) ||
+                     (Opcode == ReaderBaseNS::SubOvfUn);
+  const bool IsStrictlyAddOrSub = IsStrictlyAdd || IsStrictlySub;
+  const bool IsAddOrSub = IsAdd || IsSub;
+
+  if (Type1IsUnmanagedPointer || Type2IsUnmanagedPointer) {
+    // ptr +/- int = ptr
+    if (IsAddOrSub && Type1IsUnmanagedPointer && Type2IsInt &&
+        (Size1 >= Size2)) {
+      return Type1;
+    }
+    // int + ptr = ptr
+    if (IsAdd && Type1IsInt && Type2IsUnmanagedPointer && (Size2 >= Size1)) {
+      return Type2;
+    }
+    // Otherwise type result as native int as long as there's no truncation
+    // going on.
+    if ((Size1 <= TargetPointerSizeInBits) &&
+        (Size2 <= TargetPointerSizeInBits)) {
+      return Type::getIntNTy(*JitContext->LLVMContext, TargetPointerSizeInBits);
+    }
   }
+
+  // Special case for just strict add and sub: if Type1 is a managed pointer
+  // and Type2 is an integer, the result is Type1. We see the add case in some
+  // internal uses in reader base. We see the sub case in some IL stubs.
+  if (IsStrictlyAddOrSub && isManagedPointerType(Type1) && Type2IsInt &&
+      (Size1 >= Size2)) {
+    return Type1;
+  }
+
+  // All other combinations are invalid.
+  ASSERT(UNREACHED);
+  return nullptr;
 }
 
 // Handle simple field access via a structural GEP.
