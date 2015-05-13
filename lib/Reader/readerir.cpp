@@ -4048,7 +4048,7 @@ IRNode *GenIR::mdArrayRefAddr(uint32_t Rank, llvm::Type *ElemType) {
       LLVMBuilder->CreateInBoundsGEP(Array, ElementAddressIndices);
 
   return (IRNode *)ElementAddress;
-};
+}
 
 void GenIR::branch() {
   TerminatorInst *TermInst = LLVMBuilder->GetInsertBlock()->getTerminator();

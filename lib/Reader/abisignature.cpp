@@ -139,6 +139,7 @@ CallSite ABICallSignature::emitUnmanagedCall(GenIR &Reader, Value *Target,
   LLVMContext &LLVMContext = *JitContext.LLVMContext;
   Type *Int8Ty = Type::getInt8Ty(LLVMContext);
   Type *Int32Ty = Type::getInt32Ty(LLVMContext);
+  Type *Int64Ty = Type::getInt64Ty(LLVMContext);
   Type *Int8PtrTy = Reader.getUnmanagedPointerType(Int8Ty);
   IRBuilder<> &Builder = *Reader.LLVMBuilder;
 
@@ -230,21 +231,23 @@ CallSite ABICallSignature::emitUnmanagedCall(GenIR &Reader, Value *Target,
   Function *CallIntrinsic = Intrinsic::getDeclaration(
       M, Intrinsic::experimental_gc_statepoint, CallTypeArgs);
 
-  const uint32_t PrefixArgCount = 3;
+  const uint32_t PrefixArgCount = 5;
   const uint32_t TransitionArgCount = 4;
   const uint32_t PostfixArgCount = TransitionArgCount + 2;
   const uint32_t TargetArgCount = Arguments.size();
-  SmallVector<Value *, 16> IntrinsicArgs(PrefixArgCount + TargetArgCount +
+  SmallVector<Value *, 24> IntrinsicArgs(PrefixArgCount + TargetArgCount +
                                          PostfixArgCount);
 
-  // Call target and target arguments
-  IntrinsicArgs[0] = Target;
-  IntrinsicArgs[1] = ConstantInt::get(Int32Ty, TargetArgCount);
-  IntrinsicArgs[2] =
+  // ID, nop bytes, call target and target arguments
+  IntrinsicArgs[0] = ConstantInt::get(Int64Ty, 0);
+  IntrinsicArgs[1] = ConstantInt::get(Int32Ty, 0);
+  IntrinsicArgs[2] = Target;
+  IntrinsicArgs[3] = ConstantInt::get(Int32Ty, TargetArgCount);
+  IntrinsicArgs[4] =
       ConstantInt::get(Int32Ty, (uint32_t)StatepointFlags::GCTransition);
 
   uint32_t I, J;
-  for (I = 0, J = 3; I < TargetArgCount; I++, J++) {
+  for (I = 0, J = PrefixArgCount; I < TargetArgCount; I++, J++) {
     IntrinsicArgs[J] = Arguments[I];
   }
 
