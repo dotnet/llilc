@@ -860,7 +860,18 @@ private:
   /// integral values are zero extended
   IRNode *convert(llvm::Type *Type, llvm::Value *Node, bool IsSigned);
 
-  llvm::Type *binaryOpType(llvm::Type *Type1, llvm::Type *Type2);
+  /// \brief Determine the result type of a binary op.
+  ///
+  /// Rougly follows table III.2 of Ecma-335, with some extra cases added
+  /// because LLILC and IL stubs use this in non-standard ways. Note the result
+  /// is opcode-dependent and that Type1 and Type2 are not symmetric.
+  ///
+  /// \param Opcode  The binary opcode.
+  /// \param Type1   Type of the first operand popped from the operand stack.
+  /// \param Type2   Type of the second operand popped from the operand stack.
+  /// \returns       Type of the result.
+  llvm::Type *binaryOpType(ReaderBaseNS::BinaryOpcode Opcode, llvm::Type *Type1,
+                           llvm::Type *Type2);
 
   IRNode *genPointerAdd(IRNode *Arg1, IRNode *Arg2);
   IRNode *genPointerSub(IRNode *Arg1, IRNode *Arg2);
