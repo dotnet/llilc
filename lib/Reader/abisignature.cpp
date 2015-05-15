@@ -32,7 +32,8 @@
 
 using namespace llvm;
 
-static CallingConv::ID getLLVMCallingConv(CorInfoCallConv CC) {
+static CallingConv::ID getLLVMCallingConv(CorInfoCallConv CC,
+                                          bool &IsManagedCallingConv) {
   switch (CC) {
   case CORINFO_CALLCONV_STDCALL:
     return CallingConv::X86_StdCall;
@@ -40,6 +41,9 @@ static CallingConv::ID getLLVMCallingConv(CorInfoCallConv CC) {
     return CallingConv::X86_ThisCall;
   case CORINFO_CALLCONV_FASTCALL:
     return CallingConv::X86_FastCall;
+  case CORINFO_CALLCONV_DEFAULT:
+    IsManagedCallingConv = true;
+    return CallingConv::C;
   default:
     return CallingConv::C;
   }
@@ -66,18 +70,21 @@ ABISignature::ABISignature(const ReaderCallSignature &Signature, GenIR &Reader,
   const std::vector<CallArgType> &ArgTypes = Signature.getArgumentTypes();
   const uint32_t NumArgs = ArgTypes.size();
 
-  Type *LLVMResultType = Reader.getType(ResultType.CorType, ResultType.Class);
+  ABIType ABIResultType(Reader.getType(ResultType.CorType, ResultType.Class),
+                        GenIR::isSignedIntegralType(ResultType.CorType));
 
-  SmallVector<Type *, 16> LLVMArgTypes(NumArgs);
+  SmallVector<ABIType, 16> ABIArgTypes(NumArgs);
   uint32_t I = 0;
   for (const CallArgType &Arg : ArgTypes) {
-    LLVMArgTypes[I++] = Reader.getType(Arg.CorType, Arg.Class);
+    ABIArgTypes[I++] = ABIType(Reader.getType(Arg.CorType, Arg.Class),
+                               GenIR::isSignedIntegralType(Arg.CorType));
   }
 
-  CallingConv::ID CC =
-      getLLVMCallingConv(getNormalizedCallingConvention(Signature));
-  TheABIInfo.computeSignatureInfo(CC, LLVMResultType, LLVMArgTypes, Result,
-                                  Args);
+  bool IsManagedCallingConv = false;
+  CallingConv::ID CC = getLLVMCallingConv(
+      getNormalizedCallingConvention(Signature), IsManagedCallingConv);
+  TheABIInfo.computeSignatureInfo(CC, IsManagedCallingConv, ABIResultType,
+                                  ABIArgTypes, Result, Args);
 
   if (Result.getKind() == ABIArgInfo::Indirect) {
     FuncResultType = Reader.getManagedPointerType(Result.getType());
@@ -289,6 +296,8 @@ Value *ABICallSignature::emitCall(GenIR &Reader, Value *Target, bool MayThrow,
                                   Value **CallNode) const {
   assert(Target->getType()->isIntegerTy(Reader.TargetPointerSizeInBits));
 
+  LLVMContext &Context = *Reader.JitContext->LLVMContext;
+
   // Compute the function type
   bool HasIndirectResult = Result.getKind() == ABIArgInfo::Indirect;
   bool HasIndirectionCell = IndirectionCell != nullptr;
@@ -302,9 +311,11 @@ Value *ABICallSignature::emitCall(GenIR &Reader, Value *Target, bool MayThrow,
   }
 
   uint32_t NumExtraArgs = (HasIndirectResult ? 1 : 0) + NumSpecialArgs;
+  const uint32_t NumArgs = Args.size() + NumExtraArgs;
   Value *ResultNode = nullptr;
-  SmallVector<Type *, 16> ArgumentTypes(Args.size() + NumExtraArgs);
-  SmallVector<Value *, 16> Arguments(Args.size() + NumExtraArgs);
+  SmallVector<Type *, 16> ArgumentTypes(NumArgs);
+  SmallVector<Value *, 16> Arguments(NumArgs);
+  SmallVector<AttributeSet, 16> Attrs(NumArgs + 1);
   IRBuilder<> &Builder = *Reader.LLVMBuilder;
 
   // Check for calls with special args.
@@ -327,10 +338,25 @@ Value *ABICallSignature::emitCall(GenIR &Reader, Value *Target, bool MayThrow,
         Reader.getUnmanagedPointerType(Result.getType());
     Arguments[ResultIndex] = ResultNode =
         Reader.createTemporary(Result.getType());
+  } else {
+    AttrBuilder RetAttrs;
+
+    if (Result.getKind() == ABIArgInfo::ZeroExtend) {
+      RetAttrs.addAttribute(Attribute::ZExt);
+    } else if (Result.getKind() == ABIArgInfo::SignExtend) {
+      RetAttrs.addAttribute(Attribute::SExt);
+    }
+
+    if (RetAttrs.hasAttributes()) {
+      Attrs.push_back(
+          AttributeSet::get(Context, AttributeSet::ReturnIndex, RetAttrs));
+    }
   }
 
   uint32_t I = NumSpecialArgs, J = 0;
   for (auto Arg : Args) {
+    AttrBuilder ArgAttrs;
+
     if (ResultIndex >= 0 && I == (uint32_t)ResultIndex) {
       I++;
     }
@@ -347,6 +373,17 @@ Value *ABICallSignature::emitCall(GenIR &Reader, Value *Target, bool MayThrow,
     } else {
       ArgumentTypes[I] = ArgInfo.getType();
       Arguments[I] = coerce(Reader, ArgInfo.getType(), Arg);
+
+      if (ArgInfo.getKind() == ABIArgInfo::ZeroExtend) {
+        ArgAttrs.addAttribute(Attribute::ZExt);
+      } else if (ArgInfo.getKind() == ABIArgInfo::SignExtend) {
+        ArgAttrs.addAttribute(Attribute::SExt);
+      }
+
+      if (ArgAttrs.hasAttributes()) {
+        const unsigned Idx = I + 1; // Add one to accomodate the return attrs.
+        Attrs.push_back(AttributeSet::get(Context, Idx, ArgAttrs));
+      }
     }
 
     I++, J++;
@@ -379,9 +416,14 @@ Value *ABICallSignature::emitCall(GenIR &Reader, Value *Target, bool MayThrow,
     assert(Signature.getCallingConvention() == CORINFO_CALLCONV_DEFAULT);
     CC = CallingConv::CLR_VirtualDispatchStub;
   } else {
-    CC = getLLVMCallingConv(getNormalizedCallingConvention(Signature));
+    bool Unused;
+    CC = getLLVMCallingConv(getNormalizedCallingConvention(Signature), Unused);
   }
   Call.setCallingConv(CC);
+
+  if (Attrs.size() > 0) {
+    Call.setAttributes(AttributeSet::get(Context, Attrs));
+  }
 
   if (ResultNode == nullptr) {
     assert(!HasIndirectResult);
@@ -412,17 +454,34 @@ Function *ABIMethodSignature::createFunction(GenIR &Reader, Module &M) {
   LLVMContext &Context = M.getContext();
   bool HasIndirectResult = Result.getKind() == ABIArgInfo::Indirect;
   uint32_t NumExtraArgs = HasIndirectResult ? 1 : 0;
+  const uint32_t NumArgs = Args.size() + NumExtraArgs;
   int32_t ResultIndex = -1;
-  SmallVector<Type *, 16> ArgumentTypes(Args.size() + NumExtraArgs);
+  SmallVector<Type *, 16> ArgumentTypes(NumArgs);
+  SmallVector<AttributeSet, 16> Attrs(NumArgs + 1);
 
   if (HasIndirectResult) {
     ResultIndex = Signature->hasThis() ? 1 : 0;
     Result.setIndex((uint32_t)ResultIndex);
     ArgumentTypes[ResultIndex] = Reader.getManagedPointerType(Result.getType());
+  } else {
+    AttrBuilder RetAttrs;
+
+    if (Result.getKind() == ABIArgInfo::ZeroExtend) {
+      RetAttrs.addAttribute(Attribute::ZExt);
+    } else if (Result.getKind() == ABIArgInfo::SignExtend) {
+      RetAttrs.addAttribute(Attribute::SExt);
+    }
+
+    if (RetAttrs.hasAttributes()) {
+      Attrs.push_back(
+          AttributeSet::get(Context, AttributeSet::ReturnIndex, RetAttrs));
+    }
   }
 
   uint32_t I = 0;
   for (auto &Arg : Args) {
+    AttrBuilder ArgAttrs;
+
     if (ResultIndex >= 0 && I == (uint32_t)ResultIndex) {
       I++;
     }
@@ -432,6 +491,17 @@ Function *ABIMethodSignature::createFunction(GenIR &Reader, Module &M) {
       ArgumentTypes[I] = Reader.getManagedPointerType(Arg.getType());
     } else {
       ArgumentTypes[I] = Arg.getType();
+
+      if (Arg.getKind() == ABIArgInfo::ZeroExtend) {
+        ArgAttrs.addAttribute(Attribute::ZExt);
+      } else if (Arg.getKind() == ABIArgInfo::SignExtend) {
+        ArgAttrs.addAttribute(Attribute::SExt);
+      }
+
+      if (ArgAttrs.hasAttributes()) {
+        const unsigned Idx = I + 1; // Add one to accomodate the return attrs.
+        Attrs.push_back(AttributeSet::get(Context, Idx, ArgAttrs));
+      }
     }
     Arg.setIndex(I);
 
@@ -456,14 +526,20 @@ Function *ABIMethodSignature::createFunction(GenIR &Reader, Module &M) {
   if (Signature->hasSecretParameter()) {
     assert((--F->arg_end())->getType()->isIntegerTy());
 
-    AttributeSet Attrs = F->getAttributes();
-    F->setAttributes(
-        Attrs.addAttribute(Context, F->arg_size(), "CLR_SecretParameter"));
+    AttrBuilder SecretParamAttrs;
+    SecretParamAttrs.addAttribute("CLR_SecretParameter");
+    Attrs.push_back(
+        AttributeSet::get(Context, F->arg_size(), SecretParamAttrs));
+
     CC = CallingConv::CLR_SecretParameter;
   } else {
     CC = CallingConv::C;
   }
   F->setCallingConv(CC);
+
+  if (Attrs.size() > 0) {
+    F->setAttributes(AttributeSet::get(Context, Attrs));
+  }
 
   if (Reader.JitContext->Options->DoInsertStatepoints) {
     F->setGC("statepoint-example");

@@ -1915,6 +1915,21 @@ uint32_t GenIR::size(CorInfoType CorType) {
   }
 }
 
+bool GenIR::isSignedIntegralType(CorInfoType CorType) {
+  switch (CorType) {
+  case CorInfoType::CORINFO_TYPE_UNDEF:
+  case CorInfoType::CORINFO_TYPE_VOID:
+  case CorInfoType::CORINFO_TYPE_FLOAT:
+  case CorInfoType::CORINFO_TYPE_DOUBLE:
+  case CorInfoType::CORINFO_TYPE_VALUECLASS:
+  case CorInfoType::CORINFO_TYPE_REFANY:
+    return false;
+
+  default:
+    return isSigned(CorType);
+  }
+}
+
 // Given an CorInfoType, determine if it is
 // signed or unsigned. Treats pointer
 // types as unsigned.

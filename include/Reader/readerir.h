@@ -1110,6 +1110,15 @@ private:
 
   uint32_t size(CorInfoType CorType);
   uint32_t stackSize(CorInfoType CorType);
+
+  /// \brief Determine whether a \p CorInfoType represents a signed integral
+  ///        type.
+  ///
+  /// \param CorType  The \p CorInfoType in question.
+  ///
+  /// \returns True if \p CorType represents a signed integral type.
+  static bool isSignedIntegralType(CorInfoType CorType);
+
   static bool isSigned(CorInfoType CorType);
   llvm::Type *getStackType(CorInfoType CorType);
 

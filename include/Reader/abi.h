@@ -29,6 +29,10 @@ public:
     Direct, ///< Pass the argument directly, optionally coercing it to a
             ///< different type.
 
+    ZeroExtend, ///< Pass the argument directly with zero-extension.
+
+    SignExtend, ///< Pass the argument directly with sign-extension.
+
     Indirect, ///< Pass the argument indirectly via a hidden pointer
   };
 
@@ -49,6 +53,22 @@ public:
   ///
   /// \returns An \p ABIArgInfo value describing the argument.
   static ABIArgInfo getDirect(llvm::Type *TheType);
+
+  /// \brief Create an \p ABIIArgInfo value for an argument that is to be
+  ///        passed by value with zero extension.
+  ///
+  /// \param TheType  The type that this argument is passed as.
+  ///
+  /// \returns An \p ABIArgInfo value describing the argument.
+  static ABIArgInfo getZeroExtend(llvm::Type *TheType);
+
+  /// \brief Create an \p ABIIArgInfo value for an argument that is to be
+  ///        passed by value with sign extension.
+  ///
+  /// \param TheType  The type that this argument is passed as.
+  ///
+  /// \returns An \p ABIArgInfo value describing the argument.
+  static ABIArgInfo getSignExtend(llvm::Type *TheType);
 
   /// \brief Create an \p ABIIArgInfo value for an argument that is to be
   ///        passed by an implicit reference to a particular type.
@@ -86,13 +106,40 @@ public:
   uint32_t getIndex() const;
 };
 
+/// \brief Encapsulates an \p llvm::Type* and its signedness.
+class ABIType {
+private:
+  llvm::Type *TheType; ///< The type of this argument.
+  bool IsSigned;       ///< True if the type is a signed integral type.
+
+public:
+  /// \brief Creates an \p ABIType with the given type and signedness.
+  ///
+  /// \param TheType   The \p llvm::Type* for this \p ABIType.
+  /// \param IsSigned  True if this \p ABIType is a signed integral type.
+  ABIType(llvm::Type *TheType, bool IsSigned);
+
+  /// \brief Empty constructor to allow vectors, data-dependent construction,
+  ///        etc.
+  ABIType() {}
+
+  /// \brief Get the \p llvm::Type* for this \p ABIType.
+  ///
+  /// \returns The \p llvm::Type* for this \p ABIType.
+  llvm::Type *getType() const;
+
+  /// \brief Get the signedness of this \p ABIType.
+  ///
+  /// \returns True if this \p ABIType is a signed integral type.
+  bool isSigned() const;
+};
+
 /// \brief Encapsulautes ABI-specific functionality.
 ///
 /// The \p ABIInfo class provides ABI-specific services. Currently, this is
 /// limited to computing the details of how arguments are passed to functions
 /// for a given platform.
-class ABIInfo {
-public:
+struct ABIInfo {
   /// \brief Gets an \p ABIInfo that corresponds to the target of the given
   ///        \p Module.
   ///
@@ -107,6 +154,8 @@ public:
   /// target ABI.
   ///
   /// \param CC                    The calling convention for the call target.
+  /// \param IsManagedCallingConv  True if the callling convention targets
+  ///                              managed code.
   /// \param ResultType            The type of the target's result.
   /// \param ArgTypes              The types of the target's arguments.
   /// \param ResultInfo [out]      Argument passing information for the target's
@@ -114,8 +163,8 @@ public:
   /// \param ArgInfos [out]        Argument passing information for the target's
   ///                              arguments.
   virtual void
-  computeSignatureInfo(llvm::CallingConv::ID CC, llvm::Type *ResultType,
-                       llvm::ArrayRef<llvm::Type *> ArgTypes,
+  computeSignatureInfo(llvm::CallingConv::ID CC, bool IsManagedCallingConv,
+                       ABIType ResultType, llvm::ArrayRef<ABIType> ArgTypes,
                        ABIArgInfo &ResultInfo,
                        std::vector<ABIArgInfo> &ArgInfos) const = 0;
 };
