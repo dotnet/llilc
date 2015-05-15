@@ -1410,6 +1410,11 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
 
     for (uint32_t I = 0; I < NumDerivedFields; I++) {
       CORINFO_FIELD_HANDLE FieldHandle = getFieldInClass(ClassHandle, I);
+      if (FieldHandle == nullptr) {
+        // Likely a class that derives from System.__ComObject. See
+        // LLILC issue #557.
+        throw NotYetImplementedException("can't account for all fields");
+      }
       ASSERT(FieldHandle != nullptr);
       const uint32_t FieldOffset = getFieldOffset(FieldHandle);
       DerivedFields.push_back(std::make_pair(FieldOffset, FieldHandle));
@@ -1994,6 +1999,7 @@ IRNode *GenIR::convertToStackType(IRNode *Node, CorInfoType CorType) {
 // - lengthening float to double (since we allow floats on the stack)
 // - fixing pointer referent types
 // - implicit conversions from int to/from ptr
+// - sign extending int32 to native int
 //
 // Because LLVM's type system can't describe unsigned
 // types, we also pass in CorType to convey whether integral
@@ -2006,19 +2012,24 @@ IRNode *GenIR::convertFromStackType(IRNode *Node, CorInfoType CorType,
   case Type::TypeID::IntegerTyID: {
     const uint32_t Size = Ty->getIntegerBitWidth();
     const uint32_t DesiredSize = size(CorType);
-    ASSERT(Size >= DesiredSize);
 
     // A convert is needed if we're changing size
     // or implicitly converting int to ptr.
+    const bool NeedsExtension = (Size < DesiredSize);
     const bool NeedsTruncation = (Size > DesiredSize);
     const bool NeedsReinterpret =
         ((CorType == CorInfoType::CORINFO_TYPE_PTR) ||
          (CorType == CorInfoType::CORINFO_TYPE_BYREF));
 
     if (NeedsTruncation) {
-      // Hopefully we don't need both....
-      ASSERT(!NeedsReinterpret);
+      assert(!NeedsReinterpret && "cannot reinterpret and truncate");
       const bool IsSigned = isSigned(CorType);
+      Result = (IRNode *)LLVMBuilder->CreateIntCast(Node, ResultTy, IsSigned);
+    } else if (NeedsExtension) {
+      assert(!NeedsReinterpret && "cannot reinterpret and extend");
+      assert((CorType == CorInfoType::CORINFO_TYPE_NATIVEINT) &&
+             "only expect to extend to native int");
+      const bool IsSigned = true;
       Result = (IRNode *)LLVMBuilder->CreateIntCast(Node, ResultTy, IsSigned);
     } else if (NeedsReinterpret) {
       Result = (IRNode *)LLVMBuilder->CreateIntToPtr(Node, ResultTy);
@@ -3247,8 +3258,18 @@ IRNode *GenIR::getFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                                bool MustNullCheck) {
   // Get the field address.
   Type *AddressTy = Obj->getType();
+
+  // If we have a pointer-sized integer, convert to an unmanaged pointer.
+  if (AddressTy->isIntegerTy()) {
+    assert((AddressTy->getPrimitiveSizeInBits() == TargetPointerSizeInBits) &&
+           "expected pointer-sized int");
+    Type *PointerTy = getUnmanagedPointerType(AddressTy);
+    Obj = (IRNode *)LLVMBuilder->CreateIntToPtr(Obj, PointerTy);
+    AddressTy = PointerTy;
+  }
+
   ASSERT(AddressTy->isPointerTy());
-  const bool IsGcPointer = isManagedPointerType(cast<PointerType>(AddressTy));
+  const bool IsGcPointer = isManagedPointerType(AddressTy);
   Value *RawAddress = rdrGetFieldAddress(ResolvedToken, FieldInfo, Obj,
                                          IsGcPointer, MustNullCheck);
 
@@ -4697,6 +4718,11 @@ Value *GenIR::genConvertOverflowCheck(Value *Source, IntegerType *TargetTy,
     // truncation with overflow checking (converting e.g. from double to i8
     // uses a double->i32 helper followed by i32->i8 truncation), so continue
     // on to the integer conversion handling.
+  } else if (SourceTy->isPointerTy()) {
+    // Re-interpret pointers as native ints.
+    Type *NativeIntTy = getType(CorInfoType::CORINFO_TYPE_NATIVEINT, nullptr);
+    Source = LLVMBuilder->CreatePtrToInt(Source, NativeIntTy);
+    SourceTy = NativeIntTy;
   }
 
   assert(Source->getType() == SourceTy);
