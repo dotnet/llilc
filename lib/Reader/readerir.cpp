@@ -3920,7 +3920,8 @@ bool GenIR::arraySet(CORINFO_SIG_INFO *Sig) {
     return false;
   }
 
-  IRNode *Value = ReaderOperandStack->pop();
+  IRNode *Value =
+      convertFromStackType(ReaderOperandStack->pop(), ElemCorType, ElementTy);
 
   // This call will null-check the array so the store below can assume a
   // non-null pointer.
