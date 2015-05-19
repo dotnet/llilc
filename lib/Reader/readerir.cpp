@@ -1412,10 +1412,11 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
       CORINFO_FIELD_HANDLE FieldHandle = getFieldInClass(ClassHandle, I);
       if (FieldHandle == nullptr) {
         // Likely a class that derives from System.__ComObject. See
-        // LLILC issue #557.
-        throw NotYetImplementedException("can't account for all fields");
+        // LLILC issue #557. We'll just have to cope with an incomplete
+        // picture of this type.
+        assert(IsRefClass && "need to see all fields of value classes");
+        break;
       }
-      ASSERT(FieldHandle != nullptr);
       const uint32_t FieldOffset = getFieldOffset(FieldHandle);
       DerivedFields.push_back(std::make_pair(FieldOffset, FieldHandle));
     }
