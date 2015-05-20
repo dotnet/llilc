@@ -3807,8 +3807,10 @@ void ReaderBase::storeObj(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Value,
   } else {
     // Get the minimum Alignment for the class
     Alignment = getMinimumClassAlignment(Class, Alignment);
+    bool IsValueIsPointer = structsAreRepresentedByPointers();
     rdrCallWriteBarrierHelper(Address, Value, Alignment, IsVolatile,
-                              ResolvedToken, false, false, IsField, false);
+                              ResolvedToken, false, IsValueIsPointer, IsField,
+                              false);
   }
 }
 

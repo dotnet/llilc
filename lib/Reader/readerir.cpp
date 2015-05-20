@@ -53,6 +53,7 @@ IRNode *GenStack::pop() {
 
   IRNode *result = Stack.back();
   Stack.pop_back();
+
   return result;
 }
 
@@ -362,7 +363,9 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
       Value *Home = Arguments[J];
       Type *HomeType = Home->getType()->getPointerElementType();
       Arg = ABISignature::coerce(*this, HomeType, Arg);
-      LLVMBuilder->CreateStore(Arg, Home);
+      const bool IsVolatile = false;
+      storeAtAddressNoBarrierNonNull((IRNode *)Home, (IRNode *)Arg, HomeType,
+                                     IsVolatile);
     }
 
     J++;
@@ -788,6 +791,29 @@ void GenIR::zeroInitBlock(Value *Address, Value *Size) {
   Value *ZeroByte = ConstantInt::get(LLVMContext, APInt(8, 0, true));
   callHelperImpl(CORINFO_HELP_MEMSET, MayThrow, VoidTy, (IRNode *)Address,
                  (IRNode *)ZeroByte, (IRNode *)Size);
+}
+
+void GenIR::copyStruct(Type *StructTy, Value *DestinationAddress,
+                       Value *SourceAddress, bool IsVolatile,
+                       ReaderAlignType Alignment) {
+  // TODO: For small structs we may want to generate an integer StoreInst
+  // instead of calling a helper.
+  const DataLayout *DataLayout = JitContext->EE->getDataLayout();
+  const StructLayout *TheStructLayout =
+      DataLayout->getStructLayout(cast<StructType>(StructTy));
+  IRNode *StructSize =
+      (IRNode *)ConstantInt::get(Type::getInt32Ty(*JitContext->LLVMContext),
+                                 TheStructLayout->getSizeInBytes());
+  cpBlk(StructSize, (IRNode *)SourceAddress, (IRNode *)DestinationAddress,
+        Alignment, IsVolatile);
+}
+
+bool GenIR::doesValueRepresentStruct(Value *TheValue) {
+  return StructPointers.count(TheValue) == 1;
+}
+
+void GenIR::setValueRepresentsStruct(Value *TheValue) {
+  StructPointers.insert(TheValue);
 }
 
 // Return true if this IR node is a reference to the
@@ -1833,7 +1859,6 @@ bool GenIR::isValidStackType(IRNode *Node) {
   case Type::TypeID::PointerTyID:
   case Type::TypeID::FloatTyID:
   case Type::TypeID::DoubleTyID:
-  case Type::TypeID::StructTyID:
     IsValid = true;
     break;
 
@@ -2069,20 +2094,33 @@ IRNode *GenIR::convertFromStackType(IRNode *Node, CorInfoType CorType,
   }
 
   case Type::TypeID::PointerTyID: {
+    bool PointerRepresentsStruct = doesValueRepresentStruct(Node);
+    if (PointerRepresentsStruct) {
+      if (Ty->getPointerElementType() != ResultTy) {
+        StructType *ResultStructTy = cast<StructType>(ResultTy);
+        StructType *NodeStructTy =
+            cast<StructType>(Ty->getPointerElementType());
+        assert(ResultStructTy->isLayoutIdentical(NodeStructTy));
+        PointerType *NodePointerType = cast<PointerType>(Ty);
+        ResultTy =
+            PointerType::get(ResultTy, NodePointerType->getAddressSpace());
+      } else {
+        break;
+      }
+    }
     // May need to cast referent types.
     if (Ty != ResultTy) {
       Result = (IRNode *)LLVMBuilder->CreatePointerCast(Node, ResultTy);
+      if (PointerRepresentsStruct) {
+        setValueRepresentsStruct(Result);
+      }
     }
     break;
   }
 
   case Type::TypeID::StructTyID:
-    if (Ty != ResultTy) {
-      throw NotYetImplementedException("mismatching struct types");
-    }
-    ASSERT(Ty == ResultTy);
-    // No conversions possible/necessary.
-    break;
+  // We don't allow structs on the stack. They are represented by pointers.
+  // Fall through to default.
 
   default:
     // An invalid type
@@ -3184,15 +3222,18 @@ void GenIR::storeLocal(uint32_t LocalOrdinal, IRNode *Arg1,
   Type *LocalTy = LocalAddress->getType()->getPointerElementType();
   IRNode *Value =
       convertFromStackType(Arg1, LocalVarCorTypes[LocalIndex], LocalTy);
-  makeStoreNonNull(Value, LocalAddress, false);
+  storeAtAddressNoBarrierNonNull((IRNode *)LocalAddress, Value, LocalTy,
+                                 IsVolatile);
 }
 
 IRNode *GenIR::loadLocal(uint32_t LocalOrdinal) {
   uint32_t LocalIndex = LocalOrdinal;
   Value *LocalAddress = LocalVars[LocalIndex];
-  IRNode *Value = (IRNode *)makeLoadNonNull(LocalAddress, false);
-  IRNode *Result = convertToStackType(Value, LocalVarCorTypes[LocalIndex]);
-  return Result;
+  Type *LocalTy = LocalAddress->getType()->getPointerElementType();
+  const bool IsVolatile = false;
+  return loadAtAddressNonNull((IRNode *)LocalAddress, LocalTy,
+                              LocalVarCorTypes[LocalIndex], Reader_AlignNatural,
+                              IsVolatile);
 }
 
 IRNode *GenIR::loadLocalAddress(uint32_t LocalOrdinal) {
@@ -3212,7 +3253,8 @@ void GenIR::storeArg(uint32_t ArgOrdinal, IRNode *Arg1,
       ABIArgInfo::Indirect) {
     storeIndirectArg(CallArgType, Value, ArgAddress, IsVolatile);
   } else {
-    makeStoreNonNull(Value, ArgAddress, IsVolatile);
+    storeAtAddressNoBarrierNonNull((IRNode *)ArgAddress, Value, ArgTy,
+                                   IsVolatile);
   }
 }
 
@@ -3222,10 +3264,12 @@ IRNode *GenIR::loadArg(uint32_t ArgOrdinal, bool IsJmp) {
   }
   uint32_t ArgIndex = MethodSignature.getArgIndexForILArg(ArgOrdinal);
   Value *ArgAddress = Arguments[ArgIndex];
-  IRNode *ArgValue = (IRNode *)makeLoadNonNull(ArgAddress, false);
+
+  Type *ArgTy = ArgAddress->getType()->getPointerElementType();
+  const bool IsVolatile = false;
   CorInfoType CorType = MethodSignature.getArgumentTypes()[ArgIndex].CorType;
-  IRNode *Result = convertToStackType(ArgValue, CorType);
-  return Result;
+  return loadAtAddressNonNull((IRNode *)ArgAddress, ArgTy, CorType,
+                              Reader_AlignNatural, IsVolatile);
 }
 
 IRNode *GenIR::loadArgAddress(uint32_t ArgOrdinal) {
@@ -3401,6 +3445,26 @@ IRNode *GenIR::loadAtAddress(IRNode *Address, Type *Ty, CorInfoType CorType,
   }
 }
 
+// Generate instructions for loading value of the specified type at the
+// specified address.
+IRNode *GenIR::loadAtAddress(IRNode *Address, Type *Ty, CorInfoType CorType,
+                             ReaderAlignType AlignmentPrefix, bool IsVolatile,
+                             bool AddressMayBeNull) {
+  StructType *StructTy = dyn_cast<StructType>(Ty);
+  if (StructTy != nullptr) {
+    return loadNonPrimitiveObj(StructTy, Address, AlignmentPrefix, IsVolatile,
+                               AddressMayBeNull);
+  } else {
+    LoadInst *LoadInst = makeLoad(Address, IsVolatile, AddressMayBeNull);
+    uint32_t Align = convertReaderAlignment(AlignmentPrefix);
+    LoadInst->setAlignment(Align);
+
+    IRNode *Result = convertToStackType((IRNode *)LoadInst, CorType);
+
+    return Result;
+  }
+}
+
 // Generate instructions for storing value of the specified type at the
 // specified address.
 void GenIR::storeAtAddress(IRNode *Address, IRNode *ValueToStore, Type *Ty,
@@ -3416,6 +3480,21 @@ void GenIR::storeAtAddress(IRNode *Address, IRNode *ValueToStore, Type *Ty,
         makeStore(ValueToStore, Address, IsVolatile, AddressMayBeNull);
     uint32_t Align = convertReaderAlignment(Alignment);
     StoreInst->setAlignment(Align);
+  }
+}
+
+void GenIR::storeAtAddressNoBarrierNonNull(IRNode *Address,
+                                           IRNode *ValueToStore, llvm::Type *Ty,
+                                           bool IsVolatile) {
+  StructType *StructTy = dyn_cast<StructType>(Ty);
+  if (StructTy != nullptr) {
+    Type *ValueType = ValueToStore->getType();
+    assert(ValueType->isPointerTy() &&
+           (ValueType->getPointerElementType() == Ty));
+    assert(doesValueRepresentStruct(ValueToStore));
+    copyStruct(StructTy, Address, ValueToStore, IsVolatile);
+  } else {
+    makeStoreNonNull(ValueToStore, Address, IsVolatile);
   }
 }
 
@@ -3508,7 +3587,10 @@ void GenIR::storeIndirectArg(const CallArgType &ValueArgType,
                              llvm::Value *ValueToStore, llvm::Value *Address,
                              bool IsVolatile) {
   assert(isManagedPointerType(cast<PointerType>(Address->getType())));
-  assert(ValueToStore->getType()->isStructTy());
+  Type *ValueToStoreType = ValueToStore->getType();
+  assert(ValueToStoreType->isPointerTy() &&
+         ValueToStoreType->getPointerElementType()->isStructTy());
+  assert(doesValueRepresentStruct(ValueToStore));
 
   CORINFO_CLASS_HANDLE ArgClass = ValueArgType.Class;
 
@@ -3521,7 +3603,7 @@ void GenIR::storeIndirectArg(const CallArgType &ValueArgType,
   const ReaderAlignType Alignment =
       getMinimumClassAlignment(ArgClass, Reader_AlignNatural);
   const bool IsNotValueClass = !JitContext->JitInfo->isValueClass(ArgClass);
-  const bool IsValueIsPointer = false;
+  const bool IsValueIsPointer = true;
   const bool IsFieldToken = false;
   const bool IsUnchecked = false;
   rdrCallWriteBarrierHelper((IRNode *)Address, (IRNode *)ValueToStore,
@@ -3612,14 +3694,8 @@ void GenIR::storeStaticField(CORINFO_RESOLVED_TOKEN *FieldToken,
   }
 
   // Create an assignment which stores the value into the static field.
-  if (!IsStructTy) {
-    makeStoreNonNull(ValueToStore, DstAddress, IsVolatile);
-  } else {
-    IRNode *SrcAddress = (IRNode *)addressOfValue(ValueToStore);
-    IRNode *FieldSize = loadConstantI4(getClassSize(FieldClassHandle));
-    cpBlk(FieldSize, SrcAddress, (IRNode *)DstAddress, Reader_AlignNatural,
-          IsVolatile);
-  }
+  storeAtAddressNoBarrierNonNull((IRNode *)DstAddress, ValueToStore, FieldTy,
+                                 IsVolatile);
 }
 
 IRNode *GenIR::loadStaticField(CORINFO_RESOLVED_TOKEN *FieldToken,
@@ -3658,9 +3734,8 @@ IRNode *GenIR::loadStaticField(CORINFO_RESOLVED_TOKEN *FieldToken,
     Address = LLVMBuilder->CreatePointerCast(Address, PtrToFieldTy);
   }
 
-  IRNode *FieldValue = (IRNode *)makeLoadNonNull(Address, IsVolatile);
-  IRNode *Result = convertToStackType(FieldValue, FieldCorType);
-  return Result;
+  return loadAtAddressNonNull((IRNode *)Address, FieldTy, FieldCorType,
+                              Reader_AlignNatural, IsVolatile);
 }
 
 IRNode *GenIR::addressOfValue(IRNode *Leaf) {
@@ -3669,11 +3744,20 @@ IRNode *GenIR::addressOfValue(IRNode *Leaf) {
   switch (LeafTy->getTypeID()) {
   case Type::TypeID::IntegerTyID:
   case Type::TypeID::FloatTyID:
-  case Type::TypeID::DoubleTyID:
-  case Type::TypeID::StructTyID: {
+  case Type::TypeID::DoubleTyID: {
     Instruction *Alloc = createTemporary(LeafTy);
     StoreInst *Store = LLVMBuilder->CreateStore(Leaf, Alloc);
     return (IRNode *)Alloc;
+  }
+  case Type::TypeID::PointerTyID: {
+    assert(doesValueRepresentStruct(Leaf));
+
+    // Create a new pointer to the struct. The new pointer will point to the
+    // same struct as the original pointer but doesValueRepresentStruct will
+    // return false for the new pointer.
+    Instruction *Alloc = createTemporary(LeafTy);
+    StoreInst *Store = LLVMBuilder->CreateStore(Leaf, Alloc);
+    return (IRNode *)LLVMBuilder->CreateLoad(Alloc);
   }
   default:
     ASSERTNR(UNREACHED);
@@ -4339,17 +4423,18 @@ IRNode *GenIR::convertHandle(IRNode *GetTokenNumericNode,
   // Assign the field of the result struct.
   LLVMBuilder->CreateStore(HelperResult.getInstruction(), FieldAddress);
 
-  const bool IsVolatile = false;
-  return (IRNode *)LLVMBuilder->CreateLoad(Result, IsVolatile);
+  setValueRepresentsStruct(Result);
+
+  return (IRNode *)Result;
 }
 
 IRNode *GenIR::getTypeFromHandle(IRNode *Arg1) {
   // We expect RuntimeTypeHandle that has a single field.
-  assert(Arg1->getType()->getStructNumElements() == 1);
+  assert(Arg1->getType()->getPointerElementType()->getStructNumElements() == 1);
+  assert(doesValueRepresentStruct(Arg1));
 
   // Get the address of the struct's only field.
-  Value *FieldAddress =
-      LLVMBuilder->CreateStructGEP(nullptr, addressOfValue(Arg1), 0);
+  Value *FieldAddress = LLVMBuilder->CreateStructGEP(nullptr, Arg1, 0);
 
   // Return the field's value (of type RuntimeType).
   const bool IsVolatile = false;
@@ -4549,9 +4634,13 @@ IRNode *GenIR::genNewObjReturnNode(ReaderCallTargetData *CallTargetData,
       Alloca = AddrSpaceCast->getOperand(0);
     }
     AllocaInst *Temp = cast<AllocaInst>(Alloca);
-
-    // The temp we passed as the this arg needs to be dereferenced.
-    return (IRNode *)makeLoadNonNull((Value *)Temp, false);
+    if (Temp->getType()->getPointerElementType()->isStructTy()) {
+      setValueRepresentsStruct(Temp);
+      return (IRNode *)Temp;
+    } else {
+      // The temp we passed as the this arg needs to be dereferenced.
+      return (IRNode *)makeLoadNonNull((Value *)Temp, false);
+    }
   }
 
   // Otherwise, we already have a good value.
@@ -5803,6 +5892,10 @@ PHINode *GenIR::mergeConditionalResults(BasicBlock *JoinBlock, Value *Arg1,
   PHINode *PHI = createPHINode(JoinBlock, Arg1->getType(), 2, NameStr);
   PHI->addIncoming(Arg1, Block1);
   PHI->addIncoming(Arg2, Block2);
+  if (doesValueRepresentStruct(Arg1)) {
+    assert(doesValueRepresentStruct(Arg2));
+    setValueRepresentsStruct(PHI);
+  }
   return PHI;
 }
 
@@ -5941,10 +6034,30 @@ IRNode *GenIR::loadNonPrimitiveObj(IRNode *Addr,
   CorInfoType CorType = JitContext->JitInfo->asCorInfoType(ClassHandle);
   IRNode *TypedAddr =
       getTypedAddress(Addr, CorType, ClassHandle, Alignment, &Align);
-  LoadInst *LoadInst = makeLoad(TypedAddr, IsVolatile, AddressMayBeNull);
-  LoadInst->setAlignment(Align);
 
-  return (IRNode *)LoadInst;
+  StructType *StructTy = cast<StructType>(getType(CorType, ClassHandle));
+
+  return loadNonPrimitiveObj(StructTy, TypedAddr, Alignment, IsVolatile,
+                             AddressMayBeNull);
+}
+
+IRNode *GenIR::loadNonPrimitiveObj(StructType *StructTy, IRNode *Address,
+                                   ReaderAlignType Alignment, bool IsVolatile,
+                                   bool AddressMayBeNull) {
+  if (AddressMayBeNull) {
+    if (UseExplicitNullChecks) {
+      Address = genNullCheck(Address);
+    } else {
+      // If we had support for implicit null checks, this
+      // path would need to annotate the load we're about
+      // to generate.
+    }
+  }
+
+  IRNode *Copy = (IRNode *)createTemporary(StructTy);
+  copyStruct(cast<StructType>(StructTy), Copy, Address, IsVolatile, Alignment);
+  setValueRepresentsStruct(Copy);
+  return Copy;
 }
 
 void GenIR::classifyCmpType(Type *Ty, uint32_t &Size, bool &IsPointer,
@@ -6503,6 +6616,9 @@ void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
           // TODO: Could be nice to have actual pred. count here instead, but
           // there's no simple way of fetching that, AFAICT.
           PHI = createPHINode(SuccessorBlock, CurrentValue->getType(), 2, "");
+          if (doesValueRepresentStruct(CurrentValue)) {
+            setValueRepresentsStruct(PHI);
+          }
 
           // Preemptively add all predecessors to the PHI node to ensure
           // that we don't forget any once we're done.
@@ -6541,7 +6657,10 @@ void GenIR::AddPHIOperand(PHINode *PHI, Value *NewOperand,
   Type *NewOperandTy = NewOperand->getType();
 
   if (PHITy != NewOperandTy) {
-    Type *NewPHITy = getStackMergeType(PHITy, NewOperandTy);
+    bool IsStructPHITy = doesValueRepresentStruct(PHI);
+    bool IsStructNewOperandTy = doesValueRepresentStruct(NewOperand);
+    Type *NewPHITy = getStackMergeType(PHITy, NewOperandTy, IsStructPHITy,
+                                       IsStructNewOperandTy);
     IRBuilder<>::InsertPoint SavedInsertPoint = LLVMBuilder->saveIP();
     if (NewPHITy != PHITy) {
       // Change the type of the PHI instruction and the types of all of its
@@ -6589,10 +6708,13 @@ Value *GenIR::ChangePHIOperandType(Value *Operand, BasicBlock *OperandBlock,
   }
 }
 
-Type *GenIR::getStackMergeType(Type *Ty1, Type *Ty2) {
+Type *GenIR::getStackMergeType(Type *Ty1, Type *Ty2, bool IsStruct1,
+                               bool IsStruct2) {
   if (Ty1 == Ty2) {
     return Ty1;
   }
+
+  assert(IsStruct1 == IsStruct2);
 
   LLVMContext &LLVMContext = *this->JitContext->LLVMContext;
 
@@ -6651,6 +6773,17 @@ Type *GenIR::getStackMergeType(Type *Ty1, Type *Ty2) {
       MergedClass = getBuiltinClass(CorInfoClassId::CLASSID_SYSTEM_OBJECT);
     }
     return getType(CORINFO_TYPE_CLASS, MergedClass);
+  }
+
+  if (IsStruct1 && IsStruct2) {
+    // We can have mismatching struct types due to generic sharing.
+    // Verify that the struct layouts match.
+    StructType *StructTy1 = cast<StructType>(Ty1->getPointerElementType());
+    StructType *StructTy2 = cast<StructType>(Ty2->getPointerElementType());
+    if (StructTy1->isLayoutIdentical(StructTy2)) {
+      // Arbitrarily pick Ty1 as the resulting type.
+      return Ty1;
+    }
   }
 
   if (Ty1->isStructTy() && Ty2->isStructTy()) {
