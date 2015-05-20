@@ -49,6 +49,21 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\cmov\Double_Xor_Op.cmd" >
              <Issue>480</Issue>
         </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinbase)\JIT\Directed\lifetime\lifetime1.cmd" >
+             <Issue>31</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinbase)\JIT\Directed\lifetime\lifetime2.cmd" >
+             <Issue>31</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\newarr\newarr.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\StrAccess\straccess3.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\StrAccess\straccess4.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\gc\misc\eh1.cmd" >
              <Issue>420</Issue>
         </ExcludeList>
