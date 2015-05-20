@@ -385,9 +385,7 @@ public:
   IRNode *getValueFromRuntimeHandle(IRNode *Arg1) override;
 
   IRNode *arrayGetDimLength(IRNode *Arg1, IRNode *Arg2,
-                            CORINFO_CALL_INFO *CallInfo) override {
-    throw NotYetImplementedException("arrayGetDimLength");
-  };
+                            CORINFO_CALL_INFO *CallInfo) override;
 
   IRNode *loadAndBox(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Addr,
                      ReaderAlignType AlignmentPrefix) override;
@@ -1315,6 +1313,17 @@ private:
   /// \param ElemType Type of the array element.
   /// \returns Node representing the address of the array element.
   IRNode *mdArrayRefAddr(uint32_t Rank, llvm::Type *ElemType);
+
+  /// Get the length of the specified dimension of a multidimensional array
+  /// or a single-dimensional array with a non-zero lower bound.
+  ///
+  /// This method assumes that the array pointer is not null (i.e., the callers
+  //  are responsible for inserting a null check).
+  ///
+  /// \param Array Array object to get the dimension length of.
+  /// \param Dimension Array dimension.
+  /// \returns Node representing the length of the specified dimension.
+  IRNode *mdArrayGetDimensionLength(llvm::Value *Array, llvm::Value *Dimension);
 
   /// Create a PHI node in a block that may or may not have a terminator.
   ///
