@@ -3708,12 +3708,15 @@ IRNode *ReaderBase::refAnyVal(IRNode *RefAny,
   // first argument is class handle
   Arg1 = genericTokenToNode(ResolvedToken);
 
+  // second argument is the refany (passed by reference)
+  IRNode *Arg2 = RefAny;
+
   // Create Dst operand, interior gc ptr
   Dst = makePtrDstGCOperand(true);
 
   // Make the helper call
   const bool MayThrow = true;
-  return callHelper(CORINFO_HELP_GETREFANY, MayThrow, Dst, Arg1, RefAny);
+  return callHelper(CORINFO_HELP_GETREFANY, MayThrow, Dst, Arg1, Arg2);
 }
 
 void ReaderBase::storeElemRefAny(IRNode *Value, IRNode *Index, IRNode *Obj) {

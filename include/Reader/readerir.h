@@ -439,9 +439,7 @@ public:
   }
 
   IRNode *makeRefAny(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                     IRNode *Object) override {
-    throw NotYetImplementedException("makeRefAny");
-  };
+                     IRNode *Object) override;
   IRNode *newArr(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1) override;
   IRNode *newObj(mdToken Token, mdToken LoadFtnToken,
                  uint32_t CurrOffset) override;

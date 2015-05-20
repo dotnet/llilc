@@ -2023,10 +2023,10 @@ IRNode *GenIR::convertToStackType(IRNode *Node, CorInfoType CorType) {
   case Type::TypeID::PointerTyID:
   case Type::TypeID::FloatTyID:
   case Type::TypeID::DoubleTyID:
-  case Type::TypeID::StructTyID:
     // Already a valid stack type.
     break;
 
+  case Type::TypeID::StructTyID:
   default:
     // An invalid type
     ASSERTNR(UNREACHED);
@@ -6541,6 +6541,43 @@ IRNode *GenIR::loadAndBox(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Addr,
   // to the box helper (for primitives and value classes) and let it do the
   // load. Otherwise we end up with a redundant store/load in the path.
   return box(ResolvedToken, Value);
+}
+
+IRNode *GenIR::makeRefAny(CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                          IRNode *Object) {
+  // Create a new temporary of the right type.
+  CORINFO_CLASS_HANDLE RefAnyHandle = getBuiltinClass(CLASSID_TYPED_BYREF);
+  Type *RefAnyTy = getType(CORINFO_TYPE_VALUECLASS, RefAnyHandle);
+  StructType *RefAnyStructTy = cast<StructType>(RefAnyTy);
+  Value *RefAny = createTemporary(RefAnyTy, "RefAny");
+  const bool IsVolatile = false;
+
+  // Store the object in the value field. Object should either be an object
+  // reference or the address of a local or param, both of which we type as
+  // managed pointers.
+  const unsigned ValueIndex = 0;
+  const unsigned TypeIndex = 1;
+  assert(isManagedPointerType(Object->getType()) &&
+         "wrong type for refany value");
+  Value *ValueFieldAddress =
+      LLVMBuilder->CreateStructGEP(RefAnyTy, RefAny, ValueIndex);
+  Value *CastObject = LLVMBuilder->CreatePointerCast(
+      Object, RefAnyStructTy->getContainedType(ValueIndex));
+  makeStoreNonNull(CastObject, ValueFieldAddress, IsVolatile);
+
+  // Store the type handle in the type field.
+  Value *TypeFieldAddress =
+      LLVMBuilder->CreateStructGEP(RefAnyTy, RefAny, TypeIndex);
+  Value *TypeHandle = genericTokenToNode(ResolvedToken);
+  assert(
+      (TypeHandle->getType() == RefAnyStructTy->getContainedType(TypeIndex)) &&
+      "wrong type for refany type");
+  makeStoreNonNull(TypeHandle, TypeFieldAddress, IsVolatile);
+
+  // Load the refany as the result.
+  setValueRepresentsStruct(RefAny);
+
+  return (IRNode *)RefAny;
 }
 
 #pragma endregion
