@@ -10,45 +10,6 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\CodeGenBringUpTests\localloc.cmd" >
              <Issue>13</Issue>
         </ExcludeList> 
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\cmov\Bool_Or_Op.cmd" >
-             <Issue>480</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\cmov\Double_Or_Op.cmd" >
-             <Issue>480</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\cmov\Bool_And_Op.cmd" >
-             <Issue>480</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\cmov\Bool_No_Op.cmd" >
-             <Issue>480</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\cmov\Int_Or_Op.cmd" >
-             <Issue>480</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\cmov\Float_Xor_Op.cmd" >
-             <Issue>480</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\cmov\Int_And_Op.cmd" >
-             <Issue>480</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\cmov\Float_And_Op.cmd" >
-             <Issue>480</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\cmov\Bool_Xor_Op.cmd" >
-             <Issue>480</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\cmov\Double_And_Op.cmd" >
-             <Issue>480</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\cmov\Float_Or_Op.cmd" >
-             <Issue>480</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\cmov\Int_Xor_Op.cmd" >
-             <Issue>480</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\cmov\Double_Xor_Op.cmd" >
-             <Issue>480</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinbase)\JIT\Directed\lifetime\lifetime1.cmd" >
              <Issue>31</Issue>
         </ExcludeList>
@@ -321,45 +282,6 @@
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\refany\virtcall.cmd" >
              <Issue>13</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\MDArray\DataTypes\bool.cmd" >
-             <Issue>516</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\MDArray\DataTypes\byte.cmd" >
-             <Issue>516</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\MDArray\DataTypes\char.cmd" >
-             <Issue>516</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\MDArray\DataTypes\decimal.cmd" >
-             <Issue>516</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\MDArray\DataTypes\double.cmd" >
-             <Issue>516</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\MDArray\DataTypes\float.cmd" >
-             <Issue>516</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\MDArray\DataTypes\int.cmd" >
-             <Issue>516</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\MDArray\DataTypes\long.cmd" >
-             <Issue>516</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\MDArray\DataTypes\sbyte.cmd" >
-             <Issue>516</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\MDArray\DataTypes\short.cmd" >
-             <Issue>516</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\MDArray\DataTypes\uint.cmd" >
-             <Issue>516</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\MDArray\DataTypes\ulong.cmd" >
-             <Issue>516</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\MDArray\DataTypes\ushort.cmd" >
-             <Issue>516</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\M00\b99219\b99219.cmd" >
              <Issue>601</Issue>
