@@ -4184,16 +4184,8 @@ IRNode *GenIR::mdArrayRefAddr(uint32_t Rank, llvm::Type *ElemType) {
     // Subtract the lower bound
     Index = (IRNode *)LLVMBuilder->CreateSub(Index, LowerBound);
 
-    // Load the dimension length
-    Value *DimensionLengthIndices[] = {
-        ConstantInt::get(Int32Ty, 0),
-        ConstantInt::get(Int32Ty, DimensionLengthsIndex),
-        ConstantInt::get(Int32Ty, I)};
-    Value *DimensionLengthAddress =
-        LLVMBuilder->CreateInBoundsGEP(Array, DimensionLengthIndices);
-    LoadInst *DimensionLength =
-        makeLoadNonNull(DimensionLengthAddress, IsVolatile);
-    DimensionLength->setAlignment(NaturalAlignment);
+    IRNode *DimensionLength =
+        mdArrayGetDimensionLength(Array, ConstantInt::get(Int32Ty, I));
 
     // Do the range check
     genBoundsCheck(DimensionLength, Index);
@@ -4218,6 +4210,69 @@ IRNode *GenIR::mdArrayRefAddr(uint32_t Rank, llvm::Type *ElemType) {
       LLVMBuilder->CreateInBoundsGEP(Array, ElementAddressIndices);
 
   return (IRNode *)ElementAddress;
+}
+
+IRNode *GenIR::arrayGetDimLength(IRNode *Arg1, IRNode *Arg2,
+                                 CORINFO_CALL_INFO *CallInfo) {
+
+  IRNode *Dimension = Arg1;
+  IRNode *Array = Arg2;
+
+  const int VectorStructNumElements = 4;
+  const int MDArrayStructNumElements = 6;
+  StructType *ArrayStructType =
+      cast<StructType>(Array->getType()->getPointerElementType());
+  uint64_t ArrayRank = 0;
+  unsigned int ArrayStructNumElements = ArrayStructType->getNumElements();
+  Type *Int32Ty = Type::getInt32Ty(*JitContext->LLVMContext);
+
+  if (ArrayStructNumElements == VectorStructNumElements) {
+    // We have a zero-based one-dimensional array.
+    ArrayRank = 1;
+    Constant *ArrayRankValue = ConstantInt::get(Int32Ty, ArrayRank);
+    genBoundsCheck(ArrayRankValue, Dimension);
+
+    // This call will load the array length which will ensure that the array is
+    // not null.
+    return loadLen(Array);
+  } else {
+    assert(ArrayStructNumElements == MDArrayStructNumElements);
+    // We have a multi-dimensional array or a single-dimensional array with a
+    // non-zero lower bound.
+
+    // Check whether the array is null. If UseExplicitNullChecks were false,
+    // we'd need to annotate the first load as exception-bearing.
+    if (UseExplicitNullChecks) {
+      Array = genNullCheck(Array);
+    }
+
+    const int DimensionLengthsIndex = 3;
+    ArrayType *DimLengthsArrayType =
+        cast<ArrayType>(ArrayStructType->getElementType(DimensionLengthsIndex));
+    ArrayRank = DimLengthsArrayType->getArrayNumElements();
+    Constant *ArrayRankValue = ConstantInt::get(Int32Ty, ArrayRank);
+    genBoundsCheck(ArrayRankValue, Dimension);
+
+    return mdArrayGetDimensionLength(Array, Dimension);
+  }
+}
+
+IRNode *GenIR::mdArrayGetDimensionLength(Value *Array, Value *Dimension) {
+  Type *Int32Ty = Type::getInt32Ty(*JitContext->LLVMContext);
+  const int DimensionLengthsIndex = 3;
+
+  // Load the dimension length
+  const bool IsVolatile = false;
+  uint32_t NaturalAlignment = convertReaderAlignment(Reader_AlignNatural);
+  Value *DimensionLengthIndices[] = {
+      ConstantInt::get(Int32Ty, 0),
+      ConstantInt::get(Int32Ty, DimensionLengthsIndex), Dimension};
+  Value *DimensionLengthAddress =
+      LLVMBuilder->CreateInBoundsGEP(Array, DimensionLengthIndices);
+  LoadInst *DimensionLength =
+      makeLoadNonNull(DimensionLengthAddress, IsVolatile);
+  DimensionLength->setAlignment(NaturalAlignment);
+  return (IRNode *)DimensionLength;
 }
 
 void GenIR::branch() {
