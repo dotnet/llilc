@@ -6303,7 +6303,10 @@ void GenIR::condBranch(ReaderBaseNS::CondBranchOpcode Opcode, IRNode *Arg1,
 IRNode *GenIR::getStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken) {
   CORINFO_FIELD_INFO FieldInfo;
   getFieldInfo(ResolvedToken, CORINFO_ACCESS_ADDRESS, &FieldInfo);
-  return rdrGetStaticFieldAddress(ResolvedToken, &FieldInfo);
+  IRNode *Address = rdrGetStaticFieldAddress(ResolvedToken, &FieldInfo);
+  uint32_t Align;
+  return getTypedAddress(Address, FieldInfo.fieldType, FieldInfo.structType,
+                         Reader_AlignNatural, &Align);
 }
 
 IRNode *GenIR::shift(ReaderBaseNS::ShiftOpcode Opcode, IRNode *ShiftAmount,
