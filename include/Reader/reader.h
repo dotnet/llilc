@@ -3211,9 +3211,17 @@ public:
 
   /// Create an operand that will be used to pass to the boxing helper
   ///
-  /// \param Class CORINFO_CLASS_HANDLE of the type to be boxed
+  /// \param Class \p CORINFO_CLASS_HANDLE for the type to be boxed
   /// \returns Operand
   virtual IRNode *makeBoxDstOperand(CORINFO_CLASS_HANDLE Class) = 0;
+
+  /// Create an operand that will be used to determine the return type
+  /// of the refanytype helper.
+  ///
+  /// \param Class  \p CORINFO_CLASS_HANDLE for the type being extracted
+  ///               from the \p TypedReference.
+  /// \returns The appropriately-typed operand.
+  virtual IRNode *makeRefAnyDstOperand(CORINFO_CLASS_HANDLE Class) = 0;
 
   virtual IRNode *makePtrDstGCOperand(bool IsInteriorGC) = 0;
   virtual IRNode *makePtrNode(ReaderPtrType PointerType = Reader_PtrNotGc) = 0;
