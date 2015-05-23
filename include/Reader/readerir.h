@@ -442,9 +442,8 @@ public:
   IRNode *newObj(mdToken Token, mdToken LoadFtnToken,
                  uint32_t CurrOffset) override;
   void pop(IRNode *Opr) override;
-  IRNode *refAnyType(IRNode *Arg1) override {
-    throw NotYetImplementedException("refAnyType");
-  };
+
+  IRNode *refAnyType(IRNode *Arg1) override;
 
   void rethrow() override { throw NotYetImplementedException("rethrow"); };
   void returnOpcode(IRNode *Opr, bool IsSynchronizedMethod) override;

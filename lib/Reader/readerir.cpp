@@ -6645,6 +6645,30 @@ IRNode *GenIR::makeRefAny(CORINFO_RESOLVED_TOKEN *ResolvedToken,
   return (IRNode *)RefAny;
 }
 
+IRNode *GenIR::refAnyType(IRNode *RefAny) {
+  CORINFO_CLASS_HANDLE RefAnyHandle = getBuiltinClass(CLASSID_TYPED_BYREF);
+  Type *RefAnyTy = getType(CORINFO_TYPE_VALUECLASS, RefAnyHandle);
+  StructType *RefAnyStructTy = cast<StructType>(RefAnyTy);
+
+  assert(RefAny->getType()->isPointerTy());
+  assert(RefAny->getType()->getPointerElementType() == RefAnyTy &&
+         "refAnyType expects a RefAny as an argument");
+
+  // Load the second field of the RefAny.
+  const unsigned TypeIndex = 1;
+  Value *TypeFieldAddress =
+      LLVMBuilder->CreateStructGEP(RefAnyTy, RefAny, TypeIndex);
+  const bool IsVolatile = false;
+  Value *TypeValue = makeLoadNonNull(TypeFieldAddress, IsVolatile);
+
+  // Convert the native TypeHandle to a RuntimeTypeHandle
+  CORINFO_CLASS_HANDLE RuntimeTypeHandle =
+      getBuiltinClass(CorInfoClassId::CLASSID_TYPE_HANDLE);
+  return convertHandle((IRNode *)TypeValue,
+                       CORINFO_HELP_TYPEHANDLE_TO_RUNTIMETYPE_MAYBENULL,
+                       RuntimeTypeHandle);
+}
+
 #pragma endregion
 
 #pragma region STACK MAINTENANCE

@@ -54,7 +54,7 @@ def main(argv):
     args, unknown = parser.parse_known_args(argv)
 
     if unknown:
-        print 'Unknown argument(s): ', ', '.join(unknown)
+        print('Unknown argument(s): ', ', '.join(unknown))
         return const.UnknownArguments
 
     try:
@@ -77,17 +77,17 @@ def main(argv):
                     target_files.append(relative_path)
     except:
         e = sys.exc_info()[0]
-        print 'Error: CheckPass failed due to ', e
+        print('Error: CheckPass failed due to ', e)
         traceback.print_exc()
         return const.GeneralError
 
     # Check if results are empty
     if len(base_files) == 0:
-        print 'Error: base result is empty'
+        print('Error: base result is empty')
         return const.MissingResult
 
     if len(target_files) == 0:
-        print 'Error: target result is empty'
+        print('Error: target result is empty')
         return const.MissingResult
 
     # Track the number of methods meeting any of the following criteria:
@@ -115,7 +115,7 @@ def main(argv):
     # All other lines are ignored.
     prog = re.compile(r'^(Successfully read (.*))|(Failed to read (.*)\[.*\])$')
 
-    print 'Checking started.'
+    print('Checking started.')
     for file in base_files:
         if file in target_files:
             try:
@@ -140,48 +140,48 @@ def main(argv):
                     for line in target:
                         m = prog.match(line)
                         if m is not None:
-                            def update(method, good_set, bad_set, matched_count, new_count, bad_count):
-                                if method in good_set:
-                                    if not good_set[method]:
-                                        good_set[method] = True
+                            def update(method, same_set, other_set, matched_count, new_count, other_count):
+                                if method in same_set:
+                                    if not same_set[method]:
+                                        same_set[method] = True
                                         matched_count += 1
-                                elif method in bad_set:
-                                    if not bad_set[method]:
-                                        bad_set[method] = True
-                                        matched_count, bad_count = matched_count + 1, bad_count + 1
+                                elif method in other_set:
+                                    if not other_set[method]:
+                                        other_set[method] = True
+                                        matched_count, other_count = matched_count + 1, other_count + 1
                                 else:
                                     new_count += 1
 
-                                return matched_count, new_count, bad_count
+                                return matched_count, new_count, other_count
 
                             if m.group(1) is not None:
-                                base_matched_methods, new_target_successes, target_failure_diff = update(m.group(2), base_passing, base_failing, base_matched_methods, new_target_successes, target_failure_diff)
+                                base_matched_methods, new_target_successes, target_success_diff = update(m.group(2), base_passing, base_failing, base_matched_methods, new_target_successes, target_success_diff)
                             else:
-                                base_matched_methods, new_target_failures, target_success_diff = update(m.group(4), base_failing, base_passing, base_matched_methods, new_target_failures, target_success_diff)
+                                base_matched_methods, new_target_failures, target_failure_diff = update(m.group(4), base_failing, base_passing, base_matched_methods, new_target_failures, target_failure_diff)
 
                     missing_base_methods += len(base_passing) + len(base_failing) - base_matched_methods
             except:
                 e = sys.exc_info()[0]
-                print 'Error: CheckPass failed due to ', e
+                print('Error: CheckPass failed due to ', e)
                 traceback.print_exc()
                 return const.GeneralError
         else:
             missing_result_file = os.path.join(args.diff_result_path, file)
-            print 'Error: diff directory does not have result file ', missing_result_file
+            print('Error: diff directory does not have result file ', missing_result_file)
             return const.MissingResult
 
-    print 'CheckPass:', target_failure_diff, 'method(s) compiled successfully in base result that failed in target result.'
-    print 'CheckPass:', target_success_diff, 'method(s) failed in base result that compiled successfully in target result.'
-    print 'CheckPass:', missing_base_methods, 'method(s) processed in base result that were not processed in target result.'
-    print 'CheckPass:', new_target_successes, 'method(s) not processed in base result that compiled successfully in target result.'
-    print 'CheckPass:', new_target_failures, 'method(s) not processed in base result that failed to compile in target result.'
+    print('CheckPass:', target_failure_diff, 'method(s) compiled successfully in base result that failed in target result.')
+    print('CheckPass:', target_success_diff, 'method(s) failed in base result that compiled successfully in target result.')
+    print('CheckPass:', missing_base_methods, 'method(s) processed in base result that were not processed in target result.')
+    print('CheckPass:', new_target_successes, 'method(s) not processed in base result that compiled successfully in target result.')
+    print('CheckPass:', new_target_failures, 'method(s) not processed in base result that failed to compile in target result.')
 
     unexpected_failures = target_failure_diff + new_target_failures
 
     if unexpected_failures == 0:
-        print 'There were no unexpected failures.'
+        print('There were no unexpected failures.')
     else:
-        print 'There were unexpected failures.'
+        print('There were unexpected failures.')
 
     return unexpected_failures
 
