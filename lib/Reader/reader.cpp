@@ -3711,8 +3711,8 @@ IRNode *ReaderBase::refAnyVal(IRNode *RefAny,
   // second argument is the refany (passed by reference)
   IRNode *Arg2 = RefAny;
 
-  // Create Dst operand, interior gc ptr
-  Dst = makePtrDstGCOperand(true);
+  // Create dest operand
+  Dst = makeRefAnyDstOperand(ResolvedToken->hClass);
 
   // Make the helper call
   const bool MayThrow = true;

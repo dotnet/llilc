@@ -795,6 +795,8 @@ public:
                          bool IsCallTarget,
                          bool IsFrozenObject = false) override;
 
+  IRNode *makeRefAnyDstOperand(CORINFO_CLASS_HANDLE Class) override;
+
   // Create an operand that will be used to hold a pointer.
   IRNode *makePtrDstGCOperand(bool IsInteriorGC) override {
     return makePtrNode(IsInteriorGC ? Reader_PtrGcInterior : Reader_PtrGcBase);

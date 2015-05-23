@@ -5769,6 +5769,13 @@ IRNode *GenIR::handleToIRNode(mdToken Token, void *EmbHandle, void *RealHandle,
   return (IRNode *)HandleValue;
 }
 
+IRNode *GenIR::makeRefAnyDstOperand(CORINFO_CLASS_HANDLE Class) {
+  CorInfoType CorType = ReaderBase::getClassType(Class);
+  Type *ElementTy = getType(CorType, Class);
+  Type *Ty = getManagedPointerType(ElementTy);
+  return (IRNode *)Constant::getNullValue(Ty);
+}
+
 // TODO: currently PtrType telling base or interior pointer is ignored.
 // So for now, deliberately we keep this API to retain the call site.
 IRNode *GenIR::makePtrNode(ReaderPtrType PtrType) { return loadNull(); }
