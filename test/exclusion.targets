@@ -252,7 +252,7 @@
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\refany\gcreport.cmd" >
              <Issue>13</Issue>
-        <ExcludeList>
+        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\refany\virtcall.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
