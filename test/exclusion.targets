@@ -121,6 +121,30 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\opt\Inline\InlineThrow.cmd" >
              <Issue>487</Issue>
         </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Conversions\Reference\GenToGen01.cmd" >
+             <Issue>596</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Conversions\Reference\GenToGen02.cmd" >
+             <Issue>596</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Conversions\Reference\GenToGen03.cmd" >
+             <Issue>596</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Conversions\Reference\GenToNonGen01.cmd" >
+             <Issue>596</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Conversions\Reference\NonGenToGen01.cmd" >
+             <Issue>596</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Conversions\Reference\NonGenToGen02.cmd" >
+             <Issue>596</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Conversions\Reference\NonGenToGen03.cmd" >
+             <Issue>596</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Coverage\chaos65204782cs.cmd" >
+             <Issue>596</Issue>
+        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Exceptions\general_class_instance01.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
