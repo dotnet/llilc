@@ -112,10 +112,12 @@ bool JitOptions::queryIsAltJit(LLILCJitContext &Context) {
   }
 
 #ifdef ALT_JIT
-  if (AltJit->contains(Context.MethodName.data(), nullptr,
-                       Context.MethodInfo->args.pSig)) {
-    IsAlternateJit = true;
-  }
+  const char *ClassName = nullptr;
+  const char *MethodName = nullptr;
+  MethodName =
+      Context.JitInfo->getMethodName(Context.MethodInfo->ftn, &ClassName);
+  IsAlternateJit =
+      AltJit->contains(MethodName, ClassName, Context.MethodInfo->args.pSig);
 #endif // ALT_JIT
 
 #else
