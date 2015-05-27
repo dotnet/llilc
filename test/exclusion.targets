@@ -112,6 +112,48 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\staticFieldExprUnchecked1.cmd" >
              <Issue>462</Issue>
         </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\regress\vsw\471729\test.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\rngchk\ArrayBound.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\regress\vsw\373472\test.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\rngchk\SimpleArray_01.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\rngchk\ArrayWithFunc.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\inl\caninline.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\rngchk\ArrayWith2Loops.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\regress\vsw\539509\test1.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\rngchk\RngchkStress1.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\rngchk\RngchkStress2.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\rngchk\RngchkStress3.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\rngchk\BadMatrixMul.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\rngchk\JaggedArray.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cg\cgstress\CgStress1.cmd" >
+             <Issue>1039</Issue>
+        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\opt\Inline\Inline_Handler.cmd" >
              <Issue>487</Issue>
         </ExcludeList>
