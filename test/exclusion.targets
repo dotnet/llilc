@@ -319,5 +319,38 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\MDArray\DataTypes\ushort.cmd" >
              <Issue>516</Issue>
         </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\M00\b99219\b99219.cmd" >
+             <Issue>601</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\M00\b111130\makework.cmd" >
+             <Issue>601</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\M00\b141358\test.cmd" >
+             <Issue>601</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\M00\b115253\hello2.cmd" >
+             <Issue>601</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V1.2-M02\b26496\_1d6bgof.cmd" >
+             <Issue>601</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V1.2-M02\b10828\redundant.cmd" >
+             <Issue>601</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V1.2-M02\b102886\ovf.cmd" >
+             <Issue>601</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V2.0-Beta2\b302558\_aopst1l.cmd" >
+             <Issue>601</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V2.0-Beta2\b309539\_ba6c0ou.cmd" >
+             <Issue>601</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V2.0-Beta2\b311420\b311420.cmd" >
+             <Issue>601</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V2.0-RTM\b539509\b539509.cmd" >
+             <Issue>601</Issue>
+        </ExcludeList>
     </ItemGroup>
 </Project>
