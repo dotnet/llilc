@@ -49,6 +49,21 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\cmov\Double_Xor_Op.cmd" >
              <Issue>480</Issue>
         </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinbase)\JIT\Directed\lifetime\lifetime1.cmd" >
+             <Issue>31</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinbase)\JIT\Directed\lifetime\lifetime2.cmd" >
+             <Issue>31</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\newarr\newarr.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\StrAccess\straccess3.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\StrAccess\straccess4.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\gc\misc\eh1.cmd" >
              <Issue>420</Issue>
         </ExcludeList>
@@ -97,6 +112,48 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\staticFieldExprUnchecked1.cmd" >
              <Issue>462</Issue>
         </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\regress\vsw\471729\test.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\rngchk\ArrayBound.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\regress\vsw\373472\test.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\rngchk\SimpleArray_01.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\rngchk\ArrayWithFunc.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\inl\caninline.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\rngchk\ArrayWith2Loops.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\regress\vsw\539509\test1.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\rngchk\RngchkStress1.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\rngchk\RngchkStress2.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\rngchk\RngchkStress3.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\rngchk\BadMatrixMul.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\rngchk\JaggedArray.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cg\cgstress\CgStress1.cmd" >
+             <Issue>1039</Issue>
+        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\opt\Inline\Inline_Handler.cmd" >
              <Issue>487</Issue>
         </ExcludeList>
@@ -105,6 +162,30 @@
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\opt\Inline\InlineThrow.cmd" >
              <Issue>487</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Conversions\Reference\GenToGen01.cmd" >
+             <Issue>596</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Conversions\Reference\GenToGen02.cmd" >
+             <Issue>596</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Conversions\Reference\GenToGen03.cmd" >
+             <Issue>596</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Conversions\Reference\GenToNonGen01.cmd" >
+             <Issue>596</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Conversions\Reference\NonGenToGen01.cmd" >
+             <Issue>596</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Conversions\Reference\NonGenToGen02.cmd" >
+             <Issue>596</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Conversions\Reference\NonGenToGen03.cmd" >
+             <Issue>596</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Coverage\chaos65204782cs.cmd" >
+             <Issue>596</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Exceptions\general_class_instance01.cmd" >
              <Issue>13</Issue>
@@ -140,6 +221,105 @@
              <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Generics\Exceptions\specific_struct_static02.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Arrays\misc\arrres.cmd" >
+             <Issue>31</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Invoke\SEH\catchfinally.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Invoke\SEH\catchfinally_tail.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\MDArray\basics\classarr.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\MDArray\basics\doublearr.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\MDArray\basics\jaggedarr.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\MDArray\basics\stringarr.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\MDArray\basics\structarr.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\casts\SEH\cast_throw.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\casts\SEH\throw.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\casts\coverage\castclass_call.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\casts\coverage\castclass_ldarg.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\casts\coverage\castclass_ldloc.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\casts\coverage\castclass_newobj.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\casts\iface\iface1.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\explicit\basic\refarg_i1.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\flowgraph\bug619534\ehCodeMotion.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\flowgraph\bug619534\finallyclone.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\flowgraph\dev10_bug679008\castClassEH.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\int64\signed\s_ldc_div.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\int64\signed\s_ldc_mulovf.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\int64\signed\s_ldfld_mulovf.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\int64\signed\s_ldsfld_mulovf.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\int64\signed\s_muldiv.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\int64\superlong\superlong.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\int64\unsigned\addsub.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\int64\unsigned\ldc_mulovf.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\int64\unsigned\ldfld_mulovf.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\int64\unsigned\ldsfld_mulovf.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\int64\unsigned\muldiv.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\refany\format.cmd" >
+             <Issue>592</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\refany\gcreport.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\refany\virtcall.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\MDArray\DataTypes\bool.cmd" >
@@ -180,6 +360,39 @@
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\MDArray\DataTypes\ushort.cmd" >
              <Issue>516</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\M00\b99219\b99219.cmd" >
+             <Issue>601</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\M00\b111130\makework.cmd" >
+             <Issue>601</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\M00\b141358\test.cmd" >
+             <Issue>601</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\M00\b115253\hello2.cmd" >
+             <Issue>601</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V1.2-M02\b26496\_1d6bgof.cmd" >
+             <Issue>601</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V1.2-M02\b10828\redundant.cmd" >
+             <Issue>601</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V1.2-M02\b102886\ovf.cmd" >
+             <Issue>601</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V2.0-Beta2\b302558\_aopst1l.cmd" >
+             <Issue>601</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V2.0-Beta2\b309539\_ba6c0ou.cmd" >
+             <Issue>601</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V2.0-Beta2\b311420\b311420.cmd" >
+             <Issue>601</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V2.0-RTM\b539509\b539509.cmd" >
+             <Issue>601</Issue>
         </ExcludeList>
     </ItemGroup>
 </Project>

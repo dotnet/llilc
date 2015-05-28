@@ -389,9 +389,7 @@ public:
   IRNode *getValueFromRuntimeHandle(IRNode *Arg1) override;
 
   IRNode *arrayGetDimLength(IRNode *Arg1, IRNode *Arg2,
-                            CORINFO_CALL_INFO *CallInfo) override {
-    throw NotYetImplementedException("arrayGetDimLength");
-  };
+                            CORINFO_CALL_INFO *CallInfo) override;
 
   IRNode *loadAndBox(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Addr,
                      ReaderAlignType AlignmentPrefix) override;
@@ -423,17 +421,33 @@ public:
                               ReaderAlignType Alignment, bool IsVolatile,
                               bool AddressMayBeNull = true) override;
 
+  /// \brief Load a non-primitive object (i.e., a struct).
+  ///
+  /// \param StructTy Type of the struct.
+  /// \param Address Address of the struct.
+  /// \param Alignment Alignment of the load.
+  /// \param IsVolatile true iff this is a volatile load.
+  /// \param AddressMayBeNull true iff Address may be null.
+  ///
+  /// \returns Node representing loaded struct.
+  IRNode *loadNonPrimitiveObj(llvm::StructType *StructTy, IRNode *Address,
+                              ReaderAlignType Alignment, bool IsVolatile,
+                              bool AddressMayBeNull = true);
+
+  IRNode *loadNonPrimitiveObjNonNull(llvm::StructType *StructTy,
+                                     IRNode *Address, ReaderAlignType Alignment,
+                                     bool IsVolatile) {
+    return loadNonPrimitiveObj(StructTy, Address, Alignment, IsVolatile, false);
+  }
+
   IRNode *makeRefAny(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                     IRNode *Object) override {
-    throw NotYetImplementedException("makeRefAny");
-  };
+                     IRNode *Object) override;
   IRNode *newArr(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1) override;
   IRNode *newObj(mdToken Token, mdToken LoadFtnToken,
                  uint32_t CurrOffset) override;
   void pop(IRNode *Opr) override;
-  IRNode *refAnyType(IRNode *Arg1) override {
-    throw NotYetImplementedException("refAnyType");
-  };
+
+  IRNode *refAnyType(IRNode *Arg1) override;
 
   void rethrow() override { throw NotYetImplementedException("rethrow"); };
   void returnOpcode(IRNode *Opr, bool IsSynchronizedMethod) override;
@@ -807,6 +821,8 @@ public:
                          bool IsCallTarget,
                          bool IsFrozenObject = false) override;
 
+  IRNode *makeRefAnyDstOperand(CORINFO_CLASS_HANDLE Class) override;
+
   // Create an operand that will be used to hold a pointer.
   IRNode *makePtrDstGCOperand(bool IsInteriorGC) override {
     return makePtrNode(IsInteriorGC ? Reader_PtrGcInterior : Reader_PtrGcBase);
@@ -849,6 +865,8 @@ public:
   bool arrayGet(CORINFO_SIG_INFO *Sig, IRNode **RetVal) override;
   bool arraySet(CORINFO_SIG_INFO *Sig) override;
 
+  bool structsAreRepresentedByPointers() override { return true; }
+
 #if !defined(NDEBUG)
   void dbDumpFunction(void) override {
     throw NotYetImplementedException("dbDumpFunction");
@@ -887,7 +905,18 @@ private:
   /// integral values are zero extended
   IRNode *convert(llvm::Type *Type, llvm::Value *Node, bool IsSigned);
 
-  llvm::Type *binaryOpType(llvm::Type *Type1, llvm::Type *Type2);
+  /// \brief Determine the result type of a binary op.
+  ///
+  /// Rougly follows table III.2 of Ecma-335, with some extra cases added
+  /// because LLILC and IL stubs use this in non-standard ways. Note the result
+  /// is opcode-dependent and that Type1 and Type2 are not symmetric.
+  ///
+  /// \param Opcode  The binary opcode.
+  /// \param Type1   Type of the first operand popped from the operand stack.
+  /// \param Type2   Type of the second operand popped from the operand stack.
+  /// \returns       Type of the result.
+  llvm::Type *binaryOpType(ReaderBaseNS::BinaryOpcode Opcode, llvm::Type *Type1,
+                           llvm::Type *Type2);
 
   IRNode *genPointerAdd(IRNode *Arg1, IRNode *Arg2);
   IRNode *genPointerSub(IRNode *Arg1, IRNode *Arg2);
@@ -938,6 +967,18 @@ private:
                          IsVolatile, false);
   }
 
+  IRNode *loadAtAddress(IRNode *Address, llvm::Type *Ty, CorInfoType CorType,
+                        ReaderAlignType AlignmentPrefix, bool IsVolatile,
+                        bool AddressMayBeNull = true);
+
+  IRNode *loadAtAddressNonNull(IRNode *Address, llvm::Type *Ty,
+                               CorInfoType CorType,
+                               ReaderAlignType AlignmentPrefix,
+                               bool IsVolatile) {
+    return loadAtAddress(Address, Ty, CorType, AlignmentPrefix, IsVolatile,
+                         false);
+  }
+
   /// Generate instructions for storing value of the specified type at the
   /// specified address.
   ///
@@ -963,6 +1004,17 @@ private:
     return storeAtAddress(Address, ValueToStore, Ty, ResolvedToken,
                           AlignmentPrefix, IsVolatile, IsField, false);
   }
+
+  /// Generate instructions for storing value of the specified type at the
+  /// specified address. The caller must guarantee that address is not null and
+  /// no write barrier is needed.
+  ///
+  /// \param Address Address to store to.
+  /// \param ValueToStore Value to store.
+  /// \param Ty llvm type of the value to store.
+  /// \param IsVolatile true iff the store is volatile.
+  void storeAtAddressNoBarrierNonNull(IRNode *Address, IRNode *ValueToStore,
+                                      llvm::Type *Ty, bool IsVolatile);
 
   void classifyCmpType(llvm::Type *Ty, uint32_t &Size, bool &IsPointer,
                        bool &IsFloat);
@@ -1126,6 +1178,15 @@ private:
 
   uint32_t size(CorInfoType CorType);
   uint32_t stackSize(CorInfoType CorType);
+
+  /// \brief Determine whether a \p CorInfoType represents a signed integral
+  ///        type.
+  ///
+  /// \param CorType  The \p CorInfoType in question.
+  ///
+  /// \returns True if \p CorType represents a signed integral type.
+  static bool isSignedIntegralType(CorInfoType CorType);
+
   static bool isSigned(CorInfoType CorType);
   llvm::Type *getStackType(CorInfoType CorType);
 
@@ -1152,8 +1213,13 @@ private:
   ///
   /// \param Ty1 Type of the first value.
   /// \param Ty1 Type of the second value.
+  /// \param IsStruct1 true iff value corresponding to Ty1 logically represents
+  /// a struct rather than a pointer to struct.
+  /// \param IsStruct2 true iff value corresponding to Ty2 logically represents
+  /// a struct rather than a pointer to struct.
   /// \returns The result type.
-  llvm::Type *getStackMergeType(llvm::Type *Ty1, llvm::Type *Ty2);
+  llvm::Type *getStackMergeType(llvm::Type *Ty1, llvm::Type *Ty2,
+                                bool IsStruct1, bool isStruct2);
 
   bool objIsThis(IRNode *Obj);
 
@@ -1274,6 +1340,17 @@ private:
   /// \returns Node representing the address of the array element.
   IRNode *mdArrayRefAddr(uint32_t Rank, llvm::Type *ElemType);
 
+  /// Get the length of the specified dimension of a multidimensional array
+  /// or a single-dimensional array with a non-zero lower bound.
+  ///
+  /// This method assumes that the array pointer is not null (i.e., the callers
+  //  are responsible for inserting a null check).
+  ///
+  /// \param Array Array object to get the dimension length of.
+  /// \param Dimension Array dimension.
+  /// \returns Node representing the length of the specified dimension.
+  IRNode *mdArrayGetDimensionLength(llvm::Value *Array, llvm::Value *Dimension);
+
   /// Create a PHI node in a block that may or may not have a terminator.
   ///
   /// \param Block Block to create the PHI node in.
@@ -1356,6 +1433,28 @@ private:
   /// \param Address Address of the block.
   /// \param Size Size of the block.
   void zeroInitBlock(llvm::Value *Address, llvm::Value *Size);
+
+  /// Copy an instance of a struct from SourceAddress to DestinationAddress.
+  ///
+  /// \param StructTy Type of the struct.
+  /// \param DestinationAddress Address to copy to.
+  /// \param SourceAddress Address to copy from.
+  /// \param IsVolatile true iff copy is volatile.
+  /// \param Alignment Alignment of the copy.
+  void copyStruct(llvm::Type *StructTy, llvm::Value *DestinationAddress,
+                  llvm::Value *SourceAddress, bool IsVolatile,
+                  ReaderAlignType Alignment = Reader_AlignNatural);
+
+  /// Check if this value represents a struct.
+  ///
+  /// \param TheValue Value to examine.
+  /// \returns true iff TheValue represents a struct.
+  bool doesValueRepresentStruct(llvm::Value *TheValue);
+
+  /// Records that TheValue represents a struct.
+  ///
+  /// \param TheValue Value to record.
+  void setValueRepresentsStruct(llvm::Value *TheValue);
 
   /// Check if this LLVM type appears to be a CLR array type.
   ///
@@ -1460,6 +1559,14 @@ private:
   std::vector<llvm::Value *> Arguments;
   llvm::Value *IndirectResult;
   llvm::DenseMap<uint32_t, llvm::StoreInst *> ContinuationStoreMap;
+  llvm::SmallPtrSet<llvm::Value *, 5> StructPointers; ///< This set contains
+                                                      ///< pointers to structs
+                                                      ///< that we create
+                                                      ///< to represent structs
+                                                      ///< since we don't allow
+                                                      ///< first-class
+                                                      ///< aggregates in LLVM IR
+                                                      ///< we are generating.
   FlowGraphNode *FirstMSILBlock;
   llvm::BasicBlock *UnreachableContinuationBlock;
   llvm::Function *PersonalityFunction; ///< Personality routine reported on

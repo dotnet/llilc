@@ -2787,7 +2787,7 @@ public:
   /// \param Class  Class handle that corresponds to RuntimeTypeHandle,
   ///               RuntimeMethodHandle, or RuntimeFieldHandle.
   ///
-  /// \returns Runtime handle corresponding to the token node..
+  /// \returns Runtime handle corresponding to the token node.
   virtual IRNode *convertHandle(IRNode *RuntimeTokenNode,
                                 CorInfoHelpFunc HelperID,
                                 CORINFO_CLASS_HANDLE Class) = 0;
@@ -2811,6 +2811,16 @@ public:
     return loadPrimitiveType(Address, CorType, Alignment, IsVolatile,
                              IsInterfConst, false);
   }
+
+  /// \brief Load a non-primitive object (i.e., a struct).
+  ///
+  /// \param Address Address of the struct.
+  /// \param Class Class handle corresponding to the struct.
+  /// \param Alignment Alignment of the load.
+  /// \param IsVolatile true iff this is a volatile load.
+  /// \param AddressMayBeNull true iff Address may be null.
+  ///
+  /// \returns Node representing loaded struct.
   virtual IRNode *loadNonPrimitiveObj(IRNode *Address,
                                       CORINFO_CLASS_HANDLE Class,
                                       ReaderAlignType Alignment,
@@ -3217,9 +3227,17 @@ public:
 
   /// Create an operand that will be used to pass to the boxing helper
   ///
-  /// \param Class CORINFO_CLASS_HANDLE of the type to be boxed
+  /// \param Class \p CORINFO_CLASS_HANDLE for the type to be boxed
   /// \returns Operand
   virtual IRNode *makeBoxDstOperand(CORINFO_CLASS_HANDLE Class) = 0;
+
+  /// Create an operand that will be used to determine the return type
+  /// of the refanytype helper.
+  ///
+  /// \param Class  \p CORINFO_CLASS_HANDLE for the type being extracted
+  ///               from the \p TypedReference.
+  /// \returns The appropriately-typed operand.
+  virtual IRNode *makeRefAnyDstOperand(CORINFO_CLASS_HANDLE Class) = 0;
 
   virtual IRNode *makePtrDstGCOperand(bool IsInteriorGC) = 0;
   virtual IRNode *makePtrNode(ReaderPtrType PointerType = Reader_PtrNotGc) = 0;
@@ -3256,6 +3274,13 @@ public:
   // Used to expand multidimensional array access intrinsics
   virtual bool arrayGet(CORINFO_SIG_INFO *Sig, IRNode **RetVal) = 0;
   virtual bool arraySet(CORINFO_SIG_INFO *Sig) = 0;
+
+  /// \brief Check whether structs are represented by pointers on the operand
+  /// stack.
+  ///
+  /// \returns true iff structs are represented by pointers on the operand
+  /// stack.
+  virtual bool structsAreRepresentedByPointers() = 0;
 
 #if !defined(NDEBUG)
   virtual void dbDumpFunction(void) = 0;

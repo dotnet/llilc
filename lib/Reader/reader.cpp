@@ -3731,12 +3731,15 @@ IRNode *ReaderBase::refAnyVal(IRNode *RefAny,
   // first argument is class handle
   Arg1 = genericTokenToNode(ResolvedToken);
 
-  // Create Dst operand, interior gc ptr
-  Dst = makePtrDstGCOperand(true);
+  // second argument is the refany (passed by reference)
+  IRNode *Arg2 = RefAny;
+
+  // Create dest operand
+  Dst = makeRefAnyDstOperand(ResolvedToken->hClass);
 
   // Make the helper call
   const bool MayThrow = true;
-  return callHelper(CORINFO_HELP_GETREFANY, MayThrow, Dst, Arg1, RefAny);
+  return callHelper(CORINFO_HELP_GETREFANY, MayThrow, Dst, Arg1, Arg2);
 }
 
 void ReaderBase::storeElemRefAny(IRNode *Value, IRNode *Index, IRNode *Obj) {
@@ -3830,8 +3833,10 @@ void ReaderBase::storeObj(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Value,
   } else {
     // Get the minimum Alignment for the class
     Alignment = getMinimumClassAlignment(Class, Alignment);
+    bool IsValueIsPointer = structsAreRepresentedByPointers();
     rdrCallWriteBarrierHelper(Address, Value, Alignment, IsVolatile,
-                              ResolvedToken, false, false, IsField, false);
+                              ResolvedToken, false, IsValueIsPointer, IsField,
+                              false);
   }
 }
 

@@ -53,6 +53,7 @@ IRNode *GenStack::pop() {
 
   IRNode *result = Stack.back();
   Stack.pop_back();
+
   return result;
 }
 
@@ -385,7 +386,9 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
       Value *Home = Arguments[J];
       Type *HomeType = Home->getType()->getPointerElementType();
       Arg = ABISignature::coerce(*this, HomeType, Arg);
-      LLVMBuilder->CreateStore(Arg, Home);
+      const bool IsVolatile = false;
+      storeAtAddressNoBarrierNonNull((IRNode *)Home, (IRNode *)Arg, HomeType,
+                                     IsVolatile);
     }
 
     J++;
@@ -811,6 +814,29 @@ void GenIR::zeroInitBlock(Value *Address, Value *Size) {
   Value *ZeroByte = ConstantInt::get(LLVMContext, APInt(8, 0, true));
   callHelperImpl(CORINFO_HELP_MEMSET, MayThrow, VoidTy, (IRNode *)Address,
                  (IRNode *)ZeroByte, (IRNode *)Size);
+}
+
+void GenIR::copyStruct(Type *StructTy, Value *DestinationAddress,
+                       Value *SourceAddress, bool IsVolatile,
+                       ReaderAlignType Alignment) {
+  // TODO: For small structs we may want to generate an integer StoreInst
+  // instead of calling a helper.
+  const DataLayout *DataLayout = JitContext->EE->getDataLayout();
+  const StructLayout *TheStructLayout =
+      DataLayout->getStructLayout(cast<StructType>(StructTy));
+  IRNode *StructSize =
+      (IRNode *)ConstantInt::get(Type::getInt32Ty(*JitContext->LLVMContext),
+                                 TheStructLayout->getSizeInBytes());
+  cpBlk(StructSize, (IRNode *)SourceAddress, (IRNode *)DestinationAddress,
+        Alignment, IsVolatile);
+}
+
+bool GenIR::doesValueRepresentStruct(Value *TheValue) {
+  return StructPointers.count(TheValue) == 1;
+}
+
+void GenIR::setValueRepresentsStruct(Value *TheValue) {
+  StructPointers.insert(TheValue);
 }
 
 // Return true if this IR node is a reference to the
@@ -1433,7 +1459,13 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
 
     for (uint32_t I = 0; I < NumDerivedFields; I++) {
       CORINFO_FIELD_HANDLE FieldHandle = getFieldInClass(ClassHandle, I);
-      ASSERT(FieldHandle != nullptr);
+      if (FieldHandle == nullptr) {
+        // Likely a class that derives from System.__ComObject. See
+        // LLILC issue #557. We'll just have to cope with an incomplete
+        // picture of this type.
+        assert(IsRefClass && "need to see all fields of value classes");
+        break;
+      }
       const uint32_t FieldOffset = getFieldOffset(FieldHandle);
       DerivedFields.push_back(std::make_pair(FieldOffset, FieldHandle));
     }
@@ -1851,7 +1883,6 @@ bool GenIR::isValidStackType(IRNode *Node) {
   case Type::TypeID::PointerTyID:
   case Type::TypeID::FloatTyID:
   case Type::TypeID::DoubleTyID:
-  case Type::TypeID::StructTyID:
     IsValid = true;
     break;
 
@@ -1933,6 +1964,21 @@ uint32_t GenIR::size(CorInfoType CorType) {
   }
 }
 
+bool GenIR::isSignedIntegralType(CorInfoType CorType) {
+  switch (CorType) {
+  case CorInfoType::CORINFO_TYPE_UNDEF:
+  case CorInfoType::CORINFO_TYPE_VOID:
+  case CorInfoType::CORINFO_TYPE_FLOAT:
+  case CorInfoType::CORINFO_TYPE_DOUBLE:
+  case CorInfoType::CORINFO_TYPE_VALUECLASS:
+  case CorInfoType::CORINFO_TYPE_REFANY:
+    return false;
+
+  default:
+    return isSigned(CorType);
+  }
+}
+
 // Given an CorInfoType, determine if it is
 // signed or unsigned. Treats pointer
 // types as unsigned.
@@ -2000,10 +2046,10 @@ IRNode *GenIR::convertToStackType(IRNode *Node, CorInfoType CorType) {
   case Type::TypeID::PointerTyID:
   case Type::TypeID::FloatTyID:
   case Type::TypeID::DoubleTyID:
-  case Type::TypeID::StructTyID:
     // Already a valid stack type.
     break;
 
+  case Type::TypeID::StructTyID:
   default:
     // An invalid type
     ASSERTNR(UNREACHED);
@@ -2017,6 +2063,7 @@ IRNode *GenIR::convertToStackType(IRNode *Node, CorInfoType CorType) {
 // - lengthening float to double (since we allow floats on the stack)
 // - fixing pointer referent types
 // - implicit conversions from int to/from ptr
+// - sign extending int32 to native int
 //
 // Because LLVM's type system can't describe unsigned
 // types, we also pass in CorType to convey whether integral
@@ -2029,19 +2076,24 @@ IRNode *GenIR::convertFromStackType(IRNode *Node, CorInfoType CorType,
   case Type::TypeID::IntegerTyID: {
     const uint32_t Size = Ty->getIntegerBitWidth();
     const uint32_t DesiredSize = size(CorType);
-    ASSERT(Size >= DesiredSize);
 
     // A convert is needed if we're changing size
     // or implicitly converting int to ptr.
+    const bool NeedsExtension = (Size < DesiredSize);
     const bool NeedsTruncation = (Size > DesiredSize);
     const bool NeedsReinterpret =
         ((CorType == CorInfoType::CORINFO_TYPE_PTR) ||
          (CorType == CorInfoType::CORINFO_TYPE_BYREF));
 
     if (NeedsTruncation) {
-      // Hopefully we don't need both....
-      ASSERT(!NeedsReinterpret);
+      assert(!NeedsReinterpret && "cannot reinterpret and truncate");
       const bool IsSigned = isSigned(CorType);
+      Result = (IRNode *)LLVMBuilder->CreateIntCast(Node, ResultTy, IsSigned);
+    } else if (NeedsExtension) {
+      assert(!NeedsReinterpret && "cannot reinterpret and extend");
+      assert((CorType == CorInfoType::CORINFO_TYPE_NATIVEINT) &&
+             "only expect to extend to native int");
+      const bool IsSigned = true;
       Result = (IRNode *)LLVMBuilder->CreateIntCast(Node, ResultTy, IsSigned);
     } else if (NeedsReinterpret) {
       Result = (IRNode *)LLVMBuilder->CreateIntToPtr(Node, ResultTy);
@@ -2066,20 +2118,33 @@ IRNode *GenIR::convertFromStackType(IRNode *Node, CorInfoType CorType,
   }
 
   case Type::TypeID::PointerTyID: {
+    bool PointerRepresentsStruct = doesValueRepresentStruct(Node);
+    if (PointerRepresentsStruct) {
+      if (Ty->getPointerElementType() != ResultTy) {
+        StructType *ResultStructTy = cast<StructType>(ResultTy);
+        StructType *NodeStructTy =
+            cast<StructType>(Ty->getPointerElementType());
+        assert(ResultStructTy->isLayoutIdentical(NodeStructTy));
+        PointerType *NodePointerType = cast<PointerType>(Ty);
+        ResultTy =
+            PointerType::get(ResultTy, NodePointerType->getAddressSpace());
+      } else {
+        break;
+      }
+    }
     // May need to cast referent types.
     if (Ty != ResultTy) {
       Result = (IRNode *)LLVMBuilder->CreatePointerCast(Node, ResultTy);
+      if (PointerRepresentsStruct) {
+        setValueRepresentsStruct(Result);
+      }
     }
     break;
   }
 
   case Type::TypeID::StructTyID:
-    if (Ty != ResultTy) {
-      throw NotYetImplementedException("mismatching struct types");
-    }
-    ASSERT(Ty == ResultTy);
-    // No conversions possible/necessary.
-    break;
+  // We don't allow structs on the stack. They are represented by pointers.
+  // Fall through to default.
 
   default:
     // An invalid type
@@ -3129,7 +3194,7 @@ IRNode *GenIR::binaryOp(ReaderBaseNS::BinaryOpcode Opcode, IRNode *Arg1,
 
   Type *Type1 = Arg1->getType();
   Type *Type2 = Arg2->getType();
-  Type *ResultType = binaryOpType(Type1, Type2);
+  Type *ResultType = binaryOpType(Opcode, Type1, Type2);
 
   // If the result is a pointer, see if we have simple
   // pointer + int op...
@@ -3221,40 +3286,88 @@ IRNode *GenIR::binaryOp(ReaderBaseNS::BinaryOpcode Opcode, IRNode *Arg1,
   return Result;
 }
 
-Type *GenIR::binaryOpType(Type *Type1, Type *Type2) {
-  if (Type1->isPointerTy()) {
-    if (Type2->isPointerTy()) {
-      return Type::getIntNTy(*this->JitContext->LLVMContext,
-                             TargetPointerSizeInBits);
+Type *GenIR::binaryOpType(ReaderBaseNS::BinaryOpcode Opcode, Type *Type1,
+                          Type *Type2) {
+  // Roughly follows ECMA-355, Table III.2.
+  // If both types are floats, the result is the larger float type.
+  if (Type1->isFloatingPointTy() && Type2->isFloatingPointTy()) {
+    uint32_t Size1 = Type1->getPrimitiveSizeInBits();
+    uint32_t Size2 = Type2->getPrimitiveSizeInBits();
+    return (Size1 >= Size2 ? Type1 : Type2);
+  }
+
+  const bool Type1IsInt = Type1->isIntegerTy();
+  const bool Type2IsInt = Type2->isIntegerTy();
+  const bool Type1IsPtr = Type1->isPointerTy();
+  const bool Type2IsPtr = Type2->isPointerTy();
+
+  assert((Type1IsInt || Type1IsPtr) &&
+         "unexpected operand type1 for binary op");
+  assert((Type2IsInt || Type2IsPtr) &&
+         "unexpected operand type2 for binary op");
+
+  const uint32_t Size1 =
+      Type1IsPtr ? TargetPointerSizeInBits : Type1->getPrimitiveSizeInBits();
+  const uint32_t Size2 =
+      Type2IsPtr ? TargetPointerSizeInBits : Type2->getPrimitiveSizeInBits();
+
+  // If both types are integers, sizes must match, or one of the sizes must be
+  // native int and the other must be smaller.
+  if (Type1IsInt && Type2IsInt) {
+    if (Size1 == Size2) {
+      return Type1;
     }
-    ASSERTNR(!Type2->isFloatingPointTy());
-    return Type1;
-  } else if (Type2->isPointerTy()) {
-    ASSERTNR(!Type1->isFloatingPointTy());
-    return Type2;
-  }
-
-  if (Type1 == Type2) {
-    return Type1;
-  }
-
-  uint32_t Size1 = Type1->getPrimitiveSizeInBits();
-  uint32_t Size2 = Type2->getPrimitiveSizeInBits();
-
-  if (Type1->isFloatingPointTy()) {
-    if (Type2->isFloatingPointTy()) {
-      return Size1 > Size2 ? Type1 : Type2;
+    if ((Size1 == TargetPointerSizeInBits) && (Size1 > Size2)) {
+      return Type1;
     }
-    return Type1;
-  } else if (Type2->isFloatingPointTy()) {
-    return Type2;
+    if ((Size2 == TargetPointerSizeInBits) && (Size2 > Size1)) {
+      return Type2;
+    }
   }
 
-  if (Size1 > Size2) {
-    return Type1;
-  } else {
-    return Type2;
+  // If we see a mixture of int and unmanaged pointer, the result
+  // is generally a native int, with a few special cases where we
+  // preserve pointer-ness.
+  const bool Type1IsUnmanagedPointer = isUnmanagedPointerType(Type1);
+  const bool Type2IsUnmanagedPointer = isUnmanagedPointerType(Type2);
+  const bool IsStrictlyAdd = (Opcode == ReaderBaseNS::Add);
+  const bool IsAdd = IsStrictlyAdd || (Opcode == ReaderBaseNS::AddOvf) ||
+                     (Opcode == ReaderBaseNS::AddOvfUn);
+  const bool IsStrictlySub = (Opcode == ReaderBaseNS::Sub);
+  const bool IsSub = IsStrictlySub || (Opcode == ReaderBaseNS::SubOvf) ||
+                     (Opcode == ReaderBaseNS::SubOvfUn);
+  const bool IsStrictlyAddOrSub = IsStrictlyAdd || IsStrictlySub;
+  const bool IsAddOrSub = IsAdd || IsSub;
+
+  if (Type1IsUnmanagedPointer || Type2IsUnmanagedPointer) {
+    // ptr +/- int = ptr
+    if (IsAddOrSub && Type1IsUnmanagedPointer && Type2IsInt &&
+        (Size1 >= Size2)) {
+      return Type1;
+    }
+    // int + ptr = ptr
+    if (IsAdd && Type1IsInt && Type2IsUnmanagedPointer && (Size2 >= Size1)) {
+      return Type2;
+    }
+    // Otherwise type result as native int as long as there's no truncation
+    // going on.
+    if ((Size1 <= TargetPointerSizeInBits) &&
+        (Size2 <= TargetPointerSizeInBits)) {
+      return Type::getIntNTy(*JitContext->LLVMContext, TargetPointerSizeInBits);
+    }
   }
+
+  // Special case for just strict add and sub: if Type1 is a managed pointer
+  // and Type2 is an integer, the result is Type1. We see the add case in some
+  // internal uses in reader base. We see the sub case in some IL stubs.
+  if (IsStrictlyAddOrSub && isManagedPointerType(Type1) && Type2IsInt &&
+      (Size1 >= Size2)) {
+    return Type1;
+  }
+
+  // All other combinations are invalid.
+  ASSERT(UNREACHED);
+  return nullptr;
 }
 
 // Handle simple field access via a structural GEP.
@@ -3379,15 +3492,18 @@ void GenIR::storeLocal(uint32_t LocalOrdinal, IRNode *Arg1,
   Type *LocalTy = LocalAddress->getType()->getPointerElementType();
   IRNode *Value =
       convertFromStackType(Arg1, LocalVarCorTypes[LocalIndex], LocalTy);
-  makeStoreNonNull(Value, LocalAddress, false);
+  storeAtAddressNoBarrierNonNull((IRNode *)LocalAddress, Value, LocalTy,
+                                 IsVolatile);
 }
 
 IRNode *GenIR::loadLocal(uint32_t LocalOrdinal) {
   uint32_t LocalIndex = LocalOrdinal;
   Value *LocalAddress = LocalVars[LocalIndex];
-  IRNode *Value = (IRNode *)makeLoadNonNull(LocalAddress, false);
-  IRNode *Result = convertToStackType(Value, LocalVarCorTypes[LocalIndex]);
-  return Result;
+  Type *LocalTy = LocalAddress->getType()->getPointerElementType();
+  const bool IsVolatile = false;
+  return loadAtAddressNonNull((IRNode *)LocalAddress, LocalTy,
+                              LocalVarCorTypes[LocalIndex], Reader_AlignNatural,
+                              IsVolatile);
 }
 
 IRNode *GenIR::loadLocalAddress(uint32_t LocalOrdinal) {
@@ -3407,7 +3523,8 @@ void GenIR::storeArg(uint32_t ArgOrdinal, IRNode *Arg1,
       ABIArgInfo::Indirect) {
     storeIndirectArg(CallArgType, Value, ArgAddress, IsVolatile);
   } else {
-    makeStoreNonNull(Value, ArgAddress, IsVolatile);
+    storeAtAddressNoBarrierNonNull((IRNode *)ArgAddress, Value, ArgTy,
+                                   IsVolatile);
   }
 }
 
@@ -3417,10 +3534,12 @@ IRNode *GenIR::loadArg(uint32_t ArgOrdinal, bool IsJmp) {
   }
   uint32_t ArgIndex = MethodSignature.getArgIndexForILArg(ArgOrdinal);
   Value *ArgAddress = Arguments[ArgIndex];
-  IRNode *ArgValue = (IRNode *)makeLoadNonNull(ArgAddress, false);
+
+  Type *ArgTy = ArgAddress->getType()->getPointerElementType();
+  const bool IsVolatile = false;
   CorInfoType CorType = MethodSignature.getArgumentTypes()[ArgIndex].CorType;
-  IRNode *Result = convertToStackType(ArgValue, CorType);
-  return Result;
+  return loadAtAddressNonNull((IRNode *)ArgAddress, ArgTy, CorType,
+                              Reader_AlignNatural, IsVolatile);
 }
 
 IRNode *GenIR::loadArgAddress(uint32_t ArgOrdinal) {
@@ -3468,8 +3587,18 @@ IRNode *GenIR::getFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                                bool MustNullCheck) {
   // Get the field address.
   Type *AddressTy = Obj->getType();
+
+  // If we have a pointer-sized integer, convert to an unmanaged pointer.
+  if (AddressTy->isIntegerTy()) {
+    assert((AddressTy->getPrimitiveSizeInBits() == TargetPointerSizeInBits) &&
+           "expected pointer-sized int");
+    Type *PointerTy = getUnmanagedPointerType(AddressTy);
+    Obj = (IRNode *)LLVMBuilder->CreateIntToPtr(Obj, PointerTy);
+    AddressTy = PointerTy;
+  }
+
   ASSERT(AddressTy->isPointerTy());
-  const bool IsGcPointer = isManagedPointerType(cast<PointerType>(AddressTy));
+  const bool IsGcPointer = isManagedPointerType(AddressTy);
   Value *RawAddress = rdrGetFieldAddress(ResolvedToken, FieldInfo, Obj,
                                          IsGcPointer, MustNullCheck);
 
@@ -3586,6 +3715,26 @@ IRNode *GenIR::loadAtAddress(IRNode *Address, Type *Ty, CorInfoType CorType,
   }
 }
 
+// Generate instructions for loading value of the specified type at the
+// specified address.
+IRNode *GenIR::loadAtAddress(IRNode *Address, Type *Ty, CorInfoType CorType,
+                             ReaderAlignType AlignmentPrefix, bool IsVolatile,
+                             bool AddressMayBeNull) {
+  StructType *StructTy = dyn_cast<StructType>(Ty);
+  if (StructTy != nullptr) {
+    return loadNonPrimitiveObj(StructTy, Address, AlignmentPrefix, IsVolatile,
+                               AddressMayBeNull);
+  } else {
+    LoadInst *LoadInst = makeLoad(Address, IsVolatile, AddressMayBeNull);
+    uint32_t Align = convertReaderAlignment(AlignmentPrefix);
+    LoadInst->setAlignment(Align);
+
+    IRNode *Result = convertToStackType((IRNode *)LoadInst, CorType);
+
+    return Result;
+  }
+}
+
 // Generate instructions for storing value of the specified type at the
 // specified address.
 void GenIR::storeAtAddress(IRNode *Address, IRNode *ValueToStore, Type *Ty,
@@ -3601,6 +3750,21 @@ void GenIR::storeAtAddress(IRNode *Address, IRNode *ValueToStore, Type *Ty,
         makeStore(ValueToStore, Address, IsVolatile, AddressMayBeNull);
     uint32_t Align = convertReaderAlignment(Alignment);
     StoreInst->setAlignment(Align);
+  }
+}
+
+void GenIR::storeAtAddressNoBarrierNonNull(IRNode *Address,
+                                           IRNode *ValueToStore, llvm::Type *Ty,
+                                           bool IsVolatile) {
+  StructType *StructTy = dyn_cast<StructType>(Ty);
+  if (StructTy != nullptr) {
+    Type *ValueType = ValueToStore->getType();
+    assert(ValueType->isPointerTy() &&
+           (ValueType->getPointerElementType() == Ty));
+    assert(doesValueRepresentStruct(ValueToStore));
+    copyStruct(StructTy, Address, ValueToStore, IsVolatile);
+  } else {
+    makeStoreNonNull(ValueToStore, Address, IsVolatile);
   }
 }
 
@@ -3693,7 +3857,10 @@ void GenIR::storeIndirectArg(const CallArgType &ValueArgType,
                              llvm::Value *ValueToStore, llvm::Value *Address,
                              bool IsVolatile) {
   assert(isManagedPointerType(cast<PointerType>(Address->getType())));
-  assert(ValueToStore->getType()->isStructTy());
+  Type *ValueToStoreType = ValueToStore->getType();
+  assert(ValueToStoreType->isPointerTy() &&
+         ValueToStoreType->getPointerElementType()->isStructTy());
+  assert(doesValueRepresentStruct(ValueToStore));
 
   CORINFO_CLASS_HANDLE ArgClass = ValueArgType.Class;
 
@@ -3706,7 +3873,7 @@ void GenIR::storeIndirectArg(const CallArgType &ValueArgType,
   const ReaderAlignType Alignment =
       getMinimumClassAlignment(ArgClass, Reader_AlignNatural);
   const bool IsNotValueClass = !JitContext->JitInfo->isValueClass(ArgClass);
-  const bool IsValueIsPointer = false;
+  const bool IsValueIsPointer = true;
   const bool IsFieldToken = false;
   const bool IsUnchecked = false;
   rdrCallWriteBarrierHelper((IRNode *)Address, (IRNode *)ValueToStore,
@@ -3824,14 +3991,8 @@ void GenIR::storeStaticField(CORINFO_RESOLVED_TOKEN *FieldToken,
   }
 
   // Create an assignment which stores the value into the static field.
-  if (!IsStructTy) {
-    makeStoreNonNull(ValueToStore, DstAddress, IsVolatile);
-  } else {
-    IRNode *SrcAddress = (IRNode *)addressOfValue(ValueToStore);
-    IRNode *FieldSize = loadConstantI4(getClassSize(FieldClassHandle));
-    cpBlk(FieldSize, SrcAddress, (IRNode *)DstAddress, Reader_AlignNatural,
-          IsVolatile);
-  }
+  storeAtAddressNoBarrierNonNull((IRNode *)DstAddress, ValueToStore, FieldTy,
+                                 IsVolatile);
 }
 
 IRNode *GenIR::loadStaticField(CORINFO_RESOLVED_TOKEN *FieldToken,
@@ -3870,9 +4031,8 @@ IRNode *GenIR::loadStaticField(CORINFO_RESOLVED_TOKEN *FieldToken,
     Address = LLVMBuilder->CreatePointerCast(Address, PtrToFieldTy);
   }
 
-  IRNode *FieldValue = (IRNode *)makeLoadNonNull(Address, IsVolatile);
-  IRNode *Result = convertToStackType(FieldValue, FieldCorType);
-  return Result;
+  return loadAtAddressNonNull((IRNode *)Address, FieldTy, FieldCorType,
+                              Reader_AlignNatural, IsVolatile);
 }
 
 IRNode *GenIR::addressOfValue(IRNode *Leaf) {
@@ -3881,11 +4041,20 @@ IRNode *GenIR::addressOfValue(IRNode *Leaf) {
   switch (LeafTy->getTypeID()) {
   case Type::TypeID::IntegerTyID:
   case Type::TypeID::FloatTyID:
-  case Type::TypeID::DoubleTyID:
-  case Type::TypeID::StructTyID: {
+  case Type::TypeID::DoubleTyID: {
     Instruction *Alloc = createTemporary(LeafTy);
     StoreInst *Store = LLVMBuilder->CreateStore(Leaf, Alloc);
     return (IRNode *)Alloc;
+  }
+  case Type::TypeID::PointerTyID: {
+    assert(doesValueRepresentStruct(Leaf));
+
+    // Create a new pointer to the struct. The new pointer will point to the
+    // same struct as the original pointer but doesValueRepresentStruct will
+    // return false for the new pointer.
+    Instruction *Alloc = createTemporary(LeafTy);
+    StoreInst *Store = LLVMBuilder->CreateStore(Leaf, Alloc);
+    return (IRNode *)LLVMBuilder->CreateLoad(Alloc);
   }
   default:
     ASSERTNR(UNREACHED);
@@ -4132,7 +4301,8 @@ bool GenIR::arraySet(CORINFO_SIG_INFO *Sig) {
     return false;
   }
 
-  IRNode *Value = ReaderOperandStack->pop();
+  IRNode *Value =
+      convertFromStackType(ReaderOperandStack->pop(), ElemCorType, ElementTy);
 
   // This call will null-check the array so the store below can assume a
   // non-null pointer.
@@ -4310,16 +4480,8 @@ IRNode *GenIR::mdArrayRefAddr(uint32_t Rank, llvm::Type *ElemType) {
     // Subtract the lower bound
     Index = (IRNode *)LLVMBuilder->CreateSub(Index, LowerBound);
 
-    // Load the dimension length
-    Value *DimensionLengthIndices[] = {
-        ConstantInt::get(Int32Ty, 0),
-        ConstantInt::get(Int32Ty, DimensionLengthsIndex),
-        ConstantInt::get(Int32Ty, I)};
-    Value *DimensionLengthAddress =
-        LLVMBuilder->CreateInBoundsGEP(Array, DimensionLengthIndices);
-    LoadInst *DimensionLength =
-        makeLoadNonNull(DimensionLengthAddress, IsVolatile);
-    DimensionLength->setAlignment(NaturalAlignment);
+    IRNode *DimensionLength =
+        mdArrayGetDimensionLength(Array, ConstantInt::get(Int32Ty, I));
 
     // Do the range check
     genBoundsCheck(DimensionLength, Index);
@@ -4344,7 +4506,70 @@ IRNode *GenIR::mdArrayRefAddr(uint32_t Rank, llvm::Type *ElemType) {
       LLVMBuilder->CreateInBoundsGEP(Array, ElementAddressIndices);
 
   return (IRNode *)ElementAddress;
-};
+}
+
+IRNode *GenIR::arrayGetDimLength(IRNode *Arg1, IRNode *Arg2,
+                                 CORINFO_CALL_INFO *CallInfo) {
+
+  IRNode *Dimension = Arg1;
+  IRNode *Array = Arg2;
+
+  const int VectorStructNumElements = 4;
+  const int MDArrayStructNumElements = 6;
+  StructType *ArrayStructType =
+      cast<StructType>(Array->getType()->getPointerElementType());
+  uint64_t ArrayRank = 0;
+  unsigned int ArrayStructNumElements = ArrayStructType->getNumElements();
+  Type *Int32Ty = Type::getInt32Ty(*JitContext->LLVMContext);
+
+  if (ArrayStructNumElements == VectorStructNumElements) {
+    // We have a zero-based one-dimensional array.
+    ArrayRank = 1;
+    Constant *ArrayRankValue = ConstantInt::get(Int32Ty, ArrayRank);
+    genBoundsCheck(ArrayRankValue, Dimension);
+
+    // This call will load the array length which will ensure that the array is
+    // not null.
+    return loadLen(Array);
+  } else {
+    assert(ArrayStructNumElements == MDArrayStructNumElements);
+    // We have a multi-dimensional array or a single-dimensional array with a
+    // non-zero lower bound.
+
+    // Check whether the array is null. If UseExplicitNullChecks were false,
+    // we'd need to annotate the first load as exception-bearing.
+    if (UseExplicitNullChecks) {
+      Array = genNullCheck(Array);
+    }
+
+    const int DimensionLengthsIndex = 3;
+    ArrayType *DimLengthsArrayType =
+        cast<ArrayType>(ArrayStructType->getElementType(DimensionLengthsIndex));
+    ArrayRank = DimLengthsArrayType->getArrayNumElements();
+    Constant *ArrayRankValue = ConstantInt::get(Int32Ty, ArrayRank);
+    genBoundsCheck(ArrayRankValue, Dimension);
+
+    return mdArrayGetDimensionLength(Array, Dimension);
+  }
+}
+
+IRNode *GenIR::mdArrayGetDimensionLength(Value *Array, Value *Dimension) {
+  Type *Int32Ty = Type::getInt32Ty(*JitContext->LLVMContext);
+  const int DimensionLengthsIndex = 3;
+
+  // Load the dimension length
+  const bool IsVolatile = false;
+  uint32_t NaturalAlignment = convertReaderAlignment(Reader_AlignNatural);
+  Value *DimensionLengthIndices[] = {
+      ConstantInt::get(Int32Ty, 0),
+      ConstantInt::get(Int32Ty, DimensionLengthsIndex), Dimension};
+  Value *DimensionLengthAddress =
+      LLVMBuilder->CreateInBoundsGEP(Array, DimensionLengthIndices);
+  LoadInst *DimensionLength =
+      makeLoadNonNull(DimensionLengthAddress, IsVolatile);
+  DimensionLength->setAlignment(NaturalAlignment);
+  return (IRNode *)DimensionLength;
+}
 
 void GenIR::branch() {
   TerminatorInst *TermInst = LLVMBuilder->GetInsertBlock()->getTerminator();
@@ -4550,17 +4775,18 @@ IRNode *GenIR::convertHandle(IRNode *GetTokenNumericNode,
   // Assign the field of the result struct.
   LLVMBuilder->CreateStore(HelperResult.getInstruction(), FieldAddress);
 
-  const bool IsVolatile = false;
-  return (IRNode *)LLVMBuilder->CreateLoad(Result, IsVolatile);
+  setValueRepresentsStruct(Result);
+
+  return (IRNode *)Result;
 }
 
 IRNode *GenIR::getTypeFromHandle(IRNode *Arg1) {
   // We expect RuntimeTypeHandle that has a single field.
-  assert(Arg1->getType()->getStructNumElements() == 1);
+  assert(Arg1->getType()->getPointerElementType()->getStructNumElements() == 1);
+  assert(doesValueRepresentStruct(Arg1));
 
   // Get the address of the struct's only field.
-  Value *FieldAddress =
-      LLVMBuilder->CreateStructGEP(nullptr, addressOfValue(Arg1), 0);
+  Value *FieldAddress = LLVMBuilder->CreateStructGEP(nullptr, Arg1, 0);
 
   // Return the field's value (of type RuntimeType).
   const bool IsVolatile = false;
@@ -4760,9 +4986,13 @@ IRNode *GenIR::genNewObjReturnNode(ReaderCallTargetData *CallTargetData,
       Alloca = AddrSpaceCast->getOperand(0);
     }
     AllocaInst *Temp = cast<AllocaInst>(Alloca);
-
-    // The temp we passed as the this arg needs to be dereferenced.
-    return (IRNode *)makeLoadNonNull((Value *)Temp, false);
+    if (Temp->getType()->getPointerElementType()->isStructTy()) {
+      setValueRepresentsStruct(Temp);
+      return (IRNode *)Temp;
+    } else {
+      // The temp we passed as the this arg needs to be dereferenced.
+      return (IRNode *)makeLoadNonNull((Value *)Temp, false);
+    }
   }
 
   // Otherwise, we already have a good value.
@@ -4945,6 +5175,11 @@ Value *GenIR::genConvertOverflowCheck(Value *Source, IntegerType *TargetTy,
     // truncation with overflow checking (converting e.g. from double to i8
     // uses a double->i32 helper followed by i32->i8 truncation), so continue
     // on to the integer conversion handling.
+  } else if (SourceTy->isPointerTy()) {
+    // Re-interpret pointers as native ints.
+    Type *NativeIntTy = getType(CorInfoType::CORINFO_TYPE_NATIVEINT, nullptr);
+    Source = LLVMBuilder->CreatePtrToInt(Source, NativeIntTy);
+    SourceTy = NativeIntTy;
   }
 
   assert(Source->getType() == SourceTy);
@@ -5870,6 +6105,13 @@ IRNode *GenIR::handleToIRNode(mdToken Token, void *EmbHandle, void *RealHandle,
   return (IRNode *)HandleValue;
 }
 
+IRNode *GenIR::makeRefAnyDstOperand(CORINFO_CLASS_HANDLE Class) {
+  CorInfoType CorType = ReaderBase::getClassType(Class);
+  Type *ElementTy = getType(CorType, Class);
+  Type *Ty = getManagedPointerType(ElementTy);
+  return (IRNode *)Constant::getNullValue(Ty);
+}
+
 // TODO: currently PtrType telling base or interior pointer is ignored.
 // So for now, deliberately we keep this API to retain the call site.
 IRNode *GenIR::makePtrNode(ReaderPtrType PtrType) { return loadNull(); }
@@ -6059,6 +6301,10 @@ PHINode *GenIR::mergeConditionalResults(BasicBlock *JoinBlock, Value *Arg1,
   PHINode *PHI = createPHINode(JoinBlock, Arg1->getType(), 2, NameStr);
   PHI->addIncoming(Arg1, Block1);
   PHI->addIncoming(Arg2, Block2);
+  if (doesValueRepresentStruct(Arg1)) {
+    assert(doesValueRepresentStruct(Arg2));
+    setValueRepresentsStruct(PHI);
+  }
   return PHI;
 }
 
@@ -6197,10 +6443,30 @@ IRNode *GenIR::loadNonPrimitiveObj(IRNode *Addr,
   CorInfoType CorType = JitContext->JitInfo->asCorInfoType(ClassHandle);
   IRNode *TypedAddr =
       getTypedAddress(Addr, CorType, ClassHandle, Alignment, &Align);
-  LoadInst *LoadInst = makeLoad(TypedAddr, IsVolatile, AddressMayBeNull);
-  LoadInst->setAlignment(Align);
 
-  return (IRNode *)LoadInst;
+  StructType *StructTy = cast<StructType>(getType(CorType, ClassHandle));
+
+  return loadNonPrimitiveObj(StructTy, TypedAddr, Alignment, IsVolatile,
+                             AddressMayBeNull);
+}
+
+IRNode *GenIR::loadNonPrimitiveObj(StructType *StructTy, IRNode *Address,
+                                   ReaderAlignType Alignment, bool IsVolatile,
+                                   bool AddressMayBeNull) {
+  if (AddressMayBeNull) {
+    if (UseExplicitNullChecks) {
+      Address = genNullCheck(Address);
+    } else {
+      // If we had support for implicit null checks, this
+      // path would need to annotate the load we're about
+      // to generate.
+    }
+  }
+
+  IRNode *Copy = (IRNode *)createTemporary(StructTy);
+  copyStruct(cast<StructType>(StructTy), Copy, Address, IsVolatile, Alignment);
+  setValueRepresentsStruct(Copy);
+  return Copy;
 }
 
 void GenIR::classifyCmpType(Type *Ty, uint32_t &Size, bool &IsPointer,
@@ -6445,7 +6711,10 @@ void GenIR::condBranch(ReaderBaseNS::CondBranchOpcode Opcode, IRNode *Arg1,
 IRNode *GenIR::getStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken) {
   CORINFO_FIELD_INFO FieldInfo;
   getFieldInfo(ResolvedToken, CORINFO_ACCESS_ADDRESS, &FieldInfo);
-  return rdrGetStaticFieldAddress(ResolvedToken, &FieldInfo);
+  IRNode *Address = rdrGetStaticFieldAddress(ResolvedToken, &FieldInfo);
+  uint32_t Align;
+  return getTypedAddress(Address, FieldInfo.fieldType, FieldInfo.structType,
+                         Reader_AlignNatural, &Align);
 }
 
 IRNode *GenIR::shift(ReaderBaseNS::ShiftOpcode Opcode, IRNode *ShiftAmount,
@@ -6685,6 +6954,67 @@ IRNode *GenIR::loadAndBox(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Addr,
   return box(ResolvedToken, Value);
 }
 
+IRNode *GenIR::makeRefAny(CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                          IRNode *Object) {
+  // Create a new temporary of the right type.
+  CORINFO_CLASS_HANDLE RefAnyHandle = getBuiltinClass(CLASSID_TYPED_BYREF);
+  Type *RefAnyTy = getType(CORINFO_TYPE_VALUECLASS, RefAnyHandle);
+  StructType *RefAnyStructTy = cast<StructType>(RefAnyTy);
+  Value *RefAny = createTemporary(RefAnyTy, "RefAny");
+  const bool IsVolatile = false;
+
+  // Store the object in the value field. Object should either be an object
+  // reference or the address of a local or param, both of which we type as
+  // managed pointers.
+  const unsigned ValueIndex = 0;
+  const unsigned TypeIndex = 1;
+  assert(isManagedPointerType(Object->getType()) &&
+         "wrong type for refany value");
+  Value *ValueFieldAddress =
+      LLVMBuilder->CreateStructGEP(RefAnyTy, RefAny, ValueIndex);
+  Value *CastObject = LLVMBuilder->CreatePointerCast(
+      Object, RefAnyStructTy->getContainedType(ValueIndex));
+  makeStoreNonNull(CastObject, ValueFieldAddress, IsVolatile);
+
+  // Store the type handle in the type field.
+  Value *TypeFieldAddress =
+      LLVMBuilder->CreateStructGEP(RefAnyTy, RefAny, TypeIndex);
+  Value *TypeHandle = genericTokenToNode(ResolvedToken);
+  assert(
+      (TypeHandle->getType() == RefAnyStructTy->getContainedType(TypeIndex)) &&
+      "wrong type for refany type");
+  makeStoreNonNull(TypeHandle, TypeFieldAddress, IsVolatile);
+
+  // Load the refany as the result.
+  setValueRepresentsStruct(RefAny);
+
+  return (IRNode *)RefAny;
+}
+
+IRNode *GenIR::refAnyType(IRNode *RefAny) {
+  CORINFO_CLASS_HANDLE RefAnyHandle = getBuiltinClass(CLASSID_TYPED_BYREF);
+  Type *RefAnyTy = getType(CORINFO_TYPE_VALUECLASS, RefAnyHandle);
+  StructType *RefAnyStructTy = cast<StructType>(RefAnyTy);
+
+  assert(RefAny->getType()->isPointerTy());
+  assert(RefAny->getType()->getPointerElementType() == RefAnyTy &&
+         "refAnyType expects a RefAny as an argument");
+
+  // Load the second field of the RefAny.
+  const unsigned TypeIndex = 1;
+  Value *TypeFieldAddress =
+      LLVMBuilder->CreateStructGEP(RefAnyTy, RefAny, TypeIndex);
+  const bool IsVolatile = false;
+  Value *TypeValue = makeLoadNonNull(TypeFieldAddress, IsVolatile);
+
+  // Convert the native TypeHandle to a RuntimeTypeHandle
+  CORINFO_CLASS_HANDLE RuntimeTypeHandle =
+      getBuiltinClass(CorInfoClassId::CLASSID_TYPE_HANDLE);
+  return convertHandle((IRNode *)TypeValue,
+                       CORINFO_HELP_TYPEHANDLE_TO_RUNTIMETYPE_MAYBENULL,
+                       RuntimeTypeHandle);
+}
+
 #pragma endregion
 
 #pragma region STACK MAINTENANCE
@@ -6759,6 +7089,9 @@ void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
           // TODO: Could be nice to have actual pred. count here instead, but
           // there's no simple way of fetching that, AFAICT.
           PHI = createPHINode(SuccessorBlock, CurrentValue->getType(), 2, "");
+          if (doesValueRepresentStruct(CurrentValue)) {
+            setValueRepresentsStruct(PHI);
+          }
 
           // Preemptively add all predecessors to the PHI node to ensure
           // that we don't forget any once we're done.
@@ -6797,7 +7130,10 @@ void GenIR::AddPHIOperand(PHINode *PHI, Value *NewOperand,
   Type *NewOperandTy = NewOperand->getType();
 
   if (PHITy != NewOperandTy) {
-    Type *NewPHITy = getStackMergeType(PHITy, NewOperandTy);
+    bool IsStructPHITy = doesValueRepresentStruct(PHI);
+    bool IsStructNewOperandTy = doesValueRepresentStruct(NewOperand);
+    Type *NewPHITy = getStackMergeType(PHITy, NewOperandTy, IsStructPHITy,
+                                       IsStructNewOperandTy);
     IRBuilder<>::InsertPoint SavedInsertPoint = LLVMBuilder->saveIP();
     if (NewPHITy != PHITy) {
       // Change the type of the PHI instruction and the types of all of its
@@ -6845,10 +7181,13 @@ Value *GenIR::ChangePHIOperandType(Value *Operand, BasicBlock *OperandBlock,
   }
 }
 
-Type *GenIR::getStackMergeType(Type *Ty1, Type *Ty2) {
+Type *GenIR::getStackMergeType(Type *Ty1, Type *Ty2, bool IsStruct1,
+                               bool IsStruct2) {
   if (Ty1 == Ty2) {
     return Ty1;
   }
+
+  assert(IsStruct1 == IsStruct2);
 
   LLVMContext &LLVMContext = *this->JitContext->LLVMContext;
 
@@ -6907,6 +7246,17 @@ Type *GenIR::getStackMergeType(Type *Ty1, Type *Ty2) {
       MergedClass = getBuiltinClass(CorInfoClassId::CLASSID_SYSTEM_OBJECT);
     }
     return getType(CORINFO_TYPE_CLASS, MergedClass);
+  }
+
+  if (IsStruct1 && IsStruct2) {
+    // We can have mismatching struct types due to generic sharing.
+    // Verify that the struct layouts match.
+    StructType *StructTy1 = cast<StructType>(Ty1->getPointerElementType());
+    StructType *StructTy2 = cast<StructType>(Ty2->getPointerElementType());
+    if (StructTy1->isLayoutIdentical(StructTy2)) {
+      // Arbitrarily pick Ty1 as the resulting type.
+      return Ty1;
+    }
   }
 
   if (Ty1->isStructTy() && Ty2->isStructTy()) {
