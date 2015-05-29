@@ -13,6 +13,7 @@
 ///
 //===----------------------------------------------------------------------===//
 
+#include "earlyincludes.h"
 #include "GcInfo.h"
 #include "jitpch.h"
 #include "LLILCJit.h"
@@ -183,7 +184,7 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
     Builder.setOptLevel(CodeGenOpt::Level::Default);
   } else {
     Builder.setOptLevel(CodeGenOpt::Level::None);
-    Options.NoFramePointerElim = true;
+    // Options.NoFramePointerElim = true;
   }
 
   Builder.setTargetOptions(Options);

@@ -24,6 +24,7 @@
 ///
 //===----------------------------------------------------------------------===//
 
+#include "earlyincludes.h"
 #include "reader.h"
 #include "newvstate.h"
 #include "imeta.h"

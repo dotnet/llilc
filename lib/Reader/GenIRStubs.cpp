@@ -14,6 +14,7 @@
 ///
 //===----------------------------------------------------------------------===//
 
+#include "earlyincludes.h"
 #include "reader.h"
 #include <cstdarg>
 
