@@ -2667,7 +2667,7 @@ LandingPadInst *GenIR::createLandingPad(EHRegion *TryRegion,
   }
 
   // If we didn't break out to a handler, continue propagating the exception.
-  LLVMBuilder->CreateResume(FauxException);
+  LLVMBuilder->CreateResume(LandingPad);
 
   // Return the insertion point to where the caller had it.
   LLVMBuilder->restoreIP(SavedInsertPoint);
