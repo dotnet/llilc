@@ -13,6 +13,7 @@
 ///
 //===----------------------------------------------------------------------===//
 
+#include "earlyincludes.h"
 #include "readerir.h"
 #include "imeta.h"
 #include "newvstate.h"
@@ -526,7 +527,7 @@ void GenIR::insertIRToKeepGenericContextAlive() {
 
   // This method now requires a frame pointer.
   TargetMachine *TM = JitContext->EE->getTargetMachine();
-  TM->Options.NoFramePointerElim = true;
+  // TM->Options.NoFramePointerElim = true;
 
   // TODO: we must convey the offset of this local to the runtime
   // via the GC encoding.
@@ -5308,7 +5309,8 @@ void GenIR::nop() {
     // We may need to pick something else that survives lowering.
     Value *DoNothing = Intrinsic::getDeclaration(JitContext->CurrentModule,
                                                  Intrinsic::donothing);
-    LLVMBuilder->CreateCall(DoNothing);
+    ArrayRef<Value *> Args;
+    LLVMBuilder->CreateCall(DoNothing, Args);
   }
 }
 

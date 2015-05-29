@@ -14,6 +14,7 @@
 ///
 //===----------------------------------------------------------------------===//
 
+#include "earlyincludes.h"
 #include "global.h"
 #include "jitpch.h"
 #include "LLILCJit.h"
