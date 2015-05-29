@@ -2579,8 +2579,10 @@ void GenIR::fgEnterRegion(EHRegion *Region) {
 
   LandingPadInst *LandingPad = Parent->HandlerLandingPad;
 
-  if (Region->Kind == ReaderBaseNS::RegionKind::RGN_Try &&
-      !SuppressExceptionHandlers && !hasNYIClause(Region)) {
+  if (LandingPad != nullptr) {
+    // Nested landing pads are NYI
+  } else if (Region->Kind == ReaderBaseNS::RegionKind::RGN_Try &&
+             !SuppressExceptionHandlers && !hasNYIClause(Region)) {
     // Create a new inner landing pad
     LandingPad = createLandingPad(Region, LandingPad);
   }
