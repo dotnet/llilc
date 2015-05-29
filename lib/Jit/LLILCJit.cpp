@@ -200,7 +200,8 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
   // Construct the jitting layers.
   EEMemoryManager MM(&Context);
   LoadLayerT Loader;
-  CompileLayerT Compiler(Loader, orc::SimpleCompiler(*TM));
+  ReserveUnwindSpaceLayerT UnwindReserver(&Loader, &MM);
+  CompileLayerT Compiler(UnwindReserver, orc::SimpleCompiler(*TM));
 
   // Now jit the method.
   CorJitResult Result = CORJIT_INTERNALERROR;
