@@ -2606,17 +2606,15 @@ LandingPadInst *GenIR::createLandingPad(EHRegion *TryRegion,
     // A) the handle is opqaue, and we need an llvm::Function, and
     // B) LLVM's EH lowering expects the personality routine to have one of a
     //    few known names.
-    // Eventually, we want to be able to create llvm::Functions for
-    // CorInfoHelpFunc handles, and either get rid of the name matching in the
-    // EH lowering or teach it about the CLR's personality routine
-    // (ProcessCLRException).  For now, just pretend to be Windows MSVCRT C++
-    // since it triggers the most appropriate paths in WinEHPrepare.
+    // So, create an llvm::Function called ProcessCLRException (this is the
+    // name of the function that CORINFO_HELP_EE_PERSONALITY_ROUTINE resolves
+    // to) to match LLVM's expectations.
     // Use a dummy function type.
     FunctionType *PersonalityTy =
         FunctionType::get(Type::getVoidTy(LLVMContext), false);
     PersonalityFunction =
         Function::Create(PersonalityTy, Function::ExternalLinkage,
-                         "__CxxFrameHandler3", JitContext->CurrentModule);
+                         "ProcessCLRException", JitContext->CurrentModule);
   }
   // Landingpad defines an i8* (in addrspace 0) which is intended to be a
   // pointer to the exception object.  An actual pointer to a CLR exception
@@ -2685,21 +2683,25 @@ void GenIR::genCatchDispatch(EHRegion *CatchRegion, LandingPadInst *LandingPad,
   CORINFO_RESOLVED_TOKEN ResolvedToken;
   resolveToken(ClassToken, CORINFO_TOKENKIND_Class, &ResolvedToken);
   Type *CaughtType = getType(CORINFO_TYPE_CLASS, ResolvedToken.hClass);
-  // Generate a global variable that represents the caught exception type
-  // handle.
-  // TODO: This will need to be a value that can be mapped back to the class
-  // token.  Creating a dummy placeholder GlobalVariable for now.  Use i8 for
-  // tye type because we need to cast the address to i8* to form a well-typed
-  // LandingPad anyway.
-  Type *Int8Ty = Type::getInt8Ty(LLVMContext);
-  StructType *ExnClassType =
-      cast<StructType>(cast<PointerType>(CaughtType)->getElementType());
-  const bool IsConstant = true;
-  GlobalVariable *TokenValue = new GlobalVariable(
-      *JitContext->CurrentModule, Int8Ty, IsConstant,
-      GlobalVariable::ExternalLinkage, nullptr, ExnClassType->getName());
+  static_assert(sizeof(mdToken) == sizeof(int32_t), "Unexpected token size");
+  static_assert(std::is_unsigned<mdToken>::value,
+                "Unexpected token signedness");
+  IntegerType *TokenType = Type::getInt32Ty(LLVMContext);
+  Constant *TokenConstant = ConstantInt::get(TokenType, ClassToken);
+  // Cast TokenConstant to i8* because that's what the landingpad
+  // and eh_typeid_for call expect.
+  if (TargetPointerSizeInBits == 64) {
+    IntegerType *Int64Type = Type::getInt64Ty(LLVMContext);
+    TokenConstant = ConstantExpr::getZExt(TokenConstant, Int64Type);
+  }
+  Type *Int8PtrType = Type::getInt8PtrTy(LLVMContext);
+  TokenConstant = ConstantExpr::getIntToPtr(TokenConstant, Int8PtrType);
   // Register this clause with the LandingPad instruction.
-  LandingPad->addClause(TokenValue);
+  // TODO: LLVM optimizations can recognize catch-all handlers to build a more
+  // precise picture of the exception flow -- see isCatchAll in
+  // InstructionCombining.cpp.  We may want to flag System.Object catches
+  // in some way that InstructionCombining can recognize.
+  LandingPad->addClause(TokenConstant);
   // In LLVM, the landing pad clause entry (which for us is the class
   // token) is not identical to dispatch selector (which is an i32); the
   // @llvm.eh.typeid.for intrinsic is used to convert from the clause
@@ -2708,7 +2710,7 @@ void GenIR::genCatchDispatch(EHRegion *CatchRegion, LandingPadInst *LandingPad,
   Value *IntrinsicCallee = Intrinsic::getDeclaration(JitContext->CurrentModule,
                                                      Intrinsic::eh_typeid_for);
   Value *ClassSelector =
-      LLVMBuilder->CreateCall(IntrinsicCallee, TokenValue, "ClassSelector");
+      LLVMBuilder->CreateCall(IntrinsicCallee, TokenConstant, "ClassSelector");
 
   // Generate the test to see if the dynamically-provided selector matches
   // the selector for this clause.
