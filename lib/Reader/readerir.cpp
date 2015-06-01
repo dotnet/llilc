@@ -2927,22 +2927,41 @@ IRNode *GenIR::binaryOp(ReaderBaseNS::BinaryOpcode Opcode, IRNode *Arg1,
   Type *Type1 = Arg1->getType();
   Type *Type2 = Arg2->getType();
   Type *ResultType = binaryOpType(Opcode, Type1, Type2);
+  Type *ArithType = ResultType;
 
   // If the result is a pointer, see if we have simple
   // pointer + int op...
   if (ResultType->isPointerTy()) {
-    if (Opcode == ReaderBaseNS::Add) {
+    switch (Opcode) {
+    case ReaderBaseNS::Add: {
       IRNode *PtrAdd = genPointerAdd(Arg1, Arg2);
       if (PtrAdd != nullptr) {
         return PtrAdd;
       }
-    } else if (Opcode == ReaderBaseNS::Sub) {
+      break;
+    }
+
+    case ReaderBaseNS::Sub: {
       IRNode *PtrSub = genPointerSub(Arg1, Arg2);
       if (PtrSub != nullptr) {
         return PtrSub;
       }
+      break;
+    }
+
+    case ReaderBaseNS::AddOvfUn:
+    case ReaderBaseNS::SubOvfUn: {
+      // Arithmetic with overflow must use an appropriately-sized integer to
+      // perform the arithmetic, then convert the result back to the pointer
+      // type.
+      ArithType =
+          Type::getIntNTy(*JitContext->LLVMContext, TargetPointerSizeInBits);
+      break;
+    }
     }
   }
+
+  assert(ArithType == ResultType || ResultType->isPointerTy());
 
   bool IsFloat = ResultType->isFloatingPointTy();
   const BinaryTriple *Triple = IsFloat ? FloatMap : IntMap;
@@ -2950,12 +2969,12 @@ IRNode *GenIR::binaryOp(ReaderBaseNS::BinaryOpcode Opcode, IRNode *Arg1,
   bool IsOverflow = Triple[Opcode].IsOverflow;
   bool IsUnsigned = Triple[Opcode].IsUnsigned;
 
-  if (Type1 != ResultType) {
-    Arg1 = convert(ResultType, Arg1, !IsUnsigned);
+  if (Type1 != ArithType) {
+    Arg1 = convert(ArithType, Arg1, !IsUnsigned);
   }
 
-  if (Type2 != ResultType) {
-    Arg2 = convert(ResultType, Arg2, !IsUnsigned);
+  if (Type2 != ArithType) {
+    Arg2 = convert(ArithType, Arg2, !IsUnsigned);
   }
 
   IRNode *Result;
@@ -2981,7 +3000,7 @@ IRNode *GenIR::binaryOp(ReaderBaseNS::BinaryOpcode Opcode, IRNode *Arg1,
     // Call the appropriate intrinsic.  Its result is a pair of the arithmetic
     // result and a bool indicating whether the operation overflows.
     Value *Intrinsic = Intrinsic::getDeclaration(
-        JitContext->CurrentModule, Triple[Opcode].Op.Intrinsic, ResultType);
+        JitContext->CurrentModule, Triple[Opcode].Op.Intrinsic, ArithType);
     Value *Args[] = {Arg1, Arg2};
     const bool MayThrow = false;
     Value *Pair = makeCall(Intrinsic, MayThrow, Args).getInstruction();
@@ -3015,6 +3034,14 @@ IRNode *GenIR::binaryOp(ReaderBaseNS::BinaryOpcode Opcode, IRNode *Arg1,
 
     Result = (IRNode *)LLVMBuilder->CreateBinOp(Op, Arg1, Arg2);
   }
+
+  if (ResultType != ArithType) {
+    assert(ResultType->isPointerTy());
+    assert(ArithType->isIntegerTy());
+
+    Result = (IRNode *)LLVMBuilder->CreateIntToPtr(Result, ResultType);
+  }
+
   return Result;
 }
 
