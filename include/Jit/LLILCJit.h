@@ -22,6 +22,8 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/ThreadLocal.h"
+#include "llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h"
+#include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
 
 class ABIInfo;
 struct LLILCJitPerThreadState;
@@ -79,7 +81,7 @@ public:
   //@{
   llvm::LLVMContext *LLVMContext; ///< LLVM context for types and similar.
   llvm::Module *CurrentModule;    ///< Module holding LLVM IR.
-  llvm::ExecutionEngine *EE;      ///< MCJIT execution engine.
+  llvm::TargetMachine *TM;        ///< Target characteristics
   bool HasLoadedBitCode;          ///< Flag for side-loaded LLVM IR.
   //@}
 
@@ -155,6 +157,23 @@ public:
   std::map<CORINFO_FIELD_HANDLE, uint32_t> FieldIndexMap;
 };
 
+/// \brief Stub \p SymbolResolver expecting no resolution requests
+///
+/// The ObjectLinkingLayer takes a SymbolResolver ctor parameter.
+/// The CLR EE resolves tokens to addresses for the Jit during IL reading,
+/// so no symbol resolution is actually needed at ObjLinking time.
+class NullResolver : public llvm::RuntimeDyld::SymbolResolver {
+public:
+  llvm::RuntimeDyld::SymbolInfo findSymbol(const std::string &Name) final {
+    llvm_unreachable("Reader resolves tokens directly to addresses");
+  }
+
+  llvm::RuntimeDyld::SymbolInfo
+  findSymbolInLogicalDylib(const std::string &Name) final {
+    llvm_unreachable("Reader resolves tokens directly to addresses");
+  }
+};
+
 /// \brief The Jit interface to the CoreCLR EE.
 ///
 /// This class implements the Jit interface to the CoreCLR EE. The EE uses this
@@ -167,6 +186,9 @@ public:
 /// top-level invocations of the jit is held in thread local storage.
 class LLILCJit : public ICorJitCompiler {
 public:
+  typedef llvm::orc::ObjectLinkingLayer<> LoadLayerT;
+  typedef llvm::orc::IRCompileLayer<LoadLayerT> CompileLayerT;
+
   /// \brief Construct a new jit instance.
   ///
   /// There is only one LLILC jit instance per process, so this

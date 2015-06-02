@@ -526,7 +526,7 @@ void GenIR::insertIRToKeepGenericContextAlive() {
   LLVMBuilder->restoreIP(SavedInsertPoint);
 
   // This method now requires a frame pointer.
-  TargetMachine *TM = JitContext->EE->getTargetMachine();
+  TargetMachine *TM = JitContext->TM;
   // TM->Options.NoFramePointerElim = true;
 
   // TODO: we must convey the offset of this local to the runtime
@@ -764,7 +764,8 @@ void GenIR::zeroInitLocals() {
       // points.
       StructType *StructTy = dyn_cast<StructType>(LocalTy);
       if (StructTy != nullptr) {
-        const DataLayout *DataLayout = JitContext->EE->getDataLayout();
+        const DataLayout *DataLayout =
+            &JitContext->CurrentModule->getDataLayout();
         const StructLayout *TheStructLayout =
             DataLayout->getStructLayout(StructTy);
         zeroInitBlock(LocalVar, TheStructLayout->getSizeInBytes());
@@ -799,7 +800,7 @@ void GenIR::copyStruct(Type *StructTy, Value *DestinationAddress,
                        ReaderAlignType Alignment) {
   // TODO: For small structs we may want to generate an integer StoreInst
   // instead of calling a helper.
-  const DataLayout *DataLayout = JitContext->EE->getDataLayout();
+  const DataLayout *DataLayout = &JitContext->CurrentModule->getDataLayout();
   const StructLayout *TheStructLayout =
       DataLayout->getStructLayout(cast<StructType>(StructTy));
   IRNode *StructSize =
@@ -1267,7 +1268,7 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
 
   // Cache the context and data layout.
   LLVMContext &LLVMContext = *JitContext->LLVMContext;
-  const DataLayout *DataLayout = JitContext->EE->getDataLayout();
+  const DataLayout *DataLayout = &JitContext->CurrentModule->getDataLayout();
 
   // We need to fill in or create a new type for this class.
   if (StructTy == nullptr) {
@@ -1714,7 +1715,7 @@ void GenIR::addFieldsRecursively(
     llvm::Type *Ty) {
   StructType *StructTy = dyn_cast<StructType>(Ty);
   if (StructTy != nullptr) {
-    const DataLayout *DataLayout = JitContext->EE->getDataLayout();
+    const DataLayout *DataLayout = &JitContext->CurrentModule->getDataLayout();
     for (Type *SubTy : StructTy->subtypes()) {
       addFieldsRecursively(Fields, Offset, SubTy);
       Offset += DataLayout->getTypeSizeInBits(SubTy) / 8;
@@ -1730,7 +1731,7 @@ void GenIR::createOverlapFields(
 
   // Prepare to create and measure types.
   LLVMContext &LLVMContext = *JitContext->LLVMContext;
-  const DataLayout *DataLayout = JitContext->EE->getDataLayout();
+  const DataLayout *DataLayout = &JitContext->CurrentModule->getDataLayout();
 
   // Order the OverlapFields by offset.
   std::sort(OverlapFields.begin(), OverlapFields.end());
@@ -2184,7 +2185,7 @@ uint32_t GenIR::addArrayFields(std::vector<llvm::Type *> &Fields, bool IsVector,
                                uint32_t ArrayRank, CorInfoType ElementCorType,
                                CORINFO_CLASS_HANDLE ElementHandle) {
   LLVMContext &LLVMContext = *JitContext->LLVMContext;
-  const DataLayout *DataLayout = JitContext->EE->getDataLayout();
+  const DataLayout *DataLayout = &JitContext->CurrentModule->getDataLayout();
   uint32_t FieldByteSize = 0;
   // Array length is (u)int32 ....
   Type *ArrayLengthTy = Type::getInt32Ty(LLVMContext);
@@ -3150,7 +3151,8 @@ IRNode *GenIR::simpleFieldAddress(IRNode *BaseAddress,
     // in unverifiable IL we may not have proper referent types and
     // so may see what appear to be unrelated field accesses.
     if (BaseObjStructTy->getNumElements() > FieldIndex) {
-      const DataLayout *DataLayout = JitContext->EE->getDataLayout();
+      const DataLayout *DataLayout =
+          &JitContext->CurrentModule->getDataLayout();
       const StructLayout *StructLayout =
           DataLayout->getStructLayout(BaseObjStructTy);
       const uint32_t FieldOffset = StructLayout->getElementOffset(FieldIndex);
