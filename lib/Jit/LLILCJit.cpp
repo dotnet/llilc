@@ -80,9 +80,14 @@ ICorJitCompiler *__stdcall getJit() {
 
 // Construct the JIT instance
 LLILCJit::LLILCJit() {
+  PassRegistry &Registry = *PassRegistry::getPassRegistry();
+  initializeCore(Registry);
+  initializeScalarOpts(Registry);
+
   InitializeNativeTarget();
   InitializeNativeTargetAsmPrinter();
   InitializeNativeTargetAsmParser();
+
   llvm::linkCoreCLRGC();
 }
 
