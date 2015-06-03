@@ -574,7 +574,7 @@ Function *ABIMethodSignature::createFunction(GenIR &Reader, Module &M) {
   }
 
   if (Reader.JitContext->Options->DoInsertStatepoints) {
-    F->setGC("statepoint-example");
+    F->setGC("coreclr");
   }
 
   return F;

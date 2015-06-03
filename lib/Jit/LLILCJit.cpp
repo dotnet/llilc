@@ -83,7 +83,7 @@ LLILCJit::LLILCJit() {
   InitializeNativeTarget();
   InitializeNativeTargetAsmPrinter();
   InitializeNativeTargetAsmParser();
-  llvm::linkStatepointExampleGC();
+  llvm::linkCoreCLRGC();
 }
 
 #ifdef LLVM_ON_WIN32

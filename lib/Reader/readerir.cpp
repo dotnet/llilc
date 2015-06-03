@@ -600,7 +600,7 @@ void GenIR::insertIRForUnmanagedCallFrame() {
 
   // Mark this function as requiring a frame pointer and as using GC.
   Function->addFnAttr("no-frame-pointer-elim-non-leaf");
-  Function->setGC("statepoint-example");
+  Function->setGC("coreclr");
 
   // The call frame data structure is modeled as an opaque blob of bytes.
   Type *CallFrameTy = ArrayType::get(Int8Ty, CallFrameInfo.size);
