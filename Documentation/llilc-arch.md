@@ -61,12 +61,8 @@ BitCode creation.
 
 [LLVM](http://llvm.org/) is a great code generator that supports lots of platforms and CPU targets.  It also has 
 facilities to be used as both a JIT and AOT compiler.  This combination of features, lots of targets, and ability 
-to compile across a spectrum of compile times, attracted us to LLVM.  For our JIT we use the LLVM MCJIT. This 
-infrastructure allows us to use all the different targets supported by the MC infrastructure as a JIT.  This was our 
-quickest path to running code.  We're aware of the ORC JIT infrastructure but as the CoreCLR only notifies the JIT 
-to compile a method one method at a time, we currently would not get any benefit from the particular features of ORC. 
-(We already compile one method per module today and we don't have to do any of the inter module fixups as that is 
-performed by the runtime.)
+to compile across a spectrum of compile times, attracted us to LLVM.  For our JIT we use LLVM's ORC JIT
+infrastructure.
 
 There is a further discussion of how we're modeling the managed code semantics within LLVM in a following 
 [section](#managed-semantics-in-llvm).

@@ -22,9 +22,6 @@
 #include "abi.h"
 #include "EEMemoryManager.h"
 #include "llvm/CodeGen/GCs.h"
-#include "llvm/ExecutionEngine/ExecutionEngine.h"
-#include "llvm/ExecutionEngine/MCJIT.h"
-#include "llvm/ExecutionEngine/SectionMemoryManager.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/IRBuilder.h"
@@ -42,8 +39,10 @@
 #include "llvm/Support/Format.h"
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/TargetRegistry.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
+#include "llvm/ExecutionEngine/Orc/CompileUtils.h"
 #include <string>
 
 using namespace llvm;
@@ -177,33 +176,31 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
 
   Context.Options = &JitOptions;
 
-  EngineBuilder Builder(std::move(M));
+  // Construct the TargetMachine that we will emit code for
   std::string ErrStr;
-  Builder.setErrorStr(&ErrStr);
-
-  std::unique_ptr<RTDyldMemoryManager> MM(new EEMemoryManager(&Context));
-  Builder.setMCJITMemoryManager(std::move(MM));
-
-  TargetOptions Options;
-  if (Context.Options->OptLevel != OptLevel::DEBUG_CODE) {
-    Builder.setOptLevel(CodeGenOpt::Level::Default);
-  } else {
-    Builder.setOptLevel(CodeGenOpt::Level::None);
-    // Options.NoFramePointerElim = true;
-  }
-
-  Builder.setTargetOptions(Options);
-
-  ExecutionEngine *NewEngine = Builder.create();
-
-  if (!NewEngine) {
-    errs() << "Could not create ExecutionEngine: " << ErrStr << "\n";
+  const llvm::Target *TheTarget =
+      TargetRegistry::lookupTarget(LLILC_TARGET_TRIPLE, ErrStr);
+  if (!TheTarget) {
+    errs() << "Could not create Target: " << ErrStr << "\n";
     return CORJIT_INTERNALERROR;
   }
+  TargetOptions Options;
+  CodeGenOpt::Level OptLevel;
+  if (Context.Options->OptLevel != OptLevel::DEBUG_CODE) {
+    OptLevel = CodeGenOpt::Level::Default;
+  } else {
+    OptLevel = CodeGenOpt::Level::None;
+    // Options.NoFramePointerElim = true;
+  }
+  TargetMachine *TM = TheTarget->createTargetMachine(
+      LLILC_TARGET_TRIPLE, "", "", Options, Reloc::Default, CodeModel::Default,
+      OptLevel);
+  Context.TM = TM;
 
-  // Don't allow the EE to search for external symbols.
-  NewEngine->DisableSymbolSearching();
-  Context.EE = NewEngine;
+  // Construct the jitting layers.
+  EEMemoryManager MM(&Context);
+  LoadLayerT Loader;
+  CompileLayerT Compiler(Loader, orc::SimpleCompiler(*TM));
 
   // Now jit the method.
   CorJitResult Result = CORJIT_INTERNALERROR;
@@ -226,17 +223,17 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
       PMBuilder.populateModulePassManager(Passes);
 
       Passes.add(createRewriteStatepointsForGCPass(false));
-      Passes.run(*Context.CurrentModule);
+      Passes.run(*M);
     }
 
-    Context.EE->generateCodeForModule(Context.CurrentModule);
+    // Don't allow the LoadLayer to search for external symbols, by supplying
+    // it a NullResolver.
+    NullResolver Resolver;
+    auto HandleSet =
+        Compiler.addModuleSet<ArrayRef<Module *>>(M.get(), &MM, &Resolver);
 
-    // You need to pick up the COFFDyld changes from the MS branch of LLVM
-    // or this will fail with an "Incompatible object format!" error
-    // from LLVM's dynamic loader.
-    uint64_t FunctionAddress =
-        Context.EE->getFunctionAddress(Context.MethodName);
-    *NativeEntry = (BYTE *)FunctionAddress;
+    *NativeEntry =
+        (BYTE *)Compiler.findSymbol(Context.MethodName, false).getAddress();
 
     // TODO: ColdCodeSize, or separated code, is not enabled or included.
     *NativeSizeOfCode = Context.HotCodeSize + Context.ReadOnlyDataSize;
@@ -250,13 +247,16 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
     // Dump out any enabled timing info.
     TimerGroup::printAll(errs());
 
+    // Give the jit layers a chance to free resources.
+    Compiler.removeModuleSet(HandleSet);
+
     // Tell the CLR that we've successfully generated code for this method.
     Result = CORJIT_OK;
   }
 
   // Clean up a bit
-  delete Context.EE;
-  Context.EE = nullptr;
+  delete Context.TM;
+  Context.TM = nullptr;
   delete Context.TheABIInfo;
   Context.TheABIInfo = nullptr;
 
