@@ -68,6 +68,8 @@ JitOptions::JitOptions(LLILCJitContext &Context) {
   // Set whether to do tail call opt.
   DoTailCallOpt = queryDoTailCallOpt(Context);
 
+  LogGcInfo = queryLogGcInfo(Context);
+
   // Validate Statepoint and Conservative GC state.
   assert(DoInsertStatepoints ||
          UseConservativeGC && "Statepoints required for precise-GC");
@@ -171,6 +173,13 @@ bool JitOptions::queryDoInsertStatepoints(LLILCJitContext &Context) {
   char16_t *StatePointStr =
       getStringConfigValue(Context.JitInfo, UTF16("INSERTSTATEPOINTS"));
   return (StatePointStr != nullptr);
+}
+
+// Determine if GCInfo encoding logs should be emitted
+bool JitOptions::queryLogGcInfo(LLILCJitContext &Context) {
+  char16_t *LogGcInfoStr =
+      getStringConfigValue(Context.JitInfo, UTF16("JitGCInfoLogging"));
+  return (LogGcInfoStr != nullptr);
 }
 
 OptLevel JitOptions::queryOptLevel(LLILCJitContext &Context) {

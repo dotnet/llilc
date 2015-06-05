@@ -19,4 +19,5 @@ add_llilcjit_library(GcInfo
     STATIC
 	${CORECLR_GCINFO}/gcinfoencoder.cpp
 	GcInfoUtil.cpp
+	GcInfo.cpp
 )

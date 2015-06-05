@@ -69,8 +69,13 @@ private:
 
   /// \brief Set DoTailCallOpt based on environment variable.
   ///
-  /// \returns true if COMPLUS_TAILCALLOPT is set in the environment set.
+  /// \returns true if COMPLUS_TAILCALLOPT is set in the environment.
   static bool queryDoTailCallOpt(LLILCJitContext &JitContext);
+
+  /// \brief Set LogGcInfo based on environment variable.
+  ///
+  /// \returns true if COMPLUS_JitGCInfoLogging is set in the environment.
+  static bool queryLogGcInfo(LLILCJitContext &JitContext);
 
 public:
   bool IsAltJit; ///< True if running as the alternative JIT.

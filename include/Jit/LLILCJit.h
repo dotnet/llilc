@@ -17,7 +17,7 @@
 #define LLILC_JIT_H
 
 #include "Pal/LLILCPal.h"
-#include "options.h"
+#include "Reader/options.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/RuntimeDyld.h"
 #include "llvm/IR/LLVMContext.h"
@@ -110,9 +110,10 @@ public:
 
   /// \name Jit output sizes
   //@{
-  uint32_t HotCodeSize = 0;      ///< Size of hot code section in bytes.
-  uint32_t ColdCodeSize = 0;     ///< Size of cold code section in bytes.
-  uint32_t ReadOnlyDataSize = 0; ///< Size of readonly data ref'd from code.
+  uintptr_t HotCodeSize = 0;      ///< Size of hot code section in bytes.
+  uintptr_t ColdCodeSize = 0;     ///< Size of cold code section in bytes.
+  uintptr_t ReadOnlyDataSize = 0; ///< Size of readonly data ref'd from code.
+  uintptr_t StackMapSize = 0;     ///< Size of readonly Stackmap section.
   //@}
 };
 
@@ -239,10 +240,6 @@ private:
   /// \param JitContext Context record for the method's jit request.
   /// \returns \p true if the conversion was successful.
   bool readMethod(LLILCJitContext *JitContext);
-
-  /// Output GC info to the EE.
-  /// \param JitContext Context record for the method's jit request.
-  void outputGCInfo(LLILCJitContext *JitContext);
 
 public:
   /// A pointer to the singleton jit instance.
