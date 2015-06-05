@@ -123,13 +123,25 @@ void EEMemoryManager::reserveUnwindSpace(const object::ObjectFile &Obj) {
           if (DataPtr == DataEnd) {
             break;
           }
-          // LLILC adds 3 ints between funcs for handler info.  The last int
-          // is 0xffffffff if we're done with unwind infos (and about to start
-          // EH clauses, which don't need their space specially reserved now)
-          // and 0 if there are more unwind infos. Skip past 11 bytes and check
-          // the last byte to see if we've reached the end of the unwind infos.
-          DataPtr += 11;
-        } while (!*(DataPtr++));
+
+          // We don't support chained unwind infos, so we expect the next data
+          // in the xdata to be one of the two sentinels we insert to indicate
+          // funclet positions (0xffffffff or 0x00000000). If the compiler did
+          // emit chained unwind info, we'd expect the next unwind info to
+          // start immediately; bits 0-2 would be 001 to indicate version 1 of
+          // the xdata format, and bit 5 would be set to indicate that it is a
+          // chained unwind info.  Check for this pattern to distinguish the
+          // unsupported chained case from malformed xdata.
+          assert(((*DataPtr == 0) || (*DataPtr == 0xff) ||
+                  ((*DataPtr & 0x27) == 0x21)) &&
+                 "Malformed .xdata");
+          assert(((*DataPtr == 0) || (*DataPtr == 0xff)) &&
+                 "Chained unwind infos not supported");
+
+          // Advance DataPtr past the sentinel and the two offsets indicating
+          // funclet position/size.  Loop depending which sentinel is seen.
+          DataPtr += 12;
+        } while (!*(DataPtr - 12));
       }
     }
   }
@@ -194,6 +206,8 @@ void EEMemoryManager::registerEHFrames(uint8_t *Addr, uint64_t LoadAddr,
     DataPtr += (XdataSize / 4);
     bool IsNoEhLeaf = (Size == XdataSize);
     assert(!(IsNoEhLeaf && (FuncKind != CorJitFuncKind::CORJIT_FUNC_ROOT)));
+    // Read token to see if this is the last function
+    IsLast = IsNoEhLeaf || *(DataPtr++);
     uint32_t StartOffset = (IsNoEhLeaf ? 0 : *(DataPtr++));
     uint32_t EndOffset = (IsNoEhLeaf ? Context->HotCodeSize : *(DataPtr++));
     this->Context->JitInfo->allocUnwindInfo(this->HotCodeBlock, nullptr,
@@ -201,12 +215,10 @@ void EEMemoryManager::registerEHFrames(uint8_t *Addr, uint64_t LoadAddr,
                                             (BYTE *)XdataPtr, FuncKind);
     // Any subsequent funclet will be a handler.
     FuncKind = CorJitFuncKind::CORJIT_FUNC_HANDLER;
-    // Read token to see if this is the last function;
-    IsLast = IsNoEhLeaf || *(DataPtr++);
     // Decrement size remaining.
     Size -= XdataSize;
     if (!IsNoEhLeaf) {
-      // also read StartOffset, EndOffset, and IsLast
+      // also read IsLast, StartOffset, and EndOffset
       Size -= 12;
     }
   } while (!IsLast);
