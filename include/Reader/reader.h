@@ -47,12 +47,7 @@
 // Debugging
 // -----------------------------------------------------------------
 
-#define ASSERTM(Predicate, Message)                                            \
-  do {                                                                         \
-    if (!(Predicate)) {                                                        \
-      ReaderBase::debugError(__FILE__, __LINE__, Message);                     \
-    }                                                                          \
-  } while (0)
+#define ASSERTM(Predicate, Message) assert((Predicate) && Message)
 #define ASSERT(Predicate) ASSERTM(Predicate, #Predicate)
 #define UNREACHED 0
 #ifndef _MSC_VER
@@ -2974,10 +2969,6 @@ public:
 
   // Remove all IRNodes from block (for verification error processing.)
   virtual void clearCurrentBlock() = 0;
-
-  // Called when an assert occurs (debug only)
-  static void debugError(const char *Filename, uint32_t LineNumber,
-                         const char *Message);
 
   // Notify client of alignment problem
   virtual void verifyStaticAlignment(void *Pointer, CorInfoType CorType,

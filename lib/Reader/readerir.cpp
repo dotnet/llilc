@@ -13,6 +13,7 @@
 ///
 //===----------------------------------------------------------------------===//
 
+#include "earlyincludes.h"
 #include "readerir.h"
 #include "imeta.h"
 #include "newvstate.h"
@@ -48,8 +49,9 @@ void GenStack::push(IRNode *NewVal) {
 
 IRNode *GenStack::pop() {
   ASSERTM(size() > 0, "stack underflow");
-  if (size() == 0)
+  if (size() == 0) {
     LLILCJit::fatal(CORJIT_BADCODE);
+  }
 
   IRNode *result = Stack.back();
   Stack.pop_back();
@@ -548,8 +550,8 @@ void GenIR::insertIRToKeepGenericContextAlive() {
   LLVMBuilder->restoreIP(SavedInsertPoint);
 
   // This method now requires a frame pointer.
-  TargetMachine *TM = JitContext->EE->getTargetMachine();
-  TM->Options.NoFramePointerElim = true;
+  TargetMachine *TM = JitContext->TM;
+  // TM->Options.NoFramePointerElim = true;
 
   // TODO: we must convey the offset of this local to the runtime
   // via the GC encoding.
@@ -622,7 +624,7 @@ void GenIR::insertIRForUnmanagedCallFrame() {
 
   // Mark this function as requiring a frame pointer and as using GC.
   Function->addFnAttr("no-frame-pointer-elim-non-leaf");
-  Function->setGC("statepoint-example");
+  Function->setGC("coreclr");
 
   // The call frame data structure is modeled as an opaque blob of bytes.
   Type *CallFrameTy = ArrayType::get(Int8Ty, CallFrameInfo.size);
@@ -786,7 +788,8 @@ void GenIR::zeroInitLocals() {
       // points.
       StructType *StructTy = dyn_cast<StructType>(LocalTy);
       if (StructTy != nullptr) {
-        const DataLayout *DataLayout = JitContext->EE->getDataLayout();
+        const DataLayout *DataLayout =
+            &JitContext->CurrentModule->getDataLayout();
         const StructLayout *TheStructLayout =
             DataLayout->getStructLayout(StructTy);
         zeroInitBlock(LocalVar, TheStructLayout->getSizeInBytes());
@@ -821,7 +824,7 @@ void GenIR::copyStruct(Type *StructTy, Value *DestinationAddress,
                        ReaderAlignType Alignment) {
   // TODO: For small structs we may want to generate an integer StoreInst
   // instead of calling a helper.
-  const DataLayout *DataLayout = JitContext->EE->getDataLayout();
+  const DataLayout *DataLayout = &JitContext->CurrentModule->getDataLayout();
   const StructLayout *TheStructLayout =
       DataLayout->getStructLayout(cast<StructType>(StructTy));
   IRNode *StructSize =
@@ -1106,14 +1109,6 @@ void GenIR::verifyStaticAlignment(void *FieldAddress, CorInfoType CorType,
 #endif
 }
 
-void ReaderBase::debugError(const char *Filename, unsigned Linenumber,
-                            const char *S) {
-  assert(0);
-  // TODO
-  // if (s) JitContext->JitInfo->doAssert(Filename, Linenumber, S);
-  // ASSERTNR(UNREACHED);
-}
-
 // Fatal error, reader cannot continue.
 void ReaderBase::fatal(int ErrNum) { LLILCJit::fatal(LLILCJIT_FATAL_ERROR); }
 
@@ -1289,7 +1284,7 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
 
   // Cache the context and data layout.
   LLVMContext &LLVMContext = *JitContext->LLVMContext;
-  const DataLayout *DataLayout = JitContext->EE->getDataLayout();
+  const DataLayout *DataLayout = &JitContext->CurrentModule->getDataLayout();
 
   // We need to fill in or create a new type for this class.
   if (StructTy == nullptr) {
@@ -1736,7 +1731,7 @@ void GenIR::addFieldsRecursively(
     llvm::Type *Ty) {
   StructType *StructTy = dyn_cast<StructType>(Ty);
   if (StructTy != nullptr) {
-    const DataLayout *DataLayout = JitContext->EE->getDataLayout();
+    const DataLayout *DataLayout = &JitContext->CurrentModule->getDataLayout();
     for (Type *SubTy : StructTy->subtypes()) {
       addFieldsRecursively(Fields, Offset, SubTy);
       Offset += DataLayout->getTypeSizeInBits(SubTy) / 8;
@@ -1752,7 +1747,7 @@ void GenIR::createOverlapFields(
 
   // Prepare to create and measure types.
   LLVMContext &LLVMContext = *JitContext->LLVMContext;
-  const DataLayout *DataLayout = JitContext->EE->getDataLayout();
+  const DataLayout *DataLayout = &JitContext->CurrentModule->getDataLayout();
 
   // Order the OverlapFields by offset.
   std::sort(OverlapFields.begin(), OverlapFields.end());
@@ -2091,9 +2086,10 @@ IRNode *GenIR::convertFromStackType(IRNode *Node, CorInfoType CorType,
       Result = (IRNode *)LLVMBuilder->CreateIntCast(Node, ResultTy, IsSigned);
     } else if (NeedsExtension) {
       assert(!NeedsReinterpret && "cannot reinterpret and extend");
-      assert((CorType == CorInfoType::CORINFO_TYPE_NATIVEINT) &&
-             "only expect to extend to native int");
-      const bool IsSigned = true;
+      assert((CorType == CorInfoType::CORINFO_TYPE_NATIVEINT ||
+              CorType == CorInfoType::CORINFO_TYPE_NATIVEUINT) &&
+             "only expect to extend to native int or uint");
+      const bool IsSigned = CorType == CorInfoType::CORINFO_TYPE_NATIVEINT;
       Result = (IRNode *)LLVMBuilder->CreateIntCast(Node, ResultTy, IsSigned);
     } else if (NeedsReinterpret) {
       Result = (IRNode *)LLVMBuilder->CreateIntToPtr(Node, ResultTy);
@@ -2206,7 +2202,7 @@ uint32_t GenIR::addArrayFields(std::vector<llvm::Type *> &Fields, bool IsVector,
                                uint32_t ArrayRank, CorInfoType ElementCorType,
                                CORINFO_CLASS_HANDLE ElementHandle) {
   LLVMContext &LLVMContext = *JitContext->LLVMContext;
-  const DataLayout *DataLayout = JitContext->EE->getDataLayout();
+  const DataLayout *DataLayout = &JitContext->CurrentModule->getDataLayout();
   uint32_t FieldByteSize = 0;
   // Array length is (u)int32 ....
   Type *ArrayLengthTy = Type::getInt32Ty(LLVMContext);
@@ -2737,8 +2733,8 @@ void GenIR::genCatchDispatch(EHRegion *CatchRegion, LandingPadInst *LandingPad,
   Value *CastExnPtrAddr = LLVMBuilder->CreateBitCast(ExnPtrAddr, Int8PtrTy);
   Value *BeginCatchCallee = Intrinsic::getDeclaration(JitContext->CurrentModule,
                                                       Intrinsic::eh_begincatch);
-  Value *BeginCatch =
-      LLVMBuilder->CreateCall2(BeginCatchCallee, FauxException, CastExnPtrAddr);
+  Value *BeginCatch = LLVMBuilder->CreateCall(BeginCatchCallee,
+                                              {FauxException, CastExnPtrAddr});
   // The catch handler code itself expects the exception pointer to be on
   // the evaluation stack.
   IRNode *ExnPtr = (IRNode *)LLVMBuilder->CreateLoad(ExnPtrAddr);
@@ -3195,22 +3191,41 @@ IRNode *GenIR::binaryOp(ReaderBaseNS::BinaryOpcode Opcode, IRNode *Arg1,
   Type *Type1 = Arg1->getType();
   Type *Type2 = Arg2->getType();
   Type *ResultType = binaryOpType(Opcode, Type1, Type2);
+  Type *ArithType = ResultType;
 
   // If the result is a pointer, see if we have simple
   // pointer + int op...
   if (ResultType->isPointerTy()) {
-    if (Opcode == ReaderBaseNS::Add) {
+    switch (Opcode) {
+    case ReaderBaseNS::Add: {
       IRNode *PtrAdd = genPointerAdd(Arg1, Arg2);
       if (PtrAdd != nullptr) {
         return PtrAdd;
       }
-    } else if (Opcode == ReaderBaseNS::Sub) {
+      break;
+    }
+
+    case ReaderBaseNS::Sub: {
       IRNode *PtrSub = genPointerSub(Arg1, Arg2);
       if (PtrSub != nullptr) {
         return PtrSub;
       }
+      break;
+    }
+
+    case ReaderBaseNS::AddOvfUn:
+    case ReaderBaseNS::SubOvfUn: {
+      // Arithmetic with overflow must use an appropriately-sized integer to
+      // perform the arithmetic, then convert the result back to the pointer
+      // type.
+      ArithType =
+          Type::getIntNTy(*JitContext->LLVMContext, TargetPointerSizeInBits);
+      break;
+    }
     }
   }
+
+  assert(ArithType == ResultType || ResultType->isPointerTy());
 
   bool IsFloat = ResultType->isFloatingPointTy();
   const BinaryTriple *Triple = IsFloat ? FloatMap : IntMap;
@@ -3218,12 +3233,12 @@ IRNode *GenIR::binaryOp(ReaderBaseNS::BinaryOpcode Opcode, IRNode *Arg1,
   bool IsOverflow = Triple[Opcode].IsOverflow;
   bool IsUnsigned = Triple[Opcode].IsUnsigned;
 
-  if (Type1 != ResultType) {
-    Arg1 = convert(ResultType, Arg1, !IsUnsigned);
+  if (Type1 != ArithType) {
+    Arg1 = convert(ArithType, Arg1, !IsUnsigned);
   }
 
-  if (Type2 != ResultType) {
-    Arg2 = convert(ResultType, Arg2, !IsUnsigned);
+  if (Type2 != ArithType) {
+    Arg2 = convert(ArithType, Arg2, !IsUnsigned);
   }
 
   IRNode *Result;
@@ -3249,7 +3264,7 @@ IRNode *GenIR::binaryOp(ReaderBaseNS::BinaryOpcode Opcode, IRNode *Arg1,
     // Call the appropriate intrinsic.  Its result is a pair of the arithmetic
     // result and a bool indicating whether the operation overflows.
     Value *Intrinsic = Intrinsic::getDeclaration(
-        JitContext->CurrentModule, Triple[Opcode].Op.Intrinsic, ResultType);
+        JitContext->CurrentModule, Triple[Opcode].Op.Intrinsic, ArithType);
     Value *Args[] = {Arg1, Arg2};
     const bool MayThrow = false;
     Value *Pair = makeCall(Intrinsic, MayThrow, Args).getInstruction();
@@ -3283,6 +3298,14 @@ IRNode *GenIR::binaryOp(ReaderBaseNS::BinaryOpcode Opcode, IRNode *Arg1,
 
     Result = (IRNode *)LLVMBuilder->CreateBinOp(Op, Arg1, Arg2);
   }
+
+  if (ResultType != ArithType) {
+    assert(ResultType->isPointerTy());
+    assert(ArithType->isIntegerTy());
+
+    Result = (IRNode *)LLVMBuilder->CreateIntToPtr(Result, ResultType);
+  }
+
   return Result;
 }
 
@@ -3323,46 +3346,51 @@ Type *GenIR::binaryOpType(ReaderBaseNS::BinaryOpcode Opcode, Type *Type1,
     if ((Size2 == TargetPointerSizeInBits) && (Size2 > Size1)) {
       return Type2;
     }
-  }
+  } else {
+    const bool Type1IsUnmanagedPointer = isUnmanagedPointerType(Type1);
+    const bool Type2IsUnmanagedPointer = isUnmanagedPointerType(Type2);
+    const bool IsStrictlyAdd = (Opcode == ReaderBaseNS::Add);
+    const bool IsAdd = IsStrictlyAdd || (Opcode == ReaderBaseNS::AddOvf) ||
+                       (Opcode == ReaderBaseNS::AddOvfUn);
+    const bool IsStrictlySub = (Opcode == ReaderBaseNS::Sub);
+    const bool IsSub = IsStrictlySub || (Opcode == ReaderBaseNS::SubOvf) ||
+                       (Opcode == ReaderBaseNS::SubOvfUn);
+    const bool IsStrictlyAddOrSub = IsStrictlyAdd || IsStrictlySub;
+    const bool IsAddOrSub = IsAdd || IsSub;
 
-  // If we see a mixture of int and unmanaged pointer, the result
-  // is generally a native int, with a few special cases where we
-  // preserve pointer-ness.
-  const bool Type1IsUnmanagedPointer = isUnmanagedPointerType(Type1);
-  const bool Type2IsUnmanagedPointer = isUnmanagedPointerType(Type2);
-  const bool IsStrictlyAdd = (Opcode == ReaderBaseNS::Add);
-  const bool IsAdd = IsStrictlyAdd || (Opcode == ReaderBaseNS::AddOvf) ||
-                     (Opcode == ReaderBaseNS::AddOvfUn);
-  const bool IsStrictlySub = (Opcode == ReaderBaseNS::Sub);
-  const bool IsSub = IsStrictlySub || (Opcode == ReaderBaseNS::SubOvf) ||
-                     (Opcode == ReaderBaseNS::SubOvfUn);
-  const bool IsStrictlyAddOrSub = IsStrictlyAdd || IsStrictlySub;
-  const bool IsAddOrSub = IsAdd || IsSub;
-
-  if (Type1IsUnmanagedPointer || Type2IsUnmanagedPointer) {
-    // ptr +/- int = ptr
-    if (IsAddOrSub && Type1IsUnmanagedPointer && Type2IsInt &&
-        (Size1 >= Size2)) {
-      return Type1;
+    // If we see a mixture of int and unmanaged pointer, the result
+    // is generally a native int, with a few special cases where we
+    // preserve pointer-ness.
+    if (Type1IsUnmanagedPointer || Type2IsUnmanagedPointer) {
+      // ptr +/- int = ptr
+      if (IsAddOrSub && Type1IsUnmanagedPointer && Type2IsInt &&
+          (Size1 >= Size2)) {
+        return Type1;
+      }
+      // int + ptr = ptr
+      if (IsAdd && Type1IsInt && Type2IsUnmanagedPointer && (Size2 >= Size1)) {
+        return Type2;
+      }
+      // Otherwise type result as native int as long as there's no truncation
+      // going on.
+      if ((Size1 <= TargetPointerSizeInBits) &&
+          (Size2 <= TargetPointerSizeInBits)) {
+        return Type::getIntNTy(*JitContext->LLVMContext,
+                               TargetPointerSizeInBits);
+      }
+    } else if (isManagedPointerType(Type1)) {
+      if (IsSub && isManagedPointerType(Type2)) {
+        // The difference of two managed pointers is a native int.
+        return Type::getIntNTy(*JitContext->LLVMContext,
+                               TargetPointerSizeInBits);
+      } else if (IsStrictlyAddOrSub && Type2IsInt && (Size1 >= Size2)) {
+        // Special case for just strict add and sub: if Type1 is a managed
+        // pointer and Type2 is an integer, the result is Type1. We see the
+        // add case in some internal uses in reader base. We see the sub case
+        // in some IL stubs.
+        return Type1;
+      }
     }
-    // int + ptr = ptr
-    if (IsAdd && Type1IsInt && Type2IsUnmanagedPointer && (Size2 >= Size1)) {
-      return Type2;
-    }
-    // Otherwise type result as native int as long as there's no truncation
-    // going on.
-    if ((Size1 <= TargetPointerSizeInBits) &&
-        (Size2 <= TargetPointerSizeInBits)) {
-      return Type::getIntNTy(*JitContext->LLVMContext, TargetPointerSizeInBits);
-    }
-  }
-
-  // Special case for just strict add and sub: if Type1 is a managed pointer
-  // and Type2 is an integer, the result is Type1. We see the add case in some
-  // internal uses in reader base. We see the sub case in some IL stubs.
-  if (IsStrictlyAddOrSub && isManagedPointerType(Type1) && Type2IsInt &&
-      (Size1 >= Size2)) {
-    return Type1;
   }
 
   // All other combinations are invalid.
@@ -3391,7 +3419,8 @@ IRNode *GenIR::simpleFieldAddress(IRNode *BaseAddress,
     // in unverifiable IL we may not have proper referent types and
     // so may see what appear to be unrelated field accesses.
     if (BaseObjStructTy->getNumElements() > FieldIndex) {
-      const DataLayout *DataLayout = JitContext->EE->getDataLayout();
+      const DataLayout *DataLayout =
+          &JitContext->CurrentModule->getDataLayout();
       const StructLayout *StructLayout =
           DataLayout->getStructLayout(BaseObjStructTy);
       const uint32_t FieldOffset = StructLayout->getElementOffset(FieldIndex);
@@ -4367,18 +4396,23 @@ bool GenIR::canExpandMDArrayRef(CORINFO_SIG_INFO *Sig, bool IsStore,
   CORINFO_CLASS_HANDLE Class = nullptr;
   uint32_t ElemSize = 0;
   if (IsStore) {
-    CORINFO_ARG_LIST_HANDLE ArgLst = Sig->args;
+    CORINFO_ARG_LIST_HANDLE ArgList = Sig->args;
+    CORINFO_CLASS_HANDLE ArgType;
+
     // Skip arguments for each dimension.
     for (uint32_t R = 0; R < *Rank; R++) {
-      ArgLst = getArgNext(ArgLst);
-    }
-    CORINFO_CLASS_HANDLE ArgType;
-    CorType = strip(getArgType(Sig, ArgLst, &ArgType));
+      assert((strip(getArgType(Sig, ArgList, &ArgType)) ==
+              CorInfoType::CORINFO_TYPE_INT) &&
+             "expected MDArray indicies to be int32s");
 
+      ArgList = getArgNext(ArgList);
+    }
+
+    CorType = strip(getArgType(Sig, ArgList, &ArgType));
     ASSERTNR(CorType != CORINFO_TYPE_VAR); // common generics trouble
 
     if (CorType == CORINFO_TYPE_CLASS || CorType == CORINFO_TYPE_VALUECLASS) {
-      Class = getArgClass(Sig, ArgLst);
+      Class = getArgClass(Sig, ArgList);
     } else if (CorType == CORINFO_TYPE_REFANY) {
       Class = getBuiltinClass(CLASSID_TYPED_BYREF);
     } else {
@@ -4465,7 +4499,8 @@ IRNode *GenIR::mdArrayRefAddr(uint32_t Rank, llvm::Type *ElemType) {
   Type *Int32Ty = Type::getInt32Ty(LLVMContext);
   Type *ManagedPointerToInt32 = getManagedPointerType(Int32Ty);
   for (uint32_t I = 0; I < Rank; ++I) {
-    IRNode *Index = Indices[I];
+    IRNode *Index = convertFromStackType(
+        Indices[I], CorInfoType::CORINFO_TYPE_INT, Int32Ty);
 
     // Load the lower bound
     Value *LowerBoundIndices[] = {
@@ -4514,6 +4549,7 @@ IRNode *GenIR::arrayGetDimLength(IRNode *Arg1, IRNode *Arg2,
   IRNode *Dimension = Arg1;
   IRNode *Array = Arg2;
 
+  const int SystemArrayStructNumElements = 1;
   const int VectorStructNumElements = 4;
   const int MDArrayStructNumElements = 6;
   StructType *ArrayStructType =
@@ -4522,7 +4558,13 @@ IRNode *GenIR::arrayGetDimLength(IRNode *Arg1, IRNode *Arg2,
   unsigned int ArrayStructNumElements = ArrayStructType->getNumElements();
   Type *Int32Ty = Type::getInt32Ty(*JitContext->LLVMContext);
 
-  if (ArrayStructNumElements == VectorStructNumElements) {
+  switch (ArrayStructNumElements) {
+  case SystemArrayStructNumElements: {
+    // We have an opaque instance of System.Array. Just call the helper.
+    return nullptr;
+  }
+
+  case VectorStructNumElements: {
     // We have a zero-based one-dimensional array.
     ArrayRank = 1;
     Constant *ArrayRankValue = ConstantInt::get(Int32Ty, ArrayRank);
@@ -4531,8 +4573,9 @@ IRNode *GenIR::arrayGetDimLength(IRNode *Arg1, IRNode *Arg2,
     // This call will load the array length which will ensure that the array is
     // not null.
     return loadLen(Array);
-  } else {
-    assert(ArrayStructNumElements == MDArrayStructNumElements);
+  }
+
+  case MDArrayStructNumElements: {
     // We have a multi-dimensional array or a single-dimensional array with a
     // non-zero lower bound.
 
@@ -4550,6 +4593,10 @@ IRNode *GenIR::arrayGetDimLength(IRNode *Arg1, IRNode *Arg2,
     genBoundsCheck(ArrayRankValue, Dimension);
 
     return mdArrayGetDimensionLength(Array, Dimension);
+  }
+
+  default:
+    llvm_unreachable("Bad array type!");
   }
 }
 
@@ -5604,7 +5651,8 @@ void GenIR::nop() {
     // We may need to pick something else that survives lowering.
     Value *DoNothing = Intrinsic::getDeclaration(JitContext->CurrentModule,
                                                  Intrinsic::donothing);
-    LLVMBuilder->CreateCall(DoNothing);
+    ArrayRef<Value *> Args;
+    LLVMBuilder->CreateCall(DoNothing, Args);
   }
 }
 
@@ -6027,7 +6075,7 @@ void GenIR::leave(uint32_t TargetOffset, bool IsNonLocal,
     if (Leaving->Kind == ReaderBaseNS::RegionKind::RGN_MCatch) {
       Value *ExitCatchIntrinsic = Intrinsic::getDeclaration(
           JitContext->CurrentModule, Intrinsic::eh_endcatch);
-      LLVMBuilder->CreateCall(ExitCatchIntrinsic);
+      LLVMBuilder->CreateCall(ExitCatchIntrinsic, {});
     }
   }
 }
@@ -6516,13 +6564,22 @@ IRNode *GenIR::cmp(ReaderBaseNS::CmpOpcode Opcode, IRNode *Arg1, IRNode *Arg2) {
   ASSERT(IsFloat1 == IsFloat2);
 
   if (Size1 != Size2) {
-    // int32 can be compared with nativeint
-    ASSERT(!IsPointer1 && !IsPointer2 && !IsFloat1);
+    // int32 can be compared with nativeint and float can be compared
+    // with double
+    ASSERT(!IsPointer1 && !IsPointer2);
     bool IsSigned = true;
     if (Size1 == 32) {
-      Arg1 = (IRNode *)LLVMBuilder->CreateIntCast(Arg1, Ty2, IsSigned);
+      if (IsFloat1) {
+        Arg1 = (IRNode *)LLVMBuilder->CreateFPExt(Arg1, Ty2);
+      } else {
+        Arg1 = (IRNode *)LLVMBuilder->CreateIntCast(Arg1, Ty2, IsSigned);
+      }
     } else {
-      Arg2 = (IRNode *)LLVMBuilder->CreateIntCast(Arg2, Ty1, IsSigned);
+      if (IsFloat2) {
+        Arg2 = (IRNode *)LLVMBuilder->CreateFPExt(Arg2, Ty1);
+      } else {
+        Arg2 = (IRNode *)LLVMBuilder->CreateIntCast(Arg2, Ty1, IsSigned);
+      }
     }
   } else if (Ty1 != Ty2) {
     // Make types agree without perturbing bit patterns.

@@ -21,6 +21,7 @@
 
 //-- Bit Manipulation --
 
+#ifndef _rotl
 inline unsigned int __cdecl _rotl(unsigned int value, int shift)
 {
   unsigned int retval = 0;
@@ -29,7 +30,9 @@ inline unsigned int __cdecl _rotl(unsigned int value, int shift)
   retval = (value << shift) | (value >> (sizeof(int)* 8 - shift));
   return retval;
 }
+#endif
 
+#ifndef _rotr
 inline unsigned int __cdecl _rotr(unsigned int value, int shift)
 {
   unsigned int retval;
@@ -37,7 +40,8 @@ inline unsigned int __cdecl _rotr(unsigned int value, int shift)
   shift &= 0x1f;
   retval = (value >> shift) | (value << (sizeof(int)* 8 - shift));
   return retval;
-} 
+}
+#endif
 
 //-- Memory move/copy/set/cmp operations
 
