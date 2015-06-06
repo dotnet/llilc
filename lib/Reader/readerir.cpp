@@ -1099,8 +1099,10 @@ void ReaderBase::fatal(int ErrNum) { LLILCJit::fatal(LLILCJIT_FATAL_ERROR); }
 //
 //===----------------------------------------------------------------------===//
 
-Type *GenIR::getType(CorInfoType CorType, CORINFO_CLASS_HANDLE ClassHandle,
-                     bool GetRefClassFields) {
+Type *
+GenIR::getType(CorInfoType CorType, CORINFO_CLASS_HANDLE ClassHandle,
+               bool GetAggregateFields,
+               std::list<CORINFO_CLASS_HANDLE> *DeferredDetailAggregates) {
   LLVMContext &LLVMContext = *this->JitContext->LLVMContext;
 
   switch (CorType) {
@@ -1139,13 +1141,11 @@ Type *GenIR::getType(CorInfoType CorType, CORINFO_CLASS_HANDLE ClassHandle,
     return Type::getDoubleTy(LLVMContext);
 
   case CorInfoType::CORINFO_TYPE_CLASS:
-    ASSERT(ClassHandle != nullptr);
-    return getClassType(ClassHandle, true, GetRefClassFields);
-
   case CorInfoType::CORINFO_TYPE_VALUECLASS:
   case CorInfoType::CORINFO_TYPE_REFANY: {
     ASSERT(ClassHandle != nullptr);
-    return getClassType(ClassHandle, false, true);
+    return getClassType(ClassHandle, GetAggregateFields,
+                        DeferredDetailAggregates);
   }
 
   case CorInfoType::CORINFO_TYPE_PTR:
@@ -1161,9 +1161,11 @@ Type *GenIR::getType(CorInfoType CorType, CORINFO_CLASS_HANDLE ClassHandle,
       ClassType = getType(CORINFO_TYPE_CHAR, nullptr);
     } else if (ChildCorType == CORINFO_TYPE_UNDEF) {
       // Presumably a value class...?
-      ClassType = getType(CORINFO_TYPE_VALUECLASS, ClassHandle);
+      ClassType = getType(CORINFO_TYPE_VALUECLASS, ClassHandle,
+                          GetAggregateFields, DeferredDetailAggregates);
     } else {
-      ClassType = getType(ChildCorType, ChildClassHandle);
+      ClassType = getType(ChildCorType, ChildClassHandle, GetAggregateFields,
+                          DeferredDetailAggregates);
     }
 
     // Byrefs are reported as potential GC pointers.
@@ -1188,6 +1190,45 @@ Type *GenIR::getType(CorInfoType CorType, CORINFO_CLASS_HANDLE ClassHandle,
   }
 }
 
+Type *
+GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool GetAggregateFields,
+                    std::list<CORINFO_CLASS_HANDLE> *DeferredDetailAggregates) {
+
+  Type *Result = nullptr;
+  if (DeferredDetailAggregates == nullptr) {
+    // Keep track of any aggregates that we deferred examining in detail, so we
+    // can come back to them when this aggregate is filled in.
+    std::list<CORINFO_CLASS_HANDLE> TheDeferredDetailAggregates;
+    DeferredDetailAggregates = &TheDeferredDetailAggregates;
+
+    if (!GetAggregateFields) {
+      DeferredDetailAggregates->push_back(ClassHandle);
+    }
+    Result = getClassTypeWorker(ClassHandle, GetAggregateFields,
+                                DeferredDetailAggregates);
+
+    // Now that this aggregate's fields are filled in, go back
+    // and fill in the details for those aggregates we deferred
+    // handling earlier.
+    std::list<CORINFO_CLASS_HANDLE>::iterator it =
+        TheDeferredDetailAggregates.begin();
+    while (it != TheDeferredDetailAggregates.end()) {
+      CORINFO_CLASS_HANDLE DeferredClassHandle = *it;
+      getClassTypeWorker(DeferredClassHandle, GetAggregateFields,
+                         DeferredDetailAggregates);
+      ++it;
+    }
+  } else {
+    if (!GetAggregateFields) {
+      DeferredDetailAggregates->push_back(ClassHandle);
+    }
+    Result = getClassTypeWorker(ClassHandle, GetAggregateFields,
+                                DeferredDetailAggregates);
+  }
+
+  return Result;
+}
+
 // Map this class handle into an LLVM type.
 //
 // Classes are modelled via LLVM structs. Fields in a class
@@ -1200,11 +1241,12 @@ Type *GenIR::getType(CorInfoType CorType, CORINFO_CLASS_HANDLE ClassHandle,
 // We also do not model things like the preheader so overall
 // size is accurate only for value classes.
 //
-// If GetRefClassFields is false, then we won't fill in the
-// field information for ref classes. This is used to avoid
+// If GetAggregateFields is false, then we won't fill in the
+// field information for aggregates. This is used to avoid
 // getting trapped in cycles in the type reference graph.
-Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
-                          bool GetRefClassFields) {
+Type *GenIR::getClassTypeWorker(
+    CORINFO_CLASS_HANDLE ClassHandle, bool GetAggregateFields,
+    std::list<CORINFO_CLASS_HANDLE> *DeferredDetailClasses) {
   // Check if we've already created a type for this class handle.
   Type *ResultTy = nullptr;
   StructType *StructTy = nullptr;
@@ -1231,30 +1273,26 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
     }
   }
 
+  bool IsRefClass = !JitContext->JitInfo->isValueClass(ClassHandle);
+
   if (ResultTy != nullptr) {
     // See if we can just return this result.
-    bool CanReturnCachedType = true;
-
     if (IsRefClass) {
       // ResultTy should be ptr-to struct.
       ASSERT(ResultTy->isPointerTy());
       Type *ReferentTy = cast<PointerType>(ResultTy)->getPointerElementType();
       ASSERT(ReferentTy->isStructTy());
       StructTy = cast<StructType>(ReferentTy);
-
-      // If we need fields and don't have them yet, we
-      // can't return the cached type without doing some
-      // work to finish it off.
-      if (GetRefClassFields && StructTy->isOpaque()) {
-        CanReturnCachedType = false;
-      }
     } else {
-      // Value classes should be structs and all filled in
+      // Value classes should be structs
       ASSERT(ResultTy->isStructTy());
-      ASSERT(!cast<StructType>(ResultTy)->isOpaque());
+      StructTy = cast<StructType>(ResultTy);
     }
 
-    if (CanReturnCachedType) {
+    // If we need fields and don't have them yet, we
+    // can't return the cached type without doing some
+    // work to finish it off.
+    if (!GetAggregateFields || !StructTy->isOpaque()) {
       return ResultTy;
     }
   }
@@ -1320,9 +1358,9 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
     }
   }
 
-  // Bail out if we just want a placeholder for a ref class.
+  // Bail out if we just want a placeholder for an aggregate.
   // We will fill in details later.
-  if (IsRefClass && !GetRefClassFields) {
+  if (!GetAggregateFields) {
     return ResultTy;
   }
 
@@ -1368,11 +1406,6 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
     }
   }
 
-  // Keep track of any ref classes that we deferred
-  // examining in detail, so we can come back to them
-  // when this class is filled in.
-  std::vector<CORINFO_CLASS_HANDLE> DeferredDetailClasses;
-
   // System.Object is a special case, it has no explicit
   // fields but we need to account for the vtable slot.
   if (IsObject) {
@@ -1395,12 +1428,10 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
 
       if (ParentClassHandle != nullptr) {
         // It's always ok to ask for the details of a parent type.
-        Type *PointerToParentTy = getClassType(ParentClassHandle, true, true);
-        // It's possible that we added the fields to this struct if a parent
-        // had fields of this type. In that case we are already done.
-        if (!StructTy->isOpaque()) {
-          return ResultTy;
-        }
+        const bool GetParentAggregateFields = true;
+        Type *PointerToParentTy = getClassTypeWorker(
+            ParentClassHandle, GetParentAggregateFields, DeferredDetailClasses);
+        assert(StructTy->isOpaque());
 
         StructType *ParentTy =
             cast<StructType>(PointerToParentTy->getPointerElementType());
@@ -1469,13 +1500,15 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
       // ask for B's details while filling out A.
       CORINFO_CLASS_HANDLE FieldClassHandle;
       CorInfoType CorInfoType = getFieldType(FieldHandle, &FieldClassHandle);
-      bool GetFieldDetails = (CorInfoType != CORINFO_TYPE_CLASS);
-      Type *FieldTy = getType(CorInfoType, FieldClassHandle, GetFieldDetails);
-      // If we don't get the details now, make sure to ask
-      // for them later.
-      if (!GetFieldDetails) {
-        DeferredDetailClasses.push_back(FieldClassHandle);
-      }
+
+      const bool GetAggregateFields = ((CorInfoType != CORINFO_TYPE_CLASS) &&
+                                       (CorInfoType != CORINFO_TYPE_PTR) &&
+                                       (CorInfoType != CORINFO_TYPE_BYREF));
+      Type *FieldTy = getType(CorInfoType, FieldClassHandle, GetAggregateFields,
+                              DeferredDetailClasses);
+      // Double check that if the field is of struct type, we got its field
+      // details.
+      assert(!FieldTy->isStructTy() || !cast<StructType>(FieldTy)->isOpaque());
 
       // If we see an overlapping field, we need to handle it specially.
       if (FieldOffset < ByteOffset) {
@@ -1597,8 +1630,13 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
       CORINFO_CLASS_HANDLE ArrayElementHandle = nullptr;
       CorInfoType ArrayElementCorTy =
           getChildType(ClassHandle, &ArrayElementHandle);
-      ByteOffset += addArrayFields(Fields, IsVector, ArrayRank,
-                                   ArrayElementCorTy, ArrayElementHandle);
+      const bool GetElementAggregateFields =
+          ((ArrayElementCorTy != CORINFO_TYPE_CLASS) &&
+           (ArrayElementCorTy != CORINFO_TYPE_PTR) &&
+           (ArrayElementCorTy != CORINFO_TYPE_BYREF));
+      ByteOffset += addArrayFields(
+          Fields, IsVector, ArrayRank, ArrayElementCorTy, ArrayElementHandle,
+          GetElementAggregateFields, DeferredDetailClasses);
 
       // Verify that the offset we calculated matches the expected offset
       // for single-dimensional arrays of objects (note the last field is
@@ -1609,14 +1647,7 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
     }
   }
 
-  // It's possible that while adding the fields to this struct we already
-  // completed the struct. For example:
-  // class A { B b; }
-  // struct B { A a; }
-  // In that case we are already done.
-  if (!StructTy->isOpaque()) {
-    return ResultTy;
-  }
+  assert(StructTy->isOpaque());
 
   // Install the field list (even if empty) to complete the struct.
   // Since padding is explicit, this is an LLVM packed struct.
@@ -1689,14 +1720,6 @@ Type *GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
       assert((ExpectGCPointer == IsGCPointer) &&
              "llvm type incorrectly describes location of gc references");
     }
-  }
-
-  // Now that this class's fields are filled in, go back
-  // and fill in the details for those classes we deferred
-  // handling earlier.
-  for (const auto &DeferredClassHandle : DeferredDetailClasses) {
-    // These are ref classes, and we want their details.
-    getClassType(DeferredClassHandle, true, true);
   }
 
   // Return the struct or a pointer to it as requested.
@@ -2175,9 +2198,12 @@ bool GenIR::isUnmanagedPointerType(llvm::Type *Type) {
   return Type->isPointerTy() && !isManagedPointerType(Type);
 }
 
-uint32_t GenIR::addArrayFields(std::vector<llvm::Type *> &Fields, bool IsVector,
-                               uint32_t ArrayRank, CorInfoType ElementCorType,
-                               CORINFO_CLASS_HANDLE ElementHandle) {
+uint32_t
+GenIR::addArrayFields(std::vector<llvm::Type *> &Fields, bool IsVector,
+                      uint32_t ArrayRank, CorInfoType ElementCorType,
+                      CORINFO_CLASS_HANDLE ElementHandle,
+                      bool GetElementAggregateFields,
+                      std::list<CORINFO_CLASS_HANDLE> *DeferredDetailClasses) {
   LLVMContext &LLVMContext = *JitContext->LLVMContext;
   const DataLayout *DataLayout = &JitContext->CurrentModule->getDataLayout();
   uint32_t FieldByteSize = 0;
@@ -2207,7 +2233,9 @@ uint32_t GenIR::addArrayFields(std::vector<llvm::Type *> &Fields, bool IsVector,
     FieldByteSize += DataLayout->getTypeSizeInBits(ArrayOfDimLowerBoundsTy) / 8;
   }
 
-  Type *ElementTy = getType(ElementCorType, ElementHandle);
+  Type *ElementTy = getType(ElementCorType, ElementHandle,
+                            GetElementAggregateFields, DeferredDetailClasses);
+
   Type *ArrayOfElementTy = ArrayType::get(ElementTy, 0);
   Fields.push_back(ArrayOfElementTy);
   return FieldByteSize;
@@ -2271,8 +2299,9 @@ void GenIR::createArrayOfReferenceType() {
       getBuiltinClass(CorInfoClassId::CLASSID_SYSTEM_OBJECT);
   const uint32_t ArrayRank = 1;
   const bool IsZeroLowerBoundSDArray = true;
+  const bool GetElementAggregateFields = true;
   addArrayFields(Fields, IsZeroLowerBoundSDArray, ArrayRank, CORINFO_TYPE_CLASS,
-                 ObjectClassHandle);
+                 ObjectClassHandle, GetElementAggregateFields);
 
   // Install fields and give this a recognizable name.
   StructTy->setBody(Fields, true /* isPacked */);
