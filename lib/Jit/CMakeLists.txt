@@ -10,6 +10,7 @@ set(LLVM_LINK_COMPONENTS
   Analysis
   CodeGen
   Core
+  DebugInfoDWARF
   ExecutionEngine
   IPO
   IRReader

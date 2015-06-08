@@ -1,4 +1,4 @@
-//===---- lib/MSILReader/reader.cpp -----------------------------*- C++ -*-===//
+//===---- lib/Reader/reader.cpp ---------------------------------*- C++ -*-===//
 //
 // LLILC
 //
@@ -402,7 +402,7 @@ void ReaderBase::printMSIL(uint8_t *Buf, uint32_t StartOffset,
   while (Offset < NumBytes) {
     dbPrint("0x%-4x: ", StartOffset + Offset);
     Offset = parseILOpcode(Buf, Offset, NumBytes, this, &Opcode, &Operand);
-    dbPrint("%-10s ", OpcodeName[Opcode]);
+    dbPrint("%d: %-10s ", Offset, OpcodeName[Opcode]);
 
     switch (Opcode) {
     default:
@@ -6410,6 +6410,12 @@ void ReaderBase::readBytesForFlowGraphNodeHelper(
     CurrInstrOffset = CurrentOffset;
     NextInstrOffset = NextOffset;
 
+    // Set debug locations
+    if (ReaderOperandStack->empty()) {
+      const bool IsCall = false;
+      setDebugLocation(CurrentOffset, IsCall);
+    }
+
     // If we have cached a LoadFtnToken from LDFTN or LDVIRTFTN
     // then clear it if the next opcode is not NEWOBJ
     if (Opcode != ReaderBaseNS::CEE_NEWOBJ) {
@@ -6564,6 +6570,8 @@ void ReaderBase::readBytesForFlowGraphNodeHelper(
       goto GEN_BRANCH;
 
     GEN_BRANCH:
+      // We need to record the source location of branches, so insert a nop
+      nop();
       Param->HasFallThrough = false;
       Param->VerifiedEndBlock = true;
       verifyFinishBlock(TheVerificationState,
@@ -6588,6 +6596,8 @@ void ReaderBase::readBytesForFlowGraphNodeHelper(
     case ReaderBaseNS::CEE_CALL:
     case ReaderBaseNS::CEE_CALLI:
     case ReaderBaseNS::CEE_CALLVIRT: {
+      const bool IsCall = true;
+      setDebugLocation(CurrentOffset, IsCall);
       bool IsUnmarkedTailCall = false;
       Token = readValue<mdToken>(Operand);
 
@@ -6994,6 +7004,9 @@ void ReaderBase::readBytesForFlowGraphNodeHelper(
     case ReaderBaseNS::CEE_LDC_I4_8:
     case ReaderBaseNS::CEE_LDC_I4_M1:
     LOAD_CONSTANT:
+      // We need to record the source locations of ldcs, so insert a nop
+      // to record the source location.
+      nop();
       verifyLoadConstant(TheVerificationState, Opcode);
       BREAK_ON_VERIFY_ONLY;
 
@@ -7342,6 +7355,11 @@ void ReaderBase::readBytesForFlowGraphNodeHelper(
       break;
 
     case ReaderBaseNS::CEE_RET: {
+      // Insert a nop for debug and set return's IL offset to signify
+      // that it is part of the epilogue
+      nop();
+      const bool IsCall = false;
+      setDebugLocation(ICorDebugInfo::EPILOG, IsCall);
       CorInfoCallConv Conv;
       CorInfoType CorType;
       CORINFO_CLASS_HANDLE RetTypeClass;
