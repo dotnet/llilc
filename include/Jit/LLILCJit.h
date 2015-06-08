@@ -27,6 +27,9 @@
 
 class ABIInfo;
 struct LLILCJitPerThreadState;
+namespace llvm {
+class EEMemoryManager;
+}
 
 /// \brief This struct holds per-jit request state.
 ///
@@ -174,6 +177,47 @@ public:
   }
 };
 
+// Object layer that notifies the memory manager to reserve unwind space for
+// each object and otherwise passes processing on to the underlying base
+// object layer
+template <typename BaseLayerT> class ReserveUnwindSpaceLayer {
+public:
+  typedef llvm::orc::ObjectLinkingLayerBase::ObjSetHandleT ObjSetHandleT;
+
+  ReserveUnwindSpaceLayer(BaseLayerT *BaseLayer, llvm::EEMemoryManager *MM) {
+    this->BaseLayer = BaseLayer;
+    this->MM = MM;
+  }
+
+  template <typename ObjSetT, typename MemoryManagerPtrT,
+            typename SymbolResolverPtrT>
+  ObjSetHandleT addObjectSet(const ObjSetT &Objects, MemoryManagerPtrT MemMgr,
+                             SymbolResolverPtrT Resolver) {
+    for (const auto &Obj : Objects) {
+      MM->reserveUnwindSpace(*Obj);
+    }
+    return BaseLayer->addObjectSet(Objects, MemMgr, Resolver);
+  }
+
+  void removeObjectSet(ObjSetHandleT H) {
+    BaseLayer->removeObjectSet(std::move(H));
+  }
+
+  llvm::orc::JITSymbol findSymbol(llvm::StringRef Name,
+                                  bool ExportedSymbolsOnly) {
+    return BaseLayer->findSymbol(Name, ExportedSymbolsOnly);
+  }
+
+  template <typename OwningMBSet>
+  void takeOwnershipOfBuffers(ObjSetHandleT H, OwningMBSet MBs) {
+    BaseLayer->takeOwnershipOfBuffers(std::move(H), std::move(MBs));
+  }
+
+private:
+  BaseLayerT *BaseLayer;
+  llvm::EEMemoryManager *MM;
+};
+
 /// \brief The Jit interface to the CoreCLR EE.
 ///
 /// This class implements the Jit interface to the CoreCLR EE. The EE uses this
@@ -187,7 +231,8 @@ public:
 class LLILCJit : public ICorJitCompiler {
 public:
   typedef llvm::orc::ObjectLinkingLayer<> LoadLayerT;
-  typedef llvm::orc::IRCompileLayer<LoadLayerT> CompileLayerT;
+  typedef ReserveUnwindSpaceLayer<LoadLayerT> ReserveUnwindSpaceLayerT;
+  typedef llvm::orc::IRCompileLayer<ReserveUnwindSpaceLayerT> CompileLayerT;
 
   /// \brief Construct a new jit instance.
   ///

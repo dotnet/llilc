@@ -200,7 +200,8 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
   // Construct the jitting layers.
   EEMemoryManager MM(&Context);
   LoadLayerT Loader;
-  CompileLayerT Compiler(Loader, orc::SimpleCompiler(*TM));
+  ReserveUnwindSpaceLayerT UnwindReserver(&Loader, &MM);
+  CompileLayerT Compiler(UnwindReserver, orc::SimpleCompiler(*TM));
 
   // Now jit the method.
   CorJitResult Result = CORJIT_INTERNALERROR;
@@ -351,17 +352,6 @@ bool LLILCJit::readMethod(LLILCJitContext *JitContext) {
 
   if (DumpLevel == ::DumpLevel::VERBOSE) {
     Func->dump();
-  }
-
-  if (IsOk) {
-    for (BasicBlock &BB : *Func) {
-      if (BB.getLandingPadInst() != nullptr) {
-        // Don't try to push the EH code downstream (we'll currently fail on
-        // the first method with EH if we do that, which prevents being able
-        // to see IR for later methods)
-        return false;
-      }
-    }
   }
 
   return IsOk;
