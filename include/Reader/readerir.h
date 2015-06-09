@@ -884,11 +884,44 @@ public:
 #endif
 
 private:
-  llvm::Type *getType(CorInfoType Type, CORINFO_CLASS_HANDLE ClassHandle,
-                      bool GetRefClassFields = true);
+  /// \brief Get llvm type corresponding to Type and ClassHandle.
+  ///
+  /// \param Type  Type to get llvm type for.
+  /// \param ClassHandle   Class handle to get llvm type for.
+  /// \param GetAggregateFields  true iff this method should get type details
+  ///        for fields in case this is an aggregate or a pointer to an
+  ///        aggregate.
+  /// \param DeferredDetailClasses  List to append aggregates whose details
+  ///        weren't fully resolved.
+  /// \returns       llvm type corresponding to Type and ClassHandle.
+  llvm::Type *
+  getType(CorInfoType Type, CORINFO_CLASS_HANDLE ClassHandle,
+          bool GetAggregateFields = true,
+          std::list<CORINFO_CLASS_HANDLE> *DeferredDetailClasses = nullptr);
 
-  llvm::Type *getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool IsRefClass,
-                           bool GetRefClassFields);
+  /// \brief Get llvm type corresponding to ClassHandle.
+  ///
+  /// \param ClassHandle   Class handle to get llvm type for.
+  /// \param GetAggregateFields  true iff this method should get type details
+  ///        for fields of this aggregate.
+  /// \param DeferredDetailClasses  List to append aggregates whose details
+  ///        weren't fully resolved.
+  /// \returns       llvm type corresponding to ClassHandle.
+  llvm::Type *
+  getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool GetAggregateFields,
+               std::list<CORINFO_CLASS_HANDLE> *DeferredDetailAggregates);
+
+  /// \brief Get llvm type corresponding to ClassHandle.
+  ///
+  /// \param ClassHandle   Class handle to get llvm type for.
+  /// \param GetAggregateFields  true iff this method should get type details
+  ///        for fields of this aggregate.
+  /// \param DeferredDetailClasses  List to append aggregates whose details
+  ///        weren't fully resolved.
+  /// \returns       llvm type corresponding to ClassHandle.
+  llvm::Type *
+  getClassTypeWorker(CORINFO_CLASS_HANDLE ClassHandle, bool GetAggregateFields,
+                     std::list<CORINFO_CLASS_HANDLE> *DeferredDetailClasses);
 
   /// \brief Construct the LLVM type of the boxed representation of the given
   ///        value type.
@@ -1485,19 +1518,27 @@ private:
 
   /// Create the length, padding, and elements fields for an array type.
   ///
-  /// \param Fields                  Field collection for the array. On input,
-  ///                                should contain only the vtable pointer.
-  /// \param IsVector                true iff this is a zero-lower-bound
-  ///                                single-dimensional array.
-  /// \param ArrayRank               Rank of the array.
-  /// \param ElementCorType          CorType for the array elements.
-  /// \param ElementClassHandle      Class handle for the array elements.
-  /// \returns                       Byte size of the fields added. Fields
-  ///                                updated with length, padding (if needed),
-  ///                                and the array itself.
-  uint32_t addArrayFields(std::vector<llvm::Type *> &Fields, bool IsVector,
-                          uint32_t ArrayRank, CorInfoType ElementCorType,
-                          CORINFO_CLASS_HANDLE ElementClassHandle);
+  /// \param Fields                    Field collection for the array. On input,
+  ///                                  should contain only the vtable pointer.
+  /// \param IsVector                  true iff this is a zero-lower-bound
+  ///                                  single-dimensional array.
+  /// \param ArrayRank                 Rank of the array.
+  /// \param ElementCorType            CorType for the array elements.
+  /// \param ElementClassHandle        Class handle for the array elements.
+  /// \param GetElementAggregateFields true iff this method should get type
+  ///                                  details for fields in case the element
+  ///                                  type is an aggregate or a pointer to an
+  ///                                  aggregate.
+  /// \param DeferredDetailClasses     List to append aggregates whose details
+  ///                                  weren't fully resolved.
+  /// \returns                         Byte size of the fields added. Fields
+  ///                                  updated with length, padding (if needed),
+  ///                                  and the array itself.
+  uint32_t addArrayFields(
+      std::vector<llvm::Type *> &Fields, bool IsVector, uint32_t ArrayRank,
+      CorInfoType ElementCorType, CORINFO_CLASS_HANDLE ElementClassHandle,
+      bool GetElementAggregateFields,
+      std::list<CORINFO_CLASS_HANDLE> *DeferredDetailClasses = nullptr);
 
   /// Add fields of a type to the field vector, expanding structures
   /// (recursively) to the types they contain.
