@@ -267,7 +267,7 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
 
     // Don't allow the LoadLayer to search for external symbols, by supplying
     // it a NullResolver.
-    NullResolver Resolver;
+    orc::NullResolver Resolver;
     auto HandleSet =
         Compiler.addModuleSet<ArrayRef<Module *>>(M.get(), &MM, &Resolver);
 
