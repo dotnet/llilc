@@ -115,6 +115,8 @@ def main(argv):
                         help='the dump level: summary, or verbose')
     parser.add_argument('-r', '--result-path', type=str, 
                         default=DefaultResultPath(), help='the path to runtest result output directory')
+    parser.add_argument('-t', '--runtest-path', type=str,
+                        default=None, help='the full path to the CoreCLR\\tests directory')
     required = parser.add_argument_group('required arguments')
     required.add_argument('-j', '--jit-path', required=True, 
                         help='full path to jit .dll')
@@ -127,12 +129,19 @@ def main(argv):
         return const.UnknowArguments
         
     # Ensure the command run from a CoreCLR tests directory
-    current_work_directory = os.getcwd()
-    path, folder = os.path.split(current_work_directory)
-    parent_path, parent_folder = os.path.split(path)
-    if (not folder == 'tests' or
-        not parent_folder == 'coreclr'):
-        print('This script is required to run from tests directory in a CoreCLR repository.' )    
+    runtest_dir = args.runtest_path
+    if (args.runtest_path is None):
+        runtest_dir = os.getcwd()
+
+    # All platforms other than Windows run runtest.sh
+    runtest_full_path = os.path.join(runtest_dir, 'runtest.sh')
+
+    # On Windows, we will run runtest.cmd
+    if sys.platform == "win32":
+      runtest_full_path = os.path.join(runtest_dir, 'runtest.cmd')
+
+    if (not os.path.isfile(runtest_full_path)):
+        print('Please specify --runtest-path or run from theests directory in a CoreCLR repository')
         return const.WrongRunDir
 
     try:
@@ -171,7 +180,7 @@ def main(argv):
     # Run the test
     return_code = const.RunTestOK
     exclusion = os.path.join(os.path.dirname(__file__), 'exclusion.targets')
-    runtest_command = 'runtest ' + args.arch + ' ' + args.build 
+    runtest_command = runtest_full_path + ' ' + args.arch + ' ' + args.build 
     runtest_command = runtest_command + ' Exclude ' + exclusion
     runtest_command = runtest_command + ' Testenv ' + time_stamped_test_env_path
     runtest_command = runtest_command + ' ' + args.coreclr_runtime_path 
