@@ -130,12 +130,33 @@ void EEMemoryManager::registerEHFrames(uint8_t *Addr, uint64_t LoadAddr,
   // ColdCodeBlock, i.e. separated code is not supported.
   assert(this->ColdCodeBlock == 0 && "ColdCodeBlock must be zero");
 
+  // Addr points to an UNWIND_INFO structure:
+  // typedef struct _UNWIND_INFO {
+  //  UCHAR Version : 3;
+  //  UCHAR Flags : 5;
+  //  UCHAR SizeOfProlog;
+  //  UCHAR CountOfUnwindCodes;
+  //  UCHAR FrameRegister : 4;
+  //  UCHAR FrameOffset : 4;
+  //  UNWIND_CODE UnwindCode[1];
+  //} UNWIND_INFO, *PUNWIND_INFO;
+
+  // Size passed to this method includes the size of a padding UNWIND_CODE entry
+  // so that the number of elements of the UnwindCode array is even.
+  // Jit interface expects the size reported to it not to include the padding
+  // entry. Calculate the unpadded size.
+  const uint32_t OffsetOfCountOfUnwindCodesField = 2;
+  UCHAR CountOfUnwindCodes = Addr[OffsetOfCountOfUnwindCodesField];
+  const size_t SizeOfUnwindCode = 2;
+  size_t SizeWithoutPadding =
+      Size - (CountOfUnwindCodes & 1) * SizeOfUnwindCode;
+
   // Assume this unwind covers the entire method. Later when
   // we have multiple unwind regions we'll need something more clever.
   uint32_t StartOffset = 0;
   uint32_t EndOffset = this->Context->HotCodeSize;
   this->Context->JitInfo->allocUnwindInfo(
-      this->HotCodeBlock, nullptr, StartOffset, EndOffset, Size,
+      this->HotCodeBlock, nullptr, StartOffset, EndOffset, SizeWithoutPadding,
       (BYTE *)LoadAddr, CorJitFuncKind::CORJIT_FUNC_ROOT);
 }
 
