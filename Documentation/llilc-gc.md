@@ -553,7 +553,7 @@ No.  | Implementation | Testing | Issue | Status
 5 | Add GC-specific stress tests| All existing and new tests pass | | 
 6 | GC Stress testing | Run the LLILC tests in GCStress mode; some GCStress testing running regularly in the lab | |
 7 | Special reporting for pinned pointers | Code with pinned pointers handled by LLILC | [29](https://github.com/dotnet/llilc/issues/29) | |
-8 | Support interior pointers | Code with interior pointers handled by LLILC | [33](https://github.com/dotnet/llilc/issues/33) | |
+8 | Support aggregates containing GC pointers  | Code with GC-aggregates handled by LLILC | [33](https://github.com/dotnet/llilc/issues/33) | |
 9 | Fully-Interruptible code: Investigate whether fully interruptible code should be supported | Test and GCStress Pass | [473](https://github.com/dotnet/llilc/issues/473) | |
 10 | Lower Write barriers to Calls late | Test and GCStress Pass | [471](https://github.com/dotnet/llilc/issues/471) | | 
 11 | Place Safepoint-polls only where necessary for CoreCLR runtime | Test and GCStress Pass | [425](https://github.com/dotnet/llilc/issues/425) | |
