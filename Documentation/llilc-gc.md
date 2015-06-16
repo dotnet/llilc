@@ -448,6 +448,40 @@ Based on our experiences with Statepoint V1 we'll likely want to work with
 the community to enhance the `Statepoint` work. The specifics here will
 depend on what we've learned and what problems we encounter.
 
+### Generating GC Tables
+
+CoreCLR requires the generation of GC Tables that contain pointer 
+liveness information for each method. To achieve this, we read 
+the liveness information from the `__llvm.stackmaps` section, and 
+translate it to the CoreCLR format. We obtain the information by 
+post-processing LLVM generated binary, rather than adding a new 
+StackMap generator (for CoreCLR format) to LLVM itself. 
+While this involves a two step translation, it helps avoid:
+* Compatibility conflicts because of LLVM core having to change 
+  whenever there is a change in CoreCLR.
+* Bugs because of changes not correctly propagated to multiple 
+  stack-map generators in LLVM.
+
+Generating GC Tables involves the following steps:
+
+1. Enable StackMap section generation for COFF in LLVM.
+2. Parse the `__llvm.stackmaps` section.
+3. Collect certain information about the stack frame 
+   (ex: which of the callee save registers are saved) not available
+   in the StackMap section by parsing other sections, if necessary.
+4. Encode information using CoreCLR's GCInfo Encoder
+  * Report each call-site (GC safepoint).
+  * Assign slots IDs for each unique register and stack locations.
+  * For each slot, report liveness based on the location records 
+    in `__llvm.stackmaps` section.
+
+CoreCLR permits reportng certain slots as "untracked" GC-pointers,
+for stackmap-size reduction or throughput reasons. 
+However, LLVM currently does not support untracked reporting -- 
+stack-locations cannot be assumed to remain live through entire function, 
+due to transformations like stack coalescing. Therefore, LLILC will report
+the liveness of all slots as tracked pointers.
+
 ## Summary
 
 The requirements imposed on a code generator by the CoreCLR present new
