@@ -237,8 +237,9 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
   // Construct the jitting layers.
   EEMemoryManager MM(&Context);
   ObjectLoadListener Listener(&Context);
-  LoadLayerT Loader(Listener);
-  CompileLayerT Compiler(Loader, orc::SimpleCompiler(*TM));
+  orc::ObjectLinkingLayer<decltype(Listener)> Loader(Listener);
+  orc::IRCompileLayer<decltype(Loader)> Compiler(Loader,
+                                                 orc::SimpleCompiler(*TM));
 
   // Now jit the method.
   CorJitResult Result = CORJIT_INTERNALERROR;
