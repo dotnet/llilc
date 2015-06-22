@@ -205,29 +205,27 @@ The instructions currently implemented:
 -   Addressing fields (ldfld, ldsfld, ldflda, ldsflda, stfld, stsfld)
 
 -   Manipulating class and value type instances (ldnull, ldstr, newobj,
-    castclass, isinst, ldtoken, sizeof, box)
+    castclass, isinst, ldtoken, sizeof, box, ldobj, stobj, unbox, mkrefany,
+    refanytype, refanyval)
 
 -   Vector instructions (newarr, ldlen)
 
 -   Calls (call, calli, ldftn, ldvirtftn, calls that
-    require virtual stub dispatch)
+    require virtual stub dispatch, constrained virtual calls)
 
 -   Method argument list (arglist)
 
 -   Stack manipulation (nop, dup, pop)
 
-<a name="Not implemented"></a>The instructions not yet implemented:
+-   Block operations (cpblk, initblk)
 
 -   Local block allocation (localloc)
 
--   Block operations (cpblk, initblk).
-
--   Manipulating class and value type instances (ldobj, stobj,
-    unbox, mkrefany, refanytype, refanyval)
-
--   Calls (jmp, tail calls, constrained virtual calls)
-
 -   Debugging breakpoint (break)
+
+<a name="Not implemented"></a>The instructions not yet implemented:
+
+-   Calls (jmp, tail calls)
 
 ### Stack Maintenance
 
@@ -258,6 +256,15 @@ section III.1.7.5 prohibits non-empty operand stacks on backwards branches.
 The post-pass inserts the necessary code for keeping generic context
 alive and cleans up memory used by the reader.
 
+## Support for Ngen
+
+llilc will be used as a jit for native image generator (Ngen). The tool for generating
+Ngen images in CoreCLR is crossgen.exe. crossgen.exe exposes the same jit interface as
+the execution engine in normal jit compilation. The important difference is that handles
+for strings, methods, etc. returned via jit interface in Ngen scenario are not resolved
+addresses. These handles should be reported back to crossgen via recordRelocation method
+along with the code locations referring to those handles.
+
 ## Future Work
 
 -   [Implement remaining MSIL instructions.](#user-content-Not%20implemented)
@@ -265,9 +272,6 @@ alive and cleans up memory used by the reader.
 -   [ReaderBase has some code to enable inlining in the reader. We need
     to decide whether we do inlining in the reader or in a subsequent
     pass and update the reader accordingly.](https://github.com/dotnet/llilc/issues/239)
-
--   [Generate debug locations for later debug emission.](https://github.com/
-    dotnet/llilc/issues/318)
 
 -   Possibly enable a limited set of reader-time optimizations (like
     [avoiding redundant class initialization](https://github.com/dotnet/llilc/issues/38),
@@ -284,8 +288,10 @@ alive and cleans up memory used by the reader.
 
 -   [Handle methods with security checks.](https://github.com/dotnet/llilc/issues/301)
 
--   [Support union types.](https://github.com/dotnet/llilc/issues/275)
-
--   [Support volatile operations.](https://github.com/dotnet/llilc/issues/278)
-
 -   [Support intrinsics.](https://github.com/dotnet/llilc/issues/281)
+
+-   [NGEN: record relocations via Jit Interface.] (https://github.com/dotnet/llilc/issues/655)
+
+-   [NGEN: verify that we process handle indirections correctly.] (https://github.com/dotnet/llilc/issues/656)
+
+-   [NGEN: GS cookie constant needs to be accessed through an indirection.] (https://github.com/dotnet/llilc/issues/658)
