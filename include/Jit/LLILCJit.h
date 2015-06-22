@@ -28,7 +28,6 @@
 #include "llvm/Config/config.h"
 
 class ABIInfo;
-class ObjectLoadListener;
 struct LLILCJitPerThreadState;
 
 /// \brief This struct holds per-jit request state.
@@ -189,9 +188,6 @@ public:
 /// top-level invocations of the jit is held in thread local storage.
 class LLILCJit : public ICorJitCompiler {
 public:
-  typedef llvm::orc::ObjectLinkingLayer<ObjectLoadListener> LoadLayerT;
-  typedef llvm::orc::IRCompileLayer<LoadLayerT> CompileLayerT;
-
   /// \brief Construct a new jit instance.
   ///
   /// There is only one LLILC jit instance per process, so this
