@@ -282,8 +282,6 @@ if (APPLE)
   set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,-flat_namespace -Wl,-undefined -Wl,suppress")
 endif ()
 
-include(LLVMParseArguments)
-
 function(llilc_tablegen)
   # Syntax:
   # llilc-tablegen output-file [tablegen-arg ...] SOURCE source-file
@@ -297,7 +295,7 @@ function(llilc_tablegen)
   # executing the custom command depending on output-file. It is
   # possible to list more files to depend after DEPENDS.
 
-  parse_arguments( CTG "SOURCE;TARGET;DEPENDS" "" ${ARGN} )
+  cmake_parse_arguments( CTG "SOURCE;TARGET;DEPENDS" "" ${ARGN} )
 
   if( NOT CTG_SOURCE )
     message(FATAL_ERROR "SOURCE source-file required by llilc_tablegen")
