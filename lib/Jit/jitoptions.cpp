@@ -70,6 +70,8 @@ JitOptions::JitOptions(LLILCJitContext &Context) {
   // Set whether to insert statepoints.
   DoInsertStatepoints = queryDoInsertStatepoints(Context);
 
+  DoSIMDIntrinsic = queryDoSIMDIntrinsic(Context);
+
   // Set whether to do tail call opt.
   DoTailCallOpt = queryDoTailCallOpt(Context);
 
@@ -241,6 +243,13 @@ bool JitOptions::queryLogGcInfo(LLILCJitContext &Context) {
   char16_t *LogGcInfoStr =
       getStringConfigValue(Context.JitInfo, UTF16("JitGCInfoLogging"));
   return (LogGcInfoStr != nullptr);
+}
+
+// Determine if SIMD intrinsics should be used.
+bool JitOptions::queryDoSIMDIntrinsic(LLILCJitContext &Context) {
+  char16_t *StatePointStr =
+      getStringConfigValue(Context.JitInfo, UTF16("SIMDINTRINSIC"));
+  return (StatePointStr != nullptr);
 }
 
 OptLevel JitOptions::queryOptLevel(LLILCJitContext &Context) {

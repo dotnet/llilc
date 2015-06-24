@@ -4709,6 +4709,31 @@ ReaderBase::rdrMakeNewObjReturnNode(ReaderCallTargetData *CallTargetData,
   return genNewObjReturnNode(CallTargetData, ThisArg);
 }
 
+inline CorInfoHelpFunc eeGetHelperNum(CORINFO_METHOD_HANDLE Method) {
+  // Helpers are marked by the fact that they are odd numbers
+  if (!(((size_t)Method) & 1))
+    return (CORINFO_HELP_UNDEF);
+  return ((CorInfoHelpFunc)(((size_t)Method) >> 2));
+}
+
+inline bool eeIsNativeMethod(CORINFO_METHOD_HANDLE Method) {
+  return ((((size_t)Method) & 0x2) == 0x2);
+}
+
+const char *ReaderBase::getMethodName(CORINFO_METHOD_HANDLE Method,
+                                      const char **ClassNamePtr,
+                                      ICorJitInfo *JitInfo) {
+  if (eeGetHelperNum(Method)) {
+    return 0;
+  }
+
+  if (eeIsNativeMethod(Method)) {
+    return 0;
+  }
+
+  return JitInfo->getMethodName(Method, ClassNamePtr);
+}
+
 // Constraint calls in generic code.  Constraint calls are operations on generic
 // type variables,
 // e.g. "x.Incr()" where "x" has type "T" in generic code and where "T" supports
@@ -5006,6 +5031,21 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
       }
     }
 
+    CORINFO_CLASS_HANDLE Class = Data->getClassHandle();
+    CORINFO_SIG_INFO *SigInfo = Data->getSigInfo();
+    if (doSimdIntrinsicOpt() && JitInfo->isInSIMDModule(Class)) {
+      IRNode *ReturnNode = nullptr;
+      CORINFO_METHOD_HANDLE Method = Data->getMethodHandle();
+      ReturnNode = generateSIMDIntrinsicCall(Class, Method, SigInfo, Opcode);
+      if (ReturnNode) {
+        if (SigInfo->retType == CorInfoType::CORINFO_TYPE_VOID &&
+            Opcode != ReaderBaseNS::CallOpcode::NewObj) {
+          return 0;
+        }
+        return ReturnNode;
+      }
+    }
+
     // Check for Delegate Constructor optimization
     if (rdrCallIsDelegateConstruct(Data)) {
       if (Data->getLoadFtnToken() != mdTokenNil) {
@@ -5080,9 +5120,7 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
 
 #endif // not CC_PEVERIFY
   }
-
   CORINFO_SIG_INFO *SigInfo = Data->getSigInfo();
-
   // Set the calling convention.
   Data->CallTargetSignature.HasThis = Data->hasThis();
   Data->CallTargetSignature.CallingConvention = SigInfo->getCallConv();
@@ -8619,3 +8657,152 @@ void ReaderBase::resolveToken(mdToken Token, CorInfoTokenKind TokenType,
   return resolveToken(Token, getCurrentContext(), getCurrentModuleHandle(),
                       TokenType, ResolvedToken);
 }
+
+#pragma region SIMD_INTRINSICS
+
+//===----------------------------------------------------------------------===//
+//
+// SIMD Intrinsics
+//
+//===----------------------------------------------------------------------===//
+
+IRNode *ReaderBase::generateSIMDBinOp(ReaderSIMDIntrinsic OperationCode) {
+  IRNode *Arg2 = ReaderOperandStack->pop();
+  IRNode *Arg1 = ReaderOperandStack->pop();
+  if (checkVectorType(Arg1) && checkVectorType(Arg2)) {
+
+    IRNode *Vector1 = Arg1;
+    IRNode *Vector2 = Arg2;
+
+    IRNode *ReturnNode = 0;
+    switch (OperationCode) {
+    case ADD:
+      ReturnNode = vectorAdd(Vector1, Vector2);
+      break;
+    case SUB:
+      ReturnNode = vectorSub(Vector1, Vector2);
+      break;
+    case MUL:
+      ReturnNode = vectorMul(Vector1, Vector2);
+      break;
+    case DIV:
+      ReturnNode = vectorDiv(Vector1, Vector2);
+      break;
+    default:
+      break;
+    }
+    if (ReturnNode) {
+      return ReturnNode;
+    }
+  }
+
+  ReaderOperandStack->push(Arg1);
+  ReaderOperandStack->push(Arg2);
+  return 0;
+}
+
+IRNode *ReaderBase::generateSIMDUnOp(ReaderSIMDIntrinsic OperationCode) {
+  IRNode *Arg = ReaderOperandStack->pop();
+  if (checkVectorType(Arg)) {
+    IRNode *Vector = Arg;
+    IRNode *ReturnNode = 0;
+    switch (OperationCode) {
+    case ABS:
+      ReturnNode = vectorAbs(Vector);
+      break;
+    case SQRT:
+      ReturnNode = vectorSqrt(Vector);
+      break;
+    default:
+      break;
+    }
+    if (ReturnNode) {
+      return ReturnNode;
+    }
+  }
+  ReaderOperandStack->push(Arg);
+
+  return 0;
+}
+
+IRNode *ReaderBase::generateSIMDIntrinsicCall(CORINFO_CLASS_HANDLE Class,
+                                              CORINFO_METHOD_HANDLE Method,
+                                              CORINFO_SIG_INFO *SigInfo,
+                                              ReaderBaseNS::CallOpcode Opcode) {
+
+  const char *ModuleName;
+  const char *MethodName = getMethodName(Method, &ModuleName, JitInfo);
+  if (!strcmp(MethodName, "get_IsHardwareAccelerated")) { // Special case.
+    return generateIsHardwareAccelerated(Class);
+  }
+
+  IRNode *ReturnNode = 0;
+
+  ReaderSIMDIntrinsic OperationType = UNDEF;
+  if (!strcmp(MethodName, ".ctor")) {
+    OperationType = CTOR;
+  } else if (!strcmp(MethodName, "op_Addition")) {
+    OperationType = ADD;
+  } else if (!strcmp(MethodName, "op_Subtraction")) {
+    OperationType = SUB;
+  } else if (!strcmp(MethodName, "op_Multiply")) {
+    OperationType = MUL;
+  } else if (!strcmp(MethodName, "op_Division")) {
+    OperationType = DIV;
+  } else if (!strcmp(MethodName, "op_Equality")) {
+    OperationType = EQ;
+  } else if (!strcmp(MethodName, "op_Inequality")) {
+    OperationType = NEQ;
+  } else if (!strcmp(MethodName, "Abs")) {
+    OperationType = ABS;
+  } else if (!strcmp(MethodName, "SquareRoot")) {
+    OperationType = SQRT;
+  } else if (!strcmp(MethodName, "get_Count")) {
+    OperationType = GETCOUNTOP;
+  }
+  switch (OperationType) {
+  case ADD:
+  case SUB:
+  case MUL:
+  case DIV:
+    ReturnNode = generateSIMDBinOp(OperationType);
+    break;
+  case ABS:
+  case SQRT:
+    ReturnNode = generateSIMDUnOp(OperationType);
+    break;
+  case CTOR:
+    assert(SigInfo->numArgs <= ReaderOperandStack->size());
+    assert(SigInfo->hasThis());
+    ReturnNode = generateSMIDCtor(Class, SigInfo->numArgs, Opcode);
+    break;
+  default:
+    break;
+  }
+  return ReturnNode;
+}
+
+IRNode *ReaderBase::generateSMIDCtor(CORINFO_CLASS_HANDLE Class, int ArgsCount,
+                                     ReaderBaseNS::CallOpcode Opcode) {
+  std::vector<IRNode *> Args(ArgsCount);
+  for (int Counter = ArgsCount - 1; Counter >= 0; --Counter) {
+    Args[Counter] = ReaderOperandStack->pop();
+  }
+  IRNode *This = 0;
+  if (Opcode != ReaderBaseNS::CallOpcode::NewObj) {
+    This = ReaderOperandStack->pop();
+  }
+  IRNode *Result = vectorCtor(Class, This, Args);
+  if (Result) {
+    return Result;
+  }
+  if (Opcode != ReaderBaseNS::CallOpcode::NewObj) {
+    ReaderOperandStack->push(This);
+  }
+  for (int Counter = 0; Counter < ArgsCount; ++Counter) {
+    ReaderOperandStack->push(Args[Counter]);
+  }
+  return 0;
+}
+
+#pragma endregion

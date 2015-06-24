@@ -54,5 +54,6 @@ struct Options {
   bool DoInsertStatepoints; ///< True if the environment calls for statepoints.
   bool DoTailCallOpt;       ///< Tail call optimization.
   bool LogGcInfo;           ///< Generate GCInfo Translation logs
+  bool DoSIMDIntrinsic;     ///< True if SIMD intrinsic is on.
 };
 #endif // OPTIONS_H
