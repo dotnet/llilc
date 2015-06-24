@@ -841,3 +841,7 @@ ObjectLoadListener::mapDwarfRegisterToRegNum(uint8_t DwarfRegister) {
 #endif
   return Register;
 }
+
+unsigned LLILCJit::getMaxIntrinsicSIMDVectorLength(DWORD CpuCompileFlags) {
+  return getLLILCJitContext()->Options->PreferredIntrinsicSIMDVectorLength;
+}
