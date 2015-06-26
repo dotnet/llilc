@@ -451,6 +451,9 @@ void ObjectLoadListener::getDebugInfoForObject(
 
   for (symbol_iterator SI = DebugObj.symbol_begin(), E = DebugObj.symbol_end();
        SI != E; ++SI) {
+    if ((SI->getFlags() & SymbolRef::SF_Common) == 0)
+      continue;
+
     SymbolRef::Type SymType;
     if (SI->getType(SymType))
       continue;
