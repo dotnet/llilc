@@ -223,15 +223,15 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
   }
   TargetOptions Options;
   CodeGenOpt::Level OptLevel;
-  if (Context.Options->OptLevel != OptLevel::DEBUG_CODE) {
+  if (Context.Options->OptLevel != ::OptLevel::DEBUG_CODE) {
     OptLevel = CodeGenOpt::Level::Default;
   } else {
     OptLevel = CodeGenOpt::Level::None;
     // Options.NoFramePointerElim = true;
   }
   TargetMachine *TM = TheTarget->createTargetMachine(
-      LLILC_TARGET_TRIPLE, "", "", Options, Reloc::Default, CodeModel::Default,
-      OptLevel);
+      LLILC_TARGET_TRIPLE, "", "", Options, Reloc::Default,
+      CodeModel::JITDefault, OptLevel);
   Context.TM = TM;
 
   // Construct the jitting layers.
