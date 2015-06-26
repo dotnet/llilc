@@ -25,6 +25,7 @@
 #include "llvm/Support/ThreadLocal.h"
 #include "llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h"
 #include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
+#include "llvm/ExecutionEngine/Orc/NullResolver.h"
 #include "llvm/Config/config.h"
 
 class ABIInfo;
@@ -157,23 +158,6 @@ public:
   ///
   /// Used to build struct GEP instructions in LLVM IR for field accesses.
   std::map<CORINFO_FIELD_HANDLE, uint32_t> FieldIndexMap;
-};
-
-/// \brief Stub \p SymbolResolver expecting no resolution requests
-///
-/// The ObjectLinkingLayer takes a SymbolResolver ctor parameter.
-/// The CLR EE resolves tokens to addresses for the Jit during IL reading,
-/// so no symbol resolution is actually needed at ObjLinking time.
-class NullResolver : public llvm::RuntimeDyld::SymbolResolver {
-public:
-  llvm::RuntimeDyld::SymbolInfo findSymbol(const std::string &Name) final {
-    llvm_unreachable("Reader resolves tokens directly to addresses");
-  }
-
-  llvm::RuntimeDyld::SymbolInfo
-  findSymbolInLogicalDylib(const std::string &Name) final {
-    llvm_unreachable("Reader resolves tokens directly to addresses");
-  }
 };
 
 /// \brief The Jit interface to the CoreCLR EE.

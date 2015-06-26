@@ -14,7 +14,7 @@ set(LLVM_LINK_COMPONENTS
   ExecutionEngine
   IPO
   IRReader
-  MCJIT
+  OrcJIT
   MC
   Support
   native
