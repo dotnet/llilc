@@ -464,7 +464,7 @@ void ObjectLoadListener::getDebugInfoForObject(
       continue;
     if (SI->getAddress(Addr))
       continue;
-    uint64_t Size = SI->getSize();
+    uint64_t Size = SI->getCommonSize();
 
     unsigned LastDebugOffset = -1;
     unsigned NumDebugRanges = 0;
