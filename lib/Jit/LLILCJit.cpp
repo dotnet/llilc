@@ -40,6 +40,7 @@
 #include "llvm/IR/Verifier.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/Object/ObjectFile.h"
+#include "llvm/Object/SymbolSize.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Errno.h"
@@ -449,10 +450,13 @@ void ObjectLoadListener::getDebugInfoForObject(
   // Use symbol info to iterate functions in the object.
   // TODO: This may have to change when we have funclets
 
-  for (symbol_iterator SI = DebugObj.symbol_begin(), E = DebugObj.symbol_end();
-       SI != E; ++SI) {
+  std::vector<std::pair<SymbolRef, uint64_t>> SymbolSizes =
+      object::computeSymbolSizes(DebugObj);
+
+  for (const auto &Pair : SymbolSizes) {
+    object::SymbolRef Symbol = Pair.first;
     SymbolRef::Type SymType;
-    if (SI->getType(SymType))
+    if (Symbol.getType(SymType))
       continue;
     if (SymType != SymbolRef::ST_Function)
       continue;
@@ -460,11 +464,11 @@ void ObjectLoadListener::getDebugInfoForObject(
     // Function info
     StringRef Name;
     uint64_t Addr;
-    if (SI->getName(Name))
+    if (Symbol.getName(Name))
       continue;
-    if (SI->getAddress(Addr))
+    if (Symbol.getAddress(Addr))
       continue;
-    uint64_t Size = SI->getCommonSize();
+    uint64_t Size = Pair.second;
 
     unsigned LastDebugOffset = -1;
     unsigned NumDebugRanges = 0;
