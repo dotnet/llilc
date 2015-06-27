@@ -26,6 +26,7 @@
 #include "llvm/DebugInfo/DIContext.h"
 #include "llvm/DebugInfo/DWARF/DWARFContext.h"
 #include "llvm/ExecutionEngine/Orc/CompileUtils.h"
+#include "llvm/ExecutionEngine/Orc/ObjectTransformLayer.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/Support/DataTypes.h"
 #include "llvm/IR/DebugInfo.h"
@@ -239,7 +240,12 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
   EEMemoryManager MM(&Context);
   ObjectLoadListener Listener(&Context);
   orc::ObjectLinkingLayer<decltype(Listener)> Loader(Listener);
-  ReserveUnwindSpaceLayer<decltype(Loader)> UnwindReserver(&Loader, &MM);
+  auto ReserveUnwindSpace = [&MM](std::unique_ptr<object::ObjectFile> Obj) {
+    MM.reserveUnwindSpace(*Obj);
+    return std::move(Obj);
+  };
+  orc::ObjectTransformLayer<decltype(Loader), decltype(ReserveUnwindSpace)>
+      UnwindReserver(Loader, ReserveUnwindSpace);
   orc::IRCompileLayer<decltype(UnwindReserver)> Compiler(
       UnwindReserver, orc::SimpleCompiler(*TM));
 
