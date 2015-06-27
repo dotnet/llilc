@@ -448,6 +448,40 @@ Based on our experiences with Statepoint V1 we'll likely want to work with
 the community to enhance the `Statepoint` work. The specifics here will
 depend on what we've learned and what problems we encounter.
 
+### Generating GC Tables
+
+CoreCLR requires the generation of GC Tables that contain pointer 
+liveness information for each method. To achieve this, we read 
+the liveness information from the `__llvm.stackmaps` section, and 
+translate it to the CoreCLR format. We obtain the information by 
+post-processing LLVM generated binary, rather than adding a new 
+StackMap generator (for CoreCLR format) to LLVM itself. 
+While this involves a two step translation, it helps avoid:
+* Compatibility conflicts because of LLVM core having to change 
+  whenever there is a change in CoreCLR.
+* Bugs because of changes not correctly propagated to multiple 
+  stack-map generators in LLVM.
+
+Generating GC Tables involves the following steps:
+
+1. Enable StackMap section generation for COFF in LLVM.
+2. Parse the `__llvm.stackmaps` section.
+3. Collect certain information about the stack frame 
+   (ex: which of the callee save registers are saved) not available
+   in the StackMap section by parsing other sections, if necessary.
+4. Encode information using CoreCLR's GCInfo Encoder
+  * Report each call-site (GC safepoint).
+  * Assign slots IDs for each unique register and stack locations.
+  * For each slot, report liveness based on the location records 
+    in `__llvm.stackmaps` section.
+
+CoreCLR permits reportng certain slots as "untracked" GC-pointers,
+for stackmap-size reduction or throughput reasons. 
+However, LLVM currently does not support untracked reporting -- 
+stack-locations cannot be assumed to remain live through entire function, 
+due to transformations like stack coalescing. Therefore, LLILC will report
+the liveness of all slots as tracked pointers.
+
 ## Summary
 
 The requirements imposed on a code generator by the CoreCLR present new
@@ -549,7 +583,7 @@ No.  | Implementation | Testing | Issue | Status
 1 | Insert GC Safepoints: Run the PlaceSafepoints and RewriteSafepointsForGC phases before Code generation, and ensure that statepoints are inserted and lowered correctly | LLILC tests pass with Conservative GC | [32](https://github.com/dotnet/llilc/issues/32) | Completed 
 2 |	Bring GCInfo library to LLILC: Use the GCInfo library to encode Function size correctly; no live pointers reported at GC-safe points | LLILC tests pass with Conservative GC  | [30](https://github.com/dotnet/llilc/issues/30) | Completed
 3 | Report GC liveness: Encode GC pointer liveness information in the CLR format using the GC-Encoding library | A few functions compiled by LLILC with correct GCInfo, bail out on all other functions | [31](https://github.com/dotnet/llilc/issues/31) | In Progress
-4 | Test Pass |  LLILC tests pass with Precise GC, bail out on unimplemented features (see 7,8,9 below). Standard lab testing switched over to use Precise GC | | 
+4 | Test Pass |  LLILC tests pass with Precise GC, bail out on unimplemented features (see 7,8,9 below). Standard lab testing switched over to use Precise GC | [670](https://github.com/dotnet/llilc/issues/670) | 
 5 | Add GC-specific stress tests| All existing and new tests pass | | 
 6 | GC Stress testing | Run the LLILC tests in GCStress mode; some GCStress testing running regularly in the lab | |
 7 | Special reporting for pinned pointers | Code with pinned pointers handled by LLILC | [29](https://github.com/dotnet/llilc/issues/29) | |

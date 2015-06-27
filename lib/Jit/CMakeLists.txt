@@ -10,10 +10,11 @@ set(LLVM_LINK_COMPONENTS
   Analysis
   CodeGen
   Core
+  DebugInfoDWARF
   ExecutionEngine
   IPO
   IRReader
-  MCJIT
+  OrcJIT
   MC
   Support
   native

@@ -19,11 +19,14 @@
 #include "Pal/LLILCPal.h"
 #include "options.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
+#include "llvm/ExecutionEngine/RuntimeDyld.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/ThreadLocal.h"
 #include "llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h"
 #include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
+#include "llvm/ExecutionEngine/Orc/NullResolver.h"
+#include "llvm/Config/config.h"
 
 class ABIInfo;
 struct LLILCJitPerThreadState;
@@ -160,23 +163,6 @@ public:
   std::map<CORINFO_FIELD_HANDLE, uint32_t> FieldIndexMap;
 };
 
-/// \brief Stub \p SymbolResolver expecting no resolution requests
-///
-/// The ObjectLinkingLayer takes a SymbolResolver ctor parameter.
-/// The CLR EE resolves tokens to addresses for the Jit during IL reading,
-/// so no symbol resolution is actually needed at ObjLinking time.
-class NullResolver : public llvm::RuntimeDyld::SymbolResolver {
-public:
-  llvm::RuntimeDyld::SymbolInfo findSymbol(const std::string &Name) final {
-    llvm_unreachable("Reader resolves tokens directly to addresses");
-  }
-
-  llvm::RuntimeDyld::SymbolInfo
-  findSymbolInLogicalDylib(const std::string &Name) final {
-    llvm_unreachable("Reader resolves tokens directly to addresses");
-  }
-};
-
 // Object layer that notifies the memory manager to reserve unwind space for
 // each object and otherwise passes processing on to the underlying base
 // object layer
@@ -230,10 +216,6 @@ private:
 /// top-level invocations of the jit is held in thread local storage.
 class LLILCJit : public ICorJitCompiler {
 public:
-  typedef llvm::orc::ObjectLinkingLayer<> LoadLayerT;
-  typedef ReserveUnwindSpaceLayer<LoadLayerT> ReserveUnwindSpaceLayerT;
-  typedef llvm::orc::IRCompileLayer<ReserveUnwindSpaceLayerT> CompileLayerT;
-
   /// \brief Construct a new jit instance.
   ///
   /// There is only one LLILC jit instance per process, so this

@@ -17,7 +17,6 @@
 #include "jitpch.h"
 #include "LLILCJit.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
-#include "llvm/ExecutionEngine/MCJIT.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/IRBuilder.h"
@@ -77,27 +76,51 @@ bool EEMemoryManager::finalizeMemory(std::string *ErrMsg) {
 
 /// Compute the number of bytes of the unwind info at \p XdataPtr.
 ///
-/// \param XdataPtr - Pointer to the (first byte of) the unwind info.
-/// \returns The size of the unwind info, in bytes.
-static size_t getXdataSize(const uint8_t *XdataPtr) {
+/// \param XdataPtr             Pointer to the (first byte of) the unwind info.
+/// \param ReportedSize [out]   The size of the unwind info as it should be
+///                             reported to the EE (excludes padding and
+///                             runtime function pointer), in bytes.
+/// \param TotalSize [out]      The size of the entire unwind info, in bytes.
+static void getXdataSize(const uint8_t *XdataPtr, size_t *ReportedSize,
+                         size_t *TotalSize) {
+  // XdataPtr points to an UNWIND_INFO structure:
+  // typedef struct _UNWIND_INFO {
+  //  UCHAR Version : 3;
+  //  UCHAR Flags : 5;
+  //  UCHAR SizeOfProlog;
+  //  UCHAR CountOfUnwindCodes;
+  //  UCHAR FrameRegister : 4;
+  //  UCHAR FrameOffset : 4;
+  //  UNWIND_CODE UnwindCode[1];
+  //} UNWIND_INFO, *PUNWIND_INFO;
+
+  size_t UnreportedBytes = 0;
   uint8_t NumCodes = XdataPtr[2];
   // There's always a 4-byte header
-  size_t Size = 4;
+  size_t ReportedBytes = 4;
   // Each unwind code is 2 bytes
-  Size += (2 * NumCodes);
-  if (Size & 2) {
+  ReportedBytes += (2 * NumCodes);
+  if (ReportedBytes & 2) {
     // The unwind code array is padded to a multiple of 4 bytes
-    Size += 2;
+    UnreportedBytes += 2;
   }
   if (XdataPtr[0] != 1) {
     // 4-byte runtime function pointer
-    Size += 4;
+    UnreportedBytes += 4;
   }
-  if (Size < 8) {
+
+  size_t TotalBytes = ReportedBytes + UnreportedBytes;
+  if (TotalBytes < 8) {
     // Minimum size is 8
-    Size = 8;
+    TotalBytes = 8;
   }
-  return Size;
+
+  if (ReportedSize != nullptr) {
+    *ReportedSize = ReportedBytes;
+  }
+  if (TotalSize != nullptr) {
+    *TotalSize = TotalBytes;
+  }
 }
 
 void EEMemoryManager::reserveUnwindSpace(const object::ObjectFile &Obj) {
@@ -115,11 +138,13 @@ void EEMemoryManager::reserveUnwindSpace(const object::ObjectFile &Obj) {
         const uint8_t *DataEnd =
             reinterpret_cast<const uint8_t *>(Contents.end());
         do {
-          size_t ByteCount = getXdataSize(DataPtr);
+          size_t ReportedByteCount;
+          size_t TotalByteCount;
+          getXdataSize(DataPtr, &ReportedByteCount, &TotalByteCount);
           this->Context->JitInfo->reserveUnwindInfo(IsHandler, FALSE,
-                                                    ByteCount);
+                                                    ReportedByteCount);
           IsHandler = TRUE;
-          DataPtr += ByteCount;
+          DataPtr += TotalByteCount;
           if (DataPtr == DataEnd) {
             break;
           }
@@ -202,21 +227,23 @@ void EEMemoryManager::registerEHFrames(uint8_t *Addr, uint64_t LoadAddr,
   uint32_t IsLast;
   do {
     uint8_t *XdataPtr = reinterpret_cast<uint8_t *>(DataPtr);
-    uint32_t XdataSize = getXdataSize(XdataPtr);
-    DataPtr += (XdataSize / 4);
-    bool IsNoEhLeaf = (Size == XdataSize);
+    size_t ReportedXdataSize;
+    size_t TotalXdataSize;
+    getXdataSize(XdataPtr, &ReportedXdataSize, &TotalXdataSize);
+    DataPtr += (TotalXdataSize / 4);
+    bool IsNoEhLeaf = (Size == TotalXdataSize);
     assert(!(IsNoEhLeaf && (FuncKind != CorJitFuncKind::CORJIT_FUNC_ROOT)));
     // Read token to see if this is the last function
     IsLast = IsNoEhLeaf || *(DataPtr++);
     uint32_t StartOffset = (IsNoEhLeaf ? 0 : *(DataPtr++));
     uint32_t EndOffset = (IsNoEhLeaf ? Context->HotCodeSize : *(DataPtr++));
-    this->Context->JitInfo->allocUnwindInfo(this->HotCodeBlock, nullptr,
-                                            StartOffset, EndOffset, XdataSize,
-                                            (BYTE *)XdataPtr, FuncKind);
+    this->Context->JitInfo->allocUnwindInfo(
+        this->HotCodeBlock, nullptr, StartOffset, EndOffset, ReportedXdataSize,
+        (BYTE *)XdataPtr, FuncKind);
     // Any subsequent funclet will be a handler.
     FuncKind = CorJitFuncKind::CORJIT_FUNC_HANDLER;
     // Decrement size remaining.
-    Size -= XdataSize;
+    Size -= TotalXdataSize;
     if (!IsNoEhLeaf) {
       // also read IsLast, StartOffset, and EndOffset
       Size -= 12;

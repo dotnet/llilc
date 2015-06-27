@@ -1,4 +1,4 @@
-//===---- lib/MSILReader/readerir.cpp ---------------------------*- C++ -*-===//
+//===---- lib/Reader/readerir.cpp -------------------------------*- C++ -*-===//
 //
 // LLILC
 //
@@ -18,11 +18,15 @@
 #include "imeta.h"
 #include "newvstate.h"
 #include "llvm/ADT/Triple.h"
+#include "llvm/IR/DebugLoc.h"
+#include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/Support/Debug.h"          // for dbgs()
 #include "llvm/Support/raw_ostream.h"    // for errs()
 #include "llvm/Support/ConvertUTF.h"     // for ConvertUTF16toUTF8
 #include "llvm/Transforms/Utils/Local.h" // for removeUnreachableBlocks
+#include "llvm/IR/DebugInfo.h"
+#include "llvm/IR/DebugInfoMetadata.h"
 #include <cstdlib>
 #include <new>
 
@@ -333,6 +337,11 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   EntryBlock = BasicBlock::Create(LLVMContext, "entry", Function);
 
   LLVMBuilder = new IRBuilder<>(LLVMContext);
+  DBuilder = new DIBuilder(*JitContext->CurrentModule);
+  LLILCDebugInfo.TheCU = DBuilder->createCompileUnit(dwarf::DW_LANG_C_plus_plus,
+                                                     Function->getName().str(),
+                                                     ".", "LLILCJit", 0, "", 0);
+
   LLVMBuilder->SetInsertPoint(EntryBlock);
 
   // Note numArgs may exceed the IL argument count when there
@@ -451,6 +460,21 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
     }
   }
 
+  // Setup function for emiting debug locations
+  DIFile *Unit = DBuilder->createFile(LLILCDebugInfo.TheCU->getFilename(),
+                                      LLILCDebugInfo.TheCU->getDirectory());
+  bool IsOptimized = (JitContext->Flags & CORJIT_FLG_DEBUG_CODE) == 0;
+  DIScope *FContext = Unit;
+  unsigned LineNo = 0;
+  unsigned ScopeLine = ICorDebugInfo::PROLOG;
+  bool IsDefinition = true;
+  DISubprogram *SP = DBuilder->createFunction(
+      FContext, Function->getName(), StringRef(), Unit, LineNo,
+      createFunctionType(Function, Unit), Function->hasInternalLinkage(),
+      IsDefinition, ScopeLine, DINode::FlagPrototyped, IsOptimized, Function);
+
+  LLILCDebugInfo.FunctionScope = SP;
+
   // TODO: Insert class initialization check if necessary
   CorInfoInitClassResult InitResult =
       initClass(nullptr, getCurrentMethodHandle(), getCurrentContext());
@@ -507,6 +531,7 @@ void GenIR::readerPostPass(bool IsImportOnly) {
   }
 
   // Cleanup the memory we've been using.
+  DBuilder->finalize();
   delete LLVMBuilder;
 }
 
@@ -967,6 +992,108 @@ void GenIR::createSafepointPoll() {
 }
 
 bool GenIR::doTailCallOpt() { return JitContext->Options->DoTailCallOpt; }
+
+// Set the Debug Location for the current instruction
+void GenIR::setDebugLocation(uint32_t CurrOffset, bool IsCall) {
+  assert(LLILCDebugInfo.FunctionScope != nullptr);
+
+  DebugLoc Loc =
+      DebugLoc::get(CurrOffset, IsCall, LLILCDebugInfo.FunctionScope);
+
+  LLVMBuilder->SetCurrentDebugLocation(Loc);
+}
+
+llvm::DISubroutineType *GenIR::createFunctionType(llvm::Function *F,
+                                                  DIFile *Unit) {
+  SmallVector<Metadata *, 8> EltTys;
+  // for each param, etc. convert the type to DIType and add it to the array.
+  FunctionType *FunctionTy = F->getFunctionType();
+
+  DIType *ReturnTy = convertType(Function->getReturnType());
+  EltTys.push_back(ReturnTy);
+  auto ParamEnd = FunctionTy->param_end();
+
+  for (auto ParamIterator = FunctionTy->param_begin();
+       ParamIterator != ParamEnd; ParamIterator++) {
+    Type *Ty = *ParamIterator;
+    DIType *ParamTy = convertType(Ty);
+
+    EltTys.push_back(ParamTy);
+  }
+  return DBuilder->createSubroutineType(Unit,
+                                        DBuilder->getOrCreateTypeArray(EltTys));
+}
+
+llvm::DIType *GenIR::convertType(Type *Ty) {
+  StringRef TyName;
+  llvm::dwarf::TypeKind Encoding;
+
+  if (Ty->isVoidTy()) {
+    return nullptr;
+  }
+  if (Ty->isIntegerTy()) {
+    Encoding = llvm::dwarf::DW_ATE_signed;
+    unsigned BitWidth = Ty->getIntegerBitWidth();
+
+    switch (BitWidth) {
+    case 8:
+      TyName = "char";
+      Encoding = llvm::dwarf::DW_ATE_unsigned_char;
+      break;
+    case 16:
+      TyName = "short";
+      break;
+    case 32:
+      TyName = "int";
+      break;
+    case 64:
+      TyName = "long int";
+      break;
+    case 128:
+      TyName = "long long int";
+      break;
+    default:
+      TyName = "int";
+      break;
+    }
+    llvm::DIType *DbgTy =
+        DBuilder->createBasicType(TyName, BitWidth, BitWidth, Encoding);
+    return DbgTy;
+  }
+  if (Ty->isFloatingPointTy()) {
+    Encoding = llvm::dwarf::DW_ATE_float;
+    unsigned BitWidth = Ty->getPrimitiveSizeInBits();
+    if (Ty->isHalfTy()) {
+      TyName = "half";
+    }
+    if (Ty->isFloatTy()) {
+      TyName = "float";
+    }
+    if (Ty->isDoubleTy()) {
+      TyName = "double";
+    }
+    if (Ty->isX86_FP80Ty()) {
+      TyName = "long double";
+    }
+
+    llvm::DIType *DbgTy =
+        DBuilder->createBasicType(TyName, BitWidth, BitWidth, Encoding);
+    return DbgTy;
+  }
+
+  if (Ty->isPointerTy()) {
+    uint64_t Size = JitContext->TM->getDataLayout()->getPointerTypeSize(Ty);
+    uint64_t Align = JitContext->TM->getDataLayout()->getPrefTypeAlignment(Ty);
+    llvm::DIType *DbgTy = DBuilder->createPointerType(
+        convertType(Ty->getPointerElementType()), Size, Align);
+
+    return DbgTy;
+  }
+  // TODO: add support for aggregate types
+  // Types we are missing: LabelTy, MetadataTy, X86_MMXTy, FunctionTy, StructTy
+  // ArrayTy, VectoryTy
+  return nullptr;
+}
 
 #pragma endregion
 
@@ -2644,6 +2771,7 @@ LandingPadInst *GenIR::createLandingPad(EHRegion *TryRegion,
     PersonalityFunction =
         Function::Create(PersonalityTy, Function::ExternalLinkage,
                          "ProcessCLRException", JitContext->CurrentModule);
+    Function->setPersonalityFn(PersonalityFunction);
   }
   // Landingpad defines an i8* (in addrspace 0) which is intended to be a
   // pointer to the exception object.  An actual pointer to a CLR exception
@@ -2657,8 +2785,8 @@ LandingPadInst *GenIR::createLandingPad(EHRegion *TryRegion,
   // The LandingPad instruction itself defines an (exception, selector) pair
   StructType *PairType =
       llvm::StructType::get(FauxExceptionType, SelectorType, nullptr);
-  LandingPadInst *LandingPad = LLVMBuilder->CreateLandingPad(
-      PairType, PersonalityFunction, 1, "ExnData");
+  LandingPadInst *LandingPad =
+      LLVMBuilder->CreateLandingPad(PairType, 1, "ExnData");
   // Extract the exception and selector.  Clang spills these to locals, but
   // that seems unnecessary for us (WinEHPrepare explicitly promotes them
   // to registers if it sees them spilled).
@@ -5681,11 +5809,19 @@ void GenIR::nop() {
   // Preserve Nops in debug builds since they may carry unique source positions.
   if ((JitContext->Flags & CORJIT_FLG_DEBUG_CODE) != 0) {
     // LLVM has no high-level NOP instruction. Put in a placeholder for now.
-    // We may need to pick something else that survives lowering.
-    Value *DoNothing = Intrinsic::getDeclaration(JitContext->CurrentModule,
-                                                 Intrinsic::donothing);
+    // This will survive lowering, but we may want to do something else that
+    // is cleaner
+    // TODO: Look into creating a high-level NOP that doesn't get removed and
+    // gets lowered to the right platform-specific encoding
+
+    bool IsVariadic = false;
+    llvm::FunctionType *FTy = llvm::FunctionType::get(
+        llvm::Type::getVoidTy(*(JitContext->LLVMContext)), IsVariadic);
+
+    llvm::InlineAsm *AsmCode = llvm::InlineAsm::get(FTy, "nop", "", true, false,
+                                                    llvm::InlineAsm::AD_Intel);
     ArrayRef<Value *> Args;
-    LLVMBuilder->CreateCall(DoNothing, Args);
+    LLVMBuilder->CreateCall(AsmCode, Args);
   }
 }
 
