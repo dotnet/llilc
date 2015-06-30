@@ -455,9 +455,7 @@ void ObjectLoadListener::getDebugInfoForObject(
 
   for (const auto &Pair : SymbolSizes) {
     object::SymbolRef Symbol = Pair.first;
-    SymbolRef::Type SymType;
-    if (Symbol.getType(SymType))
-      continue;
+    SymbolRef::Type SymType = Symbol.getType();
     if (SymType != SymbolRef::ST_Function)
       continue;
 
