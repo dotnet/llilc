@@ -1,12 +1,13 @@
-# LLILC Bring up Milestones
+# LLILC Bring-Up Milestones
 
-To meet the overarching goal of fully functional JIT and AOT code 
-generators we've broken out some intermediate milestones that we 
-think are good steps along the way.  Each of these milestones represent 
-a new level of functionality or robustness on the way to a production 
+To meet the overarching goal of fully functional JIT and AOT code
+generators we've broken out some intermediate milestones that we
+think are good steps along the way.  Each of these milestones represent
+a new level of functionality or robustness on the way to a production
 quality tool.
 
-### Milestones
+## Milestones
+
 * **"Hello World"** - Using LLILC, JIT all the methods for runtime start-up
    and "Hello World" console app execution.  This is the classic first
    app. Success is that the CLR comes up, and prints "Hello World" and
@@ -25,7 +26,7 @@ quality tool.
 * **AOT Roslyn on Linux** - Full Roslyn compiling itself as a command line
   AOT tool.
 
-We'll cross these off as we get through them but we're evaluating open issues 
+We'll cross these off as we get through them but we're evaluating open issues
 with respect to how fixing them will advance these goals.
 
 Note:  To add a milestone to this list open an issue to start the discussion,
