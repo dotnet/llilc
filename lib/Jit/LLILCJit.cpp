@@ -153,6 +153,17 @@ void LLILCJitContext::outputDebugMethodName() {
                    DebugClassName, DebugMethodName);
 }
 
+void LLILCJitContext::outputSkippingMethodName() {
+  const size_t SizeOfBuffer = 512;
+  char TempBuffer[SizeOfBuffer];
+  const char *DebugClassName = nullptr;
+  const char *DebugMethodName = nullptr;
+
+  DebugMethodName = JitInfo->getMethodName(MethodInfo->ftn, &DebugClassName);
+  dbgs() << format("INFO:  skipping jitting method %s::%s using LLILCJit\n",
+                   DebugClassName, DebugMethodName);
+}
+
 LLILCJitContext::LLILCJitContext(LLILCJitPerThreadState *PerThreadState)
     : State(PerThreadState), HasLoadedBitCode(false) {
   this->Next = State->JitContext;
@@ -210,91 +221,100 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
   // Flags and MethodInfo.
   JitOptions JitOptions(Context);
 
-  Context.Options = &JitOptions;
-
-  // Construct the TargetMachine that we will emit code for
-  std::string ErrStr;
-  const llvm::Target *TheTarget =
-      TargetRegistry::lookupTarget(LLILC_TARGET_TRIPLE, ErrStr);
-  if (!TheTarget) {
-    errs() << "Could not create Target: " << ErrStr << "\n";
-    return CORJIT_INTERNALERROR;
-  }
-  TargetOptions Options;
-  CodeGenOpt::Level OptLevel;
-  if (Context.Options->OptLevel != ::OptLevel::DEBUG_CODE) {
-    OptLevel = CodeGenOpt::Level::Default;
-  } else {
-    OptLevel = CodeGenOpt::Level::None;
-    // Options.NoFramePointerElim = true;
-  }
-  TargetMachine *TM = TheTarget->createTargetMachine(
-      LLILC_TARGET_TRIPLE, "", "", Options, Reloc::Default,
-      CodeModel::JITDefault, OptLevel);
-  Context.TM = TM;
-
-  // Construct the jitting layers.
-  EEMemoryManager MM(&Context);
-  ObjectLoadListener Listener(&Context);
-  orc::ObjectLinkingLayer<decltype(Listener)> Loader(Listener);
-  orc::IRCompileLayer<decltype(Loader)> Compiler(Loader,
-                                                 orc::SimpleCompiler(*TM));
-
-  // Now jit the method.
   CorJitResult Result = CORJIT_INTERNALERROR;
-  if (Context.Options->DumpLevel == DumpLevel::VERBOSE) {
-    Context.outputDebugMethodName();
-  }
-  bool HasMethod = this->readMethod(&Context);
+  if (JitOptions.IsAltJit) {
+    Context.Options = &JitOptions;
 
-  if (HasMethod) {
+    // Construct the TargetMachine that we will emit code for
+    std::string ErrStr;
+    const llvm::Target *TheTarget =
+        TargetRegistry::lookupTarget(LLILC_TARGET_TRIPLE, ErrStr);
+    if (!TheTarget) {
+      errs() << "Could not create Target: " << ErrStr << "\n";
+      return CORJIT_INTERNALERROR;
+    }
+    TargetOptions Options;
+    CodeGenOpt::Level OptLevel;
+    if (Context.Options->OptLevel != ::OptLevel::DEBUG_CODE) {
+      OptLevel = CodeGenOpt::Level::Default;
+    } else {
+      OptLevel = CodeGenOpt::Level::None;
+      // Options.NoFramePointerElim = true;
+    }
+    TargetMachine *TM = TheTarget->createTargetMachine(
+        LLILC_TARGET_TRIPLE, "", "", Options, Reloc::Default,
+        CodeModel::JITDefault, OptLevel);
+    Context.TM = TM;
 
-    if (Context.Options->DoInsertStatepoints) {
-      // If using Precise GC, run the GC-Safepoint insertion
-      // and lowering passes before generating code.
-      legacy::PassManager Passes;
-      Passes.add(createPlaceSafepointsPass());
+    // Construct the jitting layers.
+    EEMemoryManager MM(&Context);
+    ObjectLoadListener Listener(&Context);
+    orc::ObjectLinkingLayer<decltype(Listener)> Loader(Listener);
+    orc::IRCompileLayer<decltype(Loader)> Compiler(Loader,
+                                                   orc::SimpleCompiler(*TM));
 
-      PassManagerBuilder PMBuilder;
-      PMBuilder.OptLevel = 0;  // Set optimization level to -O0
-      PMBuilder.SizeLevel = 0; // so that no additional phases are run.
-      PMBuilder.populateModulePassManager(Passes);
+    // Now jit the method.
+    if (Context.Options->DumpLevel == DumpLevel::VERBOSE) {
+      Context.outputDebugMethodName();
+    }
+    bool HasMethod = this->readMethod(&Context);
 
-      Passes.add(createRewriteStatepointsForGCPass(false));
-      Passes.run(*M);
+    if (HasMethod) {
+
+      if (Context.Options->DoInsertStatepoints) {
+        // If using Precise GC, run the GC-Safepoint insertion
+        // and lowering passes before generating code.
+        legacy::PassManager Passes;
+        Passes.add(createPlaceSafepointsPass());
+
+        PassManagerBuilder PMBuilder;
+        PMBuilder.OptLevel = 0;  // Set optimization level to -O0
+        PMBuilder.SizeLevel = 0; // so that no additional phases are run.
+        PMBuilder.populateModulePassManager(Passes);
+
+        Passes.add(createRewriteStatepointsForGCPass(false));
+        Passes.run(*M);
+      }
+
+      // Don't allow the LoadLayer to search for external symbols, by supplying
+      // it a NullResolver.
+      orc::NullResolver Resolver;
+      auto HandleSet =
+          Compiler.addModuleSet<ArrayRef<Module *>>(M.get(), &MM, &Resolver);
+
+      *NativeEntry =
+          (BYTE *)Compiler.findSymbol(Context.MethodName, false).getAddress();
+
+      // TODO: ColdCodeSize, or separated code, is not enabled or included.
+      *NativeSizeOfCode = Context.HotCodeSize + Context.ReadOnlyDataSize;
+
+      // This is a stop-gap point to issue a default stub of GC info. This lets
+      // the CLR consume our methods cleanly. (and the ETW tracing still works)
+      // Down the road this will be superseded by a CLR specific
+      // GCMetadataPrinter instance or similar.
+      this->outputGCInfo(&Context);
+
+      // Dump out any enabled timing info.
+      TimerGroup::printAll(errs());
+
+      // Give the jit layers a chance to free resources.
+      Compiler.removeModuleSet(HandleSet);
+
+      // Tell the CLR that we've successfully generated code for this method.
+      Result = CORJIT_OK;
     }
 
-    // Don't allow the LoadLayer to search for external symbols, by supplying
-    // it a NullResolver.
-    orc::NullResolver Resolver;
-    auto HandleSet =
-        Compiler.addModuleSet<ArrayRef<Module *>>(M.get(), &MM, &Resolver);
-
-    *NativeEntry =
-        (BYTE *)Compiler.findSymbol(Context.MethodName, false).getAddress();
-
-    // TODO: ColdCodeSize, or separated code, is not enabled or included.
-    *NativeSizeOfCode = Context.HotCodeSize + Context.ReadOnlyDataSize;
-
-    // This is a stop-gap point to issue a default stub of GC info. This lets
-    // the CLR consume our methods cleanly. (and the ETW tracing still works)
-    // Down the road this will be superseded by a CLR specific
-    // GCMetadataPrinter instance or similar.
-    this->outputGCInfo(&Context);
-
-    // Dump out any enabled timing info.
-    TimerGroup::printAll(errs());
-
-    // Give the jit layers a chance to free resources.
-    Compiler.removeModuleSet(HandleSet);
-
-    // Tell the CLR that we've successfully generated code for this method.
-    Result = CORJIT_OK;
+    // Clean up a bit
+    delete Context.TM;
+    Context.TM = nullptr;
+  } else {
+    // This method was not selected for jitting by LLILC.
+    if (JitOptions.DumpLevel == DumpLevel::SUMMARY) {
+      Context.outputSkippingMethodName();
+    }
   }
 
-  // Clean up a bit
-  delete Context.TM;
-  Context.TM = nullptr;
+  // Clean up a bit more
   delete Context.TheABIInfo;
   Context.TheABIInfo = nullptr;
 
