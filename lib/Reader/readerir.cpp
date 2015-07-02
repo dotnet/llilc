@@ -7002,7 +7002,7 @@ void GenIR::AddPHIOperand(PHINode *PHI, Value *NewOperand,
       // Change the type of the PHI instruction and the types of all of its
       // operands.
       PHI->mutateType(NewPHITy);
-      for (int i = 0; i < PHI->getNumOperands(); ++i) {
+      for (unsigned i = 0; i < PHI->getNumOperands(); ++i) {
         Value *Operand = PHI->getIncomingValue(i);
         if (!isa<UndefValue>(Operand)) {
           BasicBlock *OperandBlock = PHI->getIncomingBlock(i);
