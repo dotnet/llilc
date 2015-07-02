@@ -23,7 +23,7 @@ set(LLVM_LINK_COMPONENTS
 set(LLILCJIT_LINK_LIBRARIES LLILCReader GcInfo)
 
 if (WIN32)
-  set(CMAKE_CXX_FLAGS "-EHsc")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -EHsc")
 
   # Create .def file containing a list of exports preceeded by
   # 'EXPORTS'.  The file "LLILCJit.exports" already contains the list, so we
