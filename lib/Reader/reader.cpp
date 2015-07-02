@@ -4693,11 +4693,10 @@ ReaderBase::rdrMakeNewObjReturnNode(ReaderCallTargetData *CallTargetData,
                                     IRNode *ThisArg, IRNode *CallReturnNode) {
   uint32_t ClassAttribs = CallTargetData->getClassAttribs();
 
-  bool IsMDArray = ((ClassAttribs & CORINFO_FLG_ARRAY) != 0);
   bool IsVarObjSize = ((ClassAttribs & CORINFO_FLG_VAROBJSIZE) != 0);
 
   // MDArrays should already have been taken care of.
-  ASSERT(!IsMDArray);
+  ASSERT((ClassAttribs & CORINFO_FLG_ARRAY) == 0);
 
   if (IsVarObjSize) {
     // Storage for variably-sized objects is allocated by the callee; the result
@@ -7982,10 +7981,10 @@ void ReaderBase::msilToIR(void) {
   uint32_t LastInsertedInOrderBlockEndOffset = 0;
   for (FlowGraphNode *Block = FgHead; Block != nullptr;
        Block = fgNodeGetNext(Block)) {
-    uint32_t StartOffset = fgNodeGetStartMSILOffset(Block);
     uint32_t EndOffset = fgNodeGetEndMSILOffset(Block);
     if (fgNodeIsVisited(Block)) {
-      assert(LastInsertedInOrderBlockEndOffset <= StartOffset);
+      assert(LastInsertedInOrderBlockEndOffset <=
+             fgNodeGetStartMSILOffset(Block));
       LastInsertedInOrderBlockEndOffset = EndOffset;
       FlowGraphMSILOffsetOrder.push_back(Block);
     }

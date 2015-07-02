@@ -1788,13 +1788,11 @@ Type *GenIR::getClassTypeWorker(
   if (!IsRefClass) {
 
     // Verify overall size matches up.
-    const uint32_t LLVMClassSize = DataLayout->getTypeSizeInBits(StructTy) / 8;
     const uint32_t EEClassSize = getClassSize(ClassHandle);
-    ASSERT(EEClassSize == LLVMClassSize);
+    ASSERT(EEClassSize == DataLayout->getTypeSizeInBits(StructTy) / 8);
 
     // Verify that the LLVM type contains the same information
     // as the GC field info from the runtime.
-    GCLayout *RuntimeGCInfo = getClassGCLayout(ClassHandle);
     const StructLayout *MainStructLayout =
         DataLayout->getStructLayout(StructTy);
     const uint32_t PointerSize = DataLayout->getPointerSize();
@@ -1802,10 +1800,6 @@ Type *GenIR::getClassTypeWorker(
     // Walk through the type in pointer-sized jumps.
     for (uint32_t GCOffset = 0; GCOffset < EEClassSize;
          GCOffset += PointerSize) {
-      const bool ExpectGCPointer =
-          (RuntimeGCInfo != nullptr) &&
-          (RuntimeGCInfo->GCPointers[GCOffset / PointerSize] !=
-           CorInfoGCType::TYPE_GC_NONE);
       const uint32_t FieldIndex =
           MainStructLayout->getElementContainingOffset(GCOffset);
       Type *FieldTy = StructTy->getStructElementType(FieldIndex);
@@ -1842,10 +1836,17 @@ Type *GenIR::getClassTypeWorker(
         }
       }
 
+#ifndef NDEBUG
       // LLVM's type and the runtime must agree here.
+      GCLayout *RuntimeGCInfo = getClassGCLayout(ClassHandle);
+      const bool ExpectGCPointer =
+          (RuntimeGCInfo != nullptr) &&
+          (RuntimeGCInfo->GCPointers[GCOffset / PointerSize] !=
+           CorInfoGCType::TYPE_GC_NONE);
       const bool IsGCPointer = isManagedPointerType(FieldTy);
       assert((ExpectGCPointer == IsGCPointer) &&
              "llvm type incorrectly describes location of gc references");
+#endif
     }
   }
 
@@ -2244,10 +2245,8 @@ IRNode *GenIR::convertFromStackType(IRNode *Node, CorInfoType CorType,
     bool PointerRepresentsStruct = doesValueRepresentStruct(Node);
     if (PointerRepresentsStruct) {
       if (Ty->getPointerElementType() != ResultTy) {
-        StructType *ResultStructTy = cast<StructType>(ResultTy);
-        StructType *NodeStructTy =
-            cast<StructType>(Ty->getPointerElementType());
-        assert(ResultStructTy->isLayoutIdentical(NodeStructTy));
+        assert(cast<StructType>(ResultTy)->isLayoutIdentical(
+            cast<StructType>(Ty->getPointerElementType())));
         PointerType *NodePointerType = cast<PointerType>(Ty);
         ResultTy =
             PointerType::get(ResultTy, NodePointerType->getAddressSpace());
@@ -3306,12 +3305,9 @@ IRNode *GenIR::simpleFieldAddress(IRNode *BaseAddress,
     // in unverifiable IL we may not have proper referent types and
     // so may see what appear to be unrelated field accesses.
     if (BaseObjStructTy->getNumElements() > FieldIndex) {
-      const DataLayout *DataLayout =
-          &JitContext->CurrentModule->getDataLayout();
-      const StructLayout *StructLayout =
-          DataLayout->getStructLayout(BaseObjStructTy);
-      const uint32_t FieldOffset = StructLayout->getElementOffset(FieldIndex);
-      ASSERT(FieldOffset == FieldInfo->offset);
+      ASSERT(JitContext->CurrentModule->getDataLayout()
+                 .getStructLayout(BaseObjStructTy)
+                 ->getElementOffset(FieldIndex) == FieldInfo->offset);
 
       Address = LLVMBuilder->CreateStructGEP(nullptr, BaseAddress, FieldIndex);
     }
@@ -3673,9 +3669,8 @@ void GenIR::storeAtAddressNoBarrierNonNull(IRNode *Address,
                                            bool IsVolatile) {
   StructType *StructTy = dyn_cast<StructType>(Ty);
   if (StructTy != nullptr) {
-    Type *ValueType = ValueToStore->getType();
-    assert(ValueType->isPointerTy() &&
-           (ValueType->getPointerElementType() == Ty));
+    assert(ValueToStore->getType()->isPointerTy() &&
+           (ValueToStore->getType()->getPointerElementType() == Ty));
     assert(doesValueRepresentStruct(ValueToStore));
     copyStruct(StructTy, Address, ValueToStore, IsVolatile);
   } else {
@@ -3772,9 +3767,8 @@ void GenIR::storeIndirectArg(const CallArgType &ValueArgType,
                              llvm::Value *ValueToStore, llvm::Value *Address,
                              bool IsVolatile) {
   assert(isManagedPointerType(cast<PointerType>(Address->getType())));
-  Type *ValueToStoreType = ValueToStore->getType();
-  assert(ValueToStoreType->isPointerTy() &&
-         ValueToStoreType->getPointerElementType()->isStructTy());
+  assert(ValueToStore->getType()->isPointerTy() &&
+         ValueToStore->getType()->getPointerElementType()->isStructTy());
   assert(doesValueRepresentStruct(ValueToStore));
 
   CORINFO_CLASS_HANDLE ArgClass = ValueArgType.Class;
@@ -4124,10 +4118,12 @@ IRNode *GenIR::genArrayElemAddress(IRNode *Array, IRNode *Index,
   }
   StructType *ReferentTy = cast<StructType>(Ty->getPointerElementType());
   unsigned int RawArrayStructFieldIndex = ReferentTy->getNumElements() - 1;
-  Type *ArrayTy = ReferentTy->getElementType(RawArrayStructFieldIndex);
 
+#ifndef NDEBUG
+  Type *ArrayTy = ReferentTy->getElementType(RawArrayStructFieldIndex);
   ASSERTNR(ArrayTy->isArrayTy());
   ASSERTNR(NeedToCastAddress || (ArrayTy->getArrayElementType() == ElementTy));
+#endif
 
   LLVMContext &Context = *this->JitContext->LLVMContext;
 
@@ -4475,10 +4471,7 @@ IRNode *GenIR::mdArrayGetDimensionLength(Value *Array, Value *Dimension) {
 }
 
 void GenIR::branch() {
-  TerminatorInst *TermInst = LLVMBuilder->GetInsertBlock()->getTerminator();
-  ASSERT(TermInst != nullptr);
-  BranchInst *BranchInstruction = dyn_cast<BranchInst>(TermInst);
-  ASSERT(BranchInstruction != nullptr);
+  ASSERT(isa<BranchInst>(LLVMBuilder->GetInsertBlock()->getTerminator()));
 }
 
 IRNode *GenIR::call(ReaderBaseNS::CallOpcode Opcode, mdToken Token,
@@ -4995,12 +4988,12 @@ IRNode *GenIR::convertToBoxHelperArgumentType(IRNode *Opr,
   case Type::TypeID::IntegerTyID: {
     // CLR box helper will only accept 4 byte or 8 byte integers. The value on
     // the stack should already have the right size.
-    const uint32_t Size = Ty->getIntegerBitWidth();
-    ASSERT((Size == 32) || (Size == 64));
+    ASSERT((Ty->getIntegerBitWidth() == 32) ||
+           (Ty->getIntegerBitWidth() == 64));
 
     // If Size were smaller than DestinationSize the boxing helper would grab
     // data from outside the smaller datatype.
-    ASSERT(size(DestType) <= Size);
+    ASSERT(size(DestType) <= Ty->getIntegerBitWidth());
     break;
   }
   // If the data type is a float64 and we want to box it to a
@@ -6241,15 +6234,14 @@ IRNode *GenIR::getTypedAddress(IRNode *Addr, CorInfoType CorInfoType,
         throw NotYetImplementedException(
             "unexpected type in load/store primitive");
       }
-      PointerType *ReferentPtrTy = cast<PointerType>(ReferentTy);
-      ASSERT(isManagedPointerType(ReferentPtrTy));
-      ASSERT(ReferentTy->getPointerElementType()->isStructTy());
+      ASSERT(isManagedPointerType(ReferentTy));
+      ASSERT(
+          cast<PointerType>(ReferentTy)->getPointerElementType()->isStructTy());
     } else {
       // This must be a nativeint, in which case we cast the address
       // to an address of Object.
-      Type *NativeIntTy =
-          Type::getIntNTy(*JitContext->LLVMContext, TargetPointerSizeInBits);
-      ASSERT(AddressTy == NativeIntTy);
+      ASSERT(AddressTy == Type::getIntNTy(*JitContext->LLVMContext,
+                                          TargetPointerSizeInBits));
 
       Type *ObjectType = getBuiltInObjectType();
       TypedAddr = (IRNode *)LLVMBuilder->CreateIntToPtr(
