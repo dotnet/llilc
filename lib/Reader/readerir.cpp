@@ -552,7 +552,7 @@ void GenIR::insertIRToKeepGenericContextAlive() {
   LLVMBuilder->restoreIP(SavedInsertPoint);
 
   // This method now requires a frame pointer.
-  TargetMachine *TM = JitContext->TM;
+  // TargetMachine *TM = JitContext->TM;
   // TM->Options.NoFramePointerElim = true;
 
   // TODO: we must convey the offset of this local to the runtime
@@ -3460,7 +3460,6 @@ IRNode *GenIR::loadArg(uint32_t ArgOrdinal, bool IsJmp) {
 
 IRNode *GenIR::loadArgAddress(uint32_t ArgOrdinal) {
   uint32_t ArgIndex = MethodSignature.getArgIndexForILArg(ArgOrdinal);
-  const ABIArgInfo &Info = ABIMethodSig.getArgumentInfo(ArgIndex);
   Value *Address = Arguments[ArgIndex];
   return loadManagedAddress(Address);
 }
@@ -3932,7 +3931,7 @@ IRNode *GenIR::addressOfValue(IRNode *Leaf) {
   case Type::TypeID::FloatTyID:
   case Type::TypeID::DoubleTyID: {
     Instruction *Alloc = createTemporary(LeafTy);
-    StoreInst *Store = LLVMBuilder->CreateStore(Leaf, Alloc);
+    LLVMBuilder->CreateStore(Leaf, Alloc);
     return (IRNode *)Alloc;
   }
   case Type::TypeID::PointerTyID: {
@@ -3942,7 +3941,7 @@ IRNode *GenIR::addressOfValue(IRNode *Leaf) {
     // same struct as the original pointer but doesValueRepresentStruct will
     // return false for the new pointer.
     Instruction *Alloc = createTemporary(LeafTy);
-    StoreInst *Store = LLVMBuilder->CreateStore(Leaf, Alloc);
+    LLVMBuilder->CreateStore(Leaf, Alloc);
     return (IRNode *)LLVMBuilder->CreateLoad(Alloc);
   }
   default:
@@ -4254,7 +4253,6 @@ bool GenIR::canExpandMDArrayRef(CORINFO_SIG_INFO *Sig, bool IsStore,
   // Figure out the element type
   CorInfoType CorType = CORINFO_TYPE_UNDEF;
   CORINFO_CLASS_HANDLE Class = nullptr;
-  uint32_t ElemSize = 0;
   if (IsStore) {
     CORINFO_ARG_LIST_HANDLE ArgList = Sig->args;
     CORINFO_CLASS_HANDLE ArgType;
@@ -4350,14 +4348,12 @@ IRNode *GenIR::mdArrayRefAddr(uint32_t Rank, llvm::Type *ElemType) {
   StructType *ReferentTy = cast<StructType>(Ty->getPointerElementType());
   unsigned ArrayDataIndex = ReferentTy->getNumElements() - 1;
   unsigned DimensionBoundsIndex = ArrayDataIndex - 1;
-  unsigned DimensionLengthsIndex = ArrayDataIndex - 2;
 
   LLVMContext &LLVMContext = *this->JitContext->LLVMContext;
   IRNode *ElementOffset = nullptr;
   const bool IsVolatile = false;
   uint32_t NaturalAlignment = convertReaderAlignment(Reader_AlignNatural);
   Type *Int32Ty = Type::getInt32Ty(LLVMContext);
-  Type *ManagedPointerToInt32 = getManagedPointerType(Int32Ty);
   for (uint32_t I = 0; I < Rank; ++I) {
     IRNode *Index = convertFromStackType(
         Indices[I], CorInfoType::CORINFO_TYPE_INT, Int32Ty);
@@ -4908,13 +4904,10 @@ IRNode *GenIR::genNewObjReturnNode(ReaderCallTargetData *CallTargetData,
 
 IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo, bool MayThrow,
                        std::vector<IRNode *> Args, IRNode **CallNode) {
-  IRNode *Call = nullptr, *ReturnNode = nullptr;
+  IRNode *Call = nullptr;
   IRNode *TargetNode = CallTargetInfo->getCallTargetNode();
-  CORINFO_CALL_INFO *CallInfo = CallTargetInfo->getCallInfo();
   const ReaderCallSignature &Signature =
       CallTargetInfo->getCallTargetSignature();
-  bool IsStubCall =
-      (CallInfo != nullptr) && (CallInfo->kind == CORINFO_VIRTUALCALL_STUB);
 
   if (CallTargetInfo->isTailCall()) {
     // If there's no explicit tail prefix, we can generate
@@ -6655,8 +6648,6 @@ IRNode *GenIR::newArr(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1) {
   // The second argument to the helper is the number of elements in the array.
   // Create the second argument, the number of elements in the array.
   // This needs to be of type native int.
-  Type *NumOfElementsType =
-      Type::getIntNTy(*this->JitContext->LLVMContext, TargetPointerSizeInBits);
   IRNode *NumOfElements =
       convertToStackType(Arg1, CorInfoType::CORINFO_TYPE_NATIVEINT);
 
@@ -6869,7 +6860,6 @@ IRNode *GenIR::makeRefAny(CORINFO_RESOLVED_TOKEN *ResolvedToken,
 IRNode *GenIR::refAnyType(IRNode *RefAny) {
   CORINFO_CLASS_HANDLE RefAnyHandle = getBuiltinClass(CLASSID_TYPED_BYREF);
   Type *RefAnyTy = getType(CORINFO_TYPE_VALUECLASS, RefAnyHandle);
-  StructType *RefAnyStructTy = cast<StructType>(RefAnyTy);
 
   assert(RefAny->getType()->isPointerTy());
   assert(RefAny->getType()->getPointerElementType() == RefAnyTy &&

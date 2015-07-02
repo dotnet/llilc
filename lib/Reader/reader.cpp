@@ -4858,7 +4858,6 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
         case CORINFO_INTRINSIC_InterlockedXAdd64:
         case CORINFO_INTRINSIC_InterlockedXchg32:
         case CORINFO_INTRINSIC_InterlockedXchg64: {
-          IRNode *CallTargetNode = nullptr;
           IntrinsicArg2 = (IRNode *)ReaderOperandStack->pop();
           IntrinsicArg1 = (IRNode *)ReaderOperandStack->pop();
 

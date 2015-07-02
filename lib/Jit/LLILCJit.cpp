@@ -145,8 +145,6 @@ extern "C" void __stdcall sxsJitStartup(void *CcCallbacks) {
 }
 
 void LLILCJitContext::outputDebugMethodName() {
-  const size_t SizeOfBuffer = 512;
-  char TempBuffer[SizeOfBuffer];
   const char *DebugClassName = nullptr;
   const char *DebugMethodName = nullptr;
 
@@ -439,9 +437,6 @@ void ObjectLoadListener::getDebugInfoForObject(
     const ObjectFile &Obj, const RuntimeDyld::LoadedObjectInfo &L) {
   OwningBinary<ObjectFile> DebugObjOwner = L.getObjectForDebug(Obj);
   const ObjectFile &DebugObj = *DebugObjOwner.getBinary();
-
-  // Get the address of the object image for use as a unique identifier
-  const void *ObjData = DebugObj.getData().data();
 
   // TODO: This extracts DWARF information from the object file, but we will
   // want to also be able to eventually extract WinCodeView information as well
