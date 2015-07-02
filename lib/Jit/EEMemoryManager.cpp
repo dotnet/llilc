@@ -37,7 +37,12 @@ uint8_t *EEMemoryManager::allocateCodeSection(uintptr_t Size,
                                               unsigned int Alignment,
                                               unsigned int SectionID,
                                               StringRef SectionName) {
-  // ColdCodeBlock is not currently used.
+  // TODO: ColdCodeBlock is not currently used.
+  return this->HotCodeBlock;
+}
+
+uint8_t *EEMemoryManager::getCodeSection() {
+  // TODO: ColdCodeBlock is not currently used.
   return this->HotCodeBlock;
 }
 
@@ -141,14 +146,17 @@ void EEMemoryManager::registerEHFrames(uint8_t *Addr, uint64_t LoadAddr,
   //} UNWIND_INFO, *PUNWIND_INFO;
 
   // Size passed to this method includes the size of a padding UNWIND_CODE entry
-  // so that the number of elements of the UnwindCode array is even.
+  // so that the number of elements of the UnwindCode array is even. Also, if
+  // CountOfUnwindCodes is 0, Size includes a 4 byte padding.
   // Jit interface expects the size reported to it not to include the padding
-  // entry. Calculate the unpadded size.
+  // entries. Calculate the unpadded size.
   const uint32_t OffsetOfCountOfUnwindCodesField = 2;
   UCHAR CountOfUnwindCodes = Addr[OffsetOfCountOfUnwindCodesField];
   const size_t SizeOfUnwindCode = 2;
   size_t SizeWithoutPadding =
-      Size - (CountOfUnwindCodes & 1) * SizeOfUnwindCode;
+      CountOfUnwindCodes == 0
+          ? Size - 4
+          : Size - (CountOfUnwindCodes & 1) * SizeOfUnwindCode;
 
   // Assume this unwind covers the entire method. Later when
   // we have multiple unwind regions we'll need something more clever.

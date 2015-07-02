@@ -3486,17 +3486,25 @@ IRNode *ReaderBase::genericTokenToNode(CORINFO_RESOLVED_TOKEN *ResolvedToken,
   // No runtime lookup is required
   if (!Result.lookup.lookupKind.needsRuntimeLookup) {
     if (NeedResult) {
+      mdToken Token = ResolvedToken->token;
+      // If the handle really corresponds to a class and not a method, pass
+      // mdtClassHandle to handleToIRNode so that a class name is used for the
+      // name of the GlobalVariable created there instead of the method name.
+      if ((Result.handleType == CORINFO_HANDLETYPE_CLASS) &&
+          (TypeFromToken(Token) != mdtClassHandle)) {
+        Token = mdtClassHandle;
+      }
       if (Result.lookup.constLookup.accessType == IAT_VALUE) {
         ASSERTNR(Result.lookup.constLookup.handle != nullptr);
-        return handleToIRNode(
-            ResolvedToken->token, Result.lookup.constLookup.handle,
-            Result.compileTimeHandle, false, false, true, false);
+        return handleToIRNode(Token, Result.lookup.constLookup.handle,
+                              Result.compileTimeHandle, false, false, true,
+                              false);
       } else {
         ASSERTNR(Result.lookup.constLookup.accessType == IAT_PVALUE);
         // TODO: Can we mark this as readonly for aliasing?
-        return handleToIRNode(
-            ResolvedToken->token, Result.lookup.constLookup.addr,
-            Result.compileTimeHandle, true, true, true, false);
+        return handleToIRNode(Token, Result.lookup.constLookup.addr,
+                              Result.compileTimeHandle, true, true, true,
+                              false);
       }
     } else
       return nullptr;
@@ -5414,7 +5422,8 @@ IRNode *ReaderBase::rdrGetDirectCallTarget(CORINFO_METHOD_HANDLE Method,
 
   IRNode *TargetNode;
   if ((AddressInfo.accessType == IAT_VALUE) && CanMakeDirectCall) {
-    TargetNode = makeDirectCallTargetNode(AddressInfo.addr);
+    TargetNode =
+        makeDirectCallTargetNode(Method, MethodToken, AddressInfo.addr);
   } else {
     bool IsIndirect = AddressInfo.accessType != IAT_VALUE;
     TargetNode = handleToIRNode(MethodToken, AddressInfo.addr, 0, IsIndirect,

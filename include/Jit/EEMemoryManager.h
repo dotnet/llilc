@@ -54,6 +54,10 @@ public:
                                unsigned SectionID,
                                StringRef SectionName) override;
 
+  // \brief Returns code section address.
+  // \returns Code section address.
+  uint8_t *getCodeSection();
+
   /// \brief Allocates a memory block of (at least) the given size suitable
   /// for executable code.
   ///
