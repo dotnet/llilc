@@ -3108,6 +3108,9 @@ IRNode *GenIR::binaryOp(ReaderBaseNS::BinaryOpcode Opcode, IRNode *Arg1,
           Type::getIntNTy(*JitContext->LLVMContext, TargetPointerSizeInBits);
       break;
     }
+    default:
+      // No fixup required
+      break;
     }
   }
 
@@ -5612,6 +5615,9 @@ bool GenIR::interlockedIntrinsicBinOp(IRNode *Arg1, IRNode *Arg2,
   case CORINFO_INTRINSIC_InterlockedXchg32:
   case CORINFO_INTRINSIC_InterlockedXchg64:
     Op = AtomicRMWInst::BinOp::Xchg;
+    break;
+  default:
+    // Leave Op unchanged
     break;
   }
 
