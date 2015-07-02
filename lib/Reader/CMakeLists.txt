@@ -6,7 +6,7 @@ include_directories(${LLILC_INCLUDES}/clr
                     ${LLILC_INCLUDES}/Jit)
 
 if( WIN32 )
-  set(CMAKE_CXX_FLAGS "-EHsc")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -EHsc")
 endif()
 
 add_llilcjit_library(LLILCReader
