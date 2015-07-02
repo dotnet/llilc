@@ -18,7 +18,7 @@
 
 #include "llvm/ExecutionEngine/RTDyldMemoryManager.h"
 
-class LLILCJitContext;
+struct LLILCJitContext;
 
 namespace llvm {
 

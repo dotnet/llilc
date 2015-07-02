@@ -139,7 +139,8 @@ public:
 /// The \p ABIInfo class provides ABI-specific services. Currently, this is
 /// limited to computing the details of how arguments are passed to functions
 /// for a given platform.
-struct ABIInfo {
+class ABIInfo {
+public:
   /// \brief Gets an \p ABIInfo that corresponds to the target of the given
   ///        \p Module.
   ///
