@@ -260,7 +260,7 @@ public:
       : ReaderBase(JitContext->JitInfo, JitContext->MethodInfo,
                    JitContext->Flags),
         UnmanagedCallFrame(nullptr), ThreadPointer(nullptr),
-        ArrayOfReferenceType(nullptr) {
+        BuiltinObjectType(nullptr), ElementToArrayTypeMap() {
     this->JitContext = JitContext;
     this->ClassTypeMap = ClassTypeMap;
     this->ReverseClassTypeMap = ReverseClassTypeMap;
@@ -1312,19 +1312,25 @@ private:
   /// \returns Alignment in bytes.
   uint32_t convertReaderAlignment(ReaderAlignType ReaderAlignment);
 
-  /// Get array element type.
+  /// \brief Get array element type expected for an MSIL instruction.
   ///
-  /// \param Array Array node.
+  /// Note: we avoid the name getArrayElementType to avoid confusion
+  /// with llvm::Type::getArrayElementType.
+  ///
+  /// \param Array         When the CorInfoType is CORINFO_TYPE_CLASS this
+  ///                      is a call for ldelem.ref or stelem.ref. In that
+  ///                      case the element type is the same as element type
+  ///                      of the input array, so we need to pass it in.
   /// \param ResolvedToken Resolved token from ldelem or stelem instruction.
-  /// \param CorInfoType [IN/OUT] Type of the element (will be resolved for
+  /// \param CorType - [IN/OUT] Type of the element (will be resolved for
   /// CORINFO_TYPE_UNDEF).
   /// \param Alignment - [IN/OUT] Alignment that will be updated for value
   /// classes.
-  /// \returns Array element type.
-  llvm::Type *getArrayElementType(IRNode *Array,
-                                  CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                                  CorInfoType *CorType,
-                                  ReaderAlignType *Alignment);
+  /// \returns LLVM Array element type.
+  llvm::Type *getMSILArrayElementType(IRNode *Array,
+                                      CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                                      CorInfoType *CorType,
+                                      ReaderAlignType *Alignment);
 
   /// Check whether access to this multidimensional array can be expanded as an
   /// intrinsic.
@@ -1470,9 +1476,22 @@ private:
 
   /// Check if this LLVM type appears to be a CLR array type.
   ///
-  /// \param Type   Type to examine.
+  /// \param Type       Type to examine.
+  /// \param ElementTy  If non-null, the element type that must match.
+  ///                   otherwise any element type will do.
   /// \returns      True if this type looks like a CLR array type.
-  bool isArrayType(llvm::Type *Type);
+  bool isArrayType(llvm::Type *Type, llvm::Type *ElementTy);
+
+  /// If the Array is not typed as an MSIL array with specified element type
+  /// cast it to that type.
+  ///
+  /// \param Array     The array for which we want to ensure its typing.
+  /// \param ElementTy The LLVM element type desired. If null, means we
+  ///                  do not care about element type. In that case if
+  ///                  we need to make an array type we will use
+  ///                  Sytem.Object as the element type.
+  /// \returns         The possibly-casted input array.
+  IRNode *ensureIsArray(IRNode *Array, llvm::Type *ElementTy);
 
   /// Get the LLVM type for the built-in string type.
   ///
@@ -1484,16 +1503,20 @@ private:
   /// \returns    LLVM type that models the built-in object type.
   llvm::Type *getBuiltInObjectType();
 
-  /// Get the LLVM type for an array of references.
+  /// Get the LLVM type for an array of given element type.
   ///
   /// Used when we know that some type must be an array but our local
   /// type information thinks otherwise.
   ///
-  /// \returns    LLVM type that models array of references.
-  llvm::PointerType *getArrayOfReferenceType();
+  /// \param ElementTy                 The desired element type for the array,
+  /// \returns                         LLVM type that models the desired array
+  llvm::PointerType *getArrayOfElementType(llvm::Type *ElementTy);
 
-  /// Create the LLVM type for an array of references.
-  void createArrayOfReferenceType();
+  /// \brief Creates the type of the array with specified element type.
+  ///
+  /// \param ElementTy The LLVM element type that is desired for the array type.
+  /// \returns The LLVM representation of the MSIL array type.
+  llvm::PointerType *createArrayOfElementType(llvm::Type *ElementTy);
 
   /// Create the length, padding, and elements fields for an array type.
   ///
@@ -1502,22 +1525,12 @@ private:
   /// \param IsVector                  true iff this is a zero-lower-bound
   ///                                  single-dimensional array.
   /// \param ArrayRank                 Rank of the array.
-  /// \param ElementCorType            CorType for the array elements.
-  /// \param ElementClassHandle        Class handle for the array elements.
-  /// \param GetElementAggregateFields true iff this method should get type
-  ///                                  details for fields in case the element
-  ///                                  type is an aggregate or a pointer to an
-  ///                                  aggregate.
-  /// \param DeferredDetailClasses     List to append aggregates whose details
-  ///                                  weren't fully resolved.
+  /// \param ElementTy                 The LLVM element type desired.
   /// \returns                         Byte size of the fields added. Fields
   ///                                  updated with length, padding (if needed),
   ///                                  and the array itself.
-  uint32_t addArrayFields(
-      std::vector<llvm::Type *> &Fields, bool IsVector, uint32_t ArrayRank,
-      CorInfoType ElementCorType, CORINFO_CLASS_HANDLE ElementClassHandle,
-      bool GetElementAggregateFields,
-      std::list<CORINFO_CLASS_HANDLE> *DeferredDetailClasses = nullptr);
+  uint32_t addArrayFields(std::vector<llvm::Type *> &Fields, bool IsVector,
+                          uint32_t ArrayRank, llvm::Type *ElementTy);
 
   /// Add fields of a type to the field vector, expanding structures
   /// (recursively) to the types they contain.
@@ -1605,9 +1618,12 @@ private:
   uint32_t TargetPointerSizeInBits;
   const uint32_t UnmanagedAddressSpace = 0;
   const uint32_t ManagedAddressSpace = 1;
-  llvm::PointerType *ArrayOfReferenceType; ///< Array type for use in casting
-                                           ///< non-array types seen in array
-                                           ///< contexts.
+  llvm::Type *BuiltinObjectType; ///< Cached LLVM representation of object.
+
+  /// \brief Map from Element types to the LLVM representation of the
+  /// MSIL array type that has that element type.
+  std::map<llvm::Type *, llvm::PointerType *> ElementToArrayTypeMap;
+
   static const uint32_t ArrayIntrinMaxRank = 3; ///< This constant determines
                                                 ///< the maximum rank of an
                                                 ///< array access that we will
