@@ -475,12 +475,16 @@ void ObjectLoadListener::getDebugInfoForObject(
       continue;
 
     // Function info
-    StringRef Name;
-    uint64_t Addr;
-    if (Symbol.getName(Name))
-      continue;
-    if (Symbol.getAddress(Addr))
-      continue;
+    ErrorOr<StringRef> NameOrError = Symbol.getName();
+    if (!NameOrError) {
+      continue; // Error.
+    }
+    StringRef Name = NameOrError.get();
+    ErrorOr<uint64_t> AddrOrError = Symbol.getAddress();
+    if (!AddrOrError) {
+      continue; // Error.
+    }
+    uint64_t Addr = AddrOrError.get();
     uint64_t Size = Pair.second;
 
     unsigned LastDebugOffset = -1;
