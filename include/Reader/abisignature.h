@@ -33,7 +33,7 @@ protected:
   ///
   /// \param Signature   The function signature.
   /// \param Reader      The \p GenIR instance that will be used to emit IR.
-  /// \oaram TheABIInfo  The target \p ABIInfo.
+  /// \param TheABIInfo  The target \p ABIInfo.
   ABISignature(const ReaderCallSignature &Signature, GenIR &Reader,
                const ABIInfo &TheABIInfo);
 

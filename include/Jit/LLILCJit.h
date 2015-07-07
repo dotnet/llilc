@@ -73,6 +73,10 @@ struct LLILCJitContext {
   /// Write an informational message about this jit request to LLVM's dbgs().
   void outputDebugMethodName();
 
+  /// Write an informational message about skipping this jit request to LLVM's
+  /// dbgs().
+  void outputSkippingMethodName();
+
 public:
   /// \name CoreCLR EE information
   //@{

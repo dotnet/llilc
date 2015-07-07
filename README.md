@@ -20,7 +20,7 @@ with a goal of producing a set of cross-platform .NET code generation tools.
 Today LLILC is being developed against [dotnet/CoreCLR](https://github.com/dotnet/coreclr)
 for use as a JIT, but an ahead of time (AOT) compiler is planned for the future.  
 
-See the [wiki](https://github.com/dotnet/llilc/wiki) for more information.
+See the [documentation](Documentation/Welcome.md) for more information.
 It has a more complete discussion of our background and goals as well as
 "getting started" details and developer information.
 
@@ -28,8 +28,8 @@ It has a more complete discussion of our background and goals as well as
 Supported Platforms
 -------------------
 
-Our initial supported platform is [Windows](https://github.com/dotnet/llilc/wiki/Getting-Started-For-Windows),
-but [Linux and Mac OS X](https://github.com/dotnet/llilc/wiki/Getting-Started-For-Linux-and-OS-X)
+Our initial supported platform is [Windows](Documentation/Getting-Started-For-Windows.md),
+but [Linux and Mac OS X](Documentation/Getting-Started-For-Linux-and-OS-X.md)
 support are under development.
 
 
@@ -38,5 +38,5 @@ Contributions
 
 LLILC is just starting up.  Only a few tests are working and there are lots
 of places where we need help.  Please see our [issues](https://github.com/dotnet/llilc/issues)
-or the [contributing page](https://github.com/dotnet/llilc/wiki/Areas-To-Contribute)
+or the [contributing document](Documentation/Areas-To-Contribute.md)
 for how to pitch in.
