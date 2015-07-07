@@ -18,6 +18,7 @@
 #include "jitpch.h"
 #include "LLILCJit.h"
 #include "jitoptions.h"
+#include "compiler.h"
 #include "readerir.h"
 #include "abi.h"
 #include "EEMemoryManager.h"
@@ -251,7 +252,7 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
     ObjectLoadListener Listener(&Context);
     orc::ObjectLinkingLayer<decltype(Listener)> Loader(Listener);
     orc::IRCompileLayer<decltype(Loader)> Compiler(Loader,
-                                                   orc::SimpleCompiler(*TM));
+                                                   orc::LLILCCompiler(*TM));
 
     // Now jit the method.
     if (Context.Options->DumpLevel == DumpLevel::VERBOSE) {
