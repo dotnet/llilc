@@ -14,9 +14,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "earlyincludes.h"
-#include "GcInfo.h"
 #include "jitpch.h"
 #include "LLILCJit.h"
+#include "GcInfo.h"
 #include "jitoptions.h"
 #include "compiler.h"
 #include "readerir.h"
@@ -289,11 +289,10 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
       // TODO: ColdCodeSize, or separated code, is not enabled or included.
       *NativeSizeOfCode = Context.HotCodeSize + Context.ReadOnlyDataSize;
 
-      // This is a stop-gap point to issue a default stub of GC info. This lets
-      // the CLR consume our methods cleanly. (and the ETW tracing still works)
-      // Down the road this will be superseded by a CLR specific
-      // GCMetadataPrinter instance or similar.
-      this->outputGCInfo(&Context);
+      GcInfoAllocator GcInfoAllocator;
+      GCInfo GcInfo(&Context, MM.getStackMapSection(), MM.getHotCodeBlock(),
+                    &GcInfoAllocator);
+      GcInfo.emitGCInfo();
 
       // Dump out any enabled timing info.
       TimerGroup::printAll(errs());
@@ -413,20 +412,6 @@ bool LLILCJit::readMethod(LLILCJitContext *JitContext) {
   }
 
   return IsOk;
-}
-
-void LLILCJit::outputGCInfo(LLILCJitContext *JitContext) {
-  GcInfoAllocator Allocator;
-  GcInfoEncoder gcInfoEncoder(JitContext->JitInfo, JitContext->MethodInfo,
-                              &Allocator);
-
-  // The Encoder currently only encodes the CodeSize
-  // TODO: Encode pointer liveness information for GC-safepoints in the method
-
-  gcInfoEncoder.SetCodeLength(JitContext->HotCodeSize);
-
-  gcInfoEncoder.Build();
-  gcInfoEncoder.Emit();
 }
 
 // Notification from the runtime that any caches should be cleaned up.
