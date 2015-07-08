@@ -3219,7 +3219,15 @@ public:
   virtual IRNode *makePtrNode(ReaderPtrType PointerType = Reader_PtrNotGc) = 0;
   virtual IRNode *makeStackTypeNode(IRNode *Node) = 0;
 
-  virtual IRNode *makeDirectCallTargetNode(void *CodeAddress) = 0;
+  /// Create a direct call target node.
+  ///
+  /// \param MethodHandle  Handle of the method to call.
+  /// \param MethodToken  Token of the method to call.
+  /// \param CodeAddress  Method address.
+  /// \returns Call target node for the given method and code address.
+  virtual IRNode *makeDirectCallTargetNode(CORINFO_METHOD_HANDLE MethodHandle,
+                                           mdToken MethodToken,
+                                           void *CodeAddress) = 0;
 
   /// \brief Infer the type of the 'this' argument to an indirect call from
   ///        the given IR node.
