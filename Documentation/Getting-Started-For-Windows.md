@@ -53,6 +53,7 @@ may be replaced in all commands below with the directory of your choice.
 * Install Visual Studio 2013
   * Follow the instructions at [Visual Studio](http://www.visualstudio.com/en-us/products/visual-studio-community-vs)
     to install the free Community edition of Visual Studio 2013.
+  * Update the product to [Visual Studio Update 4](http://www.microsoft.com/en-us/download/details.aspx?id=39305)
 
 * If you want to run [Doxygen](http://www.stack.nl/~dimitri/doxygen/) to
   produce documentation from your code comments, then in addition do the following:
