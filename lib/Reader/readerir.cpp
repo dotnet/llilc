@@ -550,7 +550,7 @@ void GenIR::insertIRToKeepGenericContextAlive() {
   // store to the scratch local.
   LLVMBuilder->SetInsertPoint(InsertPoint->getNextNode());
   Value *FrameEscape = Intrinsic::getDeclaration(JitContext->CurrentModule,
-                                                 Intrinsic::frameescape);
+                                                 Intrinsic::localescape);
   Value *Args[] = {ContextLocalAddress};
   const bool MayThrow = false;
   makeCall(FrameEscape, MayThrow, Args);
