@@ -117,6 +117,7 @@ def main(argv):
                         default=DefaultResultPath(), help='the path to runtest result output directory')
     parser.add_argument('-t', '--runtest-path', type=str,
                         default=None, help='the full path to the CoreCLR\\tests directory')
+    parser.add_argument('-n', '--ngen', help='use ngened mscorlib', default=False, action="store_true")
     required = parser.add_argument_group('required arguments')
     required.add_argument('-j', '--jit-path', required=True, 
                         help='full path to jit .dll')
@@ -165,7 +166,8 @@ def main(argv):
             test_env.write('set COMPlus_AltJit=*\n')
             test_env.write('set COMPlus_AltJitName=' + time_stamped_jit_name + '\n')
             test_env.write('set COMPlus_GCConservative=1\n')
-            test_env.write('set COMPlus_ZapDisable=1\n')
+            if (not args.ngen):
+              test_env.write('set COMPlus_ZapDisable=1\n')
             test_env.write('chcp 65001\n')
             if args.dump_level is not None:
                 test_env.write('set COMPlus_DumpLLVMIR=' + args.dump_level + '\n')
