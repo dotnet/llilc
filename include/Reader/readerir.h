@@ -324,9 +324,7 @@ public:
   IRNode *conv(ReaderBaseNS::ConvOpcode Opcode, IRNode *Source) override;
 
   void dup(IRNode *Opr, IRNode **Result1, IRNode **Result2) override;
-  void endFilter(IRNode *Arg1) override {
-    throw NotYetImplementedException("endFilter");
-  };
+  void endFilter(IRNode *Arg1) override;
 
   FlowGraphEdgeList *fgNodeGetSuccessorList(FlowGraphNode *FgNode) override;
   FlowGraphEdgeList *fgNodeGetPredecessorList(FlowGraphNode *FgNode) override;
@@ -523,6 +521,9 @@ public:
   // Called between building the flow graph and inserting the IR
   void readerMiddlePass(void) override;
 
+  // Called after reading all MSIL, before removing unreachable blocks
+  void readerPostVisit() override;
+
   // Called when reader has finished processing method.
   void readerPostPass(bool IsImportOnly) override;
 
@@ -591,7 +592,7 @@ public:
   llvm::LandingPadInst *createLandingPad(EHRegion *TryRegion,
                                          llvm::LandingPadInst *OuterLandingPad);
 
-  /// Generate a single catch clause for a protected region
+  /// Generate a single catch clause for a protected region.
   ///
   /// \param CatchRegion   Handler that needs a clause and dispatch code
   /// \param LandingPad    \p LandingPadInst under construction
@@ -601,6 +602,32 @@ public:
   ///                      dispatch code
   void genCatchDispatch(EHRegion *CatchRegion, llvm::LandingPadInst *LandingPad,
                         llvm::Value *FauxException, llvm::Value *Selector);
+
+  /// Generate landingpad code for a single filter.
+  ///
+  /// \param FilterRegion   Filter that needs a clause and dispatch code
+  /// \param LandingPad     \p LandingPadInst under construction
+  /// \param FauxException  \p Value representing the caught exception in the
+  ///                       dispatch code
+  /// \param Selector       \p Value representing the exception selector in the
+  ///                       dispatch code
+  void genFilterDispatch(EHRegion *FilterRegion,
+                         llvm::LandingPadInst *LandingPad,
+                         llvm::Value *FauxException, llvm::Value *Selector);
+
+  /// Helper for generating catch/filter dispatch.
+  ///
+  /// \param HandlerRegion  Handler that needs a clause and dispatch code
+  /// \param DoEnter        \p Value dictating whether to dispatch to the
+  ///                       handler
+  /// \param EnterBlockName Name for the BasicBlock that will enter the handler
+  /// \param ExceptionType  \p Type of the formal for the exception object
+  /// \param FauxException  \p Value representing the caught exception in the
+  ///                       dispatch code
+  void genHandlerDispatch(EHRegion *HandlerRegion, llvm::Value *DoEnter,
+                          const llvm::Twine &EnterBlockName,
+                          llvm::Type *ExceptionType,
+                          llvm::Value *FauxException);
 
   IRNode *fgNodeFindStartLabel(FlowGraphNode *Block) override;
 
@@ -1453,6 +1480,10 @@ private:
   ///        the thread pointer.
   void insertIRForUnmanagedCallFrame();
 
+  /// \brief Apply any function-level attributes needed to indicate an
+  ///        unmanaged call, on root function and any outlined filters.
+  void setAttributesForUnmanagedCallFrame(llvm::Function *F);
+
   /// \brief Create the @gc.safepoint_poll() method
   /// Creates the @gc.safepoint_poll() method and insertes it into the
   /// current module. This helper is required by the LLVM GC-Statepoint
@@ -1585,12 +1616,86 @@ private:
       std::vector<std::pair<uint32_t, llvm::Type *>> &OverlapFields,
       std::vector<llvm::Type *> &Fields);
 
+  /// Access the address of a root function local.  If the current region is a
+  /// filter (which will be outlined), insert appropriate code in the root
+  /// function to escape the address and in the filter to recover it.
+  ///
+  /// \param RootFrameAddres  Unescaped local alloca in the root function.
+  /// \returns A \p Value which may be used in the current function (root or
+  ///          filter) to represent the local's address.
+  llvm::Value *getFrameAddress(llvm::Value *RootFrameAddress);
+
+  /// Access the address of the home location of an MSIL-level argument of the
+  /// root function.  Add a home location if necessary.  If the current region
+  /// is a filter (which will be outlined), insert appropriate code in the root
+  /// function to escape the address and in the filter to recover it.
+  ///
+  /// \param   Ordinal  Ordinal number (as would be used in MSIL ldarg etc.)
+  ///                   indicating which parameter
+  /// \returns A \p Value which may be used in the current function (root or
+  ///          filter) to represent the argument's address.
+  llvm::Value *getArgumentAddress(uint32_t Ordinal);
+
+  /// Access an IR-level parameter of the root function.  If the current region
+  /// is a filter (which will be outlined), insert appropriate code in the root
+  /// function to spill and escape the parameter and in the filter to recover
+  /// it.
+  ///
+  /// \param Parameter  The \p Argument whose value is required
+  /// \returns A \p Value which may be used in the current function (root or
+  ///          filter) to represent the parameter's value.
+  llvm::Value *getReadonlyParameter(llvm::Argument *Parameter);
+
+  /// Access an IR-level parameter of the root function.  If the current region
+  /// is a filter (which will be outlined), insert appropriate code in the root
+  /// function to spill and escape the parameter and in the filter to recover
+  /// it.
+  ///
+  /// \param Index  The IR-level index of the parameter whose value is required
+  /// \returns A \p Value which may be used in the current function (root or
+  ///          filter) to represent the parameter's value.
+  llvm::Value *getReadonlyParameter(uint32_t Index);
+
+  /// Get a call to @llvm.framerecover that can be used to reference the given
+  /// root function alloca in the given filter.  Also marks the root address
+  /// as escaping.
+  ///
+  /// \param RootAddress     The alloca in the root function that the filter
+  ///                        needs to reference.
+  /// \param FilterFunction  The outlined filter function that needs to access
+  ///                        the address.
+  /// \returns A \p Value which may be used in the filter function to represent
+  ///          the given address.
+  llvm::Value *recoverAddress(llvm::Value *RootAddress,
+                              llvm::Function *FilterFunction);
+
+  /// Get the outline filter function (if any) associated with the current
+  /// region.
+  ///
+  /// \returns The \p Function to which the code at the current point will be
+  ///          outlined.
+  llvm::Function *getCurrentFilter();
+
+  /// Record that the given address needs to escape by call to
+  /// @llvm.frameescape, and return the index that may be used to recover it by
+  /// call to @llvm.framerecover.  May be called multiple times for the same
+  /// frame address; will return the same index.
+  ///
+  /// \param FrameAddress  Alloca in the root function
+  /// \returns             Index appropriate to pass to @llvm.framerecover in
+  ///                      an outlined filter.
+  int32_t frameEscape(llvm::Value *FrameAddress);
+
+  /// Emit a call to @llvm.frameescape if any allocas have been marked as
+  /// escaping.
+  void emitFrameEscapeIfNeeded();
+
 private:
   LLILCJitContext *JitContext;
   ABIInfo *TheABIInfo;
   ReaderMethodSignature MethodSignature;
   ABIMethodSignature ABIMethodSig;
-  llvm::Function *Function;
+  llvm::Function *RootFunction;
   // The LLVMBuilder has a notion of a current insertion point.  During the
   // first-pass flow-graph construction, each method sets the insertion point
   // explicitly before inserting IR (the fg- methods typically take an
@@ -1628,12 +1733,17 @@ private:
                                                       ///< first-class
                                                       ///< aggregates in LLVM IR
                                                       ///< we are generating.
+  llvm::DenseMap<llvm::Value *, int32_t> FrameEscapes;
+  llvm::SmallVector<llvm::Value *, 4> FrameEscapeArgs;
+  std::map<std::pair<llvm::Value *, llvm::Function *>, llvm::Value *>
+      FrameRecovers;
   FlowGraphNode *FirstMSILBlock;
   llvm::BasicBlock *UnreachableContinuationBlock;
   llvm::Function *PersonalityFunction; ///< Personality routine reported on
                                        ///< LandingPads in this function.
                                        ///< Lazily created/cached.
   bool KeepGenericContextAlive;
+  bool HasUnmanagedCallFrame;
   bool NeedsSecurityObject;
   bool DoneBuildingFlowGraph;
   llvm::BasicBlock *EntryBlock;

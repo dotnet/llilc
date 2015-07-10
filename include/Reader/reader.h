@@ -2947,6 +2947,9 @@ public:
   // Called between building the flow graph and inserting the IR
   virtual void readerMiddlePass(void) = 0;
 
+  // Called after reading all MSIL, before removing unreachable blocks
+  virtual void readerPostVisit() = 0;
+
   // Called when reader has finished processing method.
   virtual void readerPostPass(bool IsImportOnly) = 0;
 

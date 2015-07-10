@@ -116,6 +116,8 @@ public:
   union {
     llvm::SwitchInst *EndFinallySwitch; // Only used for Finally regions
     mdToken CatchClassToken;            // Only used for Catch regions
+    EHRegion *HandlerRegion;            // Only used for Filter regions
+    llvm::Function *FilterFunction;     // Only used for Filter-Handler regions
   };
   ReaderBaseNS::RegionKind Kind;
 };
@@ -236,8 +238,12 @@ void rgnSetExceptUsesExCode(EHRegion *Region, bool UsesExceptionCode) {
 }
 EHRegion *rgnGetFilterTryRegion(EHRegion *Region) { return nullptr; }
 void rgnSetFilterTryRegion(EHRegion *Region, EHRegion *TryRegion) { return; }
-EHRegion *rgnGetFilterHandlerRegion(EHRegion *Region) { return nullptr; }
-void rgnSetFilterHandlerRegion(EHRegion *Region, EHRegion *Handler) { return; }
+EHRegion *rgnGetFilterHandlerRegion(EHRegion *Region) {
+  return Region->HandlerRegion;
+}
+void rgnSetFilterHandlerRegion(EHRegion *Region, EHRegion *Handler) {
+  Region->HandlerRegion = Handler;
+}
 EHRegion *rgnGetFinallyTryRegion(EHRegion *FinallyRegion) { return nullptr; }
 void rgnSetFinallyTryRegion(EHRegion *FinallyRegion, EHRegion *TryRegion) {
   return;
@@ -288,7 +294,7 @@ void *GenIR::getProcMemory(size_t NumBytes) { return calloc(1, NumBytes); }
 //
 //===----------------------------------------------------------------------===//
 
-static Value *functionArgAt(Function *F, uint32_t I) {
+static Argument *functionArgAt(Function *F, uint32_t I) {
   Function::arg_iterator Args = F->arg_begin();
   for (; I > 0; I--) {
     ++Args;
@@ -331,16 +337,16 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
 
   new (&ABIMethodSig)
       ABIMethodSignature(MethodSignature, *this, *JitContext->TheABIInfo);
-  Function = ABIMethodSig.createFunction(*this, *JitContext->CurrentModule);
+  RootFunction = ABIMethodSig.createFunction(*this, *JitContext->CurrentModule);
 
   llvm::LLVMContext &LLVMContext = *JitContext->LLVMContext;
-  EntryBlock = BasicBlock::Create(LLVMContext, "entry", Function);
+  EntryBlock = BasicBlock::Create(LLVMContext, "entry", RootFunction);
 
   LLVMBuilder = new IRBuilder<>(LLVMContext);
   DBuilder = new DIBuilder(*JitContext->CurrentModule);
-  LLILCDebugInfo.TheCU = DBuilder->createCompileUnit(dwarf::DW_LANG_C_plus_plus,
-                                                     Function->getName().str(),
-                                                     ".", "LLILCJit", 0, "", 0);
+  LLILCDebugInfo.TheCU = DBuilder->createCompileUnit(
+      dwarf::DW_LANG_C_plus_plus, RootFunction->getName().str(), ".",
+      "LLILCJit", 0, "", 0);
 
   LLVMBuilder->SetInsertPoint(EntryBlock);
 
@@ -367,7 +373,7 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   int32_t IndirectResultIndex = -1;
   if (HasIndirectResult) {
     IndirectResultIndex = ResultInfo.getIndex();
-    IndirectResult = functionArgAt(Function, IndirectResultIndex);
+    IndirectResult = getReadonlyParameter(IndirectResultIndex);
   } else {
     IndirectResult = nullptr;
   }
@@ -381,8 +387,8 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   }
 
   // Home the method arguments.
-  Function::arg_iterator ArgI = Function->arg_begin();
-  Function::arg_iterator ArgE = Function->arg_end();
+  Function::arg_iterator ArgI = RootFunction->arg_begin();
+  Function::arg_iterator ArgE = RootFunction->arg_end();
   for (uint32_t I = 0, J = 0; ArgI != ArgE; ++I, ++ArgI) {
     if (IndirectResultIndex >= 0 && I == IndirectResultIndex) {
       // Indirect results aren't homed.
@@ -469,9 +475,10 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   unsigned ScopeLine = ICorDebugInfo::PROLOG;
   bool IsDefinition = true;
   DISubprogram *SP = DBuilder->createFunction(
-      FContext, Function->getName(), StringRef(), Unit, LineNo,
-      createFunctionType(Function, Unit), Function->hasInternalLinkage(),
-      IsDefinition, ScopeLine, DINode::FlagPrototyped, IsOptimized, Function);
+      FContext, RootFunction->getName(), StringRef(), Unit, LineNo,
+      createFunctionType(RootFunction, Unit),
+      RootFunction->hasInternalLinkage(), IsDefinition, ScopeLine,
+      DINode::FlagPrototyped, IsOptimized, RootFunction);
 
   LLILCDebugInfo.FunctionScope = SP;
 
@@ -513,18 +520,20 @@ void GenIR::readerPostPass(bool IsImportOnly) {
     // managed pointers yet. So, check if this function deals with such values
     // and fail early. (Issue #33)
 
-    for (const Argument &arg : Function->args()) {
+    for (const Argument &arg : RootFunction->args()) {
       if (isManagedAggregateType(arg.getType())) {
         throw NotYetImplementedException(
             "NYI: Precice GC for Managed-Aggregate values");
       }
     }
 
-    for (const BasicBlock &BB : *Function) {
-      for (const Instruction &Instr : BB) {
-        if (isManagedAggregateType(Instr.getType())) {
-          throw NotYetImplementedException(
-              "NYI: Precice GC for Managed-Aggregate values");
+    for (const Function &F : JitContext->CurrentModule->functions()) {
+      for (const BasicBlock &BB : F) {
+        for (const Instruction &Instr : BB) {
+          if (isManagedAggregateType(Instr.getType())) {
+            throw NotYetImplementedException(
+                "NYI: Precice GC for Managed-Aggregate values");
+          }
         }
       }
     }
@@ -535,12 +544,51 @@ void GenIR::readerPostPass(bool IsImportOnly) {
   delete LLVMBuilder;
 }
 
-void GenIR::insertIRToKeepGenericContextAlive() {
+int32_t GenIR::frameEscape(Value *FrameAddress) {
+  // Check if this address has already been escaped and return the existing
+  // index if so.  The values in the memo map are offset by 1 because 0 is a
+  // valid index for an escaped address but operator[] will create an entry
+  // with value 0 if the key is not found.
+  int32_t &IndexPlusOne = FrameEscapes[FrameAddress];
+  if (IndexPlusOne != 0) {
+    return IndexPlusOne - 1;
+  }
+
+  // Record escaped addresses in a vector on the GenIR object so we can emit
+  // a call to @llvm.frameescape later.
+  FrameEscapeArgs.push_back(FrameAddress);
+
+  // Record and return the index.
+  IndexPlusOne = FrameEscapeArgs.size();
+  return IndexPlusOne - 1;
+}
+
+void GenIR::emitFrameEscapeIfNeeded() {
+  if (FrameEscapeArgs.empty()) {
+    return;
+  }
+
+  // Emit the frameescape call just after the allocas for temps.
   IRBuilder<>::InsertPoint SavedInsertPoint = LLVMBuilder->saveIP();
+  if (TempInsertionPoint == nullptr) {
+    LLVMBuilder->SetInsertPoint(&RootFunction->getEntryBlock());
+  } else {
+    BasicBlock *InsertBlock = TempInsertionPoint->getParent();
+    if (TempInsertionPoint == &InsertBlock->back()) {
+      LLVMBuilder->SetInsertPoint(InsertBlock);
+    } else {
+      LLVMBuilder->SetInsertPoint(TempInsertionPoint->getNextNode());
+    }
+  }
+  Value *FrameEscape = Intrinsic::getDeclaration(JitContext->CurrentModule,
+                                                 Intrinsic::frameescape);
+  LLVMBuilder->CreateCall(FrameEscape, FrameEscapeArgs);
+  LLVMBuilder->restoreIP(SavedInsertPoint);
+}
+
+void GenIR::insertIRToKeepGenericContextAlive() {
   Value *ContextLocalAddress = nullptr;
   CorInfoOptions Options = JitContext->MethodInfo->options;
-  Instruction *InsertPoint = TempInsertionPoint;
-  ASSERT(InsertPoint != nullptr);
 
   if (Options & CORINFO_GENERICS_CTXT_FROM_THIS) {
     // The this argument might be modified in the method body, so
@@ -549,8 +597,10 @@ void GenIR::insertIRToKeepGenericContextAlive() {
     Value *This = thisObj();
     Instruction *ScratchLocalAlloca = createTemporary(This->getType());
     // Put the store just after the newly added alloca.
+    IRBuilder<>::InsertPoint SavedInsertPoint = LLVMBuilder->saveIP();
     LLVMBuilder->SetInsertPoint(ScratchLocalAlloca->getNextNode());
-    InsertPoint = makeStoreNonNull(This, ScratchLocalAlloca, false);
+    makeStoreNonNull(This, ScratchLocalAlloca, false);
+    LLVMBuilder->restoreIP(SavedInsertPoint);
     // The scratch local's address is the saved context address.
     ContextLocalAddress = ScratchLocalAlloca;
   } else {
@@ -562,17 +612,7 @@ void GenIR::insertIRToKeepGenericContextAlive() {
     ContextLocalAddress = Arguments[MethodSignature.getTypeArgIndex()];
   }
 
-  // Indicate that the context location's address escapes by inserting a call
-  // to llvm.frameescape. Put that call just after the last alloca or the
-  // store to the scratch local.
-  LLVMBuilder->SetInsertPoint(InsertPoint->getNextNode());
-  Value *FrameEscape = Intrinsic::getDeclaration(JitContext->CurrentModule,
-                                                 Intrinsic::frameescape);
-  Value *Args[] = {ContextLocalAddress};
-  const bool MayThrow = false;
-  makeCall(FrameEscape, MayThrow, Args);
-  // Don't move TempInsertionPoint up since what we added was not an alloca
-  LLVMBuilder->restoreIP(SavedInsertPoint);
+  frameEscape(ContextLocalAddress);
 
   // This method now requires a frame pointer.
   // TargetMachine *TM = JitContext->TM;
@@ -648,8 +688,7 @@ void GenIR::insertIRForUnmanagedCallFrame() {
   IRBuilder<>::InsertPoint SavedInsertPoint = LLVMBuilder->saveIP();
 
   // Mark this function as requiring a frame pointer and as using GC.
-  Function->addFnAttr("no-frame-pointer-elim-non-leaf");
-  Function->setGC("coreclr");
+  HasUnmanagedCallFrame = true;
 
   // The call frame data structure is modeled as an opaque blob of bytes.
   Type *CallFrameTy = ArrayType::get(Int8Ty, CallFrameInfo.size);
@@ -726,6 +765,12 @@ void GenIR::insertIRForUnmanagedCallFrame() {
   ThreadPointer = ThreadPointerAddress;
 }
 
+void GenIR::setAttributesForUnmanagedCallFrame(Function *F) {
+  // Mark this function as requiring a frame pointer and as using GC.
+  F->addFnAttr("no-frame-pointer-elim-non-leaf");
+  F->setGC("coreclr");
+}
+
 #pragma endregion
 
 #pragma region UTILITIES
@@ -781,7 +826,7 @@ void GenIR::createSym(uint32_t Num, bool IsAuto, CorInfoType CorType,
   if (!IsAuto) {
     const ABIArgInfo &Info = ABIMethodSig.getArgumentInfo(Num);
     if (Info.getKind() == ABIArgInfo::Indirect) {
-      Arguments[Num] = functionArgAt(Function, Info.getIndex());
+      Arguments[Num] = functionArgAt(RootFunction, Info.getIndex());
       return;
     }
   }
@@ -912,7 +957,7 @@ IRNode *GenIR::thisObj() {
   ASSERT(MethodSignature.hasThis());
   uint32_t I = MethodSignature.getThisIndex();
   I = ABIMethodSig.getArgumentInfo(I).getIndex();
-  return (IRNode *)functionArgAt(Function, I);
+  return (IRNode *)getReadonlyParameter(I);
   ;
 }
 
@@ -921,9 +966,9 @@ IRNode *GenIR::secretParam() {
   ASSERT(MethodSignature.hasSecretParameter());
   ASSERT(MethodSignature.getSecretParameterIndex() ==
          (MethodSignature.getArgumentTypes().size() - 1));
-  Function::arg_iterator Args = Function->arg_end();
-  Value *SecretParameter = --Args;
-  return (IRNode *)SecretParameter;
+  Function::arg_iterator Args = RootFunction->arg_end();
+  Argument *SecretParameter = --Args;
+  return (IRNode *)getReadonlyParameter(SecretParameter);
 }
 
 // Get the value of the varargs token (aka argList).
@@ -931,7 +976,7 @@ IRNode *GenIR::argList() {
   ASSERT(MethodSignature.isVarArg());
   uint32_t I = MethodSignature.getVarArgIndex();
   I = ABIMethodSig.getArgumentInfo(I).getIndex();
-  return (IRNode *)functionArgAt(Function, I);
+  return (IRNode *)getReadonlyParameter(I);
 }
 
 // Get the value of the instantiation parameter (aka type parameter).
@@ -939,7 +984,7 @@ IRNode *GenIR::instParam() {
   ASSERT(MethodSignature.hasTypeArg());
   uint32_t I = MethodSignature.getTypeArgIndex();
   I = ABIMethodSig.getArgumentInfo(I).getIndex();
-  return (IRNode *)functionArgAt(Function, I);
+  return (IRNode *)getReadonlyParameter(I);
 }
 
 // Convert ReaderAlignType to byte alighnment
@@ -1009,7 +1054,7 @@ llvm::DISubroutineType *GenIR::createFunctionType(llvm::Function *F,
   // for each param, etc. convert the type to DIType and add it to the array.
   FunctionType *FunctionTy = F->getFunctionType();
 
-  DIType *ReturnTy = convertType(Function->getReturnType());
+  DIType *ReturnTy = convertType(RootFunction->getReturnType());
   EltTys.push_back(ReturnTy);
   auto ParamEnd = FunctionTy->param_end();
 
@@ -2518,11 +2563,11 @@ void GenIR::fgNodeChangeRegion(FlowGraphNode *Node, EHRegion *Region) {
 }
 
 FlowGraphNode *GenIR::fgGetHeadBlock() {
-  return ((FlowGraphNode *)&Function->getEntryBlock());
+  return ((FlowGraphNode *)&RootFunction->getEntryBlock());
 }
 
 FlowGraphNode *GenIR::fgGetTailBlock() {
-  return ((FlowGraphNode *)&Function->back());
+  return ((FlowGraphNode *)&RootFunction->back());
 }
 
 FlowGraphNode *GenIR::makeFlowGraphNode(uint32_t TargetOffset,
@@ -2530,7 +2575,7 @@ FlowGraphNode *GenIR::makeFlowGraphNode(uint32_t TargetOffset,
   BasicBlock *NextBlock =
       (PreviousNode == nullptr ? nullptr : PreviousNode->getNextNode());
   FlowGraphNode *Node = (FlowGraphNode *)BasicBlock::Create(
-      *JitContext->LLVMContext, "", Function, NextBlock);
+      *JitContext->LLVMContext, "", RootFunction, NextBlock);
   fgNodeSetStartMSILOffset(Node, TargetOffset);
   return Node;
 }
@@ -2579,8 +2624,9 @@ FlowGraphNode *GenIR::fgSplitBlock(FlowGraphNode *Block, IRNode *Node) {
   bool PropagatesStack = fgNodePropagatesOperandStack(Block);
   BasicBlock *NewBlock;
   if (Inst == nullptr) {
-    NewBlock = BasicBlock::Create(*JitContext->LLVMContext, "", Function,
-                                  TheBasicBlock->getNextNode());
+    NewBlock =
+        BasicBlock::Create(*JitContext->LLVMContext, "", Block->getParent(),
+                           TheBasicBlock->getNextNode());
     TerminatorInst *TermInst = TheBasicBlock->getTerminator();
     if (TermInst != nullptr) {
       if (isa<UnreachableInst>(TermInst)) {
@@ -2604,8 +2650,9 @@ FlowGraphNode *GenIR::fgSplitBlock(FlowGraphNode *Block, IRNode *Node) {
     if (TheBasicBlock->getTerminator() != nullptr) {
       NewBlock = TheBasicBlock->splitBasicBlock(Inst);
     } else {
-      NewBlock = BasicBlock::Create(*JitContext->LLVMContext, "", Function,
-                                    TheBasicBlock->getNextNode());
+      NewBlock =
+          BasicBlock::Create(*JitContext->LLVMContext, "", Block->getParent(),
+                             TheBasicBlock->getNextNode());
       NewBlock->getInstList().splice(NewBlock->end(),
                                      TheBasicBlock->getInstList(), Inst,
                                      TheBasicBlock->end());
@@ -2616,8 +2663,48 @@ FlowGraphNode *GenIR::fgSplitBlock(FlowGraphNode *Block, IRNode *Node) {
   return (FlowGraphNode *)NewBlock;
 }
 
+void GenIR::readerPostVisit() {
+  // Now that we have the full set of escaping frame locations, emit the
+  // call to @llvm.frameescape
+  emitFrameEscapeIfNeeded();
+
+  for (Function &F : JitContext->CurrentModule->functions()) {
+    if (F.isDeclaration()) {
+      continue;
+    }
+    if (HasUnmanagedCallFrame) {
+      // If there is an unmanaged call in the root or in any filter, set the
+      // attributes on the root and all filters.
+      setAttributesForUnmanagedCallFrame(&F);
+    }
+    if (&F == RootFunction) {
+      continue;
+    }
+    // Found a filter function.  Its body (except for the entry block) was
+    // generated inline in the root function; move those blocks to the outlined
+    // function now.
+    BasicBlock *FilterEntry = &F.getEntryBlock();
+    EHRegion *FilterRegion = fgNodeGetRegion((FlowGraphNode *)FilterEntry);
+    assert(FilterRegion->Kind == ReaderBaseNS::RegionKind::RGN_Filter);
+    BasicBlock *NextFilterBlock = FilterEntry->getSingleSuccessor();
+    assert(NextFilterBlock != nullptr);
+    BasicBlock *PreviousBlock = FilterEntry;
+    while (fgNodeGetRegion((FlowGraphNode *)NextFilterBlock) == FilterRegion) {
+      BasicBlock *MovingBlock = NextFilterBlock;
+      NextFilterBlock = MovingBlock->getNextNode();
+      MovingBlock->moveAfter(PreviousBlock);
+      PreviousBlock = MovingBlock;
+    }
+  }
+}
+
 void GenIR::fgRemoveUnusedBlocks(FlowGraphNode *FgHead) {
-  removeUnreachableBlocks(*this->Function);
+  for (Function &F : JitContext->CurrentModule->functions()) {
+    if (F.isDeclaration()) {
+      continue;
+    }
+    removeUnreachableBlocks(F);
+  }
 }
 
 void GenIR::fgDeleteBlock(FlowGraphNode *Node) {
@@ -2730,9 +2817,10 @@ static bool hasNYIClause(EHRegion *TryRegion) {
       // any code in the landing pad.
       break;
     case ReaderBaseNS::RegionKind::RGN_MCatch:
+    case ReaderBaseNS::RegionKind::RGN_Filter:
+    case ReaderBaseNS::RegionKind::RGN_MExcept:
       // This handler type is implemented.
       break;
-    case ReaderBaseNS::RegionKind::RGN_MExcept:
     case ReaderBaseNS::RegionKind::RGN_Finally:
     case ReaderBaseNS::RegionKind::RGN_Fault:
       // These are not yet implemented.
@@ -2792,7 +2880,7 @@ LandingPadInst *GenIR::createLandingPad(EHRegion *TryRegion,
     PersonalityFunction =
         Function::Create(PersonalityTy, Function::ExternalLinkage,
                          "ProcessCLRException", JitContext->CurrentModule);
-    Function->setPersonalityFn(PersonalityFunction);
+    RootFunction->setPersonalityFn(PersonalityFunction);
   }
   // Landingpad defines an i8* (in addrspace 0) which is intended to be a
   // pointer to the exception object.  An actual pointer to a CLR exception
@@ -2828,7 +2916,12 @@ LandingPadInst *GenIR::createLandingPad(EHRegion *TryRegion,
     case ReaderBaseNS::RegionKind::RGN_MCatch:
       genCatchDispatch(Child, LandingPad, FauxException, Selector);
       break;
+    case ReaderBaseNS::RegionKind::RGN_Filter:
+      genFilterDispatch(Child, LandingPad, FauxException, Selector);
+      break;
     case ReaderBaseNS::RegionKind::RGN_MExcept:
+      // This is handled when its filter is.
+      break;
     case ReaderBaseNS::RegionKind::RGN_Finally:
     case ReaderBaseNS::RegionKind::RGN_Fault:
       // These are not yet implemented.  Omit the dispatch code for them, so
@@ -2893,23 +2986,32 @@ void GenIR::genCatchDispatch(EHRegion *CatchRegion, LandingPadInst *LandingPad,
   // Generate the test to see if the dynamically-provided selector matches
   // the selector for this clause.
   Value *Match = LLVMBuilder->CreateICmpEQ(Selector, ClassSelector, "DoCatch");
+
+  genHandlerDispatch(CatchRegion, Match, "EnterCatch", CaughtType,
+                     FauxException);
+}
+
+void GenIR::genHandlerDispatch(EHRegion *HandlerRegion, Value *DoEnter,
+                               const Twine &EnterBlockName, Type *ExceptionType,
+                               Value *FauxException) {
+  LLVMContext &LLVMContext = *JitContext->LLVMContext;
   // Create the successor blocks for the true/false cases of the match.
-  BasicBlock *EnterCatchBlock =
-      createPointBlock(CatchRegion->StartMsilOffset, "EnterCatch");
-  EHRegion *TryRegion = CatchRegion->Parent;
+  BasicBlock *EnterBlock =
+      createPointBlock(HandlerRegion->StartMsilOffset, EnterBlockName);
+  EHRegion *TryRegion = HandlerRegion->Parent;
   BasicBlock *ContinueBlock =
       createPointBlock(TryRegion->EndMsilOffset, "ContinueDispatch");
   // Branch to the appropriate successor.
-  LLVMBuilder->CreateCondBr(Match, EnterCatchBlock, ContinueBlock);
+  LLVMBuilder->CreateCondBr(DoEnter, EnterBlock, ContinueBlock);
   // Populate the enter-catch block
-  LLVMBuilder->SetInsertPoint(EnterCatchBlock);
+  LLVMBuilder->SetInsertPoint(EnterBlock);
   // SEQUENCE POINTS: ensure sequence point at eh region start
   if (needSequencePoints()) {
-    setSequencePoint(CatchRegion->StartMsilOffset,
+    setSequencePoint(HandlerRegion->StartMsilOffset,
                      ICorDebugInfo::SOURCE_TYPE_INVALID);
   }
   // Generate a local to hold the pointer to the caught exception.
-  Value *ExnPtrAddr = createTemporary(CaughtType, "CaughtException");
+  Value *ExnPtrAddr = createTemporary(ExceptionType, "CaughtException");
   // The begincatch intrinsic takes the address of the local as i8*
   Type *Int8PtrTy = Type::getInt8PtrTy(LLVMContext);
   Value *CastExnPtrAddr = LLVMBuilder->CreateBitCast(ExnPtrAddr, Int8PtrTy);
@@ -2922,14 +3024,88 @@ void GenIR::genCatchDispatch(EHRegion *CatchRegion, LandingPadInst *LandingPad,
   IRNode *ExnPtr = (IRNode *)LLVMBuilder->CreateLoad(ExnPtrAddr);
   ReaderStack *EnterBlockStack = createStack();
   EnterBlockStack->push(ExnPtr);
-  fgNodeSetOperandStack((FlowGraphNode *)EnterCatchBlock, EnterBlockStack);
-  fgNodeSetPropagatesOperandStack((FlowGraphNode *)EnterCatchBlock, true);
+  fgNodeSetOperandStack((FlowGraphNode *)EnterBlock, EnterBlockStack);
+  fgNodeSetPropagatesOperandStack((FlowGraphNode *)EnterBlock, true);
   // Branch to the handler code.
   FlowGraphNode *HandlerNode = nullptr;
-  fgAddNodeMSILOffset(&HandlerNode, CatchRegion->StartMsilOffset);
+  fgAddNodeMSILOffset(&HandlerNode, HandlerRegion->StartMsilOffset);
   LLVMBuilder->CreateBr((BasicBlock *)HandlerNode);
   // Reset the insert point to continue exception dispatch.
   LLVMBuilder->SetInsertPoint(ContinueBlock);
+}
+
+void GenIR::genFilterDispatch(EHRegion *FilterRegion,
+                              LandingPadInst *LandingPad, Value *FauxException,
+                              Value *Selector) {
+  LLVMContext &LLVMContext = *JitContext->LLVMContext;
+  EHRegion *HandlerRegion = FilterRegion->HandlerRegion;
+  assert(HandlerRegion != nullptr);
+
+  // Compute the function signature.
+  // The filter takes two parameters: stack pointer, and exception to filter.
+  // Type the stack pointer as i8*.
+  Type *Int8PtrTy = Type::getInt8PtrTy(LLVMContext);
+  Type *ExceptionTy =
+      getType(CORINFO_TYPE_CLASS,
+              getBuiltinClass(CorInfoClassId::CLASSID_SYSTEM_OBJECT));
+  // The filter returns an i32 (though its value is always either 0 or 1)
+  Type *Int32Ty = Type::getInt32Ty(LLVMContext);
+  FunctionType *FilterTy =
+      FunctionType::get(Int32Ty, {Int8PtrTy, ExceptionTy}, false);
+
+  // Create the filter function.
+  uint32_t FilterOffset = FilterRegion->StartMsilOffset;
+  Twine FunctionName = Twine("Filter_") + Twine::utohexstr(FilterOffset);
+  Function *FilterFunction =
+      Function::Create(FilterTy, Function::ExternalLinkage, FunctionName,
+                       JitContext->CurrentModule);
+  FilterFunction->addFnAttr("wineh-parent", RootFunction->getName());
+
+  // Give the arguments names to make the IR easier to read.
+  auto ArgIter = FilterFunction->arg_begin();
+  ArgIter->setName("EstablisherFrame");
+  (++ArgIter)->setName("Exception");
+
+  // Construct an entry block in the filter function with a branch to a block
+  // that goes in the root function now (and will get moved to the filter
+  // function in a post-pass) that will receive the IR for the MSIL in the
+  // body of the filter.
+  FlowGraphNode *FilterEntry = (FlowGraphNode *)BasicBlock::Create(
+      LLVMContext, "filter_entry", FilterFunction);
+  fgNodeSetStartMSILOffset(FilterEntry, FilterOffset);
+  fgNodeSetEndMSILOffset(FilterEntry, FilterOffset);
+  fgNodeSetRegion(FilterEntry, FilterRegion);
+  FlowGraphNode *FilterTarget = nullptr;
+  fgAddNodeMSILOffset(&FilterTarget, FilterOffset);
+  IRBuilder<>::InsertPoint SavedInsertPoint = LLVMBuilder->saveIP();
+  LLVMBuilder->SetInsertPoint(FilterEntry);
+  LLVMBuilder->CreateBr(FilterTarget);
+
+  // MSIL reading will skip over the filter entry (it is a point block); set
+  // up its stack entry so we'll know it pushes the caught exception onto the
+  // evauation stack.
+  ReaderStack *EnterFilterStack = createStack();
+  EnterFilterStack->push((IRNode *)&*ArgIter);
+  fgNodeSetOperandStack(FilterEntry, EnterFilterStack);
+  LLVMBuilder->restoreIP(SavedInsertPoint);
+
+  // Record the FilterFunction on the EHRegion.
+  assert(HandlerRegion->FilterFunction == nullptr);
+  HandlerRegion->FilterFunction = FilterFunction;
+
+  // Add the LandingPad clause (Filter function bitcast to i8*) and dispatch
+  // code.
+  Constant *FilterToken = ConstantExpr::getBitCast(FilterFunction, Int8PtrTy);
+  LandingPad->addClause(FilterToken);
+  Value *IntrinsicCallee = Intrinsic::getDeclaration(JitContext->CurrentModule,
+                                                     Intrinsic::eh_typeid_for);
+  Value *FilterSelector =
+      LLVMBuilder->CreateCall(IntrinsicCallee, FilterToken, "FilterSelector");
+  Value *FilterResult =
+      LLVMBuilder->CreateICmpEQ(Selector, FilterSelector, "FilterResult");
+
+  genHandlerDispatch(HandlerRegion, FilterResult, "EnterFilter", ExceptionTy,
+                     FauxException);
 }
 
 void GenIR::endFlowGraphNode(FlowGraphNode *Fg, uint32_t CurrOffset) { return; }
@@ -3070,7 +3246,52 @@ void FlowGraphSuccessorEdgeList::moveNext() {
   if (NominalSucc == nullptr) {
     SuccIterator++;
   } else {
+    LandingPadInst *LandingPad;
+    Function *PreviousFilter;
+    if (NominalSucc->isLandingPad()) {
+      // We've just visited the landing pad (which we visit first).  We also
+      // need to visit any filter referenced by this landing pad.
+      LandingPad = NominalSucc->getLandingPadInst();
+      PreviousFilter = nullptr;
+    } else {
+      // We've just visited a filter.  We need to visit the next filter if
+      // there is one.
+      PreviousFilter = NominalSucc->getParent();
+      assert(NominalSucc == &PreviousFilter->getEntryBlock());
+      assert(PreviousFilter->hasOneUse());
+      Value *User = *PreviousFilter->user_begin();
+      assert(isa<Constant>(User));
+      assert(isa<Operator>(User));
+      assert(cast<Operator>(User)->getOpcode() == CastInst::BitCast);
+      LandingPad = nullptr;
+      for (Value *User2 : User->users()) {
+        if ((LandingPad = dyn_cast<LandingPadInst>(User2)) != nullptr) {
+          break;
+        }
+        assert(isa<CallInst>(User2) &&
+               "Expected other use to be tyepid.for call");
+      }
+      assert(LandingPad != nullptr && "Should be used in landing pad");
+    }
+
+    // Search LandingPad for the next filter after PreviousFilter (or for the
+    // first filter, if PreviousFilter is nullptr).
     NominalSucc = nullptr;
+    unsigned NumClauses = LandingPad->getNumClauses();
+    for (unsigned I = 0; I < NumClauses; ++I) {
+      Constant *Clause = LandingPad->getClause(I);
+      Function *FilterFunction =
+          dyn_cast<Function>(Clause->stripPointerCasts());
+      if (FilterFunction != nullptr) {
+        if (PreviousFilter == nullptr) {
+          NominalSucc = &FilterFunction->getEntryBlock();
+          break;
+        }
+        if (FilterFunction == PreviousFilter) {
+          PreviousFilter = nullptr;
+        }
+      }
+    }
   }
 }
 
@@ -3114,11 +3335,39 @@ void GenIR::fgNodeSetPropagatesOperandStack(FlowGraphNode *Fg,
 }
 
 FlowGraphNode *GenIR::fgNodeGetNext(FlowGraphNode *FgNode) {
-  if (FgNode == &(Function->getBasicBlockList().back())) {
-    return nullptr;
-  } else {
-    return (FlowGraphNode *)((BasicBlock *)FgNode)->getNextNode();
+  Function *Parent = FgNode->getParent();
+  if (FgNode == &(Parent->back())) {
+    if (Parent == RootFunction) {
+      // Last node in root: all done.
+      return nullptr;
+    }
+
+    // This is the entry block for a to-be-outlined filter function.  The code
+    // for the filter body is in the root function (it will get moved in
+    // readerPostVisit); visit that node now.
+    assert(FgNode == &Parent->getEntryBlock());
+    assert(FgNode->getSingleSuccessor() != nullptr);
+    return (FlowGraphNode *)FgNode->getSingleSuccessor();
   }
+
+  assert(Parent == RootFunction);
+  BasicBlock *NextBlock = FgNode->getNextNode();
+  for (BasicBlock *Pred : predecessors(NextBlock)) {
+    if (Pred->getParent() != Parent) {
+      // We've found a block with a predecessor that is not in the root
+      // function, which therefore must be the entry block of a filter function
+      // that will be outlined.  Visit the filter entry block before visiting
+      // this block (which is the first block of the filter body).
+      assert(llvm::all_of(predecessors(NextBlock), [Pred, Parent](
+                                                       BasicBlock *OtherPred) {
+        return ((OtherPred == Pred) || (OtherPred->getParent() == Parent));
+      }) && "Unable to find unique pred in filter");
+      assert(Pred == &Pred->getParent()->getEntryBlock() &&
+             "Need to start at filter entry");
+      return (FlowGraphNode *)Pred;
+    }
+  }
+  return (FlowGraphNode *)NextBlock;
 }
 
 FlowGraphNode *GenIR::fgPrePhase(FlowGraphNode *Fg) { return FirstMSILBlock; }
@@ -3688,10 +3937,132 @@ IRNode *GenIR::genPointerSub(IRNode *Arg1, IRNode *Arg2) {
   return (IRNode *)ResultPtr;
 }
 
+Function *GenIR::getCurrentFilter() {
+  if ((CurrentRegion != nullptr) &&
+      (CurrentRegion->Kind == ReaderBaseNS::RegionKind::RGN_Filter)) {
+    return CurrentRegion->HandlerRegion->FilterFunction;
+  }
+
+  // Filters never have child regions, so if the leaf region at this point
+  // isn't a filter then it isn't enclosed in a filter at all.
+  return nullptr;
+}
+
+Value *GenIR::getFrameAddress(Value *RootFrameAddress) {
+  assert(isa<AllocaInst>(RootFrameAddress));
+  Function *FilterFunction = getCurrentFilter();
+  if (FilterFunction == nullptr) {
+    // This reference is not from a filter and therefore does not need to be
+    // escaped.
+
+    return RootFrameAddress;
+  }
+  Value *&Memo = FrameRecovers[{RootFrameAddress, FilterFunction}];
+  if (Memo != nullptr) {
+    // We've already referenced this variable in this filter.
+    return Memo;
+  }
+  Value *RecoveredAddress = recoverAddress(RootFrameAddress, FilterFunction);
+  Memo = RecoveredAddress;
+  return RecoveredAddress;
+}
+
+Value *GenIR::recoverAddress(Value *RootAddress, Function *FilterFunction) {
+  assert(FilterFunction != nullptr);
+  assert(isa<AllocaInst>(RootAddress));
+  assert(cast<Instruction>(RootAddress)->getParent()->getParent() ==
+         RootFunction);
+  int32_t FrameIndex = frameEscape(RootAddress);
+  BasicBlock *Prolog = &FilterFunction->getEntryBlock();
+  TerminatorInst *PrologEnd = Prolog->getTerminator();
+  assert(PrologEnd != nullptr);
+  auto SavedInsertPoint = LLVMBuilder->saveIP();
+  LLVMBuilder->SetInsertPoint(PrologEnd);
+  Value *FrameRecover = Intrinsic::getDeclaration(JitContext->CurrentModule,
+                                                  Intrinsic::framerecover);
+  Type *Int32Ty = Type::getInt32Ty(*JitContext->LLVMContext);
+  Type *Int8PtrTy = Type::getInt8PtrTy(*JitContext->LLVMContext);
+  Constant *RootFunctionAddress =
+      ConstantExpr::getBitCast(RootFunction, Int8PtrTy);
+  Value *FilterFrame = &*FilterFunction->arg_begin();
+  Value *RecoveredAddress = LLVMBuilder->CreateCall(
+      FrameRecover, {RootFunctionAddress, FilterFrame,
+                     ConstantInt::get(Int32Ty, FrameIndex)});
+  if (RecoveredAddress->getType() != RootAddress->getType()) {
+    RecoveredAddress =
+        LLVMBuilder->CreateBitCast(RecoveredAddress, RootAddress->getType());
+  }
+
+  LLVMBuilder->restoreIP(SavedInsertPoint);
+  return RecoveredAddress;
+}
+
+Value *GenIR::getReadonlyParameter(uint32_t Index) {
+  Argument *RootArgument = functionArgAt(RootFunction, Index);
+  return getReadonlyParameter(RootArgument);
+}
+
+Value *GenIR::getReadonlyParameter(Argument *Parameter) {
+  assert(Parameter->getParent() == RootFunction);
+  Function *FilterFunction = getCurrentFilter();
+  if (FilterFunction == nullptr) {
+    // This reference is not from a filter and therefore does not need to be
+    // escaped.
+
+    return Parameter;
+  }
+  Value *&Memo = FrameRecovers[{Parameter, FilterFunction}];
+  if (Memo != nullptr) {
+    // We've already referenced this parameter in this filter.
+    return Memo;
+  }
+
+  // We have to spill the parameter so we have a local to escape and look up
+  // in the filter.
+  Instruction *Alloca = createTemporary(Parameter->getType(), "spill");
+  auto SavedInsertPoint = LLVMBuilder->saveIP();
+  BasicBlock *TempBlock = Alloca->getParent();
+  if (Alloca == &TempBlock->back()) {
+    LLVMBuilder->SetInsertPoint(TempBlock);
+  } else {
+    LLVMBuilder->SetInsertPoint(Alloca->getNextNode());
+  }
+  LLVMBuilder->CreateStore(Parameter, Alloca);
+
+  // Now escape the spilled local of the root function and get a corresponding
+  // local of the filter function.
+  Instruction *RecoveredAddress =
+      cast<Instruction>(recoverAddress(Alloca, FilterFunction));
+
+  // Load the filter local since the caller wants the value.
+  assert(RecoveredAddress != &RecoveredAddress->getParent()->back());
+  LLVMBuilder->SetInsertPoint(RecoveredAddress->getNextNode());
+  Value *LoadedValue = LLVMBuilder->CreateLoad(RecoveredAddress);
+
+  // Done editing
+  LLVMBuilder->restoreIP(SavedInsertPoint);
+
+  // Record and return the result.
+  Memo = LoadedValue;
+  return LoadedValue;
+}
+
+Value *GenIR::getArgumentAddress(uint32_t Ordinal) {
+  uint32_t Index = MethodSignature.getArgIndexForILArg(Ordinal);
+  const ABIArgInfo &Info = ABIMethodSig.getArgumentInfo(Index);
+  if (Info.getKind() == ABIArgInfo::Indirect) {
+    // These are not homed (and the pointer value is unchanging), so get the
+    // value of the parameter itself.
+    return getReadonlyParameter(Index);
+  }
+  // Get the home location for this parameter.
+  return getFrameAddress(Arguments[Index]);
+}
+
 void GenIR::storeLocal(uint32_t LocalOrdinal, IRNode *Arg1,
                        ReaderAlignType Alignment, bool IsVolatile) {
   uint32_t LocalIndex = LocalOrdinal;
-  Value *LocalAddress = LocalVars[LocalIndex];
+  Value *LocalAddress = getFrameAddress(LocalVars[LocalIndex]);
   Type *LocalTy = LocalAddress->getType()->getPointerElementType();
   IRNode *Value =
       convertFromStackType(Arg1, LocalVarCorTypes[LocalIndex], LocalTy);
@@ -3701,7 +4072,7 @@ void GenIR::storeLocal(uint32_t LocalOrdinal, IRNode *Arg1,
 
 IRNode *GenIR::loadLocal(uint32_t LocalOrdinal) {
   uint32_t LocalIndex = LocalOrdinal;
-  Value *LocalAddress = LocalVars[LocalIndex];
+  Value *LocalAddress = getFrameAddress(LocalVars[LocalIndex]);
   Type *LocalTy = LocalAddress->getType()->getPointerElementType();
   const bool IsVolatile = false;
   return loadAtAddressNonNull((IRNode *)LocalAddress, LocalTy,
@@ -3711,13 +4082,13 @@ IRNode *GenIR::loadLocal(uint32_t LocalOrdinal) {
 
 IRNode *GenIR::loadLocalAddress(uint32_t LocalOrdinal) {
   uint32_t LocalIndex = LocalOrdinal;
-  return loadManagedAddress(LocalVars[LocalIndex]);
+  return loadManagedAddress(getFrameAddress(LocalVars[LocalIndex]));
 }
 
 void GenIR::storeArg(uint32_t ArgOrdinal, IRNode *Arg1,
                      ReaderAlignType Alignment, bool IsVolatile) {
   uint32_t ArgIndex = MethodSignature.getArgIndexForILArg(ArgOrdinal);
-  Value *ArgAddress = Arguments[ArgIndex];
+  Value *ArgAddress = getArgumentAddress(ArgOrdinal);
   Type *ArgTy = ArgAddress->getType()->getPointerElementType();
   const CallArgType &CallArgType = MethodSignature.getArgumentTypes()[ArgIndex];
   IRNode *Value = convertFromStackType(Arg1, CallArgType.CorType, ArgTy);
@@ -3736,7 +4107,7 @@ IRNode *GenIR::loadArg(uint32_t ArgOrdinal, bool IsJmp) {
     throw NotYetImplementedException("JMP");
   }
   uint32_t ArgIndex = MethodSignature.getArgIndexForILArg(ArgOrdinal);
-  Value *ArgAddress = Arguments[ArgIndex];
+  Value *ArgAddress = getArgumentAddress(ArgOrdinal);
 
   Type *ArgTy = ArgAddress->getType()->getPointerElementType();
   const bool IsVolatile = false;
@@ -3746,8 +4117,7 @@ IRNode *GenIR::loadArg(uint32_t ArgOrdinal, bool IsJmp) {
 }
 
 IRNode *GenIR::loadArgAddress(uint32_t ArgOrdinal) {
-  uint32_t ArgIndex = MethodSignature.getArgIndexForILArg(ArgOrdinal);
-  Value *Address = Arguments[ArgIndex];
+  Value *Address = getArgumentAddress(ArgOrdinal);
   return loadManagedAddress(Address);
 }
 
@@ -5976,6 +6346,11 @@ void GenIR::throwOpcode(IRNode *Arg1) {
   ThrowCall.setDoesNotReturn();
 }
 
+void GenIR::endFilter(IRNode *Arg1) {
+  // endfilter simply becomes a return in the filter function being outlined.
+  LLVMBuilder->CreateRet(Arg1);
+};
+
 CallSite GenIR::genConditionalHelperCall(
     Value *Condition, CorInfoHelpFunc HelperId, bool MayThrow, Type *ReturnType,
     IRNode *Arg1, IRNode *Arg2, bool CallReturns, const Twine &CallBlockName) {
@@ -6244,7 +6619,8 @@ void GenIR::leave(uint32_t TargetOffset, bool IsNonLocal,
   EHRegion *ExitToRegion = getCommonAncestor(CurrentRegion, TargetRegion);
   for (EHRegion *Leaving = CurrentRegion; Leaving != ExitToRegion;
        Leaving = Leaving->Parent) {
-    if (Leaving->Kind == ReaderBaseNS::RegionKind::RGN_MCatch) {
+    if ((Leaving->Kind == ReaderBaseNS::RegionKind::RGN_MCatch) ||
+        (Leaving->Kind == ReaderBaseNS::RegionKind::RGN_MExcept)) {
       Value *ExitCatchIntrinsic = Intrinsic::getDeclaration(
           JitContext->CurrentModule, Intrinsic::eh_endcatch);
       LLVMBuilder->CreateCall(ExitCatchIntrinsic, {});
@@ -6386,7 +6762,7 @@ IRNode *GenIR::derefAddress(IRNode *Address, bool DstIsGCPtr, bool IsConst,
 BasicBlock *GenIR::createPointBlock(uint32_t PointOffset,
                                     const Twine &BlockName) {
   BasicBlock *Block =
-      BasicBlock::Create(*JitContext->LLVMContext, BlockName, Function);
+      BasicBlock::Create(*JitContext->LLVMContext, BlockName, RootFunction);
 
   // Give the point block equal start and end offsets so subsequent processing
   // won't try to translate MSIL into it.
