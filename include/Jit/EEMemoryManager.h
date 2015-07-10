@@ -34,7 +34,7 @@ public:
   /// \param C Jit context for the method being jitted.
   EEMemoryManager(LLILCJitContext *C)
       : Context(C), HotCodeBlock(nullptr), ColdCodeBlock(nullptr),
-        ReadOnlyDataBlock(nullptr) {}
+        ReadOnlyDataBlock(nullptr), StackMapBlock(nullptr) {}
 
   /// Destroy an \p EEMemoryManager
   ~EEMemoryManager() override;
@@ -53,6 +53,10 @@ public:
   uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
                                unsigned SectionID,
                                StringRef SectionName) override;
+
+  // \brief Returns code section address.
+  // \returns Code section address.
+  uint8_t *getCodeSection();
 
   /// \brief Allocates a memory block of (at least) the given size suitable
   /// for executable code.
@@ -133,11 +137,26 @@ public:
   void deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr,
                           size_t Size) override;
 
+  /// \brief Get the LLVM Stackmap section if allocated.
+  ///
+  /// Returns a pointer to the .llvm_stackmaps section
+  /// if it is already loaded into memory.
+
+  uint8_t *getStackMapSection() { return StackMapBlock; }
+
+  /// \brief Get the HotCode section if allocated.
+  ///
+  /// Returns a pointer to the HotCode section
+  /// if it is already loaded into memory.
+
+  uint8_t *getHotCodeBlock() { return HotCodeBlock; }
+
 private:
   LLILCJitContext *Context;         ///< LLVM context for types, etc.
   uint8_t *HotCodeBlock;            ///< Memory to hold the hot method code.
   uint8_t *ColdCodeBlock;           ///< Memory to hold the cold method code.
   uint8_t *ReadOnlyDataBlock;       ///< Memory to hold the readonly data.
+  uint8_t *StackMapBlock;           ///< Memory to hold the readonly StackMap
   uint8_t *ReadOnlyDataUnallocated; ///< Address of unallocated part of RO data.
 };
 } // namespace llvm

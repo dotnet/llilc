@@ -53,5 +53,6 @@ struct Options {
   bool UseConservativeGC;   ///< True if the environment is set to use CGC.
   bool DoInsertStatepoints; ///< True if the environment calls for statepoints.
   bool DoTailCallOpt;       ///< Tail call optimization.
+  bool LogGcInfo;           ///< Generate GCInfo Translation logs
 };
 #endif // OPTIONS_H

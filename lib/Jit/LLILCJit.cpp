@@ -14,10 +14,11 @@
 //===----------------------------------------------------------------------===//
 
 #include "earlyincludes.h"
-#include "GcInfo.h"
 #include "jitpch.h"
 #include "LLILCJit.h"
+#include "GcInfo.h"
 #include "jitoptions.h"
+#include "compiler.h"
 #include "readerir.h"
 #include "abi.h"
 #include "EEMemoryManager.h"
@@ -61,7 +62,10 @@ using namespace llvm::object;
 
 class ObjectLoadListener {
 public:
-  ObjectLoadListener(LLILCJitContext *Context) { this->Context = Context; }
+  ObjectLoadListener(LLILCJitContext *Context, EEMemoryManager *MM) {
+    this->Context = Context;
+    this->MM = MM;
+  }
 
   template <typename ObjSetT, typename LoadResult>
   void operator()(llvm::orc::ObjectLinkingLayerBase::ObjSetHandleT ObjHandles,
@@ -75,15 +79,31 @@ public:
 
       getDebugInfoForObject(Obj, L);
 
+      recordRelocations(Obj);
+
       ++I;
     }
   }
 
+private:
   void getDebugInfoForObject(const ObjectFile &Obj,
                              const RuntimeDyld::LoadedObjectInfo &L);
 
+  /// \brief Record relocations for external symbols via Jit interface.
+  ///
+  /// \param Obj Object file to record relocations for.
+  void recordRelocations(const ObjectFile &Obj);
+
+  /// \brief Translate from LLVM relocation type to EE relocation type.
+  ///
+  /// \param LLVMRelocationType LLVM relocation type to translate from.
+  /// \returns EE relocation type.
+  uint64_t TranslateRelocationType(uint64_t LLVMRelocationType);
+
 private:
   LLILCJitContext *Context;
+
+  EEMemoryManager *MM;
 };
 
 // The one and only Jit Object.
@@ -155,8 +175,6 @@ void LLILCJitContext::outputDebugMethodName() {
 }
 
 void LLILCJitContext::outputSkippingMethodName() {
-  const size_t SizeOfBuffer = 512;
-  char TempBuffer[SizeOfBuffer];
   const char *DebugClassName = nullptr;
   const char *DebugMethodName = nullptr;
 
@@ -201,7 +219,7 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
   }
 
   // Set up context for this Jit request
-  LLILCJitContext Context = LLILCJitContext(PerThreadState);
+  LLILCJitContext Context(PerThreadState);
 
   // Fill in context information from the CLR
   Context.JitInfo = JitInfo;
@@ -249,7 +267,7 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
 
     // Construct the jitting layers.
     EEMemoryManager MM(&Context);
-    ObjectLoadListener Listener(&Context);
+    ObjectLoadListener Listener(&Context, &MM);
     orc::ObjectLinkingLayer<decltype(Listener)> Loader(Listener);
     auto ReserveUnwindSpace = [&MM](std::unique_ptr<object::ObjectFile> Obj) {
       MM.reserveUnwindSpace(*Obj);
@@ -258,7 +276,7 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
     orc::ObjectTransformLayer<decltype(Loader), decltype(ReserveUnwindSpace)>
         UnwindReserver(Loader, ReserveUnwindSpace);
     orc::IRCompileLayer<decltype(UnwindReserver)> Compiler(
-        UnwindReserver, orc::SimpleCompiler(*TM));
+        UnwindReserver, orc::LLILCCompiler(*TM));
 
     // Now jit the method.
     if (Context.Options->DumpLevel == DumpLevel::VERBOSE) {
@@ -283,9 +301,11 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
         Passes.run(*M);
       }
 
-      // Don't allow the LoadLayer to search for external symbols, by supplying
-      // it a NullResolver.
-      orc::NullResolver Resolver;
+      // Use a custom resolver that will tell the dynamic linker to skip
+      // relocation processing for external symbols that we create. We will
+      // report relocations for those symbols via Jit interface's
+      // recordRelocation method.
+      EESymbolResolver Resolver(&Context.NameToHandleMap);
       auto HandleSet =
           Compiler.addModuleSet<ArrayRef<Module *>>(M.get(), &MM, &Resolver);
 
@@ -295,11 +315,10 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
       // TODO: ColdCodeSize, or separated code, is not enabled or included.
       *NativeSizeOfCode = Context.HotCodeSize + Context.ReadOnlyDataSize;
 
-      // This is a stop-gap point to issue a default stub of GC info. This lets
-      // the CLR consume our methods cleanly. (and the ETW tracing still works)
-      // Down the road this will be superseded by a CLR specific
-      // GCMetadataPrinter instance or similar.
-      this->outputGCInfo(&Context);
+      GcInfoAllocator GcInfoAllocator;
+      GCInfo GcInfo(&Context, MM.getStackMapSection(), MM.getHotCodeBlock(),
+                    &GcInfoAllocator);
+      GcInfo.emitGCInfo();
 
       // Dump out any enabled timing info.
       TimerGroup::printAll(errs());
@@ -420,20 +439,6 @@ bool LLILCJit::readMethod(LLILCJitContext *JitContext) {
   return IsOk;
 }
 
-void LLILCJit::outputGCInfo(LLILCJitContext *JitContext) {
-  GcInfoAllocator Allocator;
-  GcInfoEncoder gcInfoEncoder(JitContext->JitInfo, JitContext->MethodInfo,
-                              &Allocator);
-
-  // The Encoder currently only encodes the CodeSize
-  // TODO: Encode pointer liveness information for GC-safepoints in the method
-
-  gcInfoEncoder.SetCodeLength(JitContext->HotCodeSize);
-
-  gcInfoEncoder.Build();
-  gcInfoEncoder.Emit();
-}
-
 // Notification from the runtime that any caches should be cleaned up.
 void LLILCJit::clearCache() { return; }
 
@@ -482,9 +487,7 @@ void ObjectLoadListener::getDebugInfoForObject(
 
     // Function info
     ErrorOr<StringRef> NameOrError = Symbol.getName();
-    if (!NameOrError) {
-      continue; // Error.
-    }
+    assert(NameOrError);
     StringRef Name = NameOrError.get();
     ErrorOr<uint64_t> AddrOrError = Symbol.getAddress();
     if (!AddrOrError) {
@@ -552,5 +555,59 @@ void ObjectLoadListener::getDebugInfoForObject(
 
       Context->JitInfo->setBoundaries(MethodHandle, NumDebugRanges, OM);
     }
+  }
+}
+
+void ObjectLoadListener::recordRelocations(const ObjectFile &Obj) {
+  for (section_iterator SI = Obj.section_begin(), SE = Obj.section_end();
+       SI != SE; ++SI) {
+    if (SI->isText()) {
+      section_iterator RelocatedSection = SI->getRelocatedSection();
+
+      if (RelocatedSection == SE) {
+        continue;
+      }
+
+      relocation_iterator I = SI->relocation_begin();
+      relocation_iterator E = SI->relocation_end();
+
+      for (; I != E;) {
+        symbol_iterator Symbol = I->getSymbol();
+        assert(Symbol != Obj.symbol_end());
+        section_iterator SecI(Obj.section_end());
+        Symbol->getSection(SecI);
+        const bool IsExtern = SecI == Obj.section_end();
+        if (IsExtern) {
+          // This is an external symbol. Verify that it's one we created for
+          // a global variable and report the relocation via Jit interface.
+          uint64_t RelType = I->getType();
+          uint64_t Offset = I->getOffset();
+          ErrorOr<StringRef> NameOrError = Symbol->getName();
+          assert(NameOrError);
+          StringRef TargetName = NameOrError.get();
+          assert(Context->NameToHandleMap.count(TargetName) == 1);
+          uint64_t Target = Context->NameToHandleMap[TargetName];
+          Context->JitInfo->recordRelocation(MM->getCodeSection() + Offset,
+                                             (void *)Target,
+                                             TranslateRelocationType(RelType));
+        }
+        ++I;
+      }
+    }
+  }
+}
+
+uint64_t
+ObjectLoadListener::TranslateRelocationType(uint64_t LLVMRelocationType) {
+  switch (LLVMRelocationType) {
+  case IMAGE_REL_AMD64_ABSOLUTE:
+    return IMAGE_REL_BASED_ABSOLUTE;
+  case IMAGE_REL_AMD64_ADDR64:
+    return IMAGE_REL_BASED_DIR64;
+  case IMAGE_REL_AMD64_REL32:
+    return IMAGE_REL_BASED_REL32;
+
+  default:
+    llvm_unreachable("Unknown reloc type.");
   }
 }

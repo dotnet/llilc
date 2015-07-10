@@ -17,7 +17,7 @@
 #define LLILC_JIT_H
 
 #include "Pal/LLILCPal.h"
-#include "options.h"
+#include "Reader/options.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/RuntimeDyld.h"
 #include "llvm/IR/LLVMContext.h"
@@ -93,6 +93,9 @@ public:
   llvm::Module *CurrentModule;    ///< Module holding LLVM IR.
   llvm::TargetMachine *TM;        ///< Target characteristics
   bool HasLoadedBitCode;          ///< Flag for side-loaded LLVM IR.
+  llvm::StringMap<uint64_t> NameToHandleMap; ///< Map from global variable names
+                                             ///< to the corresponding CLR
+                                             ///< handles.
   //@}
 
   /// \name ABI information
@@ -113,9 +116,10 @@ public:
 
   /// \name Jit output sizes
   //@{
-  uint32_t HotCodeSize = 0;      ///< Size of hot code section in bytes.
-  uint32_t ColdCodeSize = 0;     ///< Size of cold code section in bytes.
-  uint32_t ReadOnlyDataSize = 0; ///< Size of readonly data ref'd from code.
+  uintptr_t HotCodeSize = 0;      ///< Size of hot code section in bytes.
+  uintptr_t ColdCodeSize = 0;     ///< Size of cold code section in bytes.
+  uintptr_t ReadOnlyDataSize = 0; ///< Size of readonly data ref'd from code.
+  uintptr_t StackMapSize = 0;     ///< Size of readonly Stackmap section.
   //@}
 };
 
@@ -165,6 +169,34 @@ public:
   ///
   /// Used to build struct GEP instructions in LLVM IR for field accesses.
   std::map<CORINFO_FIELD_HANDLE, uint32_t> FieldIndexMap;
+};
+
+/// \brief Stub \p SymbolResolver that tells dynamic linker not to apply
+/// relocations for external symbols we know about.
+///
+/// The ObjectLinkingLayer takes a SymbolResolver ctor parameter.
+class EESymbolResolver : public llvm::RuntimeDyld::SymbolResolver {
+public:
+  EESymbolResolver(llvm::StringMap<uint64_t> *NameToHandleMap) {
+    this->NameToHandleMap = NameToHandleMap;
+  }
+
+  llvm::RuntimeDyld::SymbolInfo findSymbol(const std::string &Name) final {
+    // Address UINT64_MAX means that we will resolve relocations for this symbol
+    // manually and the dynamic linker will skip relocation resolution for this
+    // symbol.
+    assert(NameToHandleMap->count(Name) == 1);
+    return llvm::RuntimeDyld::SymbolInfo(UINT64_MAX,
+                                         llvm::JITSymbolFlags::None);
+  }
+
+  llvm::RuntimeDyld::SymbolInfo
+  findSymbolInLogicalDylib(const std::string &Name) final {
+    llvm_unreachable("Unexpected request to resolve a common symbol.");
+  }
+
+private:
+  llvm::StringMap<uint64_t> *NameToHandleMap;
 };
 
 /// \brief The Jit interface to the CoreCLR EE.
@@ -242,10 +274,6 @@ private:
   /// \param JitContext Context record for the method's jit request.
   /// \returns \p true if the conversion was successful.
   bool readMethod(LLILCJitContext *JitContext);
-
-  /// Output GC info to the EE.
-  /// \param JitContext Context record for the method's jit request.
-  void outputGCInfo(LLILCJitContext *JitContext);
 
 public:
   /// A pointer to the singleton jit instance.

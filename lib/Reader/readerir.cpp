@@ -22,6 +22,7 @@
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/Support/Debug.h"          // for dbgs()
+#include "llvm/Support/Format.h"         // for format()
 #include "llvm/Support/raw_ostream.h"    // for errs()
 #include "llvm/Support/ConvertUTF.h"     // for ConvertUTF16toUTF8
 #include "llvm/Transforms/Utils/Local.h" // for removeUnreachableBlocks
@@ -314,6 +315,13 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
     ASSERTNR(UNREACHED);
   }
 
+  const uint32_t JitFlags = JitContext->Flags;
+
+  if (((JitFlags & CORJIT_FLG_PREJIT) != 0) &&
+      ((JitFlags & CORJIT_FLG_IL_STUB) != 0)) {
+    throw NotYetImplementedException("il stub in ngen");
+  }
+
   if (JitContext->Options->DoInsertStatepoints) {
     createSafepointPoll();
   }
@@ -327,8 +335,6 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   if (Sig.retType == CORINFO_TYPE_REFANY) {
     throw NotYetImplementedException("Return refany");
   }
-
-  const uint32_t JitFlags = JitContext->Flags;
 
   bool HasSecretParameter = (JitFlags & CORJIT_FLG_PUBLISH_SECRET_PARAM) != 0;
 
@@ -544,31 +550,31 @@ void GenIR::readerPostPass(bool IsImportOnly) {
   delete LLVMBuilder;
 }
 
-int32_t GenIR::frameEscape(Value *FrameAddress) {
+int32_t GenIR::escapeLocal(Value *FrameAddress) {
   // Check if this address has already been escaped and return the existing
   // index if so.  The values in the memo map are offset by 1 because 0 is a
   // valid index for an escaped address but operator[] will create an entry
   // with value 0 if the key is not found.
-  int32_t &IndexPlusOne = FrameEscapes[FrameAddress];
+  int32_t &IndexPlusOne = LocalEscapes[FrameAddress];
   if (IndexPlusOne != 0) {
     return IndexPlusOne - 1;
   }
 
   // Record escaped addresses in a vector on the GenIR object so we can emit
-  // a call to @llvm.frameescape later.
-  FrameEscapeArgs.push_back(FrameAddress);
+  // a call to @llvm.localescape later.
+  LocalEscapeArgs.push_back(FrameAddress);
 
   // Record and return the index.
-  IndexPlusOne = FrameEscapeArgs.size();
+  IndexPlusOne = LocalEscapeArgs.size();
   return IndexPlusOne - 1;
 }
 
-void GenIR::emitFrameEscapeIfNeeded() {
-  if (FrameEscapeArgs.empty()) {
+void GenIR::emitLocalEscapeIfNeeded() {
+  if (LocalEscapeArgs.empty()) {
     return;
   }
 
-  // Emit the frameescape call just after the allocas for temps.
+  // Emit the localescape call just after the allocas for temps.
   IRBuilder<>::InsertPoint SavedInsertPoint = LLVMBuilder->saveIP();
   if (TempInsertionPoint == nullptr) {
     LLVMBuilder->SetInsertPoint(&RootFunction->getEntryBlock());
@@ -580,9 +586,9 @@ void GenIR::emitFrameEscapeIfNeeded() {
       LLVMBuilder->SetInsertPoint(TempInsertionPoint->getNextNode());
     }
   }
-  Value *FrameEscape = Intrinsic::getDeclaration(JitContext->CurrentModule,
-                                                 Intrinsic::frameescape);
-  LLVMBuilder->CreateCall(FrameEscape, FrameEscapeArgs);
+  Value *LocalEscape = Intrinsic::getDeclaration(JitContext->CurrentModule,
+                                                 Intrinsic::localescape);
+  LLVMBuilder->CreateCall(LocalEscape, LocalEscapeArgs);
   LLVMBuilder->restoreIP(SavedInsertPoint);
 }
 
@@ -612,7 +618,7 @@ void GenIR::insertIRToKeepGenericContextAlive() {
     ContextLocalAddress = Arguments[MethodSignature.getTypeArgIndex()];
   }
 
-  frameEscape(ContextLocalAddress);
+  escapeLocal(ContextLocalAddress);
 
   // This method now requires a frame pointer.
   // TargetMachine *TM = JitContext->TM;
@@ -641,7 +647,7 @@ void GenIR::insertIRForSecurityObject() {
   const bool IsRelocatable = true;
   const bool IsCallTarget = false;
   IRNode *MethodNode = handleToIRNode(getMethodDefFromMethod(MethodHandle),
-                                      MethodHandle, EmbeddedHandle, IsIndirect,
+                                      EmbeddedHandle, MethodHandle, IsIndirect,
                                       IsIndirect, IsRelocatable, IsCallTarget);
   CorInfoHelpFunc SecurityHelper =
       JitContext->JitInfo->getSecurityPrologHelper(MethodHandle);
@@ -1512,44 +1518,10 @@ Type *GenIR::getClassTypeWorker(
     }
 
     // Fetch the name of this type for use in dumps.
-    // Note some constructed types like arrays may not have names.
-    int32_t NameSize = 0;
-    const bool IncludeNamespace = true;
-    const bool FullInst = false;
-    const bool IncludeAssembly = false;
-    // We are using appendClassName instead of getClassName because
-    // getClassName omits namespaces from some types (e.g., nested classes).
-    // We may still get the same name for two different structs because
-    // two classes with the same fully-qualified names may live in different
-    // assemblies. In that case StructType->setName will append a unique suffix
-    // to the conflicting name.
-    NameSize = appendClassName(nullptr, &NameSize, ClassHandle,
-                               IncludeNamespace, FullInst, IncludeAssembly);
-    if (NameSize > 0) {
-      // Add one for terminating null.
-      int32_t BufferLength = NameSize + 1;
-      int32_t BufferRemaining = BufferLength;
-      char16_t *WideCharBuffer = new char16_t[BufferLength];
-      char16_t *BufferPtrToChange = WideCharBuffer;
-      appendClassName(&BufferPtrToChange, &BufferRemaining, ClassHandle,
-                      IncludeNamespace, FullInst, IncludeAssembly);
-      ASSERT(BufferRemaining == 1);
-
-      // Note that this is a worst-case estimate.
-      size_t UTF8Size = (NameSize * UNI_MAX_UTF8_BYTES_PER_CODE_POINT) + 1;
-      UTF8 *ClassName = new UTF8[UTF8Size];
-      UTF8 *UTF8Start = ClassName;
-      const UTF16 *UTF16Start = (UTF16 *)WideCharBuffer;
-      ConversionResult Result =
-          ConvertUTF16toUTF8(&UTF16Start, &UTF16Start[NameSize + 1], &UTF8Start,
-                             &UTF8Start[UTF8Size], strictConversion);
-      if (Result == conversionOK) {
-        ASSERT((size_t)(&WideCharBuffer[BufferLength] -
-                        (const char16_t *)UTF16Start) == 0);
-        StructTy->setName((char *)ClassName);
-      }
+    char *ClassName = getClassNameWithNamespace(ClassHandle);
+    if (ClassName != nullptr) {
+      StructTy->setName((char *)ClassName);
       delete[] ClassName;
-      delete[] WideCharBuffer;
     }
   }
 
@@ -2000,6 +1972,52 @@ void GenIR::createOverlapFields(
   OverlapFields.clear();
 }
 
+char *GenIR::getClassNameWithNamespace(CORINFO_CLASS_HANDLE ClassHandle) {
+  // Fetch the name of this type.
+  // Note some constructed types like arrays may not have names.
+  int32_t NameSize = 0;
+  const bool IncludeNamespace = true;
+  const bool FullInst = false;
+  const bool IncludeAssembly = false;
+  // We are using appendClassName instead of getClassName because
+  // getClassName omits namespaces from some types (e.g., nested classes).
+  // We may still get the same name for two different classes because
+  // two classes with the same fully-qualified names may live in different
+  // assemblies.
+  NameSize = appendClassName(nullptr, &NameSize, ClassHandle, IncludeNamespace,
+                             FullInst, IncludeAssembly);
+  if (NameSize > 0) {
+    // Add one for terminating null.
+    int32_t BufferLength = NameSize + 1;
+    int32_t BufferRemaining = BufferLength;
+    char16_t *WideCharBuffer = new char16_t[BufferLength];
+    char16_t *BufferPtrToChange = WideCharBuffer;
+    appendClassName(&BufferPtrToChange, &BufferRemaining, ClassHandle,
+                    IncludeNamespace, FullInst, IncludeAssembly);
+    ASSERT(BufferRemaining == 1);
+
+    // Note that this is a worst-case estimate.
+    size_t UTF8Size = (NameSize * UNI_MAX_UTF8_BYTES_PER_CODE_POINT) + 1;
+    UTF8 *ClassName = new UTF8[UTF8Size];
+    UTF8 *UTF8Start = ClassName;
+    const UTF16 *UTF16Start = (UTF16 *)WideCharBuffer;
+    ConversionResult Result =
+        ConvertUTF16toUTF8(&UTF16Start, &UTF16Start[NameSize + 1], &UTF8Start,
+                           &UTF8Start[UTF8Size], strictConversion);
+    delete[] WideCharBuffer;
+    if (Result == conversionOK) {
+      assert((size_t)(&WideCharBuffer[BufferLength] -
+                      (const char16_t *)UTF16Start) == 0);
+      return (char *)ClassName;
+    } else {
+      delete[] ClassName;
+      return nullptr;
+    }
+  } else {
+    return nullptr;
+  }
+}
+
 Type *GenIR::getBoxedType(CORINFO_CLASS_HANDLE Class) {
   assert(JitContext->JitInfo->isValueClass(Class));
 
@@ -2014,6 +2032,17 @@ Type *GenIR::getBoxedType(CORINFO_CLASS_HANDLE Class) {
 
   CorInfoType CorType = ReaderBase::getClassType(TypeToBox);
   Type *ValueType = getType(CorType, TypeToBox);
+
+  if (CorType == CORINFO_TYPE_CLASS) {
+    // NGen will try to compile __Canon instantiations for all generic types.
+    // It does not check constraints to see whether __Canon instantiation is
+    // useful. Because of that Class here may be Nullable<__Canon> even though
+    // __Canon is a reference type and Nullable<T> has a constraint that T is a
+    // value class. In that case getTypeForBox returns __Canon. Match what
+    // RyuJit does and type the result as __Canon.
+    assert((JitContext->Flags & CORJIT_FLG_PREJIT) != 0);
+    return ValueType;
+  }
 
   // Treat the boxed type as a subclass of Object with a single field of the
   // source type.
@@ -2503,7 +2532,6 @@ PointerType *GenIR::createArrayOfElementType(llvm::Type *ElementTy) {
 
   const uint32_t ArrayRank = 1;
   const bool IsZeroLowerBoundSDArray = true;
-  const bool GetElementAggregateFields = true;
   addArrayFields(Fields, IsZeroLowerBoundSDArray, ArrayRank, ElementTy);
 
   // Install fields and give this a recognizable name.
@@ -2665,8 +2693,8 @@ FlowGraphNode *GenIR::fgSplitBlock(FlowGraphNode *Block, IRNode *Node) {
 
 void GenIR::readerPostVisit() {
   // Now that we have the full set of escaping frame locations, emit the
-  // call to @llvm.frameescape
-  emitFrameEscapeIfNeeded();
+  // call to @llvm.localescape
+  emitLocalEscapeIfNeeded();
 
   for (Function &F : JitContext->CurrentModule->functions()) {
     if (F.isDeclaration()) {
@@ -3017,8 +3045,7 @@ void GenIR::genHandlerDispatch(EHRegion *HandlerRegion, Value *DoEnter,
   Value *CastExnPtrAddr = LLVMBuilder->CreateBitCast(ExnPtrAddr, Int8PtrTy);
   Value *BeginCatchCallee = Intrinsic::getDeclaration(JitContext->CurrentModule,
                                                       Intrinsic::eh_begincatch);
-  Value *BeginCatch = LLVMBuilder->CreateCall(BeginCatchCallee,
-                                              {FauxException, CastExnPtrAddr});
+  LLVMBuilder->CreateCall(BeginCatchCallee, {FauxException, CastExnPtrAddr});
   // The catch handler code itself expects the exception pointer to be on
   // the evaluation stack.
   IRNode *ExnPtr = (IRNode *)LLVMBuilder->CreateLoad(ExnPtrAddr);
@@ -3153,7 +3180,8 @@ void GenIR::replaceFlowGraphNodeUses(FlowGraphNode *OldNode,
 
 bool fgEdgeListIsNominal(FlowGraphEdgeList *FgEdge) {
   BasicBlock *Successor = (BasicBlock *)fgEdgeListGetSink(FgEdge);
-  return Successor->isLandingPad();
+  Instruction *First = Successor->getFirstNonPHI();
+  return (First != nullptr) && isa<LandingPadInst>(First);
 }
 
 // Hook called from reader fg builder to identify potential inline candidates.
@@ -3418,10 +3446,16 @@ IRNode *GenIR::loadConstantI(size_t Constant) {
 }
 
 IRNode *GenIR::loadConstantR4(float Value) {
+  if ((JitContext->Flags & CORJIT_FLG_PREJIT) != 0) {
+    throw NotYetImplementedException("ldc.r4 in ngen");
+  }
   return (IRNode *)ConstantFP::get(*JitContext->LLVMContext, APFloat(Value));
 }
 
 IRNode *GenIR::loadConstantR8(double Value) {
+  if ((JitContext->Flags & CORJIT_FLG_PREJIT) != 0) {
+    throw NotYetImplementedException("ldc.r8 in ngen");
+  }
   return (IRNode *)ConstantFP::get(*JitContext->LLVMContext, APFloat(Value));
 }
 
@@ -3957,7 +3991,7 @@ Value *GenIR::getFrameAddress(Value *RootFrameAddress) {
 
     return RootFrameAddress;
   }
-  Value *&Memo = FrameRecovers[{RootFrameAddress, FilterFunction}];
+  Value *&Memo = LocalRecovers[{RootFrameAddress, FilterFunction}];
   if (Memo != nullptr) {
     // We've already referenced this variable in this filter.
     return Memo;
@@ -3972,22 +4006,22 @@ Value *GenIR::recoverAddress(Value *RootAddress, Function *FilterFunction) {
   assert(isa<AllocaInst>(RootAddress));
   assert(cast<Instruction>(RootAddress)->getParent()->getParent() ==
          RootFunction);
-  int32_t FrameIndex = frameEscape(RootAddress);
+  int32_t LocalIndex = escapeLocal(RootAddress);
   BasicBlock *Prolog = &FilterFunction->getEntryBlock();
   TerminatorInst *PrologEnd = Prolog->getTerminator();
   assert(PrologEnd != nullptr);
   auto SavedInsertPoint = LLVMBuilder->saveIP();
   LLVMBuilder->SetInsertPoint(PrologEnd);
-  Value *FrameRecover = Intrinsic::getDeclaration(JitContext->CurrentModule,
-                                                  Intrinsic::framerecover);
+  Value *LocalRecover = Intrinsic::getDeclaration(JitContext->CurrentModule,
+                                                  Intrinsic::localrecover);
   Type *Int32Ty = Type::getInt32Ty(*JitContext->LLVMContext);
   Type *Int8PtrTy = Type::getInt8PtrTy(*JitContext->LLVMContext);
   Constant *RootFunctionAddress =
       ConstantExpr::getBitCast(RootFunction, Int8PtrTy);
   Value *FilterFrame = &*FilterFunction->arg_begin();
   Value *RecoveredAddress = LLVMBuilder->CreateCall(
-      FrameRecover, {RootFunctionAddress, FilterFrame,
-                     ConstantInt::get(Int32Ty, FrameIndex)});
+      LocalRecover, {RootFunctionAddress, FilterFrame,
+                     ConstantInt::get(Int32Ty, LocalIndex)});
   if (RecoveredAddress->getType() != RootAddress->getType()) {
     RecoveredAddress =
         LLVMBuilder->CreateBitCast(RecoveredAddress, RootAddress->getType());
@@ -4011,7 +4045,7 @@ Value *GenIR::getReadonlyParameter(Argument *Parameter) {
 
     return Parameter;
   }
-  Value *&Memo = FrameRecovers[{Parameter, FilterFunction}];
+  Value *&Memo = LocalRecovers[{Parameter, FilterFunction}];
   if (Memo != nullptr) {
     // We've already referenced this parameter in this filter.
     return Memo;
@@ -5410,12 +5444,52 @@ bool GenIR::canMakeDirectCall(ReaderCallTargetData *CallTargetData) {
   return !CallTargetData->isJmp();
 }
 
-IRNode *GenIR::makeDirectCallTargetNode(void *CodeAddr) {
-  uint32_t NumBits = TargetPointerSizeInBits;
-  bool IsSigned = false;
+GlobalVariable *GenIR::getGlobalVariable(uint64_t LookupHandle,
+                                         uint64_t ValueHandle, Type *Ty,
+                                         StringRef Name, bool IsConstant) {
+  GlobalVariable *&GlobalVar = HandleToGlobalVariableMap[LookupHandle];
 
-  ConstantInt *CodeAddrValue = ConstantInt::get(
-      *JitContext->LLVMContext, APInt(NumBits, (uint64_t)CodeAddr, IsSigned));
+  if (GlobalVar == nullptr) {
+    Constant *Initializer = nullptr;
+    const bool IsExternallyInitialized = false;
+    const GlobalValue::LinkageTypes LinkageType =
+        GlobalValue::LinkageTypes::ExternalLinkage;
+    GlobalVariable *const InsertBefore = nullptr;
+    unsigned int AddressSpace = 0;
+
+    GlobalVar = new GlobalVariable(*JitContext->CurrentModule, Ty, IsConstant,
+                                   LinkageType, Initializer, Name, InsertBefore,
+                                   GlobalValue::NotThreadLocal, AddressSpace,
+                                   IsExternallyInitialized);
+    StringRef ResultName = GlobalVar->getName();
+    if (NameToHandleMap->count(ResultName) == 1) {
+      assert((*NameToHandleMap)[ResultName] == ValueHandle);
+    } else {
+      (*NameToHandleMap)[ResultName] = ValueHandle;
+    }
+  }
+
+  return GlobalVar;
+}
+
+IRNode *GenIR::makeDirectCallTargetNode(CORINFO_METHOD_HANDLE MethodHandle,
+                                        mdToken MethodToken, void *CodeAddr) {
+  uint64_t Handle = (uint64_t)CodeAddr;
+  Type *CodeAddrTy =
+      Type::getIntNTy(*JitContext->LLVMContext, TargetPointerSizeInBits);
+  const bool IsConstant = true;
+  const char *ModuleName = nullptr;
+  const char *MethodName =
+      JitContext->JitInfo->getMethodName(MethodHandle, &ModuleName);
+
+  std::string FullName;
+  raw_string_ostream OS(FullName);
+  OS << format("%s.%s(TK_%x)", ModuleName, MethodName, MethodToken);
+  OS.flush();
+  GlobalVariable *GlobalVar =
+      getGlobalVariable(Handle, Handle, CodeAddrTy, FullName, IsConstant);
+
+  Value *CodeAddrValue = LLVMBuilder->CreatePtrToInt(GlobalVar, CodeAddrTy);
 
   return (IRNode *)CodeAddrValue;
 }
@@ -5900,6 +5974,14 @@ IRNode *GenIR::conv(ReaderBaseNS::ConvOpcode Opcode, IRNode *Source) {
       {CorInfoType::CORINFO_TYPE_DOUBLE, false, true}       // CONV_R_UN
   };
 
+  if ((JitContext->Flags & CORJIT_FLG_PREJIT) != 0) {
+    if ((Opcode == ReaderBaseNS::ConvOpcode::ConvR4) ||
+        (Opcode == ReaderBaseNS::ConvOpcode::ConvR8) ||
+        (Opcode == ReaderBaseNS::ConvOpcode::ConvRUn)) {
+      throw NotYetImplementedException("conv.r4, conv.r8, or conv.run in ngen");
+    }
+  }
+
   ConvertInfo Info = Map[Opcode];
 
   Type *TargetTy = getType(Info.CorType, nullptr);
@@ -6325,6 +6407,13 @@ bool GenIR::memoryBarrier() {
 }
 
 void GenIR::switchOpcode(IRNode *Opr) {
+
+  const uint32_t JitFlags = JitContext->Flags;
+
+  if ((JitFlags & CORJIT_FLG_PREJIT) != 0) {
+    throw NotYetImplementedException("switch in ngen");
+  }
+
   // We split the block right after the switch during the flow-graph build.
   // The terminator is switch instruction itself.
   // Now condition operand is updated.
@@ -6682,23 +6771,142 @@ IRNode *GenIR::handleToIRNode(mdToken Token, void *EmbHandle, void *RealHandle,
     throw NotYetImplementedException("NYI handle cases");
   }
 
-  // TODO: There is more work for ngen scenario here. We are ignoring
-  // fRelocatable and realHandle for now.
+  uint64_t LookupHandle =
+      RealHandle ? (uint64_t)RealHandle : (uint64_t)EmbHandle;
+  uint64_t ValueHandle = (uint64_t)EmbHandle;
 
-  uint32_t NumBits = TargetPointerSizeInBits;
-  bool IsSigned = false;
+  Value *HandleValue = nullptr;
+  Type *HandleTy = Type::getIntNTy(LLVMContext, TargetPointerSizeInBits);
 
-  Value *HandleValue = ConstantInt::get(
-      LLVMContext, APInt(NumBits, (uint64_t)EmbHandle, IsSigned));
+  if (IsRelocatable) {
+    std::string HandleName =
+        GetNameForToken(Token, (CORINFO_GENERIC_HANDLE)LookupHandle,
+                        getCurrentContext(), getCurrentModuleHandle());
+    GlobalVariable *GlobalVar = getGlobalVariable(
+        LookupHandle, ValueHandle, HandleTy, HandleName, IsReadOnly);
+    HandleValue = LLVMBuilder->CreatePtrToInt(GlobalVar, HandleTy);
+  } else {
+    uint32_t NumBits = TargetPointerSizeInBits;
+    bool IsSigned = false;
+
+    HandleValue = ConstantInt::get(
+        LLVMContext, APInt(NumBits, (uint64_t)EmbHandle, IsSigned));
+  }
 
   if (IsIndirect) {
-    Type *HandleTy = Type::getIntNTy(LLVMContext, TargetPointerSizeInBits);
     Type *HandlePtrTy = getUnmanagedPointerType(HandleTy);
     Value *HandlePtr = LLVMBuilder->CreateIntToPtr(HandleValue, HandlePtrTy);
     HandleValue = LLVMBuilder->CreateLoad(HandlePtr);
   }
 
   return (IRNode *)HandleValue;
+}
+
+std::string GenIR::GetNameForToken(mdToken Token, CORINFO_GENERIC_HANDLE Handle,
+                                   CORINFO_CONTEXT_HANDLE Context,
+                                   CORINFO_MODULE_HANDLE Scope) {
+  std::string Storage;
+  raw_string_ostream OS(Storage);
+
+  // DEBUG ONLY: Find the real name based on the token/context/scope
+  switch (TypeFromToken(Token)) {
+  case mdtJitHelper:
+    OS << JitContext->JitInfo->getHelperName(
+              (CorInfoHelpFunc)RidFromToken(Token)) << "::JitHelper";
+    break;
+  case mdtVarArgsHandle:
+    OS << GetNameForToken(TokenFromRid(RidFromToken(Token), mdtMemberRef),
+                          Handle, Context, Scope) << "::VarArgsHandle";
+    break;
+  case mdtVarArgsMDHandle:
+    OS << GetNameForToken(TokenFromRid(RidFromToken(Token), mdtMethodDef),
+                          Handle, Context, Scope) << "::VarArgsHandle";
+    break;
+  case mdtVarArgsMSHandle:
+    OS << GetNameForToken(TokenFromRid(RidFromToken(Token), mdtMethodSpec),
+                          Handle, Context, Scope) << "::VarArgsHandle";
+    break;
+  case mdtVarArgsSigHandle:
+    OS << GetNameForToken(TokenFromRid(RidFromToken(Token), mdtSignature),
+                          Handle, Context, Scope) << "::VarArgsHandle";
+    break;
+  case mdtInterfaceOffset:
+    OS << "InterfaceOffset";
+    break;
+  case mdtCodeOffset:
+    OS << "CodeOffset";
+    break;
+  case mdtPInvokeCalliHandle:
+    OS << "PinvokeCalliHandle";
+    break;
+  case mdtIBCProfHandle:
+    OS << "IBCProfHandle";
+    break;
+  case mdtMBReturnHandle:
+    OS << "MBReturnHandle";
+    break;
+  case mdtSyncHandle:
+    OS << "SyncHandle";
+    break;
+  case mdtGSCookie:
+    OS << "GSCookieAddr";
+    break;
+  case mdtJMCHandle:
+    OS << "JMCHandle";
+    break;
+  case mdtCaptureThreadGlobal:
+    OS << "CaptureThreadGlobal";
+    break;
+  case mdtSignature:
+    // findNameOfToken doesn't do anythign interesting and getMemberParent
+    // asserts so special case it here.
+    OS << format("Signature(TK_%x)", Token);
+    break;
+  case mdtString:
+    OS << format("String(TK_%x)", Token);
+    break;
+  case mdtModule:
+    // Can't get the parent of a module, because it's the 'root'
+    assert(Token == mdtModule);
+    OS << "ModuleHandle";
+    break;
+  case mdtModuleID:
+    OS << format("EmbeddedModuleID(%x)", Token);
+    break;
+  case mdtMethodHandle: {
+    const char *MethodName;
+    const char *ModuleName = NULL;
+    MethodName = JitContext->JitInfo->getMethodName(
+        (CORINFO_METHOD_HANDLE)Handle, &ModuleName);
+    OS << format("TypeContext(%s.%s)", ModuleName, MethodName);
+  } break;
+  case mdtClassHandle: {
+    char *ClassName = getClassNameWithNamespace((CORINFO_CLASS_HANDLE)Handle);
+    if (ClassName != nullptr) {
+      OS << format("TypeContext(%s)", ClassName);
+      delete[] ClassName;
+    }
+  } break;
+  default:
+    char Buffer[MAX_CLASSNAME_LENGTH];
+    JitContext->JitInfo->findNameOfToken(Scope, Token, Buffer, COUNTOF(Buffer));
+    OS << format("%s", &Buffer[0]);
+    break;
+  }
+
+  OS.flush();
+
+  if (Storage.empty()) {
+    assert(Handle != 0);
+    if (RidFromToken(Token) == 0) {
+      OS << format("!handle_%Ix", Handle);
+    } else {
+      OS << format("!TK_%x_handle_%Ix", Token, Handle);
+    }
+    OS.flush();
+  }
+
+  return Storage;
 }
 
 IRNode *GenIR::makeRefAnyDstOperand(CORINFO_CLASS_HANDLE Class) {
@@ -7858,10 +8066,6 @@ Type *GenIR::getStackMergeType(Type *Ty1, Type *Ty2, bool IsStruct1,
       // Arbitrarily pick Ty1 as the resulting type.
       return Ty1;
     }
-  }
-
-  if (Ty1->isStructTy() && Ty2->isStructTy()) {
-    throw NotYetImplementedException("mismatching PHI struct types");
   }
 
   ASSERT(UNREACHED);

@@ -38,7 +38,12 @@ uint8_t *EEMemoryManager::allocateCodeSection(uintptr_t Size,
                                               unsigned int Alignment,
                                               unsigned int SectionID,
                                               StringRef SectionName) {
-  // ColdCodeBlock is not currently used.
+  // TODO: ColdCodeBlock is not currently used.
+  return this->HotCodeBlock;
+}
+
+uint8_t *EEMemoryManager::getCodeSection() {
+  // TODO: ColdCodeBlock is not currently used.
   return this->HotCodeBlock;
 }
 
@@ -65,6 +70,14 @@ uint8_t *EEMemoryManager::allocateDataSection(uintptr_t Size,
   // Make sure we are not allocating more than we expected to.
   assert(ReadOnlyDataUnallocated <=
          (ReadOnlyDataBlock + this->Context->ReadOnlyDataSize));
+
+  if (SectionName.equals(".llvm_stackmaps")) {
+    assert((this->StackMapBlock == nullptr) &&
+           "Unexpected second Stackmap Section");
+
+    this->Context->StackMapSize = Size;
+    this->StackMapBlock = Result;
+  }
 
   return Result;
 }
@@ -176,14 +189,14 @@ void EEMemoryManager::reserveAllocationSpace(uintptr_t CodeSize,
                                              uintptr_t DataSizeRO,
                                              uintptr_t DataSizeRW) {
   // Treat all code for now as "hot section"
-  uint32_t HotCodeSize = CodeSize;
-  uint32_t ColdCodeSize = 0;
+  uintptr_t HotCodeSize = CodeSize;
+  uintptr_t ColdCodeSize = 0;
 
   // We still need to allocate space for the RO data here too, because
   // LLVM's dynamic loader does not know where the EE's reservation was made.
   // So this gives the dyamic loader room to copy the RO sections, and later
   // the EE will copy from there to the place it really keeps unwind data.
-  uint32_t ReadOnlyDataSize = DataSizeRO;
+  uintptr_t ReadOnlyDataSize = DataSizeRO;
   uint32_t ExceptionCount = 0;
 
   // Remap alignment to the EE notion of alignment
