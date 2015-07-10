@@ -813,7 +813,7 @@ public:
   /// \param Context Context to use for name generation..
   /// \param Scope Scope to use for name generation.
   /// \returns Name for the given token, handle, context, and scope.
-  std::string GetNameForToken(mdToken Token, CORINFO_GENERIC_HANDLE Handle,
+  std::string getNameForToken(mdToken Token, CORINFO_GENERIC_HANDLE Handle,
                               CORINFO_CONTEXT_HANDLE Context,
                               CORINFO_MODULE_HANDLE Scope);
 
@@ -1406,7 +1406,7 @@ private:
   ///
   /// \param PHI PHI instruction.
   /// \param NewOperand Operand to add to the PHI instruction.
-  void AddPHIOperand(llvm::PHINode *PHI, llvm::Value *NewOperand,
+  void addPHIOperand(llvm::PHINode *PHI, llvm::Value *NewOperand,
                      llvm::BasicBlock *NewBlock);
 
   /// Change the type of a PHI instruction operand as a result of a stack merge.
@@ -1415,7 +1415,7 @@ private:
   /// \param OperandBlock Basic block corresponding to the operand.
   /// \param NewTy New type of the operand.
   /// \returns Operand with the changed type.
-  llvm::Value *ChangePHIOperandType(llvm::Value *Operand,
+  llvm::Value *changePHIOperandType(llvm::Value *Operand,
                                     llvm::BasicBlock *OperandBlock,
                                     llvm::Type *NewTy);
 

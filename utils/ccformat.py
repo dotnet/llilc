@@ -13,13 +13,7 @@ def expandPath(path):
     return os.path.abspath(os.path.expanduser(path))
 
 def runTidy(args):
-  if args.llilc_source == None:
-    print >> sys.stderr, "Please specify --llilc-source or set the " \
-                          "LLILC_SOURCE environment variable."
-    return 1
-
   tidyFix = "-fix" if args.fix else ""
-
   osInc = ""
   osIncList = []
 
@@ -35,14 +29,21 @@ def runTidy(args):
 
     if args.llvm_source is None:
       print >> sys.stderr, "Please specify --llvm-source or set the " \
-                           "LLVM_SOURCE environment variable."
+                           "LLVMSOURCE environment variable."
       return 1
 
     if args.llvm_build is None:
       print >> sys.stderr, "Please specify --llvm-build or set the " \
-                           "LLVM_BUILD environment variable."
+                           "LLVMBUILD environment variable."
       return 1
 
+    if args.coreclr_build is None:
+      print >> sys.stderr, "Please specify --coreclr-build or set the " \
+                           "CORECLRBUILD environment variable."
+      return 1
+
+    coreclrbuild = expandPath(args.coreclr_build)
+    llvmbuild = expandPath(args.llvm_build)
     llilcSrc = expandPath(args.llilc_source)
     llilcBuild = ""
     if args.llilc_build != None:
@@ -65,12 +66,17 @@ def runTidy(args):
         os.path.join(expandPath(args.llvm_source), "include"),
         os.path.join(llilcInc, "clr"),
         os.path.join(llilcInc, "Driver"),
+        os.path.join(llilcInc, "GcInfo"),
         os.path.join(llilcInc, "Jit"),
-        os.path.join(llilcInc, "Reader"),
         os.path.join(llilcInc, "Pal"),
+        os.path.join(llilcInc, "Reader"),
         os.path.join(llilcBuild, "lib", "Reader"),
         os.path.join(llilcBuild, "include"),
-        os.path.join(expandPath(args.llvm_build), "include")
+        os.path.join(llvmbuild, "include")
+    ]
+    clrincludes = [
+        os.path.join(coreclrbuild, "inc"),
+        os.path.join(coreclrbuild, "gcinfo")
     ]
     defines = [
         "_DEBUG",
@@ -87,11 +93,21 @@ def runTidy(args):
         "LLILCJit_EXPORTS",
         "_WINDLL",
         "_MBCS",
-        "NOMINMAX"
+        "NOMINMAX",
+        "STANDALONE_BUILD",
+        "LLILC_TARGET_TRIPLE=\\\"\\\""
     ]
-
+    excludes = [
+        # Contains utility functions used by the standalone build
+        # of CoreCLR's GcInfo encoder implementation
+        "GcInfoUtil.cpp",
+        # ABI code uses some variable names with underscores, 
+        # by convention.
+        "abi.cpp"
+    ]
     clangArgs = " ".join(["--"] + flags 
                          + ["-I" + i for i in includes] \
+                         + ["-isystem" + i for i in clrincludes] \
                          + ["-isystem" + i for i in osIncList] \
                          + ["-D" + d for d in defines])
   else:
@@ -101,20 +117,30 @@ def runTidy(args):
   for dirname,subdir,files in os.walk(llilcSrc):
     for filename in files:
       if filename.endswith(".c") or filename.endswith(".cpp"):
+        if filename in excludes:
+            continue
         filepath = os.path.join(dirname, filename)
-        errorlevel = subprocess.call(" ".join([args.clang_tidy, tidyFix,
+        proc = subprocess.Popen(" ".join([args.clang_tidy, tidyFix,
             "-checks=" + args.checks,
             "-header-filter=\"" + llilcSrc + ".*(Reader)|(Jit)|(Pal)\"",
-            filepath, clangArgs]), shell=True)
-        if errorlevel == 1:
-          returncode = 1
-  
+            filepath, clangArgs]), shell=True, 
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        output,error = proc.communicate()
+
+        # Fail if there are any errors or warnings.
+        # error only contains a message about suppressed warnings
+        # output may contain errors/warnings about coding conventions
+        warnings = io.StringIO(output.decode('utf-8')).read()
+        if len(warnings) > 0:
+            sys.stdout.write(warnings)
+            returncode = -2
+		  
   return returncode
 
 def runFormat(args):
   formatFix = "-i" if args.fix else ""
   returncode = 0
-  llilcSrc = expandPath(args.llilc_source)
 
   llilcSrc = expandPath(args.llilc_source)
   for dirname,subdir,files in os.walk(llilcSrc):
@@ -174,6 +200,10 @@ def main(argv):
             help="path to LLVM sources. If not specified, defaults to the " \
                   "value of the LLVMSOURCE environment variable. Only used " \
                   "when a compile commands database has not been specified.")
+  parser.add_argument("--coreclr-build", metavar="PATH",
+            default=os.environ.get("CORECLRBUILD"),
+            help="path to CoreCLR build. Only used when a compile commands " \
+                 "database has not been specified.")			
   parser.add_argument("--llilc-build", metavar="PATH",
             default=None if llvmBuild is None else \
                 os.path.join(llvmBuild, "tools", "llilc"), \
@@ -184,8 +214,8 @@ def main(argv):
             help="path to LLILC sources")
   parser.add_argument("--fix", action="store_true", default=False,
             help="fix failures when possible")
-  parser.add_argument("--tidy", action="store_true", default=False,
-            help="Run clang-tidy")
+  parser.add_argument("--untidy", action="store_true", default=False,
+            help="Don't run clang-tidy")
   parser.add_argument("--noformat", action="store_true", default=False,
             help="Don\'t run clang-format-diff")
   parser.add_argument("--checks", default="llvm*,misc*,microsoft*,"\
@@ -197,10 +227,10 @@ def main(argv):
   
   if unknown:
     print("Unknown argument(s): ", ", ".join(unknown))
-    return -2
+    return -3
   
   returncode=0
-  if args.tidy:
+  if not args.untidy:
     returncode = runTidy(args)
     if returncode != 0:
       return returncode
