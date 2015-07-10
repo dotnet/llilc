@@ -101,9 +101,14 @@ void EEMemoryManager::reserveAllocationSpace(uintptr_t CodeSize,
 
   // We still need to allocate space for the RO data here too, because
   // LLVM's dynamic loader does not know where the EE's reservation was made.
-  // So this gives the dyamic loader room to copy the RO sections, and later
+  // So this gives the dynamic loader room to copy the RO sections, and later
   // the EE will copy from there to the place it really keeps unwind data.
-  uintptr_t ReadOnlyDataSize = DataSizeRO;
+
+  // RODataBlock we get back is either 8 bytes or pointer-size aligned. If the
+  // first section we place in that block is 16 bytes aligned (e.g., for a
+  // constant pool), we may need to add padding. Overallocate by 16 bytes to
+  // account for that.
+  uintptr_t ReadOnlyDataSize = DataSizeRO + 16;
   uint32_t ExceptionCount = 0;
 
   // Remap alignment to the EE notion of alignment

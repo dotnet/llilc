@@ -28,6 +28,7 @@
 #include "readerir.h"
 #include "abi.h"
 #include "abisignature.h"
+#include "imeta.h"
 #include <cstdint>
 #include <cassert>
 
@@ -209,22 +210,24 @@ CallSite ABICallSignature::emitUnmanagedCall(GenIR &Reader, Value *Target,
   void *AddrOfCaptureThreadGlobal =
       (void *)JitContext.JitInfo->getAddrOfCaptureThreadGlobal(
           &IndirectAddrOfCaptureThreadGlobal);
+  void *AddrOfCaptureThreadHandle;
+  bool IsIndirect;
+  const bool IsReadOnly = true;
+  const bool IsRelocatable = true;
+  const bool IsCallTarget = false;
   if (AddrOfCaptureThreadGlobal != nullptr) {
-    Value *RawThreadTrapAddress = ConstantInt::get(
-        LLVMContext, APInt(Reader.TargetPointerSizeInBits,
-                           (uint64_t)AddrOfCaptureThreadGlobal));
-    ThreadTrapAddress =
-        Builder.CreateIntToPtr(RawThreadTrapAddress, ThreadTrapAddressTy);
+    AddrOfCaptureThreadHandle = AddrOfCaptureThreadGlobal;
+    IsIndirect = false;
   } else {
-    Value *IndirectThreadTrapAddress = ConstantInt::get(
-        LLVMContext, APInt(Reader.TargetPointerSizeInBits,
-                           (uint64_t)IndirectAddrOfCaptureThreadGlobal));
-    Type *IndirectAddressTy =
-        Reader.getUnmanagedPointerType(ThreadTrapAddressTy);
-    Value *TypedIndirectAddress =
-        Builder.CreateIntToPtr(IndirectThreadTrapAddress, IndirectAddressTy);
-    ThreadTrapAddress = Builder.CreateLoad(TypedIndirectAddress);
+    AddrOfCaptureThreadHandle = IndirectAddrOfCaptureThreadGlobal;
+    IsIndirect = true;
   }
+  Value *RawThreadTrapAddress =
+      Reader.handleToIRNode(mdtCaptureThreadGlobal, AddrOfCaptureThreadHandle,
+                            AddrOfCaptureThreadHandle, IsIndirect, IsReadOnly,
+                            IsRelocatable, IsCallTarget);
+  ThreadTrapAddress =
+      Builder.CreateIntToPtr(RawThreadTrapAddress, ThreadTrapAddressTy);
 
   // Compute address of GC pause helper
   Value *PauseHelperAddress =

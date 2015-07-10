@@ -290,11 +290,6 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
 
   const uint32_t JitFlags = JitContext->Flags;
 
-  if (((JitFlags & CORJIT_FLG_PREJIT) != 0) &&
-      ((JitFlags & CORJIT_FLG_IL_STUB) != 0)) {
-    throw NotYetImplementedException("il stub in ngen");
-  }
-
   if (JitContext->Options->DoInsertStatepoints) {
     createSafepointPoll();
   }
