@@ -474,7 +474,7 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
 
 void GenIR::readerMiddlePass() { return; }
 
-void GenIR::readerPostPass(bool IsImportOnly) {
+void GenIR::readerPostVisit() {
   // If the generic context must be kept live, make it so.
   if (KeepGenericContextAlive) {
     insertIRToKeepGenericContextAlive();
@@ -484,7 +484,9 @@ void GenIR::readerPostPass(bool IsImportOnly) {
   if (NeedsSecurityObject) {
     insertIRForSecurityObject();
   }
+}
 
+void GenIR::readerPostPass(bool IsImportOnly) {
   if (JitContext->Options->DoInsertStatepoints) {
 
     // Precise GC using statepoints cannot handle aggregates that contain

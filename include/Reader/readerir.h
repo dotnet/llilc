@@ -520,6 +520,9 @@ public:
   // Called between building the flow graph and inserting the IR
   void readerMiddlePass(void) override;
 
+  // Called after reading all MSIL, before removing unreachable blocks
+  void readerPostVisit() override;
+
   // Called when reader has finished processing method.
   void readerPostPass(bool IsImportOnly) override;
 
