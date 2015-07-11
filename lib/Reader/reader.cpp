@@ -8060,6 +8060,10 @@ void ReaderBase::msilToIR(void) {
     }
   }
 
+  // Give client a chance to do any bookkeeping necessary after reading MSIL
+  // for all blocks but before removing unreachable ones.
+  readerPostVisit();
+
   // Remove blocks that weren't marked as visited.
   fgRemoveUnusedBlocks(FgHead);
 
