@@ -164,24 +164,6 @@ extern "C" void __stdcall sxsJitStartup(void *CcCallbacks) {
   // nothing to do
 }
 
-void LLILCJitContext::outputDebugMethodName() {
-  const char *DebugClassName = nullptr;
-  const char *DebugMethodName = nullptr;
-
-  DebugMethodName = JitInfo->getMethodName(MethodInfo->ftn, &DebugClassName);
-  dbgs() << format("INFO:  jitting method %s::%s using LLILCJit\n",
-                   DebugClassName, DebugMethodName);
-}
-
-void LLILCJitContext::outputSkippingMethodName() {
-  const char *DebugClassName = nullptr;
-  const char *DebugMethodName = nullptr;
-
-  DebugMethodName = JitInfo->getMethodName(MethodInfo->ftn, &DebugClassName);
-  dbgs() << format("INFO:  skipping jitting method %s::%s using LLILCJit\n",
-                   DebugClassName, DebugMethodName);
-}
-
 LLILCJitContext::LLILCJitContext(LLILCJitPerThreadState *PerThreadState)
     : State(PerThreadState), HasLoadedBitCode(false) {
   this->Next = State->JitContext;
@@ -239,8 +221,15 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
   // Flags and MethodInfo.
   JitOptions JitOptions(Context);
 
+  if (JitOptions.IsBreakMethod) {
+    dbgs() << "INFO:  Breaking for method " << Context.MethodName << "\n";
+  }
+  if (JitOptions.IsMSILDumpMethod) {
+    dbgs() << "INFO:  Dumping MSIL for method " << Context.MethodName << "\n";
+    ReaderBase::printMSIL(MethodInfo->ILCode, 0, MethodInfo->ILCodeSize);
+  }
   CorJitResult Result = CORJIT_INTERNALERROR;
-  if (JitOptions.IsAltJit) {
+  if (JitOptions.IsAltJit && !JitOptions.IsExcludeMethod) {
     Context.Options = &JitOptions;
 
     // Construct the TargetMachine that we will emit code for
@@ -273,12 +262,17 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
 
     // Now jit the method.
     if (Context.Options->DumpLevel == DumpLevel::VERBOSE) {
-      Context.outputDebugMethodName();
+      dbgs() << "INFO:  jitting method " << Context.MethodName
+             << " using LLILCJit\n";
     }
     bool HasMethod = this->readMethod(&Context);
 
     if (HasMethod) {
-
+      if (JitOptions.IsLLVMDumpMethod) {
+        dbgs() << "INFO:  Dumping LLVM for method " << Context.MethodName
+               << "\n";
+        Context.CurrentModule->dump();
+      }
       if (Context.Options->DoInsertStatepoints) {
         // If using Precise GC, run the GC-Safepoint insertion
         // and lowering passes before generating code.
@@ -307,7 +301,13 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
 
       // TODO: ColdCodeSize, or separated code, is not enabled or included.
       *NativeSizeOfCode = Context.HotCodeSize + Context.ReadOnlyDataSize;
-
+      if (JitOptions.IsCodeRangeMethod) {
+        errs() << "LLILC compiled: "
+               << ", Entry = " << *NativeEntry
+               << ", End = " << (*NativeEntry + *NativeSizeOfCode)
+               << ", size = " << *NativeSizeOfCode
+               << " method = " << Context.MethodName << '\n';
+      }
       GcInfoAllocator GcInfoAllocator;
       GCInfo GcInfo(&Context, MM.getStackMapSection(), MM.getHotCodeBlock(),
                     &GcInfoAllocator);
@@ -329,7 +329,8 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
   } else {
     // This method was not selected for jitting by LLILC.
     if (JitOptions.DumpLevel == DumpLevel::SUMMARY) {
-      Context.outputSkippingMethodName();
+      dbgs() << "INFO:  skipping jitting method " << Context.MethodName
+             << " using LLILCJit\n";
     }
   }
 

@@ -5,7 +5,8 @@
 The LLILC project is structured as a subproject of LLVM so we are using the
 same coding conventions as LLVM. The LLVM coding conventions are at
 <http://llvm.org/docs/CodingStandards.html>.  We use clang-format to
-check/enforce some formatting rules, as described on our [code formatting document](Code-Formatting.md).
+check/enforce some formatting rules, as described on our 
+[code formatting document](Code-Formatting.md).
 
 ## Commenting Guidelines
 
@@ -45,6 +46,15 @@ We can summarize these as follows:
 * For classes and class members that are declared in a header, put the Doxygen
   comments there. Otherwise put the comments in the implementation file.
 
+* For declaration of fields of a class, if the declaration is short
+  use the "//<" form of document comments at the end of the line,
+  if the comment will fit on not more than two lines.
+  If the comment would be longer than two lines, put the documentation
+  comment before the declaration.
+  
+* When a documentation comment precedes a declaration, separate it from
+  preceding declarations by a blank line.
+  
 * For virtual methods, put the documentation on the method declaration in the
   base class that first introduced the method. Do not put documentation on
   the method overrides. In the Doxygen output the comments from the base

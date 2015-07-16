@@ -1533,7 +1533,6 @@ public:
   FlowGraphNode *fgSplitBlock(FlowGraphNode *Block, uint32_t Offset,
                               IRNode *Node);
 
-#if !defined(NDEBUG)
   /// \brief Debug-only reader function to print MSIL of the current method.
   void printMSIL();
 
@@ -1545,8 +1544,7 @@ public:
   /// \param Buf           Buffer containing MSIL bytecode.
   /// \param StartOffset   Initial offset for the range to print.
   /// \param EndOffset     Ending offset for the range to print.
-  void printMSIL(uint8_t *Buf, uint32_t StartOffset, uint32_t EndOffset);
-#endif
+  static void printMSIL(uint8_t *Buf, uint32_t StartOffset, uint32_t EndOffset);
 
   /// \brief Determine the effect of this instruction on the operand stack.
   ///
