@@ -17,51 +17,51 @@ int MethodID::parseArgs(const string &S, size_t &I) {
 
   I = S.find_first_of(")", I);
   if (I == string::npos)
-    return MethodIDState::ANYARGS;
+    return MethodIDState::AnyArgs;
 
-  string num = string(S, Start, I - Start);
-  int NArgs = atoi(num.c_str());
+  string Num = string(S, Start, I - Start);
+  int NArgs = atoi(Num.c_str());
   ++I; // skip )
   return NArgs;
 }
 
 unique_ptr<MethodID> MethodID::parse(const string &S, size_t &I) {
-  MethodID MID;
+  MethodID MId;
   size_t SLen = S.length();
 
-  string token = MID.scan(S, I);
+  string Token = MId.scan(S, I);
 
-  if (token == "") // off the end of S
+  if (Token == "") // off the end of S
     return nullptr;
 
-  if (token == "*") {
-    MID.ClassName = llvm::make_unique<string>(token);
-    MID.MethodName = nullptr;
+  if (Token == "*") {
+    MId.ClassName = llvm::make_unique<string>(Token);
+    MId.MethodName = nullptr;
     if (I >= SLen || S[I] == ' ') {
-      MID.NumArgs = MethodIDState::ANYARGS;
+      MId.NumArgs = MethodIDState::AnyArgs;
     }
-    return llvm::make_unique<MethodID>(MID);
+    return llvm::make_unique<MethodID>(MId);
     return nullptr;
   }
 
   if (S[I] == ':') { // C:M | C:M(A)
-    MID.ClassName = llvm::make_unique<string>(token);
-    token = MID.scan(S, ++I); // M | M(A)
+    MId.ClassName = llvm::make_unique<string>(Token);
+    Token = MId.scan(S, ++I); // M | M(A)
   }
 
-  MID.MethodName = llvm::make_unique<string>(token);
+  MId.MethodName = llvm::make_unique<string>(Token);
 
   if (I >= SLen || S[I] == ' ') {
-    MID.NumArgs = MethodIDState::ANYARGS;
-    return llvm::make_unique<MethodID>(MID);
+    MId.NumArgs = MethodIDState::AnyArgs;
+    return llvm::make_unique<MethodID>(MId);
     return nullptr;
   }
 
   if (S[I] != '(') // illegal
     return nullptr;
 
-  MID.NumArgs = MID.parseArgs(S, I);
-  return llvm::make_unique<MethodID>(MID);
+  MId.NumArgs = MId.parseArgs(S, I);
+  return llvm::make_unique<MethodID>(MId);
   return nullptr;
 }
 
@@ -90,22 +90,22 @@ void MethodSet::init(unique_ptr<string> ConfigValue) {
 
 void MethodSet::insert(unique_ptr<string> Ups) {
   size_t I = 0;
-  std::list<MethodID> *MIDL = new std::list<MethodID>();
+  std::list<MethodID> *MIdList = new std::list<MethodID>();
   string S = *Ups;
 
-  auto MID = MethodID::parse(S, I);
-  while (MID) {
-    MIDL->push_back(*MID);
-    MID = MethodID::parse(S, I);
+  auto MId = MethodID::parse(S, I);
+  while (MId) {
+    MIdList->push_back(*MId);
+    MId = MethodID::parse(S, I);
   }
 
   // This write should be atomic, delete if we're not the first.
   llvm::sys::cas_flag F = llvm::sys::CompareAndSwap(
       (llvm::sys::cas_flag *)&(this->Initialized), 0x1, 0x0);
   if (F != 0x0) {
-    delete MIDL;
+    delete MIdList;
   } else {
-    this->MethodIDList = MIDL;
+    this->MethodIDList = MIdList;
   }
 }
 
@@ -114,7 +114,7 @@ bool MethodSet::contains(const char *MethodName, const char *ClassName,
 
   assert(this->isInitialized());
 
-  int NumArgs = MethodIDState::ANYARGS; // assume no signature supplied
+  int NumArgs = MethodIDState::AnyArgs; // assume no signature supplied
 
   if (PCSig) {
     PCSig++; // skip calling convention
@@ -124,28 +124,28 @@ bool MethodSet::contains(const char *MethodName, const char *ClassName,
   string StrClassName = ClassName ? ClassName : "";
   string StrMethodName = MethodName ? MethodName : "";
 
-  auto begin = this->MethodIDList->begin();
-  auto end = this->MethodIDList->end();
+  auto Begin = this->MethodIDList->begin();
+  auto End = this->MethodIDList->end();
 
-  for (auto p = begin; p != end; ++p) { // p => "pattern"
+  for (auto P = Begin; P != End; ++P) { // P => "pattern"
 
     // Check for "*", the common case, first
-    if (p->ClassName && *p->ClassName == "*")
+    if (P->ClassName && *P->ClassName == "*")
       return true;
 
     // Check for mis-match on NumArgs
-    if (p->NumArgs != MethodIDState::ANYARGS && p->NumArgs != NumArgs)
+    if (P->NumArgs != MethodIDState::AnyArgs && P->NumArgs != NumArgs)
       continue;
 
     // Check for mis-match on MethodName
-    if (p->MethodName && (*p->MethodName != StrMethodName))
+    if (P->MethodName && (*P->MethodName != StrMethodName))
       continue;
 
     // Check for match on ClassName (we already match NumArgs and MethodName)
-    if (!p->ClassName) // no ClassName
+    if (!P->ClassName) // no ClassName
       return true;
 
-    if (*p->ClassName == StrClassName)
+    if (*P->ClassName == StrClassName)
       return true;
   }
 
