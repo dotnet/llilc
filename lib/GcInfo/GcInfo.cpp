@@ -38,10 +38,12 @@ GCInfo::GCInfo(LLILCJitContext *JitCtx, uint8_t *StackMapData,
 }
 
 void GCInfo::encodeHeader() {
+#if !defined(NDEBUG)
   if (EmitLogs) {
     dbgs() << "GcTable for Function: " << JitContext->MethodName << "\n"
            << "  Size: " << JitContext->HotCodeSize << "\n";
   }
+#endif // !NDEBUG
 
   // TODO: Set Code Length accurately.
   // https://github.com/dotnet/llilc/issues/679
