@@ -628,7 +628,7 @@ void GenIR::insertIRForUnmanagedCallFrame() {
   IRBuilder<>::InsertPoint SavedInsertPoint = LLVMBuilder->saveIP();
 
   // Mark this function as requiring a frame pointer and as using GC.
-  Function->addFnAttr("no-frame-pointer-elim-non-leaf");
+  Function->addFnAttr("no-frame-pointer-elim", "true");
   Function->setGC("coreclr");
 
   // The call frame data structure is modeled as an opaque blob of bytes.
