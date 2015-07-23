@@ -58,10 +58,10 @@ IRNode *GenStack::pop() {
     LLILCJit::fatal(CORJIT_BADCODE);
   }
 
-  IRNode *result = Stack.back();
+  IRNode *Result = Stack.back();
   Stack.pop_back();
 
-  return result;
+  return Result;
 }
 
 void GenStack::assertEmpty() { ASSERT(empty()); }
@@ -317,11 +317,6 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
 
   const uint32_t JitFlags = JitContext->Flags;
 
-  if (((JitFlags & CORJIT_FLG_PREJIT) != 0) &&
-      ((JitFlags & CORJIT_FLG_IL_STUB) != 0)) {
-    throw NotYetImplementedException("il stub in ngen");
-  }
-
   if (JitContext->Options->DoInsertStatepoints) {
     createSafepointPoll();
   }
@@ -509,7 +504,7 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
 
 void GenIR::readerMiddlePass() { return; }
 
-void GenIR::readerPostPass(bool IsImportOnly) {
+void GenIR::readerPostVisit() {
   // If the generic context must be kept live, make it so.
   if (KeepGenericContextAlive) {
     insertIRToKeepGenericContextAlive();
@@ -520,14 +515,49 @@ void GenIR::readerPostPass(bool IsImportOnly) {
     insertIRForSecurityObject();
   }
 
+  // Now that we have the full set of escaping frame locations, emit the
+  // call to @llvm.localescape
+  emitLocalEscapeIfNeeded();
+
+  for (Function &F : JitContext->CurrentModule->functions()) {
+    if (F.isDeclaration()) {
+      continue;
+    }
+    if (HasUnmanagedCallFrame) {
+      // If there is an unmanaged call in the root or in any filter, set the
+      // attributes on the root and all filters.
+      setAttributesForUnmanagedCallFrame(&F);
+    }
+    if (&F == RootFunction) {
+      continue;
+    }
+    // Found a filter function.  Its body (except for the entry block) was
+    // generated inline in the root function; move those blocks to the outlined
+    // function now.
+    BasicBlock *FilterEntry = &F.getEntryBlock();
+    EHRegion *FilterRegion = fgNodeGetRegion((FlowGraphNode *)FilterEntry);
+    assert(FilterRegion->Kind == ReaderBaseNS::RegionKind::RGN_Filter);
+    BasicBlock *NextFilterBlock = FilterEntry->getSingleSuccessor();
+    assert(NextFilterBlock != nullptr);
+    BasicBlock *PreviousBlock = FilterEntry;
+    while (fgNodeGetRegion((FlowGraphNode *)NextFilterBlock) == FilterRegion) {
+      BasicBlock *MovingBlock = NextFilterBlock;
+      NextFilterBlock = MovingBlock->getNextNode();
+      MovingBlock->moveAfter(PreviousBlock);
+      PreviousBlock = MovingBlock;
+    }
+  }
+}
+
+void GenIR::readerPostPass(bool IsImportOnly) {
   if (JitContext->Options->DoInsertStatepoints) {
 
     // Precise GC using statepoints cannot handle aggregates that contain
     // managed pointers yet. So, check if this function deals with such values
     // and fail early. (Issue #33)
 
-    for (const Argument &arg : RootFunction->args()) {
-      if (isManagedAggregateType(arg.getType())) {
+    for (const Argument &Arg : RootFunction->args()) {
+      if (isManagedAggregateType(Arg.getType())) {
         throw NotYetImplementedException(
             "NYI: Precice GC for Managed-Aggregate values");
       }
@@ -773,7 +803,7 @@ void GenIR::insertIRForUnmanagedCallFrame() {
 
 void GenIR::setAttributesForUnmanagedCallFrame(Function *F) {
   // Mark this function as requiring a frame pointer and as using GC.
-  F->addFnAttr("no-frame-pointer-elim-non-leaf");
+  F->addFnAttr("no-frame-pointer-elim", "true");
   F->setGC("coreclr");
 }
 
@@ -1411,13 +1441,13 @@ GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool GetAggregateFields,
     // Now that this aggregate's fields are filled in, go back
     // and fill in the details for those aggregates we deferred
     // handling earlier.
-    std::list<CORINFO_CLASS_HANDLE>::iterator it =
+    std::list<CORINFO_CLASS_HANDLE>::iterator It =
         TheDeferredDetailAggregates.begin();
-    while (it != TheDeferredDetailAggregates.end()) {
-      CORINFO_CLASS_HANDLE DeferredClassHandle = *it;
+    while (It != TheDeferredDetailAggregates.end()) {
+      CORINFO_CLASS_HANDLE DeferredClassHandle = *It;
       getClassTypeWorker(DeferredClassHandle, GetAggregateFields,
                          DeferredDetailAggregates);
-      ++it;
+      ++It;
     }
   } else {
     if (!GetAggregateFields) {
@@ -2483,7 +2513,7 @@ bool GenIR::isArrayType(llvm::Type *ArrayTy, llvm::Type *ElementTy) {
     return false;
   }
   ArrayType *ElementsArrayType = cast<ArrayType>(ElementsArrayFieldType);
-  if (!ElementsArrayType->getArrayNumElements() == 0) {
+  if (ElementsArrayType->getArrayNumElements() != 0) {
     return false;
   }
   llvm::Type *ActualElementTy = ElementsArrayType->getArrayElementType();
@@ -2508,9 +2538,9 @@ IRNode *GenIR::ensureIsArray(IRNode *Array, llvm::Type *ElementTy) {
 }
 
 PointerType *GenIR::getArrayOfElementType(llvm::Type *ElementTy) {
-  auto it = ElementToArrayTypeMap.find(ElementTy);
-  if (it != ElementToArrayTypeMap.end()) {
-    return it->second;
+  auto It = ElementToArrayTypeMap.find(ElementTy);
+  if (It != ElementToArrayTypeMap.end()) {
+    return It->second;
   }
   PointerType *Array = createArrayOfElementType(ElementTy);
   ElementToArrayTypeMap[ElementTy] = Array;
@@ -2689,41 +2719,6 @@ FlowGraphNode *GenIR::fgSplitBlock(FlowGraphNode *Block, IRNode *Node) {
   }
   fgNodeSetPropagatesOperandStack((FlowGraphNode *)NewBlock, PropagatesStack);
   return (FlowGraphNode *)NewBlock;
-}
-
-void GenIR::readerPostVisit() {
-  // Now that we have the full set of escaping frame locations, emit the
-  // call to @llvm.localescape
-  emitLocalEscapeIfNeeded();
-
-  for (Function &F : JitContext->CurrentModule->functions()) {
-    if (F.isDeclaration()) {
-      continue;
-    }
-    if (HasUnmanagedCallFrame) {
-      // If there is an unmanaged call in the root or in any filter, set the
-      // attributes on the root and all filters.
-      setAttributesForUnmanagedCallFrame(&F);
-    }
-    if (&F == RootFunction) {
-      continue;
-    }
-    // Found a filter function.  Its body (except for the entry block) was
-    // generated inline in the root function; move those blocks to the outlined
-    // function now.
-    BasicBlock *FilterEntry = &F.getEntryBlock();
-    EHRegion *FilterRegion = fgNodeGetRegion((FlowGraphNode *)FilterEntry);
-    assert(FilterRegion->Kind == ReaderBaseNS::RegionKind::RGN_Filter);
-    BasicBlock *NextFilterBlock = FilterEntry->getSingleSuccessor();
-    assert(NextFilterBlock != nullptr);
-    BasicBlock *PreviousBlock = FilterEntry;
-    while (fgNodeGetRegion((FlowGraphNode *)NextFilterBlock) == FilterRegion) {
-      BasicBlock *MovingBlock = NextFilterBlock;
-      NextFilterBlock = MovingBlock->getNextNode();
-      MovingBlock->moveAfter(PreviousBlock);
-      PreviousBlock = MovingBlock;
-    }
-  }
 }
 
 void GenIR::fgRemoveUnusedBlocks(FlowGraphNode *FgHead) {
@@ -3087,6 +3082,8 @@ void GenIR::genFilterDispatch(EHRegion *FilterRegion,
       Function::Create(FilterTy, Function::ExternalLinkage, FunctionName,
                        JitContext->CurrentModule);
   FilterFunction->addFnAttr("wineh-parent", RootFunction->getName());
+  assert(PersonalityFunction != nullptr);
+  FilterFunction->setPersonalityFn(PersonalityFunction);
 
   // Give the arguments names to make the IR easier to read.
   auto ArgIter = FilterFunction->arg_begin();
@@ -5360,10 +5357,10 @@ IRNode *GenIR::callRuntimeHandleHelper(CorInfoHelpFunc Helper, IRNode *Arg1,
   // return x;
   BasicBlock *CurrentBlock = LLVMBuilder->GetInsertBlock();
   BasicBlock *CallBlock = HelperCall->getParent();
-  PHINode *PHI = mergeConditionalResults(CurrentBlock, NullCheckArg, SaveBlock,
+  PHINode *Phi = mergeConditionalResults(CurrentBlock, NullCheckArg, SaveBlock,
                                          HelperCall.getInstruction(), CallBlock,
                                          "RuntimeHandle");
-  return (IRNode *)PHI;
+  return (IRNode *)Phi;
 }
 
 IRNode *GenIR::convertHandle(IRNode *GetTokenNumericNode,
@@ -6780,7 +6777,7 @@ IRNode *GenIR::handleToIRNode(mdToken Token, void *EmbHandle, void *RealHandle,
 
   if (IsRelocatable) {
     std::string HandleName =
-        GetNameForToken(Token, (CORINFO_GENERIC_HANDLE)LookupHandle,
+        getNameForToken(Token, (CORINFO_GENERIC_HANDLE)LookupHandle,
                         getCurrentContext(), getCurrentModuleHandle());
     GlobalVariable *GlobalVar = getGlobalVariable(
         LookupHandle, ValueHandle, HandleTy, HandleName, IsReadOnly);
@@ -6802,7 +6799,7 @@ IRNode *GenIR::handleToIRNode(mdToken Token, void *EmbHandle, void *RealHandle,
   return (IRNode *)HandleValue;
 }
 
-std::string GenIR::GetNameForToken(mdToken Token, CORINFO_GENERIC_HANDLE Handle,
+std::string GenIR::getNameForToken(mdToken Token, CORINFO_GENERIC_HANDLE Handle,
                                    CORINFO_CONTEXT_HANDLE Context,
                                    CORINFO_MODULE_HANDLE Scope) {
   std::string Storage;
@@ -6815,19 +6812,19 @@ std::string GenIR::GetNameForToken(mdToken Token, CORINFO_GENERIC_HANDLE Handle,
               (CorInfoHelpFunc)RidFromToken(Token)) << "::JitHelper";
     break;
   case mdtVarArgsHandle:
-    OS << GetNameForToken(TokenFromRid(RidFromToken(Token), mdtMemberRef),
+    OS << getNameForToken(TokenFromRid(RidFromToken(Token), mdtMemberRef),
                           Handle, Context, Scope) << "::VarArgsHandle";
     break;
   case mdtVarArgsMDHandle:
-    OS << GetNameForToken(TokenFromRid(RidFromToken(Token), mdtMethodDef),
+    OS << getNameForToken(TokenFromRid(RidFromToken(Token), mdtMethodDef),
                           Handle, Context, Scope) << "::VarArgsHandle";
     break;
   case mdtVarArgsMSHandle:
-    OS << GetNameForToken(TokenFromRid(RidFromToken(Token), mdtMethodSpec),
+    OS << getNameForToken(TokenFromRid(RidFromToken(Token), mdtMethodSpec),
                           Handle, Context, Scope) << "::VarArgsHandle";
     break;
   case mdtVarArgsSigHandle:
-    OS << GetNameForToken(TokenFromRid(RidFromToken(Token), mdtSignature),
+    OS << getNameForToken(TokenFromRid(RidFromToken(Token), mdtSignature),
                           Handle, Context, Scope) << "::VarArgsHandle";
     break;
   case mdtInterfaceOffset:
@@ -7102,14 +7099,14 @@ PHINode *GenIR::mergeConditionalResults(BasicBlock *JoinBlock, Value *Arg1,
                                         BasicBlock *Block1, Value *Arg2,
                                         BasicBlock *Block2,
                                         const Twine &NameStr) {
-  PHINode *PHI = createPHINode(JoinBlock, Arg1->getType(), 2, NameStr);
-  PHI->addIncoming(Arg1, Block1);
-  PHI->addIncoming(Arg2, Block2);
+  PHINode *Phi = createPHINode(JoinBlock, Arg1->getType(), 2, NameStr);
+  Phi->addIncoming(Arg1, Block1);
+  Phi->addIncoming(Arg2, Block2);
   if (doesValueRepresentStruct(Arg1)) {
     assert(doesValueRepresentStruct(Arg2));
-    setValueRepresentsStruct(PHI);
+    setValueRepresentsStruct(Phi);
   }
-  return PHI;
+  return Phi;
 }
 
 // Handle case of an indirection from CORINFO_RUNTIME_LOOKUP where
@@ -7889,7 +7886,7 @@ void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
       }
 
       Instruction *CurrentInst = SuccessorBlock->begin();
-      PHINode *PHI = nullptr;
+      PHINode *Phi = nullptr;
       for (IRNode *Current : *ReaderOperandStack) {
         Value *CurrentValue = (Value *)Current;
         if (CreatePHIs) {
@@ -7897,9 +7894,9 @@ void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
           // hint for the number of PHI sources.
           // TODO: Could be nice to have actual pred. count here instead, but
           // there's no simple way of fetching that, AFAICT.
-          PHI = createPHINode(SuccessorBlock, CurrentValue->getType(), 2, "");
+          Phi = createPHINode(SuccessorBlock, CurrentValue->getType(), 2, "");
           if (doesValueRepresentStruct(CurrentValue)) {
-            setValueRepresentsStruct(PHI);
+            setValueRepresentsStruct(Phi);
           }
 
           // Preemptively add all predecessors to the PHI node to ensure
@@ -7907,19 +7904,19 @@ void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
           FlowGraphEdgeList *PredecessorList =
               fgNodeGetPredecessorListActual(SuccessorBlock);
           while (PredecessorList != nullptr) {
-            PHI->addIncoming(UndefValue::get(CurrentValue->getType()),
+            Phi->addIncoming(UndefValue::get(CurrentValue->getType()),
                              fgEdgeListGetSource(PredecessorList));
             PredecessorList =
                 fgEdgeListGetNextPredecessorActual(PredecessorList);
           }
         } else {
           // PHI instructions should have been inserted already
-          PHI = cast<PHINode>(CurrentInst);
+          Phi = cast<PHINode>(CurrentInst);
           CurrentInst = CurrentInst->getNextNode();
         }
-        AddPHIOperand(PHI, CurrentValue, (BasicBlock *)CurrentBlock);
+        addPHIOperand(Phi, CurrentValue, (BasicBlock *)CurrentBlock);
         if (CreatePHIs) {
-          SuccessorStack->push((IRNode *)PHI);
+          SuccessorStack->push((IRNode *)Phi);
         }
       }
 
@@ -7933,13 +7930,13 @@ void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
   clearStack();
 }
 
-void GenIR::AddPHIOperand(PHINode *PHI, Value *NewOperand,
+void GenIR::addPHIOperand(PHINode *Phi, Value *NewOperand,
                           BasicBlock *NewBlock) {
-  Type *PHITy = PHI->getType();
+  Type *PHITy = Phi->getType();
   Type *NewOperandTy = NewOperand->getType();
 
   if (PHITy != NewOperandTy) {
-    bool IsStructPHITy = doesValueRepresentStruct(PHI);
+    bool IsStructPHITy = doesValueRepresentStruct(Phi);
     bool IsStructNewOperandTy = doesValueRepresentStruct(NewOperand);
     Type *NewPHITy = getStackMergeType(PHITy, NewOperandTy, IsStructPHITy,
                                        IsStructNewOperandTy);
@@ -7947,31 +7944,31 @@ void GenIR::AddPHIOperand(PHINode *PHI, Value *NewOperand,
     if (NewPHITy != PHITy) {
       // Change the type of the PHI instruction and the types of all of its
       // operands.
-      PHI->mutateType(NewPHITy);
-      for (unsigned i = 0; i < PHI->getNumOperands(); ++i) {
-        Value *Operand = PHI->getIncomingValue(i);
+      Phi->mutateType(NewPHITy);
+      for (unsigned I = 0; I < Phi->getNumOperands(); ++I) {
+        Value *Operand = Phi->getIncomingValue(I);
         if (!isa<UndefValue>(Operand)) {
-          BasicBlock *OperandBlock = PHI->getIncomingBlock(i);
-          Operand = ChangePHIOperandType(Operand, OperandBlock, NewPHITy);
-          PHI->setIncomingValue(i, Operand);
+          BasicBlock *OperandBlock = Phi->getIncomingBlock(I);
+          Operand = changePHIOperandType(Operand, OperandBlock, NewPHITy);
+          Phi->setIncomingValue(I, Operand);
         }
       }
     }
     if (NewPHITy != NewOperandTy) {
       // Change the type of the new PHI operand.
-      NewOperand = ChangePHIOperandType(NewOperand, NewBlock, NewPHITy);
+      NewOperand = changePHIOperandType(NewOperand, NewBlock, NewPHITy);
     }
     LLVMBuilder->restoreIP(SavedInsertPoint);
   }
 
-  int BlockIndex = PHI->getBasicBlockIndex(NewBlock);
+  int BlockIndex = Phi->getBasicBlockIndex(NewBlock);
   if (BlockIndex >= 0)
-    PHI->setIncomingValue(BlockIndex, NewOperand);
+    Phi->setIncomingValue(BlockIndex, NewOperand);
   else
-    PHI->addIncoming(NewOperand, NewBlock);
+    Phi->addIncoming(NewOperand, NewBlock);
 }
 
-Value *GenIR::ChangePHIOperandType(Value *Operand, BasicBlock *OperandBlock,
+Value *GenIR::changePHIOperandType(Value *Operand, BasicBlock *OperandBlock,
                                    Type *NewTy) {
   LLVMBuilder->SetInsertPoint(OperandBlock->getTerminator());
   if (NewTy->isIntegerTy()) {

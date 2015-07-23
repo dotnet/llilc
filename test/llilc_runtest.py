@@ -14,7 +14,7 @@
 #
 # To exclude undesired test cases, please edit exclusion.targets file.
 #
-# usage: llilc_runtest.py [-h] [-a {x64,x86}] [-b {debug,release}]
+# usage: llilc_runtest.py [-h] [-a {x64,x86}] [-b {debug,release}] [-p] [-n]
 #                         [-d {summary,verbose}] [-r RESULT_PATH] -j JIT_PATH -c
 #                         CORECLR_RUNTIME_PATH
 # 
@@ -26,6 +26,8 @@
 #                         release or debug build of CoreCLR run-time used
 #   -d {summary,verbose}, --dump-level {summary,verbose}
 #                         the dump level: summary, or verbose
+#   -n, --ngen            Use ngened mscorlib
+#   -p, --precise-gc      Test with Precise GC
 #   -r RESULT_PATH, --result-path RESULT_PATH
 #                         the path to runtest result output directory
 # 
@@ -118,6 +120,7 @@ def main(argv):
     parser.add_argument('-t', '--runtest-path', type=str,
                         default=None, help='the full path to the CoreCLR\\tests directory')
     parser.add_argument('-n', '--ngen', help='use ngened mscorlib', default=False, action="store_true")
+    parser.add_argument('-p', '--precise-gc', help='test with precise gc', default=False, action="store_true")
     required = parser.add_argument_group('required arguments')
     required.add_argument('-j', '--jit-path', required=True, 
                         help='full path to jit .dll')
@@ -165,7 +168,10 @@ def main(argv):
         with open(time_stamped_test_env_path, 'w') as test_env:
             test_env.write('set COMPlus_AltJit=*\n')
             test_env.write('set COMPlus_AltJitName=' + time_stamped_jit_name + '\n')
-            test_env.write('set COMPlus_GCConservative=1\n')
+            if (args.precise_gc):
+                test_env.write('set COMPlus_InsertStatepoints=1\n')
+            else:
+                test_env.write('set COMPlus_GCConservative=1\n')
             if (not args.ngen):
               test_env.write('set COMPlus_ZapDisable=1\n')
             test_env.write('chcp 65001\n')

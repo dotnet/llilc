@@ -28,11 +28,11 @@
 #include "llvm/Config/llvm-config.h"
 
 // The MethodID.NumArgs field may hold either of 2 values:
-//   EMPTY   => the input string was all-blank, or empty.
-//   ANYARGS => the pattern did not specify any constraint on the number of
+//   Empty   => the input string was all-blank, or empty.
+//   AnyArgs => the pattern did not specify any constraint on the number of
 //              arguments.  Eg: "foo" as opposed to "foo()", "foo(3)", etc
 
-enum MethodIDState { EMPTY = -7, ANYARGS = -1 };
+enum MethodIDState { Empty = -7, AnyArgs = -1 };
 
 /// \brief MethodID struct represents a Method Signature.
 ///
@@ -45,45 +45,45 @@ public:
   std::unique_ptr<std::string> ClassName;
   /// Method Name
   std::unique_ptr<std::string> MethodName;
-  ///  Number of method arguments.  MethodIDState::ANYARGS => not specified
+  ///  Number of method arguments.  MethodIDState::AnyArgs => not specified
   int NumArgs;
 
   /// Default constructor.
   MethodID()
       : ClassName(nullptr), MethodName(nullptr),
-        NumArgs(MethodIDState::ANYARGS) {}
+        NumArgs(MethodIDState::AnyArgs) {}
 
   /// Copy constructor.
-  MethodID(const MethodID &other) {
-    if (other.ClassName) {
-      ClassName = llvm::make_unique<std::string>(*other.ClassName);
+  MethodID(const MethodID &Other) {
+    if (Other.ClassName) {
+      ClassName = llvm::make_unique<std::string>(*Other.ClassName);
     } else {
-      ClassName == nullptr;
+      ClassName = nullptr;
     }
-    if (other.MethodName) {
-      MethodName = llvm::make_unique<std::string>(*other.MethodName);
+    if (Other.MethodName) {
+      MethodName = llvm::make_unique<std::string>(*Other.MethodName);
     } else {
       MethodName = nullptr;
     }
-    this->NumArgs = other.NumArgs;
+    this->NumArgs = Other.NumArgs;
   }
 
   /// Copy assignment operator.
 
-  MethodID &operator=(const MethodID &other) {
-    if (this == &other)
+  MethodID &operator=(const MethodID &Other) {
+    if (this == &Other)
       return *this;
-    if (other.ClassName) {
-      ClassName = llvm::make_unique<std::string>(*other.ClassName);
+    if (Other.ClassName) {
+      ClassName = llvm::make_unique<std::string>(*Other.ClassName);
     } else {
       ClassName = nullptr;
     }
-    if (other.MethodName) {
-      MethodName = llvm::make_unique<std::string>(*other.MethodName);
+    if (Other.MethodName) {
+      MethodName = llvm::make_unique<std::string>(*Other.MethodName);
     } else {
       MethodName = nullptr;
     }
-    NumArgs = other.NumArgs;
+    NumArgs = Other.NumArgs;
     return *this;
   }
 
@@ -145,7 +145,7 @@ public:
   /// \return true if Method is contained in Set.
 
   bool contains(const char *MethodName, const char *ClassName,
-                PCCOR_SIGNATURE sig);
+                PCCOR_SIGNATURE Sig);
 
   /// Initialize a new MethodSet - once only.
   void init(std::unique_ptr<std::string> ConfigValue);
@@ -170,7 +170,7 @@ private:
 class Convert {
 public:
   /// Convert a UTF-16 string to a UTF-8 string.
-  static std::unique_ptr<std::string> utf16ToUtf8(const char16_t *wideStr);
+  static std::unique_ptr<std::string> utf16ToUtf8(const char16_t *WideStr);
 };
 
 #endif // UTILITY_H

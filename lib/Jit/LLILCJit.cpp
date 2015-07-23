@@ -98,7 +98,7 @@ private:
   ///
   /// \param LLVMRelocationType LLVM relocation type to translate from.
   /// \returns EE relocation type.
-  uint64_t TranslateRelocationType(uint64_t LLVMRelocationType);
+  uint64_t translateRelocationType(uint64_t LLVMRelocationType);
 
 private:
   LLILCJitContext *Context;
@@ -589,7 +589,7 @@ void ObjectLoadListener::recordRelocations(const ObjectFile &Obj) {
           uint64_t Target = Context->NameToHandleMap[TargetName];
           Context->JitInfo->recordRelocation(MM->getCodeSection() + Offset,
                                              (void *)Target,
-                                             TranslateRelocationType(RelType));
+                                             translateRelocationType(RelType));
         }
         ++I;
       }
@@ -598,7 +598,7 @@ void ObjectLoadListener::recordRelocations(const ObjectFile &Obj) {
 }
 
 uint64_t
-ObjectLoadListener::TranslateRelocationType(uint64_t LLVMRelocationType) {
+ObjectLoadListener::translateRelocationType(uint64_t LLVMRelocationType) {
   switch (LLVMRelocationType) {
   case IMAGE_REL_AMD64_ABSOLUTE:
     return IMAGE_REL_BASED_ABSOLUTE;

@@ -2806,7 +2806,7 @@ EHRegion *ReaderBase::fgSwitchRegion(EHRegion *OldRegion, uint32_t Offset,
 
 #define CHECKTARGET(TargetOffset, BufSize)                                     \
   {                                                                            \
-    if (TargetOffset < 0 || TargetOffset >= BufSize)                           \
+    if ((TargetOffset) < 0 || (TargetOffset) >= (BufSize))                     \
       ReaderBase::verGlobalError(MVER_E_BAD_BRANCH);                           \
   }
 
@@ -8020,9 +8020,9 @@ void ReaderBase::msilToIR(void) {
   }
 
   // Process the nodes in MSIL offset order.
-  std::list<FlowGraphNode *>::iterator it = FlowGraphMSILOffsetOrder.begin();
-  while (it != FlowGraphMSILOffsetOrder.end()) {
-    FlowGraphNode *CurrentNode = *it;
+  std::list<FlowGraphNode *>::iterator It = FlowGraphMSILOffsetOrder.begin();
+  while (It != FlowGraphMSILOffsetOrder.end()) {
+    FlowGraphNode *CurrentNode = *It;
     readBytesForFlowGraphNode(CurrentNode, IsImportOnly);
 
 #ifndef CC_PEVERIFY
@@ -8049,15 +8049,15 @@ void ReaderBase::msilToIR(void) {
 
         // The two checks above ensure that it's safe to insert Successor after
         // CurrentNode even if that breaks MSIL offset order.
-        ++it;
-        FlowGraphMSILOffsetOrder.insert(it, Successor);
+        ++It;
+        FlowGraphMSILOffsetOrder.insert(It, Successor);
         // Point the iterator back to CurrentNode.
-        --it;
-        --it;
+        --It;
+        --It;
         fgNodeSetVisited(Successor, true);
       }
     }
-    ++it;
+    ++It;
   }
 
   // global verification dataflow

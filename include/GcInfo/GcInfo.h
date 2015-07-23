@@ -50,7 +50,10 @@ private:
   const uint8_t *CodeBlockStart;
   const uint8_t *LLVMStackMapData;
   GcInfoEncoder Encoder;
+
+#if !defined(NDEBUG)
   bool EmitLogs;
+#endif // !NDEBUG
 
 #if defined(PARTIALLY_INTERRUPTIBLE_GC_SUPPORTED)
   size_t NumCallSites;

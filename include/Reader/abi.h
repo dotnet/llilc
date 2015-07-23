@@ -168,6 +168,9 @@ public:
                        ABIType ResultType, llvm::ArrayRef<ABIType> ArgTypes,
                        ABIArgInfo &ResultInfo,
                        std::vector<ABIArgInfo> &ArgInfos) const = 0;
+
+  /// \brief Virtual Destructor
+  virtual ~ABIInfo() = default;
 };
 
 #endif
