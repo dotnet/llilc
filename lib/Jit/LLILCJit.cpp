@@ -22,6 +22,7 @@
 #include "readerir.h"
 #include "abi.h"
 #include "EEMemoryManager.h"
+#include "EEObjectLinkingLayer.h"
 #include "llvm/CodeGen/GCs.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/DebugInfo/DIContext.h"
@@ -61,10 +62,7 @@ using namespace llvm::object;
 
 class ObjectLoadListener {
 public:
-  ObjectLoadListener(LLILCJitContext *Context, EEMemoryManager *MM) {
-    this->Context = Context;
-    this->MM = MM;
-  }
+  ObjectLoadListener(LLILCJitContext *Context) { this->Context = Context; }
 
   template <typename ObjSetT, typename LoadResult>
   void operator()(llvm::orc::ObjectLinkingLayerBase::ObjSetHandleT ObjHandles,
@@ -78,7 +76,7 @@ public:
 
       getDebugInfoForObject(Obj, L);
 
-      recordRelocations(Obj);
+      recordRelocations(Obj, L);
 
       ++I;
     }
@@ -91,7 +89,8 @@ private:
   /// \brief Record relocations for external symbols via Jit interface.
   ///
   /// \param Obj Object file to record relocations for.
-  void recordRelocations(const ObjectFile &Obj);
+  void recordRelocations(const ObjectFile &Obj,
+                         const RuntimeDyld::LoadedObjectInfo &L);
 
   /// \brief Translate from LLVM relocation type to EE relocation type.
   ///
@@ -101,8 +100,6 @@ private:
 
 private:
   LLILCJitContext *Context;
-
-  EEMemoryManager *MM;
 };
 
 // The one and only Jit Object.
@@ -255,8 +252,8 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
 
     // Construct the jitting layers.
     EEMemoryManager MM(&Context);
-    ObjectLoadListener Listener(&Context, &MM);
-    orc::ObjectLinkingLayer<decltype(Listener)> Loader(Listener);
+    ObjectLoadListener Listener(&Context);
+    orc::EEObjectLinkingLayer<decltype(Listener)> Loader(Listener);
     orc::IRCompileLayer<decltype(Loader)> Compiler(Loader,
                                                    orc::LLILCCompiler(*TM));
 
@@ -552,41 +549,61 @@ void ObjectLoadListener::getDebugInfoForObject(
   }
 }
 
-void ObjectLoadListener::recordRelocations(const ObjectFile &Obj) {
+void ObjectLoadListener::recordRelocations(
+    const ObjectFile &Obj, const RuntimeDyld::LoadedObjectInfo &L) {
   for (section_iterator SI = Obj.section_begin(), SE = Obj.section_end();
        SI != SE; ++SI) {
-    if (SI->isText()) {
-      section_iterator RelocatedSection = SI->getRelocatedSection();
+    section_iterator RelocatedSection = SI->getRelocatedSection();
 
-      if (RelocatedSection == SE) {
+    if (RelocatedSection == SE) {
+      continue;
+    }
+
+    relocation_iterator I = SI->relocation_begin();
+    relocation_iterator E = SI->relocation_end();
+
+    for (; I != E; ++I) {
+
+      StringRef SectionName;
+      std::error_code ErrorCode = SI->getName(SectionName);
+      if (ErrorCode) {
+        assert(false && ErrorCode.message().c_str());
+      }
+
+      symbol_iterator Symbol = I->getSymbol();
+      assert(Symbol != Obj.symbol_end());
+
+      SymbolRef::Type SymbolType = Symbol->getType();
+
+      if (SymbolType == SymbolRef::ST_Debug) {
         continue;
       }
 
-      relocation_iterator I = SI->relocation_begin();
-      relocation_iterator E = SI->relocation_end();
-
-      for (; I != E;) {
-        symbol_iterator Symbol = I->getSymbol();
-        assert(Symbol != Obj.symbol_end());
-        section_iterator SecI(Obj.section_end());
-        Symbol->getSection(SecI);
-        const bool IsExtern = SecI == Obj.section_end();
-        if (IsExtern) {
-          // This is an external symbol. Verify that it's one we created for
-          // a global variable and report the relocation via Jit interface.
-          uint64_t RelType = I->getType();
-          uint64_t Offset = I->getOffset();
-          ErrorOr<StringRef> NameOrError = Symbol->getName();
-          assert(NameOrError);
-          StringRef TargetName = NameOrError.get();
-          assert(Context->NameToHandleMap.count(TargetName) == 1);
-          uint64_t Target = Context->NameToHandleMap[TargetName];
-          Context->JitInfo->recordRelocation(MM->getCodeSection() + Offset,
-                                             (void *)Target,
-                                             translateRelocationType(RelType));
-        }
-        ++I;
+      if (!SectionName.compare(".pdata")) {
+        continue;
       }
+
+      section_iterator SymbolSection(Obj.section_end());
+      Symbol->getSection(SymbolSection);
+      const bool IsExtern = SymbolSection == Obj.section_end();
+      uint64_t RelType = I->getType();
+      uint64_t Offset = I->getOffset();
+      void *RelocationTarget = nullptr;
+      if (IsExtern) {
+        // This is an external symbol. Verify that it's one we created for
+        // a global variable and report the relocation via Jit interface.
+        ErrorOr<StringRef> NameOrError = Symbol->getName();
+        assert(NameOrError);
+        StringRef TargetName = NameOrError.get();
+        assert(Context->NameToHandleMap.count(TargetName) == 1);
+        RelocationTarget = (void *)Context->NameToHandleMap[TargetName];
+      } else {
+        RelocationTarget = (void *)(L.getSectionLoadAddress(*SymbolSection) +
+                                    Symbol->getValue());
+      }
+      Context->JitInfo->recordRelocation(
+          (uint8_t *)L.getSectionLoadAddress(*SI) + Offset, RelocationTarget,
+          translateRelocationType(RelType));
     }
   }
 }
