@@ -67,13 +67,6 @@ struct LLILCJitContext {
   std::unique_ptr<llvm::Module>
   getModuleForMethod(CORINFO_METHOD_INFO *MethodInfo);
 
-  /// Write an informational message about this jit request to LLVM's dbgs().
-  void outputDebugMethodName();
-
-  /// Write an informational message about skipping this jit request to LLVM's
-  /// dbgs().
-  void outputSkippingMethodName();
-
 public:
   /// \name CoreCLR EE information
   //@{

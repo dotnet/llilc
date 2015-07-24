@@ -336,7 +336,7 @@ uint32_t parseILOpcode(uint8_t *ILInput, uint32_t ILOffset, uint32_t ILSize,
   if (TheOpcode == ReaderBaseNS::CEE_ILLEGAL) {
     if (ReportErrors) {
       if (Reader == nullptr) {
-        ReaderBase::fatal(CORJIT_BADCODE);
+        dbPrint("parseILOpcode: Bad Opcode\n");
       } else {
         Reader->verGlobalError(MVER_E_UNKNOWN_OPCODE);
       }
@@ -363,7 +363,7 @@ uint32_t parseILOpcode(uint8_t *ILInput, uint32_t ILOffset, uint32_t ILSize,
 underflow:
   if (ReportErrors) {
     if (Reader == nullptr) {
-      ReaderBase::fatal(CORJIT_BADCODE);
+      dbPrint("parseILOpcode: Underflow\n");
     } else {
       Reader->verGlobalError(MVER_E_METHOD_END);
     }
@@ -371,17 +371,12 @@ underflow:
   return ILSize;
 }
 
-#if !defined(NDEBUG) || defined(CC_PEVERIFY)
-
 const char *OpcodeName[] = {
 #define OPDEF_HELPER OPDEF_OPCODENAME
 #include "ophelper.def"
 #undef OPDEF_HELPER
 };
 
-#endif
-
-#if !defined(NDEBUG)
 void ReaderBase::printMSIL() {
   printMSIL(MethodInfo->ILCode, 0, MethodInfo->ILCodeSize);
 }
@@ -401,7 +396,7 @@ void ReaderBase::printMSIL(uint8_t *Buf, uint32_t StartOffset,
 
   while (Offset < NumBytes) {
     dbPrint("0x%-4x: ", StartOffset + Offset);
-    Offset = parseILOpcode(Buf, Offset, NumBytes, this, &Opcode, &Operand);
+    Offset = parseILOpcode(Buf, Offset, NumBytes, nullptr, &Opcode, &Operand);
     dbPrint("%d: %-10s ", Offset, OpcodeName[Opcode]);
 
     switch (Opcode) {
@@ -444,7 +439,6 @@ void ReaderBase::printMSIL(uint8_t *Buf, uint32_t StartOffset,
     dbPrint("\n");
   }
 }
-#endif
 
 //////////////////////////////////////////////////////////////////////////
 //

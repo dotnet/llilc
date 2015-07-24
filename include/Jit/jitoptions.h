@@ -77,12 +77,51 @@ private:
   /// \returns true if COMPLUS_JitGCInfoLogging is set in the environment.
   static bool queryLogGcInfo(LLILCJitContext &JitContext);
 
+  /// \brief Define set of methods to exclude from LLILC compilation
+  ///
+  /// \returns true if current method is in that set.
+  static bool queryIsExcludeMethod(LLILCJitContext &JitContext);
+
+  /// \brief Define set of methods on which to break.
+  ///
+  /// \returns true if current method is in that set.
+  static bool queryIsBreakMethod(LLILCJitContext &JitContext);
+
+  /// \brief Define set of methods for which to dump MSIL
+  ///
+  /// \returns true if current method is in that set.
+  static bool queryIsMSILDumpMethod(LLILCJitContext &JitContext);
+
+  /// \brief Define set of methods for which to dump LLVM IR.
+  ///
+  /// \returns true if current method is in that set.
+  static bool queryIsLLVMDumpMethod(LLILCJitContext &JitContext);
+
+  /// \brief Define set of methods for which to print code address range.
+  ///
+  /// \returns true if current method is in that set.
+  static bool queryIsCodeRangeMethod(LLILCJitContext &JitContext);
+
+  static bool queryMethodSet(LLILCJitContext &JitContext, MethodSet &TheSet,
+                             const char16_t *Name);
+
 public:
-  bool IsAltJit; ///< True if running as the alternative JIT.
+  bool IsAltJit;        ///< True if running as the alternative JIT.
+  bool IsExcludeMethod; ///< True if method is to be excluded.
+                        ///< Jit if IsAltJit && !IsExcludeMethod
+  bool IsBreakMethod;   ///< True if break requested when compiling this method.
+  bool IsMSILDumpMethod;  ///< True if dump of MSIL requested.
+  bool IsLLVMDumpMethod;  ///< True if dump of LLVM requested.
+  bool IsCodeRangeMethod; ///< True if desired to dump entry address and size.
 
 private:
   static MethodSet AltJitMethodSet;     ///< Singleton AltJit MethodSet.
   static MethodSet AltJitNgenMethodSet; ///< Singleton AltJitNgen MethodSet.
+  static MethodSet ExcludeMethodSet;    ///< Methods to exclude from jitting.
+  static MethodSet BreakMethodSet;      ///< Methods to break.
+  static MethodSet MSILMethodSet;       ///< Methods to dump MSIL.
+  static MethodSet LLVMMethodSet;       ///< Methods to dump LLVM IR.
+  static MethodSet CodeRangeMethodSet;  ///< Methods to dump code range
 };
 
 #endif // JITOPTIONS_H
