@@ -5619,11 +5619,22 @@ IRNode *GenIR::unbox(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Object,
   IRNode *ClassHandleArgument = genericTokenToNode(ResolvedToken);
 
   // The normal Unboxing helper returns a pointer into the boxed object
-  // But the unbox nullable helper takes a pointer to write into and
+  // but the unbox nullable helper takes a pointer to write into and
   // returns void, so we need to shift the arguments and create a temp
-  // to write the output into
+  // to write the output into.
   if (HelperId == CORINFO_HELP_UNBOX_NULLABLE) {
-    throw NotYetImplementedException("unbox nullable");
+    CorInfoType CorType = ReaderBase::getClassType(ClassHandle);
+    Type *NullableType = getType(CorType, ClassHandle);
+    assert(NullableType->isStructTy());
+    IRNode *UnboxedNullable =
+        (IRNode *)createTemporary(NullableType, "UnboxedNullable");
+    const bool MayThrow = true;
+    IRNode *Result = callHelper(HelperId, MayThrow, nullptr, UnboxedNullable,
+                                ClassHandleArgument, Object);
+    if (AndLoad) {
+      setValueRepresentsStruct(UnboxedNullable);
+    }
+    return UnboxedNullable;
   }
 
   ASSERTNR(HelperId == CORINFO_HELP_UNBOX);
@@ -6448,21 +6459,29 @@ IRNode *GenIR::getTypedAddress(IRNode *Addr, CorInfoType CorInfoType,
     if (PointerTy != nullptr) {
       Type *ReferentTy = PointerTy->getPointerElementType();
 
-      // The result of the load is an object reference,
-      // So addr should be ptr to managed ptr to struct
-      if (!ReferentTy->isPointerTy()) {
-        // If we hit this we should fix the address producer, not
-        // coerce the type here.
-        throw NotYetImplementedException(
-            "unexpected type in load/store primitive");
+      // The result of the load is an object reference or a typed reference.
+      if (ReferentTy->isStructTy()) {
+        // This is the typed reference case. We shouldn't need a cast here.
+        Type *ExpectedTy = this->getType(CorInfoType, ClassHandle);
+        assert(ReferentTy == ExpectedTy);
+      } else {
+        // This is the object reference case so addr should be ptr to managed
+        // ptr to struct.
+        if (!ReferentTy->isPointerTy()) {
+          // If we hit this we should fix the address producer, not
+          // coerce the type here.
+          throw NotYetImplementedException(
+              "unexpected type in load/store primitive");
+        }
+        assert(isManagedPointerType(ReferentTy));
+        assert(cast<PointerType>(ReferentTy)
+                   ->getPointerElementType()
+                   ->isStructTy());
       }
-      ASSERT(isManagedPointerType(ReferentTy));
-      ASSERT(
-          cast<PointerType>(ReferentTy)->getPointerElementType()->isStructTy());
     } else {
       // This must be a nativeint, in which case we cast the address
       // to an address of Object.
-      ASSERT(AddressTy == Type::getIntNTy(*JitContext->LLVMContext,
+      assert(AddressTy == Type::getIntNTy(*JitContext->LLVMContext,
                                           TargetPointerSizeInBits));
 
       Type *ObjectType = getBuiltInObjectType();
@@ -6485,7 +6504,7 @@ IRNode *GenIR::getTypedAddress(IRNode *Addr, CorInfoType CorInfoType,
             (IRNode *)LLVMBuilder->CreatePointerCast(Addr, PtrToExpectedTy);
       }
     } else {
-      ASSERT(AddressTy->isIntegerTy());
+      assert(AddressTy->isIntegerTy());
       Type *PtrToExpectedTy = getUnmanagedPointerType(ExpectedTy);
       TypedAddr = (IRNode *)LLVMBuilder->CreateIntToPtr(Addr, PtrToExpectedTy);
     }
