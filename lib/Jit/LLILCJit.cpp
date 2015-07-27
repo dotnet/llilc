@@ -27,6 +27,7 @@
 #include "llvm/Config/llvm-config.h"
 #include "llvm/DebugInfo/DIContext.h"
 #include "llvm/DebugInfo/DWARF/DWARFContext.h"
+#include "llvm/DebugInfo/DWARF/DWARFFormValue.h"
 #include "llvm/ExecutionEngine/Orc/CompileUtils.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/Support/DataTypes.h"
@@ -83,6 +84,9 @@ public:
   }
 
 private:
+  /// \brief Get debug info for object and send to CLR EE
+  ///
+  /// \param Obj Object file to get debug info for
   void getDebugInfoForObject(const ObjectFile &Obj,
                              const RuntimeDyld::LoadedObjectInfo &L);
 
@@ -101,6 +105,32 @@ private:
   void getRelocationTypeAndAddend(uint8_t *FixupAddress,
                                   uint64_t LLVMRelocationType,
                                   uint64_t *EERelocationType, size_t *Addend);
+
+  /// \brief Extract stack offsets for locals
+  ///
+  /// \param CU Dwarf Unit where locals exist
+  /// \param DebugEntry Debug Entry to look for local info
+  /// \param Offsets [out] List of offsets to record local info
+  void extractLocalLocations(const DWARFUnit *CU,
+                             const DWARFDebugInfoEntryMinimal *DebugEntry,
+                             std::vector<uint64_t> &Offsets);
+
+  /// \brief Extract debug info for locals from DWARF sections
+  ///
+  /// \param DwarfContext Dwarf Context to extract debug info from
+  /// \param Size Size of the function we are gathering info from
+  void getDebugInfoForLocals(DWARFContextInMemory *DwarfContext, uint64_t Size);
+
+  /// \brief Convert DWARF register number to CLR register number
+  ///
+  /// \param DwarfRegister Register number to convert
+  ICorDebugInfo::RegNum mapDwarfRegisterToRegNum(uint8_t DwarfRegister);
+
+  /// \brief Find the Subprogram DebugInfoEntry in list of DIEs
+  ///
+  /// \param DebugEntry DebugInfoEntry to start from
+  const DWARFDebugInfoEntryMinimal *
+  getSubprogramDIE(const DWARFDebugInfoEntryMinimal *DebugEntry);
 
 private:
   LLILCJitContext *Context;
@@ -471,7 +501,7 @@ void ObjectLoadListener::getDebugInfoForObject(
 
   // TODO: This extracts DWARF information from the object file, but we will
   // want to also be able to eventually extract WinCodeView information as well
-  DWARFContextInMemory DwarfContext(DebugObj);
+  DWARFContextInMemory *DwarfContext = new DWARFContextInMemory(DebugObj);
 
   // Use symbol info to iterate functions in the object.
   // TODO: This may have to change when we have funclets
@@ -500,7 +530,8 @@ void ObjectLoadListener::getDebugInfoForObject(
     unsigned NumDebugRanges = 0;
     ICorDebugInfo::OffsetMapping *OM;
 
-    DILineInfoTable Lines = DwarfContext.getLineInfoForAddressRange(Addr, Size);
+    DILineInfoTable Lines =
+        DwarfContext->getLineInfoForAddressRange(Addr, Size);
 
     DILineInfoTable::iterator Begin = Lines.begin();
     DILineInfoTable::iterator End = Lines.end();
@@ -555,6 +586,8 @@ void ObjectLoadListener::getDebugInfoForObject(
 
       Context->JitInfo->setBoundaries(MethodHandle, NumDebugRanges, OM);
     }
+
+    getDebugInfoForLocals(DwarfContext, Size);
   }
 }
 
@@ -641,4 +674,157 @@ void ObjectLoadListener::getRelocationTypeAndAddend(uint8_t *FixupAddress,
   default:
     llvm_unreachable("Unknown reloc type.");
   }
+}
+
+void ObjectLoadListener::getDebugInfoForLocals(
+    DWARFContextInMemory *DwarfContext, uint64_t Size) {
+  for (const auto &CU : DwarfContext->compile_units()) {
+    const DWARFDebugInfoEntryMinimal *UnitDIE = CU->getUnitDIE(false);
+    const DWARFDebugInfoEntryMinimal *SubprogramDIE = getSubprogramDIE(UnitDIE);
+
+    ICorDebugInfo::RegNum FrameBaseRegister = ICorDebugInfo::REGNUM_COUNT;
+    DWARFFormValue FormValue;
+
+    // Find the frame_base register value
+    if (SubprogramDIE->getAttributeValue(CU.get(), dwarf::DW_AT_frame_base,
+                                         FormValue)) {
+      Optional<ArrayRef<uint8_t>> FormValues = FormValue.getAsBlock();
+      FrameBaseRegister = mapDwarfRegisterToRegNum(FormValues->back());
+    }
+
+    std::vector<uint64_t> Offsets;
+    extractLocalLocations(CU.get(), SubprogramDIE, Offsets);
+
+    // Allocate the array of NativeVarInfo objects that will be sent to the EE
+    ICorDebugInfo::NativeVarInfo *LocalVars;
+    unsigned SizeOfArray =
+        Offsets.size() * sizeof(ICorDebugInfo::NativeVarInfo);
+    if (SizeOfArray > 0) {
+      LocalVars =
+          (ICorDebugInfo::NativeVarInfo *)Context->JitInfo->allocateArray(
+              SizeOfArray);
+
+      unsigned CurrentDebugEntry = 0;
+
+      for (auto &Offset : Offsets) {
+        LocalVars[CurrentDebugEntry].startOffset = 0;
+        LocalVars[CurrentDebugEntry].endOffset = Size;
+        LocalVars[CurrentDebugEntry].varNumber = CurrentDebugEntry;
+
+        // Assume all locals are on the stack
+        ICorDebugInfo::VarLoc VarLoc;
+        VarLoc.vlType = ICorDebugInfo::VLT_STK;
+        VarLoc.vlStk.vlsBaseReg = FrameBaseRegister;
+        VarLoc.vlStk.vlsOffset = Offset;
+
+        LocalVars[CurrentDebugEntry].loc = VarLoc;
+
+        CurrentDebugEntry++;
+      }
+
+      CORINFO_METHOD_INFO *MethodInfo = Context->MethodInfo;
+      CORINFO_METHOD_HANDLE MethodHandle = MethodInfo->ftn;
+
+      Context->JitInfo->setVars(MethodHandle, Offsets.size(), LocalVars);
+    }
+  }
+}
+
+void ObjectLoadListener::extractLocalLocations(
+    const DWARFUnit *CU, const DWARFDebugInfoEntryMinimal *DebugEntry,
+    std::vector<uint64_t> &Offsets) {
+  if (DebugEntry->isNULL())
+    return;
+  if (DebugEntry->getTag() == dwarf::DW_TAG_formal_parameter ||
+      DebugEntry->getTag() == dwarf::DW_TAG_variable) {
+    uint64_t Offset;
+
+    // Extract offset for each local found
+    DWARFFormValue FormValue;
+    if (DebugEntry->getAttributeValue(CU, dwarf::DW_AT_location, FormValue)) {
+      Optional<ArrayRef<uint8_t>> FormValues = FormValue.getAsBlock();
+      Offset = FormValues->back();
+    }
+
+    Offsets.push_back(Offset);
+  }
+
+  const DWARFDebugInfoEntryMinimal *Child = DebugEntry->getFirstChild();
+
+  // Extract info for DebugEntry's child and its child's siblings.
+  while (Child) {
+    extractLocalLocations(CU, Child, Offsets);
+    Child = Child->getSibling();
+  }
+}
+
+const DWARFDebugInfoEntryMinimal *ObjectLoadListener::getSubprogramDIE(
+    const DWARFDebugInfoEntryMinimal *DebugEntry) {
+  if (DebugEntry->isSubprogramDIE())
+    return DebugEntry;
+  else if (DebugEntry->hasChildren())
+    return getSubprogramDIE(DebugEntry->getFirstChild());
+  else
+    return nullptr;
+}
+
+ICorDebugInfo::RegNum
+ObjectLoadListener::mapDwarfRegisterToRegNum(uint8_t DwarfRegister) {
+  ICorDebugInfo::RegNum Register = ICorDebugInfo::REGNUM_COUNT;
+#if _TARGET_AMD64_
+  switch (DwarfRegister) {
+  case dwarf::DW_OP_reg0:
+    Register = ICorDebugInfo::REGNUM_RAX;
+    break;
+  case dwarf::DW_OP_reg1:
+    Register = ICorDebugInfo::REGNUM_RDX;
+    break;
+  case dwarf::DW_OP_reg2:
+    Register = ICorDebugInfo::REGNUM_RCX;
+    break;
+  case dwarf::DW_OP_reg3:
+    Register = ICorDebugInfo::REGNUM_RBX;
+    break;
+  case dwarf::DW_OP_reg4:
+    Register = ICorDebugInfo::REGNUM_RSI;
+    break;
+  case dwarf::DW_OP_reg5:
+    Register = ICorDebugInfo::REGNUM_RDI;
+    break;
+  case dwarf::DW_OP_reg6:
+    Register = ICorDebugInfo::REGNUM_RBP;
+    break;
+  case dwarf::DW_OP_reg7:
+    Register = ICorDebugInfo::REGNUM_RSP;
+    break;
+  case dwarf::DW_OP_reg8:
+    Register = ICorDebugInfo::REGNUM_R8;
+    break;
+  case dwarf::DW_OP_reg9:
+    Register = ICorDebugInfo::REGNUM_R9;
+    break;
+  case dwarf::DW_OP_reg10:
+    Register = ICorDebugInfo::REGNUM_R10;
+    break;
+  case dwarf::DW_OP_reg11:
+    Register = ICorDebugInfo::REGNUM_R11;
+    break;
+  case dwarf::DW_OP_reg12:
+    Register = ICorDebugInfo::REGNUM_R12;
+    break;
+  case dwarf::DW_OP_reg13:
+    Register = ICorDebugInfo::REGNUM_R13;
+    break;
+  case dwarf::DW_OP_reg14:
+    Register = ICorDebugInfo::REGNUM_R14;
+    break;
+  case dwarf::DW_OP_reg15:
+    Register = ICorDebugInfo::REGNUM_R15;
+    break;
+  default:
+    Register = ICorDebugInfo::REGNUM_COUNT;
+    break;
+  }
+#endif
+  return Register;
 }
