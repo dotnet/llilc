@@ -33,7 +33,7 @@ clang-tidy binary | /< on path/> | --clang-tidy \<path\>
 
 ## Running ccformat
 
-To check if a submissions conforms to coding conventions, contributors 
+To check if a submission conforms to coding conventions, contributors 
 should run from their main LLILC enlistment directory:
 
 > utils\ccformat.py
