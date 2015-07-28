@@ -1063,7 +1063,8 @@ llvm::DIType *GenIR::convertType(Type *Ty) {
 
   if (Ty->isPointerTy()) {
     uint64_t Size = JitContext->TM->createDataLayout().getPointerTypeSize(Ty);
-    uint64_t Align = JitContext->TM->createDataLayout().getPrefTypeAlignment(Ty);
+    uint64_t Align =
+        JitContext->TM->createDataLayout().getPrefTypeAlignment(Ty);
     llvm::DIType *DbgTy = DBuilder->createPointerType(
         convertType(Ty->getPointerElementType()), Size, Align);
 
