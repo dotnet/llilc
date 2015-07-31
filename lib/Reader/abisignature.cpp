@@ -312,7 +312,7 @@ CallSite ABICallSignature::emitUnmanagedCall(GenIR &Reader, Value *Target,
 
 Value *ABICallSignature::emitCall(GenIR &Reader, Value *Target, bool MayThrow,
                                   ArrayRef<Value *> Args,
-                                  Value *IndirectionCell,
+                                  Value *IndirectionCell, bool IsJmp,
                                   Value **CallNode) const {
   assert(Target->getType()->isIntegerTy(Reader.TargetPointerSizeInBits));
 
@@ -323,10 +323,13 @@ Value *ABICallSignature::emitCall(GenIR &Reader, Value *Target, bool MayThrow,
   bool HasIndirectionCell = IndirectionCell != nullptr;
   bool IsUnmanagedCall =
       Signature.getCallingConvention() != CORINFO_CALLCONV_DEFAULT;
-  assert(((HasIndirectionCell ? 1 : 0) + (IsUnmanagedCall ? 1 : 0)) <= 1);
+  bool CallerHasSecretParameter = Reader.MethodSignature.hasSecretParameter();
+  bool IsJmpWithSecretParam = IsJmp && CallerHasSecretParameter;
+  assert(((HasIndirectionCell ? 1 : 0) + (IsUnmanagedCall ? 1 : 0) +
+          (IsJmpWithSecretParam ? 1 : 0)) <= 1);
 
   uint32_t NumSpecialArgs = 0;
-  if (HasIndirectionCell) {
+  if (HasIndirectionCell || IsJmpWithSecretParam) {
     NumSpecialArgs = 1;
   }
 
@@ -349,15 +352,28 @@ Value *ABICallSignature::emitCall(GenIR &Reader, Value *Target, bool MayThrow,
         Reader.TargetPointerSizeInBits));
     ArgumentTypes[0] = IndirectionCell->getType();
     Arguments[0] = IndirectionCell;
+  } else if (IsJmpWithSecretParam) {
+    Arguments[0] = Reader.secretParam();
+    ArgumentTypes[0] = Arguments[0]->getType();
   }
 
   int32_t ResultIndex = -1;
   if (HasIndirectResult) {
     ResultIndex = (int32_t)NumSpecialArgs + (Signature.hasThis() ? 1 : 0);
     Type *ResultTy = Result.getType();
-    ArgumentTypes[ResultIndex] = Reader.getUnmanagedPointerType(ResultTy);
-    Arguments[ResultIndex] = ResultNode = Reader.createTemporary(ResultTy);
-
+    // Jmp target signature has to match the caller's signature. Since we type
+    // the caller's indirect result parameters as managed pointers, jmp target's
+    // indirect result parameters also have to be typed as managed pointers.
+    ArgumentTypes[ResultIndex] = IsJmp
+                                     ? Reader.getManagedPointerType(ResultTy)
+                                     : Reader.getUnmanagedPointerType(ResultTy);
+    if (IsJmp) {
+      // When processing jmp, pass the pointer that we got from the caller
+      // rather than a pointer to a copy in the current frame.
+      Arguments[ResultIndex] = ResultNode = Reader.IndirectResult;
+    } else {
+      Arguments[ResultIndex] = ResultNode = Reader.createTemporary(ResultTy);
+    }
     if (ResultTy->isStructTy()) {
       Reader.setValueRepresentsStruct(ResultNode);
     }
@@ -389,20 +405,27 @@ Value *ABICallSignature::emitCall(GenIR &Reader, Value *Target, bool MayThrow,
 
     if (ArgInfo.getKind() == ABIArgInfo::Indirect) {
       // TODO: byval attribute support
-      Value *Temp = nullptr;
-      if (Reader.doesValueRepresentStruct(Arg)) {
-        StructType *ArgStructTy =
-            cast<StructType>(ArgType->getPointerElementType());
+      if (IsJmp) {
+        // When processing jmp pass the pointer that we got from the caller
+        // rather than a pointer to a copy in the current frame.
+        Arguments[I] = Arg;
         ArgumentTypes[I] = ArgType;
-        Temp = Reader.createTemporary(ArgStructTy);
-        const bool IsVolatile = false;
-        Reader.copyStruct(ArgStructTy, Temp, Arg, IsVolatile);
       } else {
-        ArgumentTypes[I] = ArgType->getPointerTo();
-        Temp = Reader.createTemporary(ArgType);
-        Builder.CreateStore(Arg, Temp);
+        Value *Temp = nullptr;
+        if (Reader.doesValueRepresentStruct(Arg)) {
+          StructType *ArgStructTy =
+              cast<StructType>(ArgType->getPointerElementType());
+          ArgumentTypes[I] = ArgType;
+          Temp = Reader.createTemporary(ArgStructTy);
+          const bool IsVolatile = false;
+          Reader.copyStruct(ArgStructTy, Temp, Arg, IsVolatile);
+        } else {
+          ArgumentTypes[I] = ArgType->getPointerTo();
+          Temp = Reader.createTemporary(ArgType);
+          Builder.CreateStore(Arg, Temp);
+        }
+        Arguments[I] = Temp;
       }
-      Arguments[I] = Temp;
     } else {
       ArgumentTypes[I] = ArgInfo.getType();
       Arguments[I] = coerce(Reader, ArgInfo.getType(), Arg);
@@ -448,6 +471,9 @@ Value *ABICallSignature::emitCall(GenIR &Reader, Value *Target, bool MayThrow,
   if (HasIndirectionCell) {
     assert(Signature.getCallingConvention() == CORINFO_CALLCONV_DEFAULT);
     CC = CallingConv::CLR_VirtualDispatchStub;
+  } else if (IsJmpWithSecretParam) {
+    assert(Signature.getCallingConvention() == CORINFO_CALLCONV_DEFAULT);
+    CC = CallingConv::CLR_SecretParameter;
   } else {
     bool Unused;
     CC = getLLVMCallingConv(getNormalizedCallingConvention(Signature), Unused);
@@ -475,6 +501,12 @@ Value *ABICallSignature::emitCall(GenIR &Reader, Value *Target, bool MayThrow,
   }
 
   *CallNode = Call.getInstruction();
+
+  if (IsJmp) {
+    CallInst *TheCallInst = cast<CallInst>(*CallNode);
+    TheCallInst->setTailCallKind(CallInst::TailCallKind::TCK_MustTail);
+  }
+
   return ResultNode;
 }
 
@@ -557,19 +589,9 @@ Function *ABIMethodSignature::createFunction(GenIR &Reader, Module &M) {
     Args->setName(Twine("param") + Twine(N++));
   }
 
-  CallingConv::ID CC;
-  if (Signature->hasSecretParameter()) {
-    assert((--F->arg_end())->getType()->isIntegerTy());
-
-    AttrBuilder SecretParamAttrs;
-    SecretParamAttrs.addAttribute("CLR_SecretParameter");
-    Attrs.push_back(
-        AttributeSet::get(Context, F->arg_size(), SecretParamAttrs));
-
-    CC = CallingConv::CLR_SecretParameter;
-  } else {
-    CC = CallingConv::C;
-  }
+  CallingConv::ID CC = Signature->hasSecretParameter()
+                           ? CallingConv::CLR_SecretParameter
+                           : CallingConv::C;
   F->setCallingConv(CC);
 
   if (Attrs.size() > 0) {

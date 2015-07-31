@@ -414,10 +414,21 @@ public:
   /// \returns True if this method accepts instantiation information.
   bool hasTypeArg() const { return HasTypeArg; }
 
-  /// \brief Check whether this method acceps a secret parameter.
+  /// \brief Check whether this method accepts a secret parameter.
   ///
   /// \returns True if this method accepts a secret parameter.
   bool hasSecretParameter() const { return HasSecretParameter; }
+
+  /// \brief Get the index of the method's secret parameter.
+  ///
+  /// The result of this method can be used as an index into the
+  /// result of \p getArgumentTypes.
+  ///
+  /// \returns The index of the method's secret parameter.
+  uint32_t getSecretParameterIndex() const {
+    assert(HasSecretParameter);
+    return 0;
+  }
 
   /// \brief Get the index of the method's \p this parameter.
   ///
@@ -427,7 +438,7 @@ public:
   /// \returns The index of the method's \p this parameter.
   uint32_t getThisIndex() const {
     assert(HasThis);
-    return 0;
+    return HasSecretParameter ? 1 : 0;
   }
 
   /// \brief Get the index of the method's vararg cookie parameter.
@@ -438,7 +449,7 @@ public:
   /// \returns The index of the method's vararg cookie parameter.
   uint32_t getVarArgIndex() const {
     assert(IsVarArg);
-    return HasThis ? 1 : 0;
+    return (HasSecretParameter ? 1 : 0) + (HasThis ? 1 : 0);
   }
 
   /// \brief Get the index of the method's instantiation parameter.
@@ -449,18 +460,8 @@ public:
   /// \returns The index of the method's instantiation parameter.
   uint32_t getTypeArgIndex() const {
     assert(HasTypeArg);
-    return (HasThis ? 1 : 0) + (IsVarArg ? 1 : 0);
-  }
-
-  /// \brief Get the index of the method's secret parameter.
-  ///
-  /// The result of this method can be used as an index into the
-  /// result of \p getArgumentTypes.
-  ///
-  /// \returns The index of the method's secret parameter.
-  uint32_t getSecretParameterIndex() const {
-    assert(HasSecretParameter);
-    return ArgumentTypes.size() - 1;
+    return (HasSecretParameter ? 1 : 0) + (HasThis ? 1 : 0) +
+           (IsVarArg ? 1 : 0);
   }
 
   /// \brief Get the index of the method's first normal parameter.
@@ -477,17 +478,16 @@ public:
   ///
   /// \returns The index of the method's first normal parameter.
   uint32_t getNormalParamStart() const {
-    return (HasThis ? 1 : 0) + (IsVarArg ? 1 : 0) + (HasTypeArg ? 1 : 0);
+    return (HasSecretParameter ? 1 : 0) + (HasThis ? 1 : 0) +
+           (IsVarArg ? 1 : 0) + (HasTypeArg ? 1 : 0);
   }
 
   /// \brief Get the index after the last normal parameter to the method.
   ///
-  /// See \p getIndexOfFirstNormalParam for a discussion of "normal" parameters.
+  /// See \p getNormalParamStart for a discussion of "normal" parameters.
   ///
   /// \returns The index after the last normal parameter to this method.
-  uint32_t getNormalParamEnd() const {
-    return ArgumentTypes.size() - (HasSecretParameter ? 1 : 0);
-  }
+  uint32_t getNormalParamEnd() const { return ArgumentTypes.size(); }
 
   /// \brief Return the index of the argument that corresponds to the given
   ///        IL argument ordinal.
@@ -500,9 +500,10 @@ public:
   /// \returns The index of the argument.
   uint32_t getArgIndexForILArg(uint32_t Ordinal) const {
     if (HasThis && Ordinal == 0) {
-      return 0;
+      return getThisIndex();
     }
-    uint32_t Index = Ordinal + (IsVarArg ? 1 : 0) + (HasTypeArg ? 1 : 0);
+    uint32_t Index = Ordinal + (HasSecretParameter ? 1 : 0) +
+                     (IsVarArg ? 1 : 0) + (HasTypeArg ? 1 : 0);
     assert(Index >= getNormalParamStart());
     assert(Index < getNormalParamEnd());
     return Index;
@@ -515,12 +516,13 @@ public:
   ///
   /// \returns The IL argument ordinal.
   uint32_t getILArgForArgIndex(uint32_t Index) const {
-    if (HasThis && Index == 0) {
+    if (HasThis && Index == getThisIndex()) {
       return 0;
     }
     assert(Index >= getNormalParamStart());
     assert(Index < getNormalParamEnd());
-    return Index - (IsVarArg ? 1 : 0) - (HasTypeArg ? 1 : 0);
+    return Index - (HasSecretParameter ? 1 : 0) - (IsVarArg ? 1 : 0) -
+           (HasTypeArg ? 1 : 0);
   }
 };
 
@@ -2689,8 +2691,7 @@ public:
                        bool IsVolatile);
   virtual void initObj(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg2);
   virtual void insertThrow(CorInfoHelpFunc ThrowHelper, uint32_t Offset);
-  virtual void jmp(ReaderBaseNS::CallOpcode Opcode, mdToken Token, bool HasThis,
-                   bool HasVarArg) = 0;
+  virtual void jmp(ReaderBaseNS::CallOpcode Opcode, mdToken Token) = 0;
 
   virtual uint32_t updateLeaveOffset(uint32_t LeaveOffset, uint32_t NextOffset,
                                      FlowGraphNode *LeaveBlock,
