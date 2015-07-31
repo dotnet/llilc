@@ -18,7 +18,7 @@ request. The code formatting script is found at LLILC\utils\ccformat.py.
 ## Setup
 
 * Set the INCLUDE=<path to system headers>. On Windows, this can be done by executing
-> "%VS120COMNTOOLS%\..\..\VC\vcvarsall.bat" x64
+> "%VS120COMNTOOLS%\\..\\..\VC\vcvarsall.bat" x64
 
 * Provide a full path to the following locations via the corresponding environment settings
   or command line arguments.
