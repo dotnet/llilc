@@ -898,11 +898,10 @@ IRNode *GenIR::thisObj() {
 
 // Get the value of the secret parameter to an IL stub.
 IRNode *GenIR::secretParam() {
-  ASSERT(MethodSignature.hasSecretParameter());
-  ASSERT(MethodSignature.getSecretParameterIndex() ==
-         (MethodSignature.getArgumentTypes().size() - 1));
-  Function::arg_iterator Args = Function->arg_end();
-  Value *SecretParameter = --Args;
+  assert(MethodSignature.hasSecretParameter());
+  assert(MethodSignature.getSecretParameterIndex() == 0);
+  Function::arg_iterator Args = Function->arg_begin();
+  Value *SecretParameter = Args;
   return (IRNode *)SecretParameter;
 }
 
@@ -3490,10 +3489,8 @@ void GenIR::storeArg(uint32_t ArgOrdinal, IRNode *Arg1,
 }
 
 IRNode *GenIR::loadArg(uint32_t ArgOrdinal, bool IsJmp) {
-  if (IsJmp) {
-    throw NotYetImplementedException("JMP");
-  }
-  uint32_t ArgIndex = MethodSignature.getArgIndexForILArg(ArgOrdinal);
+  uint32_t ArgIndex =
+      IsJmp ? ArgOrdinal : MethodSignature.getArgIndexForILArg(ArgOrdinal);
   Value *ArgAddress = Arguments[ArgIndex];
 
   Type *ArgTy = ArgAddress->getType()->getPointerElementType();
@@ -4170,11 +4167,9 @@ IRNode *GenIR::genArrayElemAddress(IRNode *Array, IRNode *Index,
   StructType *ReferentTy = cast<StructType>(Ty->getPointerElementType());
   unsigned int RawArrayStructFieldIndex = ReferentTy->getNumElements() - 1;
 
-#ifndef NDEBUG
   Type *ArrayTy = ReferentTy->getElementType(RawArrayStructFieldIndex);
-  ASSERTNR(ArrayTy->isArrayTy());
-  ASSERTNR(ArrayTy->getArrayElementType() == ElementTy);
-#endif
+  assert(ArrayTy->isArrayTy());
+  assert(ArrayTy->getArrayElementType() == ElementTy);
 
   LLVMContext &Context = *this->JitContext->LLVMContext;
 
@@ -5011,6 +5006,7 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo, bool MayThrow,
   const uint32_t NumArgs = Args.size();
   assert(NumArgs == ArgumentTypes.size());
 
+  bool IsJmp = CallTargetInfo->isJmp();
   SmallVector<Value *, 16> Arguments(NumArgs);
   for (uint32_t I = 0; I < NumArgs; I++) {
     IRNode *ArgNode = Args[I];
@@ -5025,7 +5021,12 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo, bool MayThrow,
         ArgNode = genNullCheck(ArgNode);
       }
     }
-    IRNode *Arg = convertFromStackType(ArgNode, CorType, ArgType);
+    // We pass indirect args to jmp as the pointers we get from the caller
+    // without copying the parameters into the current frame.
+    IRNode *Arg = IsJmp && (ABIMethodSig.getArgumentInfo(I).getKind() ==
+                            ABIArgInfo::Indirect)
+                      ? ArgNode
+                      : convertFromStackType(ArgNode, CorType, ArgType);
     Arguments[I] = Arg;
   }
 
@@ -5049,9 +5050,10 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo, bool MayThrow,
   }
 
   ABICallSignature ABICallSig(Signature, *this, *JitContext->TheABIInfo);
-  Value *ResultNode = ABICallSig.emitCall(
-      *this, (Value *)TargetNode, MayThrow, Arguments,
-      (Value *)CallTargetInfo->getIndirectionCellNode(), (Value **)&Call);
+  Value *ResultNode =
+      ABICallSig.emitCall(*this, (Value *)TargetNode, MayThrow, Arguments,
+                          (Value *)CallTargetInfo->getIndirectionCellNode(),
+                          IsJmp, (Value **)&Call);
 
   // Add VarArgs cookie to outgoing param list
   if (CC == CORINFO_CALLCONV_VARARG) {
@@ -5061,7 +5063,15 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo, bool MayThrow,
   *CallNode = Call;
 
   if (ResultType.CorType != CORINFO_TYPE_VOID) {
-    return convertToStackType((IRNode *)ResultNode, ResultType.CorType);
+    if (IsJmp) {
+      // The IR for jmp is a musttail call immediately followed by a ret.
+      // The return types of the caller and the jmp target are guaranteed to
+      // match so we shouldn't convert to stack type and then back to return
+      // type.
+      return (IRNode *)ResultNode;
+    } else {
+      return convertToStackType((IRNode *)ResultNode, ResultType.CorType);
+    }
   } else {
     return nullptr;
   }
@@ -5098,6 +5108,49 @@ IRNode *GenIR::convertToBoxHelperArgumentType(IRNode *Opr,
   }
 
   return Opr;
+}
+
+// Method is called with empty stack.
+void GenIR::jmp(ReaderBaseNS::CallOpcode Opcode, mdToken Token) {
+  assert(Opcode == ReaderBaseNS::Jmp);
+  ReaderCallTargetData Data;
+  makeReaderCallTargetDataForJmp(&Data, Token);
+
+  const bool IsJmp = true;
+  if (MethodSignature.hasThis()) {
+    IRNode *ThisArg = loadArg(MethodSignature.getThisIndex(), IsJmp);
+    ReaderOperandStack->push(ThisArg);
+  }
+
+  for (uint32_t I = MethodSignature.getNormalParamStart();
+       I < MethodSignature.getNormalParamEnd(); ++I) {
+    IRNode *NormalArg = nullptr;
+    const ABIArgInfo ArgInfo = ABIMethodSig.getArgumentInfo(I);
+    if (ArgInfo.getKind() == ABIArgInfo::Indirect) {
+      // We pass indirect arguments without copying them to the current frame.
+      NormalArg = (IRNode *)Arguments[I];
+    } else {
+      NormalArg = loadArg(I, IsJmp);
+    }
+    ReaderOperandStack->push(NormalArg);
+  }
+
+  // This will generate a call marked with musttail.
+  IRNode *CallNode = nullptr;
+  rdrCall(&Data, Opcode, &CallNode);
+
+  const bool IsSynchronizedMethod =
+      ((getCurrentMethodAttribs() & CORINFO_FLG_SYNCH) != 0);
+  assert(!IsSynchronizedMethod);
+
+  // LLVM requires muttail calls to be immediatley followed by a ret.
+  if (Function->getReturnType()->isVoidTy()) {
+    LLVMBuilder->CreateRetVoid();
+  } else {
+    LLVMBuilder->CreateRet(CallNode);
+  }
+
+  return;
 }
 
 Value *GenIR::genConvertOverflowCheck(Value *Source, IntegerType *TargetTy,
@@ -5630,8 +5683,8 @@ IRNode *GenIR::unbox(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Object,
     IRNode *UnboxedNullable =
         (IRNode *)createTemporary(NullableType, "UnboxedNullable");
     const bool MayThrow = true;
-    IRNode *Result = callHelper(HelperId, MayThrow, nullptr, UnboxedNullable,
-                                ClassHandleArgument, Object);
+    callHelper(HelperId, MayThrow, nullptr, UnboxedNullable,
+               ClassHandleArgument, Object);
     if (AndLoad) {
       setValueRepresentsStruct(UnboxedNullable);
     }

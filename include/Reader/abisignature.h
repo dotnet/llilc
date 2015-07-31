@@ -92,12 +92,13 @@ public:
   /// \param Args             The arguments to the call.
   /// \param IndirectionCell  The indirection cell argument for the call, if
   ///                         any.
+  /// \param IsJmp            True iff this is a call for a jmp instruction.
   /// \param CallNode [out]   The call instruction.
   ///
   /// \returns The result of the call to the target.
   llvm::Value *emitCall(GenIR &Reader, llvm::Value *Target, bool MayThrow,
                         llvm::ArrayRef<llvm::Value *> Args,
-                        llvm::Value *IndirectionCell,
+                        llvm::Value *IndirectionCell, bool IsJmp,
                         llvm::Value **CallNode) const;
 };
 

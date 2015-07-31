@@ -3031,32 +3031,13 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
     }
 
     case ReaderBaseNS::CEE_JMP:
-      // The MSIL jmp instruction will cause us to never return to the
-      // caller, so any any code after the jmp is unreachable. Thus we
-      // must break the block.  In order to trick the flow graph
-      // builder into not placing a fall through arc here we place a
-      // branch to the exit label. Note the fifth argument to
-      // fgMakeBranch is true, which indicates that we want to make a
-      // nominal branch.  We will remove the branch when we read in
-      // the jmp instruction in the main reader loop.
-      {
-        bool IsRecursiveTail = false;
-        mdToken Token = readValue<mdToken>(Operand);
-        if (JitInfo->isValidToken(getCurrentModuleHandle(), Token)) {
-          IsRecursiveTail = fgOptRecurse(Token);
-        }
-        BlockNode = fgNodeGetStartIRNode(Block);
-        TheExitLabel = (IsRecursiveTail ? entryLabel() : exitLabel());
-        BranchNode = fgMakeBranchHelper(TheExitLabel, BlockNode, CurrentOffset,
-                                        false, !IsRecursiveTail);
-        fgNodeSetEndMSILOffset(Block, NextOffset);
-        Block = fgSplitBlock(Block, NextOffset,
-                             findBlockSplitPointAfterNode(BranchNode));
+      fgNodeSetEndMSILOffset(Block, NextOffset);
+      if (NextOffset < ILInputSize) {
+        Block = makeFlowGraphNode(NextOffset, Block, nullptr);
       }
       break;
 
     case ReaderBaseNS::CEE_RET:
-
       verifyReturnFlow(CurrentOffset);
       fgNodeSetEndMSILOffset(Block, NextOffset);
       if (NextOffset < ILInputSize) {
@@ -5685,9 +5666,8 @@ void ReaderBase::initMethodInfo(bool HasSecretParameter,
   bool HasThis = SigInfo.hasThis();
   bool IsVarArg = SigInfo.isVarArg();
   bool HasTypeArg = SigInfo.hasTypeArg();
-  uint32_t NumArgs = (HasThis ? 1 : 0) + (IsVarArg ? 1 : 0) +
-                     (HasTypeArg ? 1 : 0) + NormalArgs +
-                     (HasSecretParameter ? 1 : 0);
+  uint32_t NumArgs = (HasSecretParameter ? 1 : 0) + (HasThis ? 1 : 0) +
+                     (IsVarArg ? 1 : 0) + (HasTypeArg ? 1 : 0) + NormalArgs;
 
   // Get the number of autos for this method.
   NumAutos = MethodInfo->locals.numArgs;
@@ -5722,7 +5702,14 @@ void ReaderBase::initMethodInfo(bool HasSecretParameter,
 
   uint32_t ParamIndex = 0;
 
-  // If the first argument is a this pointer we must synthesize its type.
+  if (HasSecretParameter) {
+    assert(ParamIndex == Signature.getSecretParameterIndex());
+
+    const CORINFO_CLASS_HANDLE Class = nullptr;
+    ArgumentTypes[ParamIndex++] = {CORINFO_TYPE_NATIVEINT, Class};
+  }
+
+  // If the method has a this parameter, we must synthesize its type.
   if (HasThis) {
     assert(ParamIndex == Signature.getThisIndex());
 
@@ -5788,13 +5775,6 @@ void ReaderBase::initMethodInfo(bool HasSecretParameter,
     CallArgType &Arg = ArgumentTypes[ParamIndex];
     Args = argListNext(Args, &SigInfo, &Arg.CorType, &Arg.Class);
   }
-
-  if (HasSecretParameter) {
-    assert(ParamIndex == Signature.getSecretParameterIndex());
-
-    const CORINFO_CLASS_HANDLE Class = nullptr;
-    ArgumentTypes[ParamIndex++] = {CORINFO_TYPE_NATIVEINT, Class};
-  }
 }
 
 void ReaderBase::initParamsAndAutos(const ReaderMethodSignature &Signature) {
@@ -5823,6 +5803,12 @@ void ReaderBase::buildUpAutos() {
 void ReaderBase::buildUpParams(const ReaderMethodSignature &Signature) {
   const std::vector<CallArgType> &Args = Signature.getArgumentTypes();
 
+  if (Signature.hasSecretParameter()) {
+    const uint32_t I = Signature.getSecretParameterIndex();
+    const CallArgType &Arg = Args[I];
+    createSym(I, false, Arg.CorType, Arg.Class, false, Reader_SecretParam);
+  }
+
   if (Signature.hasThis()) {
     const uint32_t I = Signature.getThisIndex();
     const CallArgType &Arg = Args[I];
@@ -5846,12 +5832,6 @@ void ReaderBase::buildUpParams(const ReaderMethodSignature &Signature) {
        I != E; ++I) {
     const CallArgType &Arg = Args[I];
     createSym(I, false, Arg.CorType, Arg.Class, false);
-  }
-
-  if (Signature.hasSecretParameter()) {
-    const uint32_t I = Signature.getSecretParameterIndex();
-    const CallArgType &Arg = Args[I];
-    createSym(I, false, Arg.CorType, Arg.Class, false, Reader_SecretParam);
   }
 }
 
@@ -6829,7 +6809,6 @@ void ReaderBase::readBytesForFlowGraphNodeHelper(
       CORINFO_METHOD_HANDLE Handle;
       CORINFO_SIG_INFO Sig, Sig2;
       bool HasThis;
-      bool HasVarArg;
 
       // check before verification otherwise we get different exceptions
       // badcode vs verification exception depending if verifier is on
@@ -6855,14 +6834,15 @@ void ReaderBase::readBytesForFlowGraphNodeHelper(
       // so fetch the information.
       Handle = ResolvedToken.hMethod;
       getCallSiteSignature(Handle, Token, &Sig, &HasThis);
-      HasVarArg = Sig.isVarArg();
-
       // While we are at it, make sure that the jump prototype
       // matches this function's prototype, otherwise it makes
       // no sense to abandon frame and transfer control.
       JitInfo->getMethodSig(getCurrentMethodHandle(), &Sig2);
 
-      if (Sig.numArgs != Sig2.numArgs) {
+      if ((Sig.numArgs != Sig2.numArgs) ||
+          (Sig.isVarArg() != Sig2.isVarArg()) ||
+          (Sig.hasTypeArg() != Sig2.hasTypeArg()) ||
+          (Sig.hasThis() != Sig2.hasThis())) {
         // This is meant to catch illegal use of JMP
         // While it allows some flexibility in the arguments
         // that shouldn't really even be allowed, it serves
@@ -6878,7 +6858,7 @@ void ReaderBase::readBytesForFlowGraphNodeHelper(
       // TODO: Populate stack with current method's incoming
       // parameters, currently the genIR method needs to obtain it
       // from information gathered during the prepass.
-      jmp((ReaderBaseNS::CallOpcode)MappedValue, Token, HasThis, HasVarArg);
+      jmp((ReaderBaseNS::CallOpcode)MappedValue, Token);
 
       // NOTE: jmp's stack transition shows that no value is placed on
       // the stack

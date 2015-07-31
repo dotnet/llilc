@@ -343,10 +343,7 @@ public:
 
   IRNode *getStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken) override;
 
-  void jmp(ReaderBaseNS::CallOpcode Opcode, mdToken Token, bool HasThis,
-           bool HasVarArg) override {
-    throw NotYetImplementedException("jmp");
-  };
+  void jmp(ReaderBaseNS::CallOpcode Opcode, mdToken Token) override;
 
   virtual uint32_t updateLeaveOffset(uint32_t LeaveOffset, uint32_t NextOffset,
                                      FlowGraphNode *LeaveBlock,
