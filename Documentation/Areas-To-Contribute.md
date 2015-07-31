@@ -16,15 +16,26 @@ As you work on an issue, it will likely spawn more work.  So enter these as issu
 ## Major Areas
 
 + (*) Areas where documentation needs improving.
-  Eg: [#122](https://github.com/dotnet/llilc/issues/122) thru
+  Eg: [#122](https://github.com/dotnet/llilc/issues/122),
+      [#124](https://github.com/dotnet/llilc/issues/124),
+      [#128](https://github.com/dotnet/llilc/issues/128),
+      [#129](https://github.com/dotnet/llilc/issues/129),
+      [#130](https://github.com/dotnet/llilc/issues/130),
+      [#131](https://github.com/dotnet/llilc/issues/131),
+      [#145](https://github.com/dotnet/llilc/issues/145),
+      [#154](https://github.com/dotnet/llilc/issues/154),
+      [#174](https://github.com/dotnet/llilc/issues/174),
+      [#175](https://github.com/dotnet/llilc/issues/175),
       [#176](https://github.com/dotnet/llilc/issues/176)
 
-+ (**) Extend the Reader
-  Eg: [#278](https://github.com/dotnet/llilc/issues/278) thru
-      [#286](https://github.com/dotnet/llilc/issues/286) thru
++ (**) Extend the Reader 
+  Eg: [#281](https://github.com/dotnet/llilc/issues/281),
+      [#283](https://github.com/dotnet/llilc/issues/283),
+      [#284](https://github.com/dotnet/llilc/issues/284),
+      [#286](https://github.com/dotnet/llilc/issues/286)
 
 + (**) Add support for more MSIL opcodes.
-  Eg: [#187](https://github.com/dotnet/llilc/issues/187) thru
+  Eg: [#191](https://github.com/dotnet/llilc/issues/191),
       [#192](https://github.com/dotnet/llilc/issues/192)
 
 + (**) Implement missing TODO features.  Eg:
@@ -38,7 +49,16 @@ As you work on an issue, it will likely spawn more work.  So enter these as issu
 + (***) Finish support for CoreCLR Generics.
 
 + (****) Exception Handling.
-  Eg: [#63](https://github.com/dotnet/llilc/issues/63) thru
+  Eg: [#66](https://github.com/dotnet/llilc/issues/66),
+      [#67](https://github.com/dotnet/llilc/issues/67),
+      [#68](https://github.com/dotnet/llilc/issues/68),
+      [#69](https://github.com/dotnet/llilc/issues/69),
+      [#70](https://github.com/dotnet/llilc/issues/70),
+      [#71](https://github.com/dotnet/llilc/issues/71),
+      [#73](https://github.com/dotnet/llilc/issues/73),
+      [#74](https://github.com/dotnet/llilc/issues/74),
+      [#75](https://github.com/dotnet/llilc/issues/75),
+      [#76](https://github.com/dotnet/llilc/issues/76),
       [#77](https://github.com/dotnet/llilc/issues/77)
 
 + (**) Memory allocation [#233](https://github.com/dotnet/llilc/issues/233)
@@ -59,7 +79,7 @@ As you work on an issue, it will likely spawn more work.  So enter these as issu
   +  Other platforms (eg: ARM-64)
 
 + (**) Enable deferred lowering of certain runtime
-  contructs [#292](https://github.com/dotnet/llilc/issues/292)
+  constructs [#292](https://github.com/dotnet/llilc/issues/292)
   + Helper calls (eg: double->int conversions)
   + Write barriers
   + Struct copying
