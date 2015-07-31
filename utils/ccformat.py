@@ -57,7 +57,9 @@ def runTidy(args):
         "-target x86_64-pc-win32-msvc",
         "-fms-extensions",
         "-fms-compatibility",
-        "-fmsc-version=1800"
+        "-fmsc-version=1800",
+        "–fexceptions",
+        "-fcxx-exceptions"
     ]
     includes = [
         os.path.join(llilcLib, "Jit"),
@@ -219,7 +221,8 @@ def main(argv):
   parser.add_argument("--noformat", action="store_true", default=False,
             help="Don\'t run clang-format-diff")
   parser.add_argument("--checks", default="llvm*,misc*,microsoft*,"\
-                      "-llvm-header-guard,-llvm-include-order",
+                      "-llvm-header-guard,-llvm-include-order,"\
+                      "-misc-unused-parameters",
             help="clang-tidy checks to run")
   parser.add_argument("--hide-diffs", action="store_true", default=False,
             help="Don't print formatting diffs (when not automatically fixed)")
