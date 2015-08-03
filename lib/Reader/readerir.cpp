@@ -2920,16 +2920,10 @@ IRNode *GenIR::loadConstantI(size_t Constant) {
 }
 
 IRNode *GenIR::loadConstantR4(float Value) {
-  if ((JitContext->Flags & CORJIT_FLG_PREJIT) != 0) {
-    throw NotYetImplementedException("ldc.r4 in ngen");
-  }
   return (IRNode *)ConstantFP::get(*JitContext->LLVMContext, APFloat(Value));
 }
 
 IRNode *GenIR::loadConstantR8(double Value) {
-  if ((JitContext->Flags & CORJIT_FLG_PREJIT) != 0) {
-    throw NotYetImplementedException("ldc.r8 in ngen");
-  }
   return (IRNode *)ConstantFP::get(*JitContext->LLVMContext, APFloat(Value));
 }
 
@@ -5354,14 +5348,6 @@ IRNode *GenIR::conv(ReaderBaseNS::ConvOpcode Opcode, IRNode *Source) {
       {CorInfoType::CORINFO_TYPE_DOUBLE, false, true}       // CONV_R_UN
   };
 
-  if ((JitContext->Flags & CORJIT_FLG_PREJIT) != 0) {
-    if ((Opcode == ReaderBaseNS::ConvOpcode::ConvR4) ||
-        (Opcode == ReaderBaseNS::ConvOpcode::ConvR8) ||
-        (Opcode == ReaderBaseNS::ConvOpcode::ConvRUn)) {
-      throw NotYetImplementedException("conv.r4, conv.r8, or conv.run in ngen");
-    }
-  }
-
   ConvertInfo Info = Map[Opcode];
 
   Type *TargetTy = getType(Info.CorType, nullptr);
@@ -5798,13 +5784,6 @@ bool GenIR::memoryBarrier() {
 }
 
 void GenIR::switchOpcode(IRNode *Opr) {
-
-  const uint32_t JitFlags = JitContext->Flags;
-
-  if ((JitFlags & CORJIT_FLG_PREJIT) != 0) {
-    throw NotYetImplementedException("switch in ngen");
-  }
-
   // We split the block right after the switch during the flow-graph build.
   // The terminator is switch instruction itself.
   // Now condition operand is updated.
