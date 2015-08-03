@@ -662,8 +662,8 @@ void GenIR::insertIRForUnmanagedCallFrame() {
   const bool MayThrow = false;
   Value *ThreadPointerValue =
       callHelperImpl(CORINFO_HELP_INIT_PINVOKE_FRAME, MayThrow, ThreadPointerTy,
-                     (IRNode *)FrameVPtrAddress,
-                     (IRNode *)SecretParam).getInstruction();
+                     (IRNode *)FrameVPtrAddress, (IRNode *)SecretParam)
+          .getInstruction();
   LLVMBuilder->CreateStore(ThreadPointerValue, ThreadPointerAddress);
 
   // Store the stack and frame pointers
@@ -4043,8 +4043,8 @@ IRNode *GenIR::loadElemA(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Index,
     PointerType *ElementAddressTy = getManagedPointerType(ElementTy);
     const bool MayThrow = true;
     return (IRNode *)callHelperImpl(CORINFO_HELP_LDELEMA_REF, MayThrow,
-                                    ElementAddressTy, Array, Index,
-                                    HandleNode).getInstruction();
+                                    ElementAddressTy, Array, Index, HandleNode)
+        .getInstruction();
   }
 
   return genArrayElemAddress(Array, Index, ElementTy);
@@ -4559,7 +4559,8 @@ IRNode *GenIR::callHelper(CorInfoHelpFunc HelperID, bool MayThrow, IRNode *Dst,
       (Dst == nullptr) ? Type::getVoidTy(LLVMContext) : Dst->getType();
   return (IRNode *)callHelperImpl(HelperID, MayThrow, ReturnType, Arg1, Arg2,
                                   Arg3, Arg4, Alignment, IsVolatile, NoCtor,
-                                  CanMoveUp).getInstruction();
+                                  CanMoveUp)
+      .getInstruction();
 }
 
 CallSite GenIR::callHelperImpl(CorInfoHelpFunc HelperID, bool MayThrow,
@@ -4933,9 +4934,9 @@ IRNode *GenIR::genNewObjThisArg(ReaderCallTargetData *CallTargetData,
   // Create the address operand for the newobj helper.
   CorInfoHelpFunc HelperId = getNewHelper(CallTargetData->getResolvedToken());
   const bool MayThrow = true;
-  Value *ThisPointer =
-      callHelperImpl(HelperId, MayThrow, ThisType,
-                     CallTargetData->getClassHandleNode()).getInstruction();
+  Value *ThisPointer = callHelperImpl(HelperId, MayThrow, ThisType,
+                                      CallTargetData->getClassHandleNode())
+                           .getInstruction();
   return (IRNode *)ThisPointer;
 }
 
@@ -5488,8 +5489,7 @@ bool GenIR::fgOptRecurse(ReaderCallTargetData *Data) {
   uint32_t MethodCompFlags = getCurrentMethodAttribs();
   if ((Method != getCurrentMethodHandle())
       // Not yet implemented (but can do a regular tail call)
-      ||
-      (MethodCompFlags & CORINFO_FLG_SHAREDINST)
+      || (MethodCompFlags & CORINFO_FLG_SHAREDINST)
 #if 0
     || (SS_ATTRIB(CI_Entry(ciPtr)) & AA_VARARGS)
 #endif
@@ -5497,8 +5497,7 @@ bool GenIR::fgOptRecurse(ReaderCallTargetData *Data) {
       !Data->recordCommonTailCallChecks(commonTailCallChecks(
           Method, Method, Data->isUnmarkedTailCall(), false))
       // treat as inlining since we're removing the call
-      ||
-      (canInline(Method, Method, nullptr) != INLINE_PASS)) {
+      || (canInline(Method, Method, nullptr) != INLINE_PASS)) {
     // we might want a DBFLAG msg here, but since this routine may be
     // called multiple times for a given call it would just add clutter.
     return false;
@@ -5542,15 +5541,13 @@ bool GenIR::fgOptRecurse(mdToken Token) {
   uint32_t MethodCompFlags = getCurrentMethodAttribs();
   if ((Params.Method != getCurrentMethodHandle())
       // Not yet implemented (but can do a regular tail call)
-      ||
-      (MethodCompFlags & CORINFO_FLG_SHAREDINST)
+      || (MethodCompFlags & CORINFO_FLG_SHAREDINST)
 #if 0
     || (SS_ATTRIB(CI_Entry(ciPtr)) & AA_VARARGS)
 #endif
       || (!commonTailCallChecks(Params.Method, Params.Method, false, true))
       // treat as inlining since we're removing the call
-      ||
-      (canInline(Params.Method, Params.Method, nullptr) != INLINE_PASS)) {
+      || (canInline(Params.Method, Params.Method, nullptr) != INLINE_PASS)) {
     // we might want a DBFLAG msg here, but since this routine may be
     // called multiple times for a given call it would just add clutter.
     return false;
@@ -5682,9 +5679,9 @@ IRNode *GenIR::unbox(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Object,
   // Call helper to do the type check and get the address of the unbox payload.
   Type *PtrTy = getType(CorInfoType::CORINFO_TYPE_BYREF, ClassHandle);
   const bool MayThrow = true;
-  IRNode *Result =
-      (IRNode *)callHelperImpl(HelperId, MayThrow, PtrTy, ClassHandleArgument,
-                               Object).getInstruction();
+  IRNode *Result = (IRNode *)callHelperImpl(HelperId, MayThrow, PtrTy,
+                                            ClassHandleArgument, Object)
+                       .getInstruction();
 
   // If requested, load the object onto the evaluation stack.
   if (AndLoad) {
@@ -6136,23 +6133,28 @@ std::string GenIR::getNameForToken(mdToken Token, CORINFO_GENERIC_HANDLE Handle,
   switch (TypeFromToken(Token)) {
   case mdtJitHelper:
     OS << JitContext->JitInfo->getHelperName(
-              (CorInfoHelpFunc)RidFromToken(Token)) << "::JitHelper";
+              (CorInfoHelpFunc)RidFromToken(Token))
+       << "::JitHelper";
     break;
   case mdtVarArgsHandle:
     OS << getNameForToken(TokenFromRid(RidFromToken(Token), mdtMemberRef),
-                          Handle, Context, Scope) << "::VarArgsHandle";
+                          Handle, Context, Scope)
+       << "::VarArgsHandle";
     break;
   case mdtVarArgsMDHandle:
     OS << getNameForToken(TokenFromRid(RidFromToken(Token), mdtMethodDef),
-                          Handle, Context, Scope) << "::VarArgsHandle";
+                          Handle, Context, Scope)
+       << "::VarArgsHandle";
     break;
   case mdtVarArgsMSHandle:
     OS << getNameForToken(TokenFromRid(RidFromToken(Token), mdtMethodSpec),
-                          Handle, Context, Scope) << "::VarArgsHandle";
+                          Handle, Context, Scope)
+       << "::VarArgsHandle";
     break;
   case mdtVarArgsSigHandle:
     OS << getNameForToken(TokenFromRid(RidFromToken(Token), mdtSignature),
-                          Handle, Context, Scope) << "::VarArgsHandle";
+                          Handle, Context, Scope)
+       << "::VarArgsHandle";
     break;
   case mdtInterfaceOffset:
     OS << "InterfaceOffset";
@@ -6473,7 +6475,8 @@ IRNode *GenIR::loadVirtFunc(IRNode *Arg1, CORINFO_RESOLVED_TOKEN *ResolvedToken,
   const bool MayThrow = true;
   IRNode *CodeAddress =
       (IRNode *)callHelperImpl(CORINFO_HELP_VIRTUAL_FUNC_PTR, MayThrow, Ty,
-                               Arg1, TypeToken, MethodToken).getInstruction();
+                               Arg1, TypeToken, MethodToken)
+          .getInstruction();
 
   return CodeAddress;
 }
@@ -6986,7 +6989,8 @@ IRNode *GenIR::castOp(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *ObjRefNode,
   return (IRNode *)callHelperImpl(HelperId, MayThrow, ResultType,
                                   ClassHandleNode, ObjRefNode, nullptr, nullptr,
                                   Reader_AlignUnknown, IsVolatile,
-                                  DoesNotInvokeStaticCtor).getInstruction();
+                                  DoesNotInvokeStaticCtor)
+      .getInstruction();
 }
 
 // Override the cast class optimization

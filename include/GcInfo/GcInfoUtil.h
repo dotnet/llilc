@@ -503,10 +503,10 @@ protected:
   };
   friend class ArrayIteratorBase;
 
-  StructArrayListEntryBase *
-      m_pChunkListHead; // actually StructArrayListEntry<ELEMENT_TYPE>*
-  StructArrayListEntryBase *
-      m_pChunkListTail; // actually StructArrayListEntry<ELEMENT_TYPE>*
+  StructArrayListEntryBase
+      *m_pChunkListHead; // actually StructArrayListEntry<ELEMENT_TYPE>*
+  StructArrayListEntryBase
+      *m_pChunkListTail; // actually StructArrayListEntry<ELEMENT_TYPE>*
   SIZE_T m_nItemsInLastChunk;
   SIZE_T m_nTotalItems;
   SIZE_T m_nLastChunkCapacity;

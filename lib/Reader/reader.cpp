@@ -4791,9 +4791,8 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
     // An intrinsic! Ask if client would like to expand it.
     if ((Data->getMethodAttribs() & CORINFO_FLG_INTRINSIC)
         // if we're going to have to mess around with Args don't bother
-        &&
-        (!Data->hasThis() ||
-         CallInfo->thisTransform == CORINFO_NO_THIS_TRANSFORM)) {
+        && (!Data->hasThis() ||
+            CallInfo->thisTransform == CORINFO_NO_THIS_TRANSFORM)) {
       // assert(!(mflags & CORINFO_FLG_VIRTUAL) ||
       //        (mflags & CORINFO_FLG_FINAL) ||
       //        (clsFlags & CORINFO_FLG_FINAL));
