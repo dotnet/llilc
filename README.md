@@ -40,3 +40,5 @@ LLILC is just starting up.  Only a few tests are working and there are lots
 of places where we need help.  Please see our [issues](https://github.com/dotnet/llilc/issues)
 or the [contributing document](Documentation/Areas-To-Contribute.md)
 for how to pitch in.
+
+This is just a test of the lab.
