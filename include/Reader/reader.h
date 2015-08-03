@@ -252,6 +252,20 @@ enum ReaderExceptionType {
   Reader_GlobalVerificationException, ///< Verifier global check failed
 };
 
+enum ReaderSIMDIntrinsic {
+  UNDEF,
+  CTOR,
+  ADD,
+  SUB,
+  MUL,
+  DIV,
+  ABS,
+  SQRT,
+  EQ,
+  NEQ,
+  GETCOUNTOP
+};
+
 /// Common base class for reader exceptions
 class ReaderException {
 public:
@@ -328,7 +342,7 @@ public:
   /// \brief Return begin iterator for iterating from bottom to top of stack.
   iterator begin() { return Stack.begin(); }
 
-  /// \brief Return begin iterator for iterating from bottom to top of stack.
+  /// \brief Return end iterator for iterating from bottom to top of stack.
   iterator end() { return Stack.end(); }
 
 #if defined(_DEBUG)
@@ -1570,6 +1584,14 @@ public:
   /// \returns true if tail call opt is enabled.
   virtual bool doTailCallOpt() = 0;
 
+  /// \brief Check options to as to whether to use SIMD intrinsic.
+  ///
+  /// Derived class will provide an implementation that is correct for the
+  /// client.
+  ///
+  /// \returns true if simd intrinsic opt is enabled.
+  virtual bool doSimdIntrinsicOpt() = 0;
+
 private:
   /// \brief Determine if a call instruction is a candidate to be a tail call.
   ///
@@ -2502,6 +2524,11 @@ public:
   void setMethodAttribs(CORINFO_METHOD_HANDLE Handle,
                         CorInfoMethodRuntimeFlags Flag);
 
+  virtual std::string appendClassNameAsString(CORINFO_CLASS_HANDLE Class,
+                                              bool IncludeNamespace,
+                                              bool FullInst,
+                                              bool IncludeAssembly) = 0;
+
   bool checkMethodModifier(CORINFO_METHOD_HANDLE Method, LPCSTR Modifier,
                            bool IsOptional);
   mdToken getMethodDefFromMethod(CORINFO_METHOD_HANDLE Handle);
@@ -3277,6 +3304,107 @@ public:
 #endif
 
   static bool rdrIsMethodVirtual(uint32_t MethodAttribs);
+
+  /// \brief Return Method name for non helper and non native Methods.
+  ///
+  /// \param method  Method handle for the target Method.
+  /// \param classNamePtr out param, Module name.
+  /// \param JitInfo The JIT interface for this method
+  /// \returns Method name.
+  const char *getMethodName(CORINFO_METHOD_HANDLE Method,
+                            const char **ClassNamePtr, ICorJitInfo *JitInfo);
+
+  /// \brief Return true if we process this Class with SIMD intrinsics.
+  ///
+  /// \param Class The class handle for the call target method's class.
+  /// \returns  result, that represents true if HW acceleration
+  /// enabled for this class, false otherwise.
+  virtual IRNode *generateIsHardwareAccelerated(CORINFO_CLASS_HANDLE Class) = 0;
+
+  /// \brief Return result of binary or unary operation on SIMD Vector Types.
+  /// \brief It gets arguments from stack.
+  ///
+  /// \param OperationCode code to be done.
+  /// \returns an IRNode representing the result of the intrinsic
+  /// or nullptr if the intrinsic is not supported.
+
+  IRNode *generateSIMDBinOp(ReaderSIMDIntrinsic OperationCode);
+  IRNode *generateSIMDUnOp(ReaderSIMDIntrinsic OperationCode);
+
+  /// \brief Return IRNode* Result of BinOp.
+  ///
+  /// \param Vector1 the first argument for BinOp.
+  /// \param Vector2 the second argument for BinOp.
+  /// \returns an IRNode representing the result of BinOp
+  /// or nullptr if BinOp is not supported.
+
+  virtual IRNode *vectorAdd(IRNode *Vector1, IRNode *Vector2) = 0;
+  virtual IRNode *vectorSub(IRNode *Vector1, IRNode *Vector2) = 0;
+  virtual IRNode *vectorMul(IRNode *Vector1, IRNode *Vector2) = 0;
+  virtual IRNode *vectorDiv(IRNode *Vector1, IRNode *Vector2) = 0;
+
+  virtual IRNode *vectorEqual(IRNode *Vector1, IRNode *Vector2) = 0;
+  virtual IRNode *vectorNotEqual(IRNode *Vector1, IRNode *Vector2) = 0;
+
+  /// \brief Return IRNode* Result of UnOp.
+  ///
+  /// \param Vector  argument for UnOp.
+  /// \returns an IRNode representing the result of UnOp
+  /// or nullptr if UnOp is not supported.
+  virtual IRNode *vectorAbs(IRNode *Vector) = 0;
+  virtual IRNode *vectorSqrt(IRNode *Vector) = 0;
+
+  /// \brief Return result of ctor operation on SIMD Vector Types.
+  ///
+  /// \param ArgsCount Number of arguments on stack for call.
+  /// \param Class The class handle for the call target method's class.
+  /// \param Opcode Operation Opcode to distinguish newobj from ctor.
+  /// \returns an IRNode representing the result of ctor
+  /// or nullptr if ctor is not supported.
+  IRNode *generateSMIDCtor(CORINFO_CLASS_HANDLE Class, int ArgsCount,
+                           ReaderBaseNS::CallOpcode Opcode);
+
+  /// \brief Return IRNode* Result of ctor.
+  ///
+  /// \param Class The class handle for the call target method's class.
+  /// \param This in not null for ctor, null for newobj.
+  /// \param Args, args for ctor.
+  /// \returns an IRNode representing the result of ctor
+  /// or nullptr if ctor is not supported.
+  virtual IRNode *vectorCtor(CORINFO_CLASS_HANDLE Class, IRNode *This,
+                             std::vector<IRNode *> Args) = 0;
+
+  /// \brief Return length of Generic Vector.
+  ///
+  /// \param Class The class handle for the call target method's class.
+  /// \returns an IRNode representing the length of Class
+  /// or nullptr if getCount or Class is not supported.
+  virtual IRNode *vectorGetCount(CORINFO_CLASS_HANDLE Class) = 0;
+
+  /// \brief Return IRNode* The result of the intrinsic or nullptr, if it is
+  /// unnsupported.
+  ///
+  /// \param Class The class handle for the call target method's class.
+  /// \param  Method handle for the target Method.
+  /// \param  SigInfo info for the target Method.
+  /// \returns an IRNode representing the result of the intrinsic
+  /// \or nullptr if the intrinsic is not supported.
+  IRNode *generateSIMDIntrinsicCall(CORINFO_CLASS_HANDLE Class,
+                                    CORINFO_METHOD_HANDLE Method,
+                                    CORINFO_SIG_INFO *SigInfo,
+                                    ReaderBaseNS::CallOpcode Opcode);
+
+  /// \brief Check LLVM::VectorType.
+  ///
+  /// \param Arg The target for checking.
+  /// \returns true if Arg is supported vector type.
+  virtual bool checkVectorType(IRNode *Arg) = 0;
+
+  /// \brief Return length of Vector or 0 if it is not Vector.
+  ///
+  /// \param Class The class handle for the call target method's class.
+  /// \returns number of elements in vector.
+  virtual int getElementCountOfSIMDType(CORINFO_CLASS_HANDLE Class) = 0;
 
 private:
   ///////////////////////////////////////////////////////////////////////

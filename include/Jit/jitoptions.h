@@ -105,6 +105,11 @@ private:
   static bool queryMethodSet(LLILCJitContext &JitContext, MethodSet &TheSet,
                              const char16_t *Name);
 
+  /// \brief Set SIMD intrinsics using.
+  ///
+  /// \returns true if SIMD_INTRINSIC is set in the environment set.
+  static bool queryDoSIMDIntrinsic(LLILCJitContext &JitContext);
+
 public:
   bool IsAltJit;        ///< True if running as the alternative JIT.
   bool IsExcludeMethod; ///< True if method is to be excluded.

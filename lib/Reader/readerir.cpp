@@ -317,6 +317,16 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   EntryBlock = BasicBlock::Create(LLVMContext, "entry", Function);
 
   LLVMBuilder = new IRBuilder<>(LLVMContext);
+  llvm::LLVMContext &Context = LLVMBuilder->getContext();
+  FloatTy = llvm::Type::getFloatTy(Context);
+  FloatPtrTy = llvm::Type::getFloatPtrTy(Context);
+  Vector2Ty = llvm::VectorType::get(FloatTy, 2);
+  Vector3Ty = llvm::VectorType::get(FloatTy, 3);
+  Vector4Ty = llvm::VectorType::get(FloatTy, 4);
+  Vector2PtrTy = llvm::PointerType::get(Vector2Ty, 0);
+  Vector3PtrTy = llvm::PointerType::get(Vector3Ty, 0);
+  Vector4PtrTy = llvm::PointerType::get(Vector4Ty, 0);
+
   DBuilder = new DIBuilder(*JitContext->CurrentModule);
   LLILCDebugInfo.TheCU = DBuilder->createCompileUnit(dwarf::DW_LANG_C_plus_plus,
                                                      Function->getName().str(),
@@ -1075,6 +1085,10 @@ llvm::DIType *GenIR::convertType(Type *Ty) {
   return nullptr;
 }
 
+bool GenIR::doSimdIntrinsicOpt() {
+  return JitContext->Options->DoSIMDIntrinsic;
+}
+
 #pragma endregion
 
 #pragma region DIAGNOSTICS
@@ -1323,7 +1337,24 @@ GenIR::getType(CorInfoType CorType, CORINFO_CLASS_HANDLE ClassHandle,
 Type *
 GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool GetAggregateFields,
                     std::list<CORINFO_CLASS_HANDLE> *DeferredDetailAggregates) {
-
+  if (doSimdIntrinsicOpt() &&
+      JitContext->JitInfo->isInSIMDModule(ClassHandle)) {
+    std::string ClassName =
+        appendClassNameAsString(ClassHandle, true, false, false);
+    if (ClassName.compare(0, 22, "System.Numerics.Vector") == 0 &&
+        ClassName.length() == 23) {
+      switch (ClassName[22]) {
+      case '2':
+        return Vector2Ty;
+      case '3':
+        return Vector3Ty;
+      case '4':
+        return Vector4Ty;
+      default:
+        assert(UNREACHED);
+      }
+    }
+  }
   Type *Result = nullptr;
   if (DeferredDetailAggregates == nullptr) {
     // Keep track of any aggregates that we deferred examining in detail, so we
@@ -1357,6 +1388,42 @@ GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool GetAggregateFields,
   }
 
   return Result;
+}
+
+std::string GenIR::appendClassNameAsString(CORINFO_CLASS_HANDLE Class,
+                                           bool IncludeNamespace, bool FullInst,
+                                           bool IncludeAssembly) {
+  int NameSize = 0;
+  NameSize = appendClassName(nullptr, &NameSize, Class, IncludeNamespace,
+                             FullInst, IncludeAssembly);
+  std::string ResultString;
+  if (NameSize > 0) {
+    // Add one for terminating null.
+    int32_t BufferLength = NameSize + 1;
+    int32_t BufferRemaining = BufferLength;
+    char16_t *WideCharBuffer = new char16_t[BufferLength];
+    char16_t *BufferPtrToChange = WideCharBuffer;
+    appendClassName(&BufferPtrToChange, &BufferRemaining, Class,
+                    IncludeNamespace, FullInst, IncludeAssembly);
+    ASSERT(BufferRemaining == 1);
+
+    // Note that this is a worst-case estimate.
+    size_t UTF8Size = (NameSize * UNI_MAX_UTF8_BYTES_PER_CODE_POINT) + 1;
+    UTF8 *ClassName = new UTF8[UTF8Size];
+    UTF8 *UTF8Start = ClassName;
+    const UTF16 *UTF16Start = (UTF16 *)WideCharBuffer;
+    ConversionResult Result =
+        ConvertUTF16toUTF8(&UTF16Start, &UTF16Start[NameSize + 1], &UTF8Start,
+                           &UTF8Start[UTF8Size], strictConversion);
+    if (Result == conversionOK) {
+      ASSERT((size_t)(&WideCharBuffer[BufferLength] -
+                      (const char16_t *)UTF16Start) == 0);
+      ResultString = (char *)ClassName;
+    }
+    delete[] ClassName;
+    delete[] WideCharBuffer;
+  }
+  return ResultString;
 }
 
 // Map this class handle into an LLVM type.
@@ -1447,10 +1514,22 @@ Type *GenIR::getClassTypeWorker(
     }
 
     // Fetch the name of this type for use in dumps.
-    char *ClassName = getClassNameWithNamespace(ClassHandle);
-    if (ClassName != nullptr) {
-      StructTy->setName((char *)ClassName);
-      delete[] ClassName;
+
+    // Note some constructed types like arrays may not have names.
+
+    const bool IncludeNamespace = true;
+    const bool FullInst = false;
+    const bool IncludeAssembly = false;
+    // We are using appendClassName instead of getClassName because
+    // getClassName omits namespaces from some types (e.g., nested classes).
+    // We may still get the same name for two different structs because
+    // two classes with the same fully-qualified names may live in different
+    // assemblies. In that case StructType->setName will append a unique suffix
+    // to the conflicting name.
+    std::string Name = appendClassNameAsString(ClassHandle, IncludeNamespace,
+                                               FullInst, IncludeAssembly);
+    if (Name.length()) {
+      StructTy->setName(Name.c_str());
     }
   }
 
@@ -2036,6 +2115,9 @@ bool GenIR::isValidStackType(IRNode *Node) {
   case Type::TypeID::DoubleTyID:
     IsValid = true;
     break;
+  case Type::TypeID::VectorTyID:
+    IsValid = true;
+    break;
 
   default:
     ASSERT(UNREACHED);
@@ -2199,6 +2281,9 @@ IRNode *GenIR::convertToStackType(IRNode *Node, CorInfoType CorType) {
   case Type::TypeID::DoubleTyID:
     // Already a valid stack type.
     break;
+  case Type::TypeID::VectorTyID:
+    // Already a valid stack type.
+    break;
 
   case Type::TypeID::StructTyID:
   default:
@@ -2291,6 +2376,9 @@ IRNode *GenIR::convertFromStackType(IRNode *Node, CorInfoType CorType,
     }
     break;
   }
+  case Type::TypeID::VectorTyID:
+    Result = (IRNode *)Node;
+    break;
 
   case Type::TypeID::StructTyID:
   // We don't allow structs on the stack. They are represented by pointers.
@@ -3580,7 +3668,21 @@ IRNode *GenIR::loadField(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Obj,
   int32_t AccessFlags = ObjIsThis ? CORINFO_ACCESS_THIS : CORINFO_ACCESS_ANY;
   AccessFlags |= CORINFO_ACCESS_GET;
   CORINFO_FIELD_INFO FieldInfo;
+
   getFieldInfo(ResolvedToken, (CORINFO_ACCESS_FLAGS)AccessFlags, &FieldInfo);
+  if (doSimdIntrinsicOpt()) {
+    Type *ObjType = Obj->getType();
+    auto &Context = LLVMBuilder->getContext();
+
+    if (ObjType->isVectorTy()) {
+      int32_t ElementSize =
+          ObjType->getVectorElementType()->getScalarSizeInBits();
+      int32_t IndexInVector = FieldInfo.offset * 8 / ElementSize;
+      IRNode *Index =
+          (IRNode *)ConstantInt::get(Type::getInt32Ty(Context), IndexInVector);
+      return (IRNode *)LLVMBuilder->CreateExtractElement(Obj, Index);
+    }
+  }
 
   // LoadStaticField and GetFieldAddress already generate
   // checkFieldAuthorization calls, so
@@ -3727,6 +3829,17 @@ void GenIR::storeField(CORINFO_RESOLVED_TOKEN *FieldToken, IRNode *ValueToStore,
   AccessFlags |= CORINFO_ACCESS_SET;
   CORINFO_FIELD_INFO FieldInfo;
   getFieldInfo(FieldToken, (CORINFO_ACCESS_FLAGS)AccessFlags, &FieldInfo);
+  Type *ObjType = Object->getType();
+  if (doSimdIntrinsicOpt() && ObjType->isVectorTy()) {
+    auto &Context = LLVMBuilder->getContext();
+    int32_t ElementSize =
+        ObjType->getVectorElementType()->getScalarSizeInBits();
+    int32_t IndexInVector = FieldInfo.offset * 8 / ElementSize;
+    IRNode *Index =
+        (IRNode *)ConstantInt::get(Type::getInt32Ty(Context), IndexInVector);
+    LLVMBuilder->CreateInsertElement(Object, ValueToStore, Index);
+    return;
+  }
   CORINFO_FIELD_HANDLE FieldHandle = FieldToken->hField;
 
   // It's legal to use STFLD to store into a static field. In that case,
@@ -3807,8 +3920,16 @@ void GenIR::storeIndirectArg(const CallArgType &ValueArgType,
                              llvm::Value *ValueToStore, llvm::Value *Address,
                              bool IsVolatile) {
   assert(isManagedPointerType(cast<PointerType>(Address->getType())));
-  assert(ValueToStore->getType()->isPointerTy() &&
-         ValueToStore->getType()->getPointerElementType()->isStructTy());
+
+  Type *ValueToStoreType = ValueToStore->getType();
+  if (ValueToStoreType->isVectorTy()) {
+    assert(!ValueToStoreType->getVectorElementType()->isPointerTy());
+    makeStoreNonNull(ValueToStore, Address, IsVolatile);
+    return;
+  }
+
+  assert(ValueToStoreType->isPointerTy() &&
+         ValueToStoreType->getPointerElementType()->isStructTy());
   assert(doesValueRepresentStruct(ValueToStore));
 
   CORINFO_CLASS_HANDLE ArgClass = ValueArgType.Class;
@@ -3963,11 +4084,13 @@ IRNode *GenIR::addressOfValue(IRNode *Leaf) {
   switch (LeafTy->getTypeID()) {
   case Type::TypeID::IntegerTyID:
   case Type::TypeID::FloatTyID:
-  case Type::TypeID::DoubleTyID: {
+  case Type::TypeID::DoubleTyID:
+  case Type::TypeID::VectorTyID: {
     Instruction *Alloc = createTemporary(LeafTy);
     LLVMBuilder->CreateStore(Leaf, Alloc);
     return (IRNode *)Alloc;
   }
+
   case Type::TypeID::PointerTyID: {
     assert(doesValueRepresentStruct(Leaf));
 
@@ -7549,5 +7672,412 @@ void VerificationState::print() {
   }
 }
 #endif
+
+#pragma endregion
+
+#pragma region SIMD_INTRISNICS
+
+//===----------------------------------------------------------------------===//
+//
+// SIMD Intrinsics
+//
+//===----------------------------------------------------------------------===//
+
+Type *GenIR::FloatTy;
+Type *GenIR::FloatPtrTy;
+Type *GenIR::Vector2Ty;
+Type *GenIR::Vector3Ty;
+Type *GenIR::Vector4Ty;
+Type *GenIR::Vector2PtrTy;
+Type *GenIR::Vector3PtrTy;
+Type *GenIR::Vector4PtrTy;
+
+// BinOperations
+
+IRNode *GenIR::vectorAdd(IRNode *Vector1, IRNode *Vector2) {
+  assert(((Value *)Vector1)
+             ->getType()
+             ->getVectorElementType()
+             ->isFloatingPointTy());
+  assert(((Value *)Vector2)->getType() == ((Value *)Vector1)->getType());
+  return (IRNode *)LLVMBuilder->CreateFAdd(Vector1, Vector2);
+}
+
+IRNode *GenIR::vectorSub(IRNode *Vector1, IRNode *Vector2) {
+  assert(((Value *)Vector1)
+             ->getType()
+             ->getVectorElementType()
+             ->isFloatingPointTy());
+  assert(((Value *)Vector2)->getType() == ((Value *)Vector1)->getType());
+  return (IRNode *)LLVMBuilder->CreateFSub(Vector1, Vector2);
+}
+
+IRNode *GenIR::vectorMul(IRNode *Vector1, IRNode *Vector2) {
+  assert(((Value *)Vector1)
+             ->getType()
+             ->getVectorElementType()
+             ->isFloatingPointTy());
+  assert(((Value *)Vector2)->getType() == ((Value *)Vector1)->getType());
+  return (IRNode *)LLVMBuilder->CreateFMul(Vector1, Vector2);
+}
+
+IRNode *GenIR::vectorDiv(IRNode *Vector1, IRNode *Vector2) {
+  assert(((Value *)Vector1)
+             ->getType()
+             ->getVectorElementType()
+             ->isFloatingPointTy());
+  assert(((Value *)Vector2)->getType() == ((Value *)Vector1)->getType());
+  return (IRNode *)LLVMBuilder->CreateFDiv(Vector1, Vector2);
+}
+
+IRNode *GenIR::vectorEqual(IRNode *Vector1, IRNode *Vector2) {
+  assert(((Value *)Vector1)
+             ->getType()
+             ->getVectorElementType()
+             ->isFloatingPointTy());
+  assert(((Value *)Vector2)->getType() == ((Value *)Vector1)->getType());
+  return (IRNode *)LLVMBuilder->CreateFCmpOEQ(Vector1, Vector2);
+}
+
+IRNode *GenIR::vectorNotEqual(IRNode *Vector1, IRNode *Vector2) {
+  assert(((Value *)Vector1)
+             ->getType()
+             ->getVectorElementType()
+             ->isFloatingPointTy());
+  assert(((Value *)Vector2)->getType() == ((Value *)Vector1)->getType());
+  return (IRNode *)LLVMBuilder->CreateFCmpONE(Vector1, Vector2);
+}
+
+IRNode *GenIR::vectorAbs(IRNode *Vector) {
+  assert(((Value *)Vector)
+             ->getType()
+             ->getVectorElementType()
+             ->isFloatingPointTy());
+  std::vector<Type *> ArgTypes;
+  ArgTypes.push_back(Vector->getType());
+  llvm::Function *Func = Intrinsic::getDeclaration(JitContext->CurrentModule,
+                                                   Intrinsic::fabs, ArgTypes);
+  return (IRNode *)LLVMBuilder->CreateCall(Func, Vector);
+}
+
+IRNode *GenIR::vectorSqrt(IRNode *Vector) {
+  assert(((Value *)Vector)
+             ->getType()
+             ->getVectorElementType()
+             ->isFloatingPointTy());
+  std::vector<Type *> ArgTypes;
+  ArgTypes.push_back(Vector->getType());
+  llvm::Function *Func = Intrinsic::getDeclaration(JitContext->CurrentModule,
+                                                   Intrinsic::sqrt, ArgTypes);
+  return (IRNode *)LLVMBuilder->CreateCall(Func, Vector);
+}
+
+IRNode *GenIR::generateIsHardwareAccelerated(CORINFO_CLASS_HANDLE Class) {
+  int Length = 0;
+  bool IsGeneric = 0;
+  getBaseTypeAndSizeOfSIMDType(Class, Length, IsGeneric);
+  int Result = 0;
+  if (Length && !IsGeneric) {
+    Result = 1;
+  }
+  return (IRNode *)ConstantInt::get(Type::getInt32Ty(LLVMBuilder->getContext()),
+                                    Result);
+}
+
+bool GenIR::checkVectorSignature(std::vector<IRNode *> Args,
+                                 std::vector<Type *> Types) {
+  assert(Args.size() == Types.size());
+  for (int Counter = 0; Counter < Args.size(); ++Counter) {
+    assert(Args[Counter]);
+    if (Args[Counter]->getType() != Types[Counter]) {
+      assert(UNREACHED);
+      return 0;
+    }
+  }
+  return 1;
+}
+
+IRNode *GenIR::vectorCtorFromOne(int VectorSize, IRNode *Vector,
+                                 std::vector<IRNode *> Args) {
+  assert(Args.size() == 1);
+  for (int Counter = 0; Counter < VectorSize; ++Counter) {
+    Vector =
+        (IRNode *)LLVMBuilder->CreateInsertElement(Vector, Args[0], Counter);
+  }
+  return Vector;
+}
+
+IRNode *GenIR::vectorCtorFromFloats(int VectorSize, IRNode *Vector,
+                                    std::vector<IRNode *> Args) {
+  assert(Args.size() == VectorSize);
+  std::vector<Type *> Types;
+  for (int Counter = 0; Counter < VectorSize; ++Counter) {
+    Types.push_back(FloatTy);
+  }
+  if (checkVectorSignature(Args, Types)) {
+    for (int Counter = 0; Counter < VectorSize; ++Counter) {
+      Vector = (IRNode *)LLVMBuilder->CreateInsertElement(Vector, Args[Counter],
+                                                          Counter);
+    }
+    return Vector;
+  }
+  return 0;
+}
+
+IRNode *GenIR::vectorCtor(CORINFO_CLASS_HANDLE Class, IRNode *This,
+                          std::vector<IRNode *> Args) {
+  int VectorSize = 0;
+  bool IsGeneric = false;
+  Type *ElementType =
+      getBaseTypeAndSizeOfSIMDType(Class, VectorSize, IsGeneric);
+  if (VectorSize == 0) { // For example Vector<bool>.
+    return 0;
+  }
+  Type *VectorType = llvm::VectorType::get(ElementType, VectorSize);
+  IRNode *Vector = (IRNode *)UndefValue::get(VectorType);
+
+  IRNode *Return = 0;
+  if (!IsGeneric) {
+    if (Args.size() == 1) {
+      if (Args[0]->getType() == ElementType) {
+        Return = vectorCtorFromOne(VectorSize, Vector, Args);
+      } else {
+        return 0;
+      }
+    } else if (Args.size() == VectorSize) {
+      Return = vectorCtorFromFloats(VectorSize, Vector, Args);
+    } else {
+      std::vector<Type *> Types;
+      std::vector<IRNode *> ExtractedArgs;
+      llvm::LLVMContext &Context = *JitContext->LLVMContext;
+      Type *IntTy = Type::getInt32Ty(Context);
+      IRNode *Index0 = (IRNode *)ConstantInt::get(IntTy, 0);
+      IRNode *Index1 = (IRNode *)ConstantInt::get(IntTy, 1);
+      IRNode *Index2 = (IRNode *)ConstantInt::get(IntTy, 2);
+#pragma region non - generic ctors
+      switch (VectorSize) {
+      case 3:
+        assert(Args.size() == 2);
+        Types.push_back(Vector2Ty);
+        Types.push_back(FloatTy);
+        if (checkVectorSignature(Args, Types)) {
+          IRNode *Vector2 = Args[0];
+          ExtractedArgs.push_back(
+              (IRNode *)LLVMBuilder->CreateExtractElement(Vector2, Index0));
+          ExtractedArgs.push_back(
+              (IRNode *)LLVMBuilder->CreateExtractElement(Vector2, Index1));
+          ExtractedArgs.push_back(Args[1]);
+        }
+        break;
+
+      case 4:
+        if (Args.size() == 2) {
+          Types.push_back(Vector3Ty);
+          Types.push_back(FloatTy);
+          if (checkVectorSignature(Args, Types)) {
+            IRNode *Vector3 = Args[0];
+            ExtractedArgs.push_back(
+                (IRNode *)LLVMBuilder->CreateExtractElement(Vector3, Index0));
+            ExtractedArgs.push_back(
+                (IRNode *)LLVMBuilder->CreateExtractElement(Vector3, Index1));
+            ExtractedArgs.push_back(
+                (IRNode *)LLVMBuilder->CreateExtractElement(Vector3, Index2));
+            ExtractedArgs.push_back(Args[1]);
+          }
+        } else {
+          assert(Args.size() == 3);
+          Types.push_back(Vector2Ty);
+          Types.push_back(FloatTy);
+          Types.push_back(FloatTy);
+          if (checkVectorSignature(Args, Types)) {
+            IRNode *Vector2 = Args[0];
+            ExtractedArgs.push_back(
+                (IRNode *)LLVMBuilder->CreateExtractElement(Vector2, Index0));
+            ExtractedArgs.push_back(
+                (IRNode *)LLVMBuilder->CreateExtractElement(Vector2, Index1));
+            ExtractedArgs.push_back(Args[1]);
+            ExtractedArgs.push_back(Args[2]);
+          }
+        }
+        break;
+
+      default:
+        assert(UNREACHED);
+      }
+      if (ExtractedArgs.size()) {
+        for (int Counter = 0; Counter < VectorSize; ++Counter) {
+          Vector = (IRNode *)LLVMBuilder->CreateInsertElement(
+              Vector, ExtractedArgs[Counter], Counter);
+        }
+        Return = Vector;
+      }
+    }
+  }
+  if (Return) {
+    if (This) {
+      return (IRNode *)LLVMBuilder->CreateStore(
+          Return, This); // TODO sandreenko: is volatile?
+    } else {
+      return Return;
+    }
+  }
+  return 0;
+}
+
+bool GenIR::checkVectorType(IRNode *Arg) {
+  assert(Arg);
+  return Arg->getType()->isVectorTy();
+}
+
+llvm::Type *GenIR::getBaseTypeAndSizeOfSIMDType(CORINFO_CLASS_HANDLE Class,
+                                                int &VectorLength,
+                                                bool &IsGeneric) {
+  VectorLength = 0;
+  IsGeneric = false;
+  // TODO t-seand : issue #720, check thread safety.
+  static CORINFO_CLASS_HANDLE SIMDFloatHandle = 0;
+  static CORINFO_CLASS_HANDLE SIMDDoubleHandle = 0;
+  static CORINFO_CLASS_HANDLE SIMDIntHandle = 0;
+  static CORINFO_CLASS_HANDLE SIMDUShortHandle = 0;
+  static CORINFO_CLASS_HANDLE SIMDUByteHandle = 0;
+  static CORINFO_CLASS_HANDLE SIMDShortHandle = 0;
+  static CORINFO_CLASS_HANDLE SIMDByteHandle = 0;
+  static CORINFO_CLASS_HANDLE SIMDLongHandle = 0;
+  static CORINFO_CLASS_HANDLE SIMDUIntHandle = 0;
+  static CORINFO_CLASS_HANDLE SIMDULongHandle = 0;
+  static CORINFO_CLASS_HANDLE SIMDVector2Handle = 0;
+  static CORINFO_CLASS_HANDLE SIMDVector3Handle = 0;
+  static CORINFO_CLASS_HANDLE SIMDVector4Handle = 0;
+  static CORINFO_CLASS_HANDLE SIMDVectorHandle = 0;
+
+  LLVMContext &Context = *JitContext->LLVMContext;
+
+  if (Class == SIMDFloatHandle) {
+    IsGeneric = true;
+    VectorLength = 4;
+    return llvm::Type::getFloatTy(Context);
+  } else if (Class == SIMDDoubleHandle) {
+    IsGeneric = true;
+    VectorLength = 2;
+    return llvm::Type::getDoubleTy(Context);
+  } else if (Class == SIMDIntHandle) {
+    IsGeneric = true;
+    VectorLength = 4;
+    return llvm::Type::getInt32Ty(Context);
+  } else if (Class == SIMDUShortHandle) {
+    IsGeneric = true;
+    VectorLength = 8;
+    return llvm::Type::getInt16Ty(Context);
+  } else if (Class == SIMDUByteHandle) {
+    IsGeneric = true;
+    VectorLength = 16;
+    return llvm::Type::getInt8Ty(Context);
+  } else if (Class == SIMDShortHandle) {
+    IsGeneric = true;
+    VectorLength = 8;
+    return llvm::Type::getInt16Ty(Context);
+  } else if (Class == SIMDByteHandle) {
+    IsGeneric = true;
+    VectorLength = 16;
+    return llvm::Type::getInt8Ty(Context);
+  } else if (Class == SIMDLongHandle) {
+    IsGeneric = true;
+    VectorLength = 2;
+    return llvm::Type::getInt64Ty(Context);
+  } else if (Class == SIMDUIntHandle) {
+    IsGeneric = true;
+    VectorLength = 4;
+    return llvm::Type::getInt32Ty(Context);
+  } else if (Class == SIMDULongHandle) {
+    IsGeneric = true;
+    VectorLength = 2;
+    return llvm::Type::getInt64Ty(Context);
+  } else if (Class == SIMDVector2Handle) {
+    VectorLength = 2;
+    return llvm::Type::getFloatTy(Context);
+  } else if (Class == SIMDVector3Handle) {
+    VectorLength = 3;
+    return llvm::Type::getFloatTy(Context);
+  } else if (Class == SIMDVector4Handle) {
+    VectorLength = 4;
+    return llvm::Type::getFloatTy(Context);
+  }
+
+  // Doesn't match with any of the cached type handles.
+  // Obtain base type by parsing fully qualified class name.
+
+  std::string ClassName = appendClassNameAsString(Class, TRUE, FALSE, FALSE);
+  if (ClassName.compare(0, 22, "System.Numerics.Vector") == 0) {
+    if (ClassName.compare(22, 3, "`1[") == 0) {
+      IsGeneric = true;
+      if (ClassName.compare(25, 13, "System.Single") == 0) {
+        SIMDFloatHandle = Class;
+        VectorLength = 4;
+        return llvm::Type::getFloatTy(Context);
+      } else if (ClassName.compare(25, 12, "System.Int32") == 0) {
+        SIMDIntHandle = Class;
+        VectorLength = 4;
+        return llvm::Type::getInt32Ty(Context);
+      } else if (ClassName.compare(25, 13, "System.UInt16") == 0) {
+        SIMDUShortHandle = Class;
+        VectorLength = 8;
+        return llvm::Type::getInt16Ty(Context);
+      } else if (ClassName.compare(25, 11, "System.Byte") == 0) {
+        SIMDUByteHandle = Class;
+        VectorLength = 16;
+        return llvm::Type::getInt8Ty(Context);
+      } else if (ClassName.compare(25, 13, "System.Double") == 0) {
+        SIMDDoubleHandle = Class;
+        VectorLength = 2;
+        return llvm::Type::getDoubleTy(Context);
+      } else if (ClassName.compare(25, 12, "System.Int64") == 0) {
+        SIMDLongHandle = Class;
+        VectorLength = 2;
+        return llvm::Type::getInt64Ty(Context);
+      } else if (ClassName.compare(25, 12, "System.Int16") == 0) {
+        SIMDShortHandle = Class;
+        VectorLength = 8;
+        return llvm::Type::getInt16Ty(Context);
+      } else if (ClassName.compare(25, 12, "System.SByte") == 0) {
+        SIMDByteHandle = Class;
+        VectorLength = 16;
+        return llvm::Type::getInt8Ty(Context);
+      } else if (ClassName.compare(25, 13, "System.UInt32") == 0) {
+        SIMDUIntHandle = Class;
+        VectorLength = 4;
+        return llvm::Type::getInt32Ty(Context);
+      } else if (ClassName.compare(25, 13, "System.UInt64") == 0) {
+        SIMDULongHandle = Class;
+        VectorLength = 2;
+        return llvm::Type::getInt64Ty(Context);
+      }
+    } else if (ClassName.compare(22, 2, "2") == 0) {
+      SIMDVector2Handle = Class;
+      VectorLength = 2;
+      return llvm::Type::getFloatTy(Context);
+    } else if (ClassName.compare(22, 2, "3") == 0) {
+      SIMDVector3Handle = Class;
+      VectorLength = 3;
+      return llvm::Type::getFloatTy(Context);
+    } else if (ClassName.compare(22, 2, "4") == 0) {
+      SIMDVector4Handle = Class;
+      VectorLength = 4;
+      return llvm::Type::getFloatTy(Context);
+    }
+  }
+  return 0;
+}
+
+int GenIR::getElementCountOfSIMDType(CORINFO_CLASS_HANDLE Class) {
+  int Length = 0;
+  bool IsGeneric = false;
+  getBaseTypeAndSizeOfSIMDType(Class, Length, IsGeneric);
+  return Length;
+}
+
+IRNode *GenIR::vectorGetCount(CORINFO_CLASS_HANDLE Class) {
+  return (IRNode *)ConstantInt::get(Type::getInt32Ty(LLVMBuilder->getContext()),
+                                    getElementCountOfSIMDType(Class));
+}
 
 #pragma endregion
