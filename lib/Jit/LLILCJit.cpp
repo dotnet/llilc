@@ -250,6 +250,9 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
         CodeModel::JITDefault, OptLevel);
     Context.TM = TM;
 
+    // Set target machine datalayout on the method module.
+    Context.CurrentModule->setDataLayout(TM->createDataLayout());
+
     // Construct the jitting layers.
     EEMemoryManager MM(&Context);
     ObjectLoadListener Listener(&Context);
