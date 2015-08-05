@@ -337,7 +337,7 @@ uint32_t parseILOpcode(uint8_t *ILInput, uint32_t ILOffset, uint32_t ILSize,
   if (TheOpcode == ReaderBaseNS::CEE_ILLEGAL) {
     if (ReportErrors) {
       if (Reader == nullptr) {
-        ReaderBase::fatal(CORJIT_BADCODE);
+        dbPrint("parseILOpcode: Bad Opcode\n");
       } else {
         Reader->verGlobalError(MVER_E_UNKNOWN_OPCODE);
       }
@@ -364,7 +364,7 @@ uint32_t parseILOpcode(uint8_t *ILInput, uint32_t ILOffset, uint32_t ILSize,
 underflow:
   if (ReportErrors) {
     if (Reader == nullptr) {
-      ReaderBase::fatal(CORJIT_BADCODE);
+      dbPrint("parseILOpcode: Underflow\n");
     } else {
       Reader->verGlobalError(MVER_E_METHOD_END);
     }
@@ -372,17 +372,12 @@ underflow:
   return ILSize;
 }
 
-#if !defined(NDEBUG) || defined(CC_PEVERIFY)
-
 const char *OpcodeName[] = {
 #define OPDEF_HELPER OPDEF_OPCODENAME
 #include "ophelper.def"
 #undef OPDEF_HELPER
 };
 
-#endif
-
-#if !defined(NDEBUG)
 void ReaderBase::printMSIL() {
   printMSIL(MethodInfo->ILCode, 0, MethodInfo->ILCodeSize);
 }
@@ -402,7 +397,7 @@ void ReaderBase::printMSIL(uint8_t *Buf, uint32_t StartOffset,
 
   while (Offset < NumBytes) {
     dbPrint("0x%-4x: ", StartOffset + Offset);
-    Offset = parseILOpcode(Buf, Offset, NumBytes, this, &Opcode, &Operand);
+    Offset = parseILOpcode(Buf, Offset, NumBytes, nullptr, &Opcode, &Operand);
     dbPrint("%d: %-10s ", Offset, OpcodeName[Opcode]);
 
     switch (Opcode) {
@@ -445,7 +440,6 @@ void ReaderBase::printMSIL(uint8_t *Buf, uint32_t StartOffset,
     dbPrint("\n");
   }
 }
-#endif
 
 //////////////////////////////////////////////////////////////////////////
 //
@@ -3060,32 +3054,13 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
     }
 
     case ReaderBaseNS::CEE_JMP:
-      // The MSIL jmp instruction will cause us to never return to the
-      // caller, so any any code after the jmp is unreachable. Thus we
-      // must break the block.  In order to trick the flow graph
-      // builder into not placing a fall through arc here we place a
-      // branch to the exit label. Note the fifth argument to
-      // fgMakeBranch is true, which indicates that we want to make a
-      // nominal branch.  We will remove the branch when we read in
-      // the jmp instruction in the main reader loop.
-      {
-        bool IsRecursiveTail = false;
-        mdToken Token = readValue<mdToken>(Operand);
-        if (JitInfo->isValidToken(getCurrentModuleHandle(), Token)) {
-          IsRecursiveTail = fgOptRecurse(Token);
-        }
-        BlockNode = fgNodeGetStartIRNode(Block);
-        TheExitLabel = (IsRecursiveTail ? entryLabel() : exitLabel());
-        BranchNode = fgMakeBranchHelper(TheExitLabel, BlockNode, CurrentOffset,
-                                        false, !IsRecursiveTail);
-        fgNodeSetEndMSILOffset(Block, NextOffset);
-        Block = fgSplitBlock(Block, NextOffset,
-                             findBlockSplitPointAfterNode(BranchNode));
+      fgNodeSetEndMSILOffset(Block, NextOffset);
+      if (NextOffset < ILInputSize) {
+        Block = makeFlowGraphNode(NextOffset, Block);
       }
       break;
 
     case ReaderBaseNS::CEE_RET:
-
       verifyReturnFlow(CurrentOffset);
       fgNodeSetEndMSILOffset(Block, NextOffset);
       if (NextOffset < ILInputSize) {
@@ -4739,6 +4714,31 @@ ReaderBase::rdrMakeNewObjReturnNode(ReaderCallTargetData *CallTargetData,
   return genNewObjReturnNode(CallTargetData, ThisArg);
 }
 
+inline CorInfoHelpFunc eeGetHelperNum(CORINFO_METHOD_HANDLE Method) {
+  // Helpers are marked by the fact that they are odd numbers
+  if (!(((size_t)Method) & 1))
+    return (CORINFO_HELP_UNDEF);
+  return ((CorInfoHelpFunc)(((size_t)Method) >> 2));
+}
+
+inline bool eeIsNativeMethod(CORINFO_METHOD_HANDLE Method) {
+  return ((((size_t)Method) & 0x2) == 0x2);
+}
+
+const char *ReaderBase::getMethodName(CORINFO_METHOD_HANDLE Method,
+                                      const char **ClassNamePtr,
+                                      ICorJitInfo *JitInfo) {
+  if (eeGetHelperNum(Method)) {
+    return 0;
+  }
+
+  if (eeIsNativeMethod(Method)) {
+    return 0;
+  }
+
+  return JitInfo->getMethodName(Method, ClassNamePtr);
+}
+
 // Constraint calls in generic code.  Constraint calls are operations on generic
 // type variables,
 // e.g. "x.Incr()" where "x" has type "T" in generic code and where "T" supports
@@ -5036,6 +5036,21 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
       }
     }
 
+    CORINFO_CLASS_HANDLE Class = Data->getClassHandle();
+    CORINFO_SIG_INFO *SigInfo = Data->getSigInfo();
+    if (doSimdIntrinsicOpt() && JitInfo->isInSIMDModule(Class)) {
+      IRNode *ReturnNode = nullptr;
+      CORINFO_METHOD_HANDLE Method = Data->getMethodHandle();
+      ReturnNode = generateSIMDIntrinsicCall(Class, Method, SigInfo, Opcode);
+      if (ReturnNode) {
+        if (SigInfo->retType == CorInfoType::CORINFO_TYPE_VOID &&
+            Opcode != ReaderBaseNS::CallOpcode::NewObj) {
+          return 0;
+        }
+        return ReturnNode;
+      }
+    }
+
     // Check for Delegate Constructor optimization
     if (rdrCallIsDelegateConstruct(Data)) {
       if (Data->getLoadFtnToken() != mdTokenNil) {
@@ -5110,9 +5125,7 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
 
 #endif // not CC_PEVERIFY
   }
-
   CORINFO_SIG_INFO *SigInfo = Data->getSigInfo();
-
   // Set the calling convention.
   Data->CallTargetSignature.HasThis = Data->hasThis();
   Data->CallTargetSignature.CallingConvention = SigInfo->getCallConv();
@@ -5715,9 +5728,8 @@ void ReaderBase::initMethodInfo(bool HasSecretParameter,
   bool HasThis = SigInfo.hasThis();
   bool IsVarArg = SigInfo.isVarArg();
   bool HasTypeArg = SigInfo.hasTypeArg();
-  uint32_t NumArgs = (HasThis ? 1 : 0) + (IsVarArg ? 1 : 0) +
-                     (HasTypeArg ? 1 : 0) + NormalArgs +
-                     (HasSecretParameter ? 1 : 0);
+  uint32_t NumArgs = (HasSecretParameter ? 1 : 0) + (HasThis ? 1 : 0) +
+                     (IsVarArg ? 1 : 0) + (HasTypeArg ? 1 : 0) + NormalArgs;
 
   // Get the number of autos for this method.
   NumAutos = MethodInfo->locals.numArgs;
@@ -5752,7 +5764,14 @@ void ReaderBase::initMethodInfo(bool HasSecretParameter,
 
   uint32_t ParamIndex = 0;
 
-  // If the first argument is a this pointer we must synthesize its type.
+  if (HasSecretParameter) {
+    assert(ParamIndex == Signature.getSecretParameterIndex());
+
+    const CORINFO_CLASS_HANDLE Class = nullptr;
+    ArgumentTypes[ParamIndex++] = {CORINFO_TYPE_NATIVEINT, Class};
+  }
+
+  // If the method has a this parameter, we must synthesize its type.
   if (HasThis) {
     assert(ParamIndex == Signature.getThisIndex());
 
@@ -5818,13 +5837,6 @@ void ReaderBase::initMethodInfo(bool HasSecretParameter,
     CallArgType &Arg = ArgumentTypes[ParamIndex];
     Args = argListNext(Args, &SigInfo, &Arg.CorType, &Arg.Class);
   }
-
-  if (HasSecretParameter) {
-    assert(ParamIndex == Signature.getSecretParameterIndex());
-
-    const CORINFO_CLASS_HANDLE Class = nullptr;
-    ArgumentTypes[ParamIndex++] = {CORINFO_TYPE_NATIVEINT, Class};
-  }
 }
 
 void ReaderBase::initParamsAndAutos(const ReaderMethodSignature &Signature) {
@@ -5853,6 +5865,12 @@ void ReaderBase::buildUpAutos() {
 void ReaderBase::buildUpParams(const ReaderMethodSignature &Signature) {
   const std::vector<CallArgType> &Args = Signature.getArgumentTypes();
 
+  if (Signature.hasSecretParameter()) {
+    const uint32_t I = Signature.getSecretParameterIndex();
+    const CallArgType &Arg = Args[I];
+    createSym(I, false, Arg.CorType, Arg.Class, false, Reader_SecretParam);
+  }
+
   if (Signature.hasThis()) {
     const uint32_t I = Signature.getThisIndex();
     const CallArgType &Arg = Args[I];
@@ -5876,12 +5894,6 @@ void ReaderBase::buildUpParams(const ReaderMethodSignature &Signature) {
        I != E; ++I) {
     const CallArgType &Arg = Args[I];
     createSym(I, false, Arg.CorType, Arg.Class, false);
-  }
-
-  if (Signature.hasSecretParameter()) {
-    const uint32_t I = Signature.getSecretParameterIndex();
-    const CallArgType &Arg = Args[I];
-    createSym(I, false, Arg.CorType, Arg.Class, false, Reader_SecretParam);
   }
 }
 
@@ -6859,7 +6871,6 @@ void ReaderBase::readBytesForFlowGraphNodeHelper(
       CORINFO_METHOD_HANDLE Handle;
       CORINFO_SIG_INFO Sig, Sig2;
       bool HasThis;
-      bool HasVarArg;
 
       // check before verification otherwise we get different exceptions
       // badcode vs verification exception depending if verifier is on
@@ -6885,14 +6896,15 @@ void ReaderBase::readBytesForFlowGraphNodeHelper(
       // so fetch the information.
       Handle = ResolvedToken.hMethod;
       getCallSiteSignature(Handle, Token, &Sig, &HasThis);
-      HasVarArg = Sig.isVarArg();
-
       // While we are at it, make sure that the jump prototype
       // matches this function's prototype, otherwise it makes
       // no sense to abandon frame and transfer control.
       JitInfo->getMethodSig(getCurrentMethodHandle(), &Sig2);
 
-      if (Sig.numArgs != Sig2.numArgs) {
+      if ((Sig.numArgs != Sig2.numArgs) ||
+          (Sig.isVarArg() != Sig2.isVarArg()) ||
+          (Sig.hasTypeArg() != Sig2.hasTypeArg()) ||
+          (Sig.hasThis() != Sig2.hasThis())) {
         // This is meant to catch illegal use of JMP
         // While it allows some flexibility in the arguments
         // that shouldn't really even be allowed, it serves
@@ -6908,7 +6920,7 @@ void ReaderBase::readBytesForFlowGraphNodeHelper(
       // TODO: Populate stack with current method's incoming
       // parameters, currently the genIR method needs to obtain it
       // from information gathered during the prepass.
-      jmp((ReaderBaseNS::CallOpcode)MappedValue, Token, HasThis, HasVarArg);
+      jmp((ReaderBaseNS::CallOpcode)MappedValue, Token);
 
       // NOTE: jmp's stack transition shows that no value is placed on
       // the stack
@@ -8645,3 +8657,152 @@ void ReaderBase::resolveToken(mdToken Token, CorInfoTokenKind TokenType,
   return resolveToken(Token, getCurrentContext(), getCurrentModuleHandle(),
                       TokenType, ResolvedToken);
 }
+
+#pragma region SIMD_INTRINSICS
+
+//===----------------------------------------------------------------------===//
+//
+// SIMD Intrinsics
+//
+//===----------------------------------------------------------------------===//
+
+IRNode *ReaderBase::generateSIMDBinOp(ReaderSIMDIntrinsic OperationCode) {
+  IRNode *Arg2 = ReaderOperandStack->pop();
+  IRNode *Arg1 = ReaderOperandStack->pop();
+  if (checkVectorType(Arg1) && checkVectorType(Arg2)) {
+
+    IRNode *Vector1 = Arg1;
+    IRNode *Vector2 = Arg2;
+
+    IRNode *ReturnNode = 0;
+    switch (OperationCode) {
+    case ADD:
+      ReturnNode = vectorAdd(Vector1, Vector2);
+      break;
+    case SUB:
+      ReturnNode = vectorSub(Vector1, Vector2);
+      break;
+    case MUL:
+      ReturnNode = vectorMul(Vector1, Vector2);
+      break;
+    case DIV:
+      ReturnNode = vectorDiv(Vector1, Vector2);
+      break;
+    default:
+      break;
+    }
+    if (ReturnNode) {
+      return ReturnNode;
+    }
+  }
+
+  ReaderOperandStack->push(Arg1);
+  ReaderOperandStack->push(Arg2);
+  return 0;
+}
+
+IRNode *ReaderBase::generateSIMDUnOp(ReaderSIMDIntrinsic OperationCode) {
+  IRNode *Arg = ReaderOperandStack->pop();
+  if (checkVectorType(Arg)) {
+    IRNode *Vector = Arg;
+    IRNode *ReturnNode = 0;
+    switch (OperationCode) {
+    case ABS:
+      ReturnNode = vectorAbs(Vector);
+      break;
+    case SQRT:
+      ReturnNode = vectorSqrt(Vector);
+      break;
+    default:
+      break;
+    }
+    if (ReturnNode) {
+      return ReturnNode;
+    }
+  }
+  ReaderOperandStack->push(Arg);
+
+  return 0;
+}
+
+IRNode *ReaderBase::generateSIMDIntrinsicCall(CORINFO_CLASS_HANDLE Class,
+                                              CORINFO_METHOD_HANDLE Method,
+                                              CORINFO_SIG_INFO *SigInfo,
+                                              ReaderBaseNS::CallOpcode Opcode) {
+
+  const char *ModuleName;
+  const char *MethodName = getMethodName(Method, &ModuleName, JitInfo);
+  if (!strcmp(MethodName, "get_IsHardwareAccelerated")) { // Special case.
+    return generateIsHardwareAccelerated(Class);
+  }
+
+  IRNode *ReturnNode = 0;
+
+  ReaderSIMDIntrinsic OperationType = UNDEF;
+  if (!strcmp(MethodName, ".ctor")) {
+    OperationType = CTOR;
+  } else if (!strcmp(MethodName, "op_Addition")) {
+    OperationType = ADD;
+  } else if (!strcmp(MethodName, "op_Subtraction")) {
+    OperationType = SUB;
+  } else if (!strcmp(MethodName, "op_Multiply")) {
+    OperationType = MUL;
+  } else if (!strcmp(MethodName, "op_Division")) {
+    OperationType = DIV;
+  } else if (!strcmp(MethodName, "op_Equality")) {
+    OperationType = EQ;
+  } else if (!strcmp(MethodName, "op_Inequality")) {
+    OperationType = NEQ;
+  } else if (!strcmp(MethodName, "Abs")) {
+    OperationType = ABS;
+  } else if (!strcmp(MethodName, "SquareRoot")) {
+    OperationType = SQRT;
+  } else if (!strcmp(MethodName, "get_Count")) {
+    OperationType = GETCOUNTOP;
+  }
+  switch (OperationType) {
+  case ADD:
+  case SUB:
+  case MUL:
+  case DIV:
+    ReturnNode = generateSIMDBinOp(OperationType);
+    break;
+  case ABS:
+  case SQRT:
+    ReturnNode = generateSIMDUnOp(OperationType);
+    break;
+  case CTOR:
+    assert(SigInfo->numArgs <= ReaderOperandStack->size());
+    assert(SigInfo->hasThis());
+    ReturnNode = generateSMIDCtor(Class, SigInfo->numArgs, Opcode);
+    break;
+  default:
+    break;
+  }
+  return ReturnNode;
+}
+
+IRNode *ReaderBase::generateSMIDCtor(CORINFO_CLASS_HANDLE Class, int ArgsCount,
+                                     ReaderBaseNS::CallOpcode Opcode) {
+  std::vector<IRNode *> Args(ArgsCount);
+  for (int Counter = ArgsCount - 1; Counter >= 0; --Counter) {
+    Args[Counter] = ReaderOperandStack->pop();
+  }
+  IRNode *This = 0;
+  if (Opcode != ReaderBaseNS::CallOpcode::NewObj) {
+    This = ReaderOperandStack->pop();
+  }
+  IRNode *Result = vectorCtor(Class, This, Args);
+  if (Result) {
+    return Result;
+  }
+  if (Opcode != ReaderBaseNS::CallOpcode::NewObj) {
+    ReaderOperandStack->push(This);
+  }
+  for (int Counter = 0; Counter < ArgsCount; ++Counter) {
+    ReaderOperandStack->push(Args[Counter]);
+  }
+  return 0;
+}
+
+#pragma endregion

@@ -74,7 +74,7 @@ ABIArgInfo X86_64_Win64::classify(const ABIType ABITy, const DataLayout &DL,
                                   bool IsManagedCallingConv) {
   Type *Ty = ABITy.getType();
 
-  if (Ty->isAggregateType()) {
+  if (Ty->isAggregateType() || Ty->isVectorTy()) {
     // If the aggregate's size in bytes is a power of 2 that is less than or
     // equal to 8, it can be passed directly once coerced to an
     // appropriately-sized

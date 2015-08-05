@@ -23,7 +23,6 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/ThreadLocal.h"
-#include "llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h"
 #include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
 #include "llvm/ExecutionEngine/Orc/NullResolver.h"
 #include "llvm/Config/config.h"
@@ -69,13 +68,6 @@ struct LLILCJitContext {
   /// \param MethodInfo  The CoreCLR method info for the method being jitted.
   std::unique_ptr<llvm::Module>
   getModuleForMethod(CORINFO_METHOD_INFO *MethodInfo);
-
-  /// Write an informational message about this jit request to LLVM's dbgs().
-  void outputDebugMethodName();
-
-  /// Write an informational message about skipping this jit request to LLVM's
-  /// dbgs().
-  void outputSkippingMethodName();
 
 public:
   /// \name CoreCLR EE information

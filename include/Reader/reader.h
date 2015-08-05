@@ -252,6 +252,20 @@ enum ReaderExceptionType {
   Reader_GlobalVerificationException, ///< Verifier global check failed
 };
 
+enum ReaderSIMDIntrinsic {
+  UNDEF,
+  CTOR,
+  ADD,
+  SUB,
+  MUL,
+  DIV,
+  ABS,
+  SQRT,
+  EQ,
+  NEQ,
+  GETCOUNTOP
+};
+
 /// Common base class for reader exceptions
 class ReaderException {
 public:
@@ -328,7 +342,7 @@ public:
   /// \brief Return begin iterator for iterating from bottom to top of stack.
   iterator begin() { return Stack.begin(); }
 
-  /// \brief Return begin iterator for iterating from bottom to top of stack.
+  /// \brief Return end iterator for iterating from bottom to top of stack.
   iterator end() { return Stack.end(); }
 
 #if defined(_DEBUG)
@@ -414,10 +428,21 @@ public:
   /// \returns True if this method accepts instantiation information.
   bool hasTypeArg() const { return HasTypeArg; }
 
-  /// \brief Check whether this method acceps a secret parameter.
+  /// \brief Check whether this method accepts a secret parameter.
   ///
   /// \returns True if this method accepts a secret parameter.
   bool hasSecretParameter() const { return HasSecretParameter; }
+
+  /// \brief Get the index of the method's secret parameter.
+  ///
+  /// The result of this method can be used as an index into the
+  /// result of \p getArgumentTypes.
+  ///
+  /// \returns The index of the method's secret parameter.
+  uint32_t getSecretParameterIndex() const {
+    assert(HasSecretParameter);
+    return 0;
+  }
 
   /// \brief Get the index of the method's \p this parameter.
   ///
@@ -427,7 +452,7 @@ public:
   /// \returns The index of the method's \p this parameter.
   uint32_t getThisIndex() const {
     assert(HasThis);
-    return 0;
+    return HasSecretParameter ? 1 : 0;
   }
 
   /// \brief Get the index of the method's vararg cookie parameter.
@@ -438,7 +463,7 @@ public:
   /// \returns The index of the method's vararg cookie parameter.
   uint32_t getVarArgIndex() const {
     assert(IsVarArg);
-    return HasThis ? 1 : 0;
+    return (HasSecretParameter ? 1 : 0) + (HasThis ? 1 : 0);
   }
 
   /// \brief Get the index of the method's instantiation parameter.
@@ -449,18 +474,8 @@ public:
   /// \returns The index of the method's instantiation parameter.
   uint32_t getTypeArgIndex() const {
     assert(HasTypeArg);
-    return (HasThis ? 1 : 0) + (IsVarArg ? 1 : 0);
-  }
-
-  /// \brief Get the index of the method's secret parameter.
-  ///
-  /// The result of this method can be used as an index into the
-  /// result of \p getArgumentTypes.
-  ///
-  /// \returns The index of the method's secret parameter.
-  uint32_t getSecretParameterIndex() const {
-    assert(HasSecretParameter);
-    return ArgumentTypes.size() - 1;
+    return (HasSecretParameter ? 1 : 0) + (HasThis ? 1 : 0) +
+           (IsVarArg ? 1 : 0);
   }
 
   /// \brief Get the index of the method's first normal parameter.
@@ -477,17 +492,16 @@ public:
   ///
   /// \returns The index of the method's first normal parameter.
   uint32_t getNormalParamStart() const {
-    return (HasThis ? 1 : 0) + (IsVarArg ? 1 : 0) + (HasTypeArg ? 1 : 0);
+    return (HasSecretParameter ? 1 : 0) + (HasThis ? 1 : 0) +
+           (IsVarArg ? 1 : 0) + (HasTypeArg ? 1 : 0);
   }
 
   /// \brief Get the index after the last normal parameter to the method.
   ///
-  /// See \p getIndexOfFirstNormalParam for a discussion of "normal" parameters.
+  /// See \p getNormalParamStart for a discussion of "normal" parameters.
   ///
   /// \returns The index after the last normal parameter to this method.
-  uint32_t getNormalParamEnd() const {
-    return ArgumentTypes.size() - (HasSecretParameter ? 1 : 0);
-  }
+  uint32_t getNormalParamEnd() const { return ArgumentTypes.size(); }
 
   /// \brief Return the index of the argument that corresponds to the given
   ///        IL argument ordinal.
@@ -500,9 +514,10 @@ public:
   /// \returns The index of the argument.
   uint32_t getArgIndexForILArg(uint32_t Ordinal) const {
     if (HasThis && Ordinal == 0) {
-      return 0;
+      return getThisIndex();
     }
-    uint32_t Index = Ordinal + (IsVarArg ? 1 : 0) + (HasTypeArg ? 1 : 0);
+    uint32_t Index = Ordinal + (HasSecretParameter ? 1 : 0) +
+                     (IsVarArg ? 1 : 0) + (HasTypeArg ? 1 : 0);
     assert(Index >= getNormalParamStart());
     assert(Index < getNormalParamEnd());
     return Index;
@@ -515,12 +530,13 @@ public:
   ///
   /// \returns The IL argument ordinal.
   uint32_t getILArgForArgIndex(uint32_t Index) const {
-    if (HasThis && Index == 0) {
+    if (HasThis && Index == getThisIndex()) {
       return 0;
     }
     assert(Index >= getNormalParamStart());
     assert(Index < getNormalParamEnd());
-    return Index - (IsVarArg ? 1 : 0) - (HasTypeArg ? 1 : 0);
+    return Index - (HasSecretParameter ? 1 : 0) - (IsVarArg ? 1 : 0) -
+           (HasTypeArg ? 1 : 0);
   }
 };
 
@@ -1504,7 +1520,6 @@ public:
   FlowGraphNode *fgSplitBlock(FlowGraphNode *Block, uint32_t Offset,
                               IRNode *Node);
 
-#if !defined(NDEBUG)
   /// \brief Debug-only reader function to print MSIL of the current method.
   void printMSIL();
 
@@ -1516,8 +1531,7 @@ public:
   /// \param Buf           Buffer containing MSIL bytecode.
   /// \param StartOffset   Initial offset for the range to print.
   /// \param EndOffset     Ending offset for the range to print.
-  void printMSIL(uint8_t *Buf, uint32_t StartOffset, uint32_t EndOffset);
-#endif
+  static void printMSIL(uint8_t *Buf, uint32_t StartOffset, uint32_t EndOffset);
 
   /// \brief Determine the effect of this instruction on the operand stack.
   ///
@@ -1540,6 +1554,14 @@ public:
   ///
   /// \returns true if tail call opt is enabled.
   virtual bool doTailCallOpt() = 0;
+
+  /// \brief Check options to as to whether to use SIMD intrinsic.
+  ///
+  /// Derived class will provide an implementation that is correct for the
+  /// client.
+  ///
+  /// \returns true if simd intrinsic opt is enabled.
+  virtual bool doSimdIntrinsicOpt() = 0;
 
 private:
   /// \brief Determine if a call instruction is a candidate to be a tail call.
@@ -2485,6 +2507,11 @@ public:
   void setMethodAttribs(CORINFO_METHOD_HANDLE Handle,
                         CorInfoMethodRuntimeFlags Flag);
 
+  virtual std::string appendClassNameAsString(CORINFO_CLASS_HANDLE Class,
+                                              bool IncludeNamespace,
+                                              bool FullInst,
+                                              bool IncludeAssembly) = 0;
+
   bool checkMethodModifier(CORINFO_METHOD_HANDLE Method, LPCSTR Modifier,
                            bool IsOptional);
   mdToken getMethodDefFromMethod(CORINFO_METHOD_HANDLE Handle);
@@ -2709,8 +2736,7 @@ public:
                        bool IsVolatile);
   virtual void initObj(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg2);
   virtual void insertThrow(CorInfoHelpFunc ThrowHelper, uint32_t Offset);
-  virtual void jmp(ReaderBaseNS::CallOpcode Opcode, mdToken Token, bool HasThis,
-                   bool HasVarArg) = 0;
+  virtual void jmp(ReaderBaseNS::CallOpcode Opcode, mdToken Token) = 0;
 
   virtual uint32_t updateLeaveOffset(uint32_t LeaveOffset, uint32_t NextOffset,
                                      FlowGraphNode *LeaveBlock,
@@ -3294,6 +3320,107 @@ public:
 #endif
 
   static bool rdrIsMethodVirtual(uint32_t MethodAttribs);
+
+  /// \brief Return Method name for non helper and non native Methods.
+  ///
+  /// \param method  Method handle for the target Method.
+  /// \param classNamePtr out param, Module name.
+  /// \param JitInfo The JIT interface for this method
+  /// \returns Method name.
+  const char *getMethodName(CORINFO_METHOD_HANDLE Method,
+                            const char **ClassNamePtr, ICorJitInfo *JitInfo);
+
+  /// \brief Return true if we process this Class with SIMD intrinsics.
+  ///
+  /// \param Class The class handle for the call target method's class.
+  /// \returns  result, that represents true if HW acceleration
+  /// enabled for this class, false otherwise.
+  virtual IRNode *generateIsHardwareAccelerated(CORINFO_CLASS_HANDLE Class) = 0;
+
+  /// \brief Return result of binary or unary operation on SIMD Vector Types.
+  /// \brief It gets arguments from stack.
+  ///
+  /// \param OperationCode code to be done.
+  /// \returns an IRNode representing the result of the intrinsic
+  /// or nullptr if the intrinsic is not supported.
+
+  IRNode *generateSIMDBinOp(ReaderSIMDIntrinsic OperationCode);
+  IRNode *generateSIMDUnOp(ReaderSIMDIntrinsic OperationCode);
+
+  /// \brief Return IRNode* Result of BinOp.
+  ///
+  /// \param Vector1 the first argument for BinOp.
+  /// \param Vector2 the second argument for BinOp.
+  /// \returns an IRNode representing the result of BinOp
+  /// or nullptr if BinOp is not supported.
+
+  virtual IRNode *vectorAdd(IRNode *Vector1, IRNode *Vector2) = 0;
+  virtual IRNode *vectorSub(IRNode *Vector1, IRNode *Vector2) = 0;
+  virtual IRNode *vectorMul(IRNode *Vector1, IRNode *Vector2) = 0;
+  virtual IRNode *vectorDiv(IRNode *Vector1, IRNode *Vector2) = 0;
+
+  virtual IRNode *vectorEqual(IRNode *Vector1, IRNode *Vector2) = 0;
+  virtual IRNode *vectorNotEqual(IRNode *Vector1, IRNode *Vector2) = 0;
+
+  /// \brief Return IRNode* Result of UnOp.
+  ///
+  /// \param Vector  argument for UnOp.
+  /// \returns an IRNode representing the result of UnOp
+  /// or nullptr if UnOp is not supported.
+  virtual IRNode *vectorAbs(IRNode *Vector) = 0;
+  virtual IRNode *vectorSqrt(IRNode *Vector) = 0;
+
+  /// \brief Return result of ctor operation on SIMD Vector Types.
+  ///
+  /// \param ArgsCount Number of arguments on stack for call.
+  /// \param Class The class handle for the call target method's class.
+  /// \param Opcode Operation Opcode to distinguish newobj from ctor.
+  /// \returns an IRNode representing the result of ctor
+  /// or nullptr if ctor is not supported.
+  IRNode *generateSMIDCtor(CORINFO_CLASS_HANDLE Class, int ArgsCount,
+                           ReaderBaseNS::CallOpcode Opcode);
+
+  /// \brief Return IRNode* Result of ctor.
+  ///
+  /// \param Class The class handle for the call target method's class.
+  /// \param This in not null for ctor, null for newobj.
+  /// \param Args, args for ctor.
+  /// \returns an IRNode representing the result of ctor
+  /// or nullptr if ctor is not supported.
+  virtual IRNode *vectorCtor(CORINFO_CLASS_HANDLE Class, IRNode *This,
+                             std::vector<IRNode *> Args) = 0;
+
+  /// \brief Return length of Generic Vector.
+  ///
+  /// \param Class The class handle for the call target method's class.
+  /// \returns an IRNode representing the length of Class
+  /// or nullptr if getCount or Class is not supported.
+  virtual IRNode *vectorGetCount(CORINFO_CLASS_HANDLE Class) = 0;
+
+  /// \brief Return IRNode* The result of the intrinsic or nullptr, if it is
+  /// unnsupported.
+  ///
+  /// \param Class The class handle for the call target method's class.
+  /// \param  Method handle for the target Method.
+  /// \param  SigInfo info for the target Method.
+  /// \returns an IRNode representing the result of the intrinsic
+  /// \or nullptr if the intrinsic is not supported.
+  IRNode *generateSIMDIntrinsicCall(CORINFO_CLASS_HANDLE Class,
+                                    CORINFO_METHOD_HANDLE Method,
+                                    CORINFO_SIG_INFO *SigInfo,
+                                    ReaderBaseNS::CallOpcode Opcode);
+
+  /// \brief Check LLVM::VectorType.
+  ///
+  /// \param Arg The target for checking.
+  /// \returns true if Arg is supported vector type.
+  virtual bool checkVectorType(IRNode *Arg) = 0;
+
+  /// \brief Return length of Vector or 0 if it is not Vector.
+  ///
+  /// \param Class The class handle for the call target method's class.
+  /// \returns number of elements in vector.
+  virtual int getElementCountOfSIMDType(CORINFO_CLASS_HANDLE Class) = 0;
 
 private:
   ///////////////////////////////////////////////////////////////////////

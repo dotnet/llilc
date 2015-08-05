@@ -12,6 +12,7 @@ generator built on the LLVM infrastructure.
 * [Getting Started for Windows](Getting-Started-For-Windows.md)
 * [Getting Started For Linux and OS X](Getting-Started-For-Linux-and-OS-X.md)
 * [Testing](Testing.md)
+* [Debugging](Debugging.md)
 * [Contribution Guide](Contributing.md)
 * [Areas To Contribute](Areas-To-Contribute.md)
 * [LLILC Coding Conventions and Commenting Style](llilc-Coding-Conventions-and-Commenting-Style.md)

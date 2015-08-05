@@ -36,6 +36,11 @@
 
 MethodSet JitOptions::AltJitMethodSet;
 MethodSet JitOptions::AltJitNgenMethodSet;
+MethodSet JitOptions::ExcludeMethodSet;
+MethodSet JitOptions::BreakMethodSet;
+MethodSet JitOptions::MSILMethodSet;
+MethodSet JitOptions::LLVMMethodSet;
+MethodSet JitOptions::CodeRangeMethodSet;
 
 template <typename UTF16CharT>
 char16_t *getStringConfigValue(ICorJitInfo *CorInfo, const UTF16CharT *Name) {
@@ -65,10 +70,18 @@ JitOptions::JitOptions(LLILCJitContext &Context) {
   // Set whether to insert statepoints.
   DoInsertStatepoints = queryDoInsertStatepoints(Context);
 
+  DoSIMDIntrinsic = queryDoSIMDIntrinsic(Context);
+
   // Set whether to do tail call opt.
   DoTailCallOpt = queryDoTailCallOpt(Context);
 
   LogGcInfo = queryLogGcInfo(Context);
+
+  IsExcludeMethod = queryIsExcludeMethod(Context);
+  IsBreakMethod = queryIsBreakMethod(Context);
+  IsMSILDumpMethod = queryIsMSILDumpMethod(Context);
+  IsLLVMDumpMethod = queryIsLLVMDumpMethod(Context);
+  IsCodeRangeMethod = queryIsCodeRangeMethod(Context);
 
   // Validate Statepoint and Conservative GC state.
   assert(DoInsertStatepoints ||
@@ -161,6 +174,56 @@ bool JitOptions::queryIsAltJit(LLILCJitContext &Context) {
   return JitDumpLevel;
 }
 
+bool JitOptions::queryIsExcludeMethod(LLILCJitContext &JitContext) {
+  return queryMethodSet(JitContext, ExcludeMethodSet,
+                        (const char16_t *)UTF16("AltJitExclude"));
+}
+
+bool JitOptions::queryIsBreakMethod(LLILCJitContext &JitContext) {
+  return queryMethodSet(JitContext, BreakMethodSet,
+                        (const char16_t *)UTF16("AltJitBreakAtJitStart"));
+}
+
+bool JitOptions::queryIsMSILDumpMethod(LLILCJitContext &JitContext) {
+  return queryMethodSet(JitContext, MSILMethodSet,
+                        (const char16_t *)UTF16("AltJitMSILDump"));
+}
+
+bool JitOptions::queryIsLLVMDumpMethod(LLILCJitContext &JitContext) {
+  return queryMethodSet(JitContext, LLVMMethodSet,
+                        (const char16_t *)UTF16("AltJitLLVMDump"));
+}
+
+bool JitOptions::queryIsCodeRangeMethod(LLILCJitContext &JitContext) {
+  return queryMethodSet(JitContext, CodeRangeMethodSet,
+                        (const char16_t *)UTF16("AltJitCodeRangeDump"));
+}
+
+bool JitOptions::queryMethodSet(LLILCJitContext &JitContext, MethodSet &TheSet,
+                                const char16_t *Name) {
+  if (!TheSet.isInitialized()) {
+    char16_t *ConfigStr = getStringConfigValue(JitContext.JitInfo, Name);
+    bool NeedFree = true;
+    if (ConfigStr == nullptr) {
+      ConfigStr = (char16_t *)UTF16("");
+      NeedFree = false;
+    }
+    std::unique_ptr<std::string> ConfigUtf8 = Convert::utf16ToUtf8(ConfigStr);
+    TheSet.init(std::move(ConfigUtf8));
+    if (NeedFree) {
+      freeStringConfigValue(JitContext.JitInfo, ConfigStr);
+    }
+  }
+
+  const char *ClassName = nullptr;
+  const char *MethodName = nullptr;
+  MethodName =
+      JitContext.JitInfo->getMethodName(JitContext.MethodInfo->ftn, &ClassName);
+  bool IsInMethodSet =
+      TheSet.contains(MethodName, ClassName, JitContext.MethodInfo->args.pSig);
+  return IsInMethodSet;
+}
+
 // Get the GC-Scheme used by the runtime -- conservative/precise
 bool JitOptions::queryUseConservativeGC(LLILCJitContext &Context) {
   char16_t *GCStr =
@@ -180,6 +243,13 @@ bool JitOptions::queryLogGcInfo(LLILCJitContext &Context) {
   char16_t *LogGcInfoStr =
       getStringConfigValue(Context.JitInfo, UTF16("JitGCInfoLogging"));
   return (LogGcInfoStr != nullptr);
+}
+
+// Determine if SIMD intrinsics should be used.
+bool JitOptions::queryDoSIMDIntrinsic(LLILCJitContext &Context) {
+  char16_t *StatePointStr =
+      getStringConfigValue(Context.JitInfo, UTF16("SIMDINTRINSIC"));
+  return (StatePointStr != nullptr);
 }
 
 OptLevel JitOptions::queryOptLevel(LLILCJitContext &Context) {

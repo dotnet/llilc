@@ -56,11 +56,21 @@ uint8_t *EEMemoryManager::allocateDataSection(uintptr_t Size,
   assert(IsReadOnly);
 
   // Pad for alignment needs.
-  unsigned int Offset = ((uint64_t)ReadOnlyDataUnallocated) % Alignment;
+  unsigned int Offset = 0;
+  if ((this->Context->Flags & CORJIT_FLG_PREJIT) != 0) {
+    // In ngen scenario ReadOnlyDataBlock will have a 16 bytes alignment in the
+    // image but the memory block we get may not have a 16 bytes alignment. We
+    // calculate alignment padding based on the image alignment of
+    // ReadOnlyDataBlock.
+    assert(Alignment <= 16);
+    Offset = ((uint64_t)ReadOnlyDataUnallocated - (uint64_t)ReadOnlyDataBlock) %
+             Alignment;
+  } else {
+    Offset = ((uint64_t)ReadOnlyDataUnallocated) % Alignment;
+  }
   if (Offset > 0) {
     ReadOnlyDataUnallocated += Alignment - Offset;
   }
-  assert((((uint64_t)ReadOnlyDataUnallocated) % Alignment) == 0);
 
   // There are multiple read-only sections, so we need to keep
   // track of the current allocation point in the read-only memory region.
@@ -197,16 +207,16 @@ void EEMemoryManager::reserveAllocationSpace(uintptr_t CodeSize,
   // So this gives the dynamic loader room to copy the RO sections, and later
   // the EE will copy from there to the place it really keeps unwind data.
 
-  // RODataBlock we get back is either 8 bytes or pointer-size aligned. If the
-  // first section we place in that block is 16 bytes aligned (e.g., for a
-  // constant pool), we may need to add padding. Overallocate by 16 bytes to
-  // account for that.
-  uintptr_t ReadOnlyDataSize = DataSizeRO + 16;
+  uintptr_t ReadOnlyDataSize = DataSizeRO;
   uint32_t ExceptionCount = 0;
 
-  // Remap alignment to the EE notion of alignment
+  // Remap alignment to the EE notion of alignment.
+  // Conservatively request 16 bytes alignment for RODataBlock since one of the
+  // .rdata sections may be 16 bytes aligned (e.g., a floating-point constant
+  // pool.)
   CorJitAllocMemFlag Flag =
-      CorJitAllocMemFlag::CORJIT_ALLOCMEM_DEFAULT_CODE_ALIGN;
+      CorJitAllocMemFlag::CORJIT_ALLOCMEM_DEFAULT_CODE_ALIGN |
+      CorJitAllocMemFlag::CORJIT_ALLOCMEM_FLG_RODATA_16BYTE_ALIGN;
 
   // We allow the amount of RW data to be nonzero to work around the fact that
   // MCJIT will not report a size of zero for any section, even if that

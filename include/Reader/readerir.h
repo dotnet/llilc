@@ -345,10 +345,7 @@ public:
 
   IRNode *getStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken) override;
 
-  void jmp(ReaderBaseNS::CallOpcode Opcode, mdToken Token, bool HasThis,
-           bool HasVarArg) override {
-    throw NotYetImplementedException("jmp");
-  };
+  void jmp(ReaderBaseNS::CallOpcode Opcode, mdToken Token) override;
 
   virtual uint32_t updateLeaveOffset(uint32_t LeaveOffset, uint32_t NextOffset,
                                      FlowGraphNode *LeaveBlock,
@@ -1510,6 +1507,10 @@ private:
   /// Provides client specific Options look up.
   bool doTailCallOpt() override;
 
+  /// \brief Override of doSimdIntrinsicOpt method
+  /// Provides client specific Options look up.
+  bool doSimdIntrinsicOpt() override;
+
   /// If isZeroInitLocals() returns true, zero intitialize all locals;
   /// otherwise, zero initialize all gc pointers and structs with gc pointers.
   void zeroInitLocals();
@@ -1655,6 +1656,37 @@ private:
                                           uint64_t ValueHandle, llvm::Type *Ty,
                                           llvm::StringRef Name,
                                           bool IsConstant);
+  std::string appendClassNameAsString(CORINFO_CLASS_HANDLE Class,
+                                      bool IncludeNamespace, bool FullInst,
+                                      bool IncludeAssembly);
+
+  IRNode *vectorAdd(IRNode *Vector1, IRNode *Vector2) override;
+  IRNode *vectorSub(IRNode *Vector1, IRNode *Vector2) override;
+  IRNode *vectorMul(IRNode *Vector1, IRNode *Vector2) override;
+  IRNode *vectorDiv(IRNode *Vector1, IRNode *Vector2) override;
+  IRNode *vectorEqual(IRNode *Vector1, IRNode *Vector2) override;
+  IRNode *vectorNotEqual(IRNode *Vector1, IRNode *Vector2) override;
+  IRNode *vectorAbs(IRNode *Vector) override;
+  IRNode *vectorSqrt(IRNode *Vector) override;
+
+  bool checkVectorType(IRNode *Arg) override;
+
+  bool checkVectorSignature(std::vector<IRNode *> Args,
+                            std::vector<llvm::Type *> Types);
+  IRNode *vectorCtor(CORINFO_CLASS_HANDLE Class, IRNode *This,
+                     std::vector<IRNode *> Args) override;
+  IRNode *vectorCtorFromOne(int VectorSize, IRNode *This,
+                            std::vector<IRNode *> Args);
+  IRNode *vectorCtorFromFloats(int VectorSize, IRNode *This,
+                               std::vector<IRNode *> Args);
+
+  IRNode *vectorGetCount(CORINFO_CLASS_HANDLE Class) override;
+
+  llvm::Type *getBaseTypeAndSizeOfSIMDType(CORINFO_CLASS_HANDLE Class,
+                                           int &VectorLength, bool &IsGeneric);
+  IRNode *generateIsHardwareAccelerated(CORINFO_CLASS_HANDLE Class) override;
+
+  int getElementCountOfSIMDType(CORINFO_CLASS_HANDLE Class) override;
 
   /// Access the address of a root function local.  If the current region is a
   /// filter (which will be outlined), insert appropriate code in the root
@@ -1822,6 +1854,15 @@ private:
     llvm::DICompileUnit *TheCU;
     llvm::DIScope *FunctionScope;
   } LLILCDebugInfo;
+
+  static llvm::Type *Vector2Ty;
+  static llvm::Type *Vector3Ty;
+  static llvm::Type *Vector4Ty;
+  static llvm::Type *FloatTy;
+  static llvm::Type *FloatPtrTy;
+  static llvm::Type *Vector2PtrTy;
+  static llvm::Type *Vector3PtrTy;
+  static llvm::Type *Vector4PtrTy;
 };
 
 #endif // MSIL_READER_IR_H
