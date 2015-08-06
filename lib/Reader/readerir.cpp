@@ -516,6 +516,16 @@ void GenIR::readerPostPass(bool IsImportOnly) {
           throw NotYetImplementedException(
               "NYI: Precice GC for Managed-Aggregate values");
         }
+
+        if (isa<AllocaInst>(Instr)) {
+          AllocaInst *Alloca = (AllocaInst *)(&Instr);
+          Type *AllocatedType = Alloca->getAllocatedType();
+
+          if (isManagedAggregateType(AllocatedType)) {
+            throw NotYetImplementedException(
+                "NYI: Precice GC for Managed-Aggregate values");
+          }
+        }
       }
     }
   }
