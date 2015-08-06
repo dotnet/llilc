@@ -93,11 +93,15 @@ private:
   void recordRelocations(const ObjectFile &Obj,
                          const RuntimeDyld::LoadedObjectInfo &L);
 
-  /// \brief Translate from LLVM relocation type to EE relocation type.
+  /// \brief Compute EE relocation type and addend from LLVM relocation.
   ///
-  /// \param LLVMRelocationType LLVM relocation type to translate from.
-  /// \returns EE relocation type.
-  uint64_t translateRelocationType(uint64_t LLVMRelocationType);
+  /// \param FixupAddress            Address where the reloc will be applied.
+  /// \param LLVMRelocationType      LLVM relocation type to translate from.
+  /// \param EERelocationType [out]  Corresponding EE relocation type.
+  /// \param Addend [out]            Value in image to add to symbol's address.
+  void getRelocationTypeAndAddend(uint8_t *FixupAddress,
+                                  uint64_t LLVMRelocationType,
+                                  uint64_t *EERelocationType, size_t *Addend);
 
 private:
   LLILCJitContext *Context;
@@ -250,6 +254,9 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
         LLILC_TARGET_TRIPLE, "", "", Options, Reloc::Default,
         CodeModel::JITDefault, OptLevel);
     Context.TM = TM;
+
+    // Set target machine datalayout on the method module.
+    Context.CurrentModule->setDataLayout(TM->createDataLayout());
 
     // Construct the jitting layers.
     EEMemoryManager MM(&Context);
@@ -580,13 +587,9 @@ void ObjectLoadListener::recordRelocations(
       symbol_iterator Symbol = I->getSymbol();
       assert(Symbol != Obj.symbol_end());
 
-      SymbolRef::Type SymbolType = Symbol->getType();
-
-      if (SymbolType == SymbolRef::ST_Debug) {
-        continue;
-      }
-
-      if (!SectionName.compare(".pdata")) {
+      if (SectionName.startswith(".debug") || !SectionName.compare(".pdata")) {
+        // These sections use unsupported relocation types, but it's safe to
+        // skip them because we don't use their relocated contents.
         continue;
       }
 
@@ -595,7 +598,7 @@ void ObjectLoadListener::recordRelocations(
       const bool IsExtern = SymbolSection == Obj.section_end();
       uint64_t RelType = I->getType();
       uint64_t Offset = I->getOffset();
-      void *RelocationTarget = nullptr;
+      uint8_t *RelocationTarget = nullptr;
       if (IsExtern) {
         // This is an external symbol. Verify that it's one we created for
         // a global variable and report the relocation via Jit interface.
@@ -603,27 +606,41 @@ void ObjectLoadListener::recordRelocations(
         assert(NameOrError);
         StringRef TargetName = NameOrError.get();
         assert(Context->NameToHandleMap.count(TargetName) == 1);
-        RelocationTarget = (void *)Context->NameToHandleMap[TargetName];
+        RelocationTarget = (uint8_t *)Context->NameToHandleMap[TargetName];
       } else {
-        RelocationTarget = (void *)(L.getSectionLoadAddress(*SymbolSection) +
-                                    Symbol->getValue());
+        RelocationTarget = (uint8_t *)(L.getSectionLoadAddress(*SymbolSection) +
+                                       Symbol->getValue());
       }
-      Context->JitInfo->recordRelocation(
-          (uint8_t *)L.getSectionLoadAddress(*SI) + Offset, RelocationTarget,
-          translateRelocationType(RelType));
+
+      uint8_t *FixupAddress = (uint8_t *)L.getSectionLoadAddress(*SI) + Offset;
+      size_t Addend;
+      uint64_t EERelType;
+
+      getRelocationTypeAndAddend(FixupAddress, RelType, &EERelType, &Addend);
+
+      Context->JitInfo->recordRelocation(FixupAddress,
+                                         RelocationTarget + Addend, EERelType);
     }
   }
 }
 
-uint64_t
-ObjectLoadListener::translateRelocationType(uint64_t LLVMRelocationType) {
+void ObjectLoadListener::getRelocationTypeAndAddend(uint8_t *FixupAddress,
+                                                    uint64_t LLVMRelocationType,
+                                                    uint64_t *EERelocationType,
+                                                    size_t *Addend) {
   switch (LLVMRelocationType) {
   case IMAGE_REL_AMD64_ABSOLUTE:
-    return IMAGE_REL_BASED_ABSOLUTE;
+    *EERelocationType = IMAGE_REL_BASED_ABSOLUTE;
+    *Addend = *(uint32_t *)FixupAddress;
+    break;
   case IMAGE_REL_AMD64_ADDR64:
-    return IMAGE_REL_BASED_DIR64;
+    *EERelocationType = IMAGE_REL_BASED_DIR64;
+    *Addend = *(uint64_t *)FixupAddress;
+    break;
   case IMAGE_REL_AMD64_REL32:
-    return IMAGE_REL_BASED_REL32;
+    *EERelocationType = IMAGE_REL_BASED_REL32;
+    *Addend = *(uint32_t *)FixupAddress;
+    break;
 
   default:
     llvm_unreachable("Unknown reloc type.");

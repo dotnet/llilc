@@ -116,6 +116,7 @@ def runTidy(args):
     clangArgs = " ".join(["-p", expandPath(args.compile_commands)])
 
   returncode = 0
+  print("Running clang-tidy")
   for dirname,subdir,files in os.walk(llilcSrc):
     for filename in files:
       if filename.endswith(".c") or filename.endswith(".cpp"):
@@ -145,6 +146,7 @@ def runFormat(args):
   returncode = 0
 
   llilcSrc = expandPath(args.llilc_source)
+  print("Running clang-format")
   for dirname,subdir,files in os.walk(llilcSrc):
     if ".git" in dirname \
         or dirname == os.path.join(llilcSrc, "include", "clr"):
