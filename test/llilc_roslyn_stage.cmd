@@ -1,8 +1,9 @@
-REM Usage: dostage.cmd workspace buildsubdir stagedir
+REM Usage: llilc_roslyn_stage.cmd workspace buildsubdir stagedir
 REM 
 REM Will first delete (if present) and then create %workspace%/roslyn/%stagedir%
 REM directory and set it up as the directory
 REM from which Roslyn will run on CoreClr, with LLILC as JIT.
+REM buildsubdir is the subdirectory of the workspace where LLVM (and LLILC) were built.
 
 setlocal
 set WORKSPACE=%1
@@ -18,7 +19,7 @@ mkdir %stagedir%
 xcopy /S /Q Binaries\Debug\core-clr\* %stagedir%
 rename %stagedir%\csc.exe csc.dll
 copy /y %WORKSPACE%\coreclr\bin\Product\Windows_NT.x64.Debug\CoreConsole.exe %stagedir%\csc.exe
-set command=C:\Python34\python %WORKSPACE%\llvm\tools\llilc\test\llilc_run.py  --llilc-coreclr-runtime-path %WORKSPACE%\coreclr\bin\Product\Windows_NT.x64.Debug  --llilc-app-path %WORKSPACE%\roslyn\%stagedir%\csc.exe %%*
+set command=C:\Python34\python %WORKSPACE%\llvm\tools\llilc\test\llilc_run.py  -c %WORKSPACE%\coreclr\bin\Product\Windows_NT.x64.Debug  -a %WORKSPACE%\roslyn\%stagedir%\csc.exe -- %%*
 echo %command% > %stagedir%\runcsc.cmd
 echo exit /b %%ERRORLEVEL%% >> %stagedir%\runcsc.cmd
 
