@@ -24,9 +24,9 @@
 using namespace llvm;
 
 GCInfo::GCInfo(LLILCJitContext *JitCtx, uint8_t *StackMapData,
-               uint8_t *CodeBlkStart, GcInfoAllocator *Allocator)
+               GcInfoAllocator *Allocator, size_t OffsetCor)
     : JitContext(JitCtx), LLVMStackMapData(StackMapData),
-      CodeBlockStart(CodeBlkStart),
+      OffsetCorrection(OffsetCor),
       Encoder(JitContext->JitInfo, JitContext->MethodInfo, Allocator) {
 #if !defined(NDEBUG)
   this->EmitLogs = JitContext->Options->LogGcInfo;
@@ -76,19 +76,6 @@ void GCInfo::encodeLiveness() {
   assert(StackMapParser.getNumFunctions() == 1 &&
          "Expect only one function with GcInfo in the module");
 
-  // The InstructionOffsets for Call-sites are with respect to:
-  // (1) FunctionEntry in LLVM's StackMap
-  // (2) CodeBlockStart in CoreCLR's GcTable
-  //
-  // There is typically a difference between the two even in the JIT case
-  // (where we emit one function per module) because of some additional
-  // code like the gc.statepoint_poll() method.
-
-  uint8_t *FunctionEntry =
-      (uint8_t *)StackMapParser.getFunction(0).getFunctionAddress();
-
-  size_t OffsetCorrection = FunctionEntry - CodeBlockStart;
-
 // Loop over LLVM StackMap records to:
 // 1) Note CallSites (safepoints)
 // 2) Assign Slot-IDs to each unique gc-pointer location (slot)
@@ -117,7 +104,7 @@ void GCInfo::encodeLiveness() {
   //
   // When not in a fully-intrruptible block, CoreCLR only
   // uses the value of (a+b) to determine the end of the call
-  // instruction. Therefore, we simply report a = c and b = 0 for now.
+  // instruction. Therefore, we simply report a = c-2 and b = 2 for now.
   //
   // Once call-size size is available in LLVM StackMap v2, we can remove this
   // implementation specific workaround.
@@ -144,8 +131,7 @@ void GCInfo::encodeLiveness() {
 
 #if !defined(NDEBUG)
   if (EmitLogs) {
-    dbgs() << "  FunctionEntry: " << FunctionEntry << "\n"
-           << "  #Safepoints: " << StackMapParser.getNumRecords() << "\n";
+    dbgs() << "  #Safepoints: " << StackMapParser.getNumRecords() << "\n";
   }
 
   std::ostringstream SlotStream;
