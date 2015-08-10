@@ -31,9 +31,10 @@ public:
   /// \param JitCtx Context record for the method's jit request.
   /// \param StackMapData A pointer to the .llvm_stackmaps section
   ///        loaded in memory
-  /// \param CodeBlkStart Start address of the Code section block
-  GCInfo(LLILCJitContext *JitCtx, uint8_t *StackMapData, uint8_t *CodeBlkStart,
-         GcInfoAllocator *Allocator);
+  /// \param Allocator The allocator to be used by GcInfo encoder
+  /// \param OffsetCorrection FunctionStart - CodeBlockStart difference
+  GCInfo(LLILCJitContext *JitCtx, uint8_t *StackMapData,
+         GcInfoAllocator *Allocator, size_t OffsetCorrection);
 
   /// Emit GC Info to the EE using GcInfoEncoder.
   void emitGCInfo();
@@ -47,9 +48,19 @@ private:
   void emitEncoding();
 
   const LLILCJitContext *JitContext;
-  const uint8_t *CodeBlockStart;
   const uint8_t *LLVMStackMapData;
   GcInfoEncoder Encoder;
+
+  // The InstructionOffsets reported at Call-sites are with respect to:
+  // (1) FunctionEntry in LLVM's StackMap
+  // (2) CodeBlockStart in CoreCLR's GcTable
+  // OffsetCorrection accounts for the difference:
+  // FunctionStart - CodeBlockStart
+  //
+  // There is typically a difference between the two even in the JIT case
+  // (where we emit one function per module) because of some additional
+  // code like the gc.statepoint_poll() method.
+  size_t OffsetCorrection;
 
 #if !defined(NDEBUG)
   bool EmitLogs;

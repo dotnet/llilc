@@ -312,9 +312,11 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
                << ", size = " << *NativeSizeOfCode
                << " method = " << Context.MethodName << '\n';
       }
+
+      assert(*NativeEntry >= MM.getHotCodeBlock());
       GcInfoAllocator GcInfoAllocator;
-      GCInfo GcInfo(&Context, MM.getStackMapSection(), MM.getHotCodeBlock(),
-                    &GcInfoAllocator);
+      GCInfo GcInfo(&Context, MM.getStackMapSection(), &GcInfoAllocator,
+                    *NativeEntry - MM.getHotCodeBlock());
       GcInfo.emitGCInfo();
 
       // Dump out any enabled timing info.
