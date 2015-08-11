@@ -602,3 +602,4 @@ No.  | Implementation | Testing | Issue | Status
 12 | Track GC-pointers in registers | Test and GCStress Pass | [474](https://github.com/dotnet/llilc/issues/474) | | 
 13 | Implement GC Checker | Test and GCStress Pass | [34](https://github.com/dotnet/llilc/issues/34) | |
 14 | Identify Object and Managed pointers differently| Test and GCStress Pass | [28](https://github.com/dotnet/llilc/issues/28) | |
+15 | Implement necessary support to enable Precise GC when LLVM optimizations are turned on for LLILC | Test and GCStress Pass in an optimized LLILC build | | |
