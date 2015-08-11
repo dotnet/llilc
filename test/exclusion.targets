@@ -10,14 +10,11 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\CodeGenBringUpTests\localloc.cmd" >
              <Issue>13</Issue>
         </ExcludeList> 
-        <ExcludeList Include="$(XunitTestBinbase)\JIT\Directed\lifetime\lifetime1.cmd" >
-             <Issue>31</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinbase)\JIT\Directed\lifetime\lifetime2.cmd" >
-             <Issue>31</Issue>
+             <Issue>CoreClr/1037</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\newarr\newarr.cmd" >
-             <Issue>13</Issue>
+             <Issue>CoreClr/1036</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\StrAccess\straccess3.cmd" >
              <Issue>13</Issue>
@@ -112,9 +109,6 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\rngchk\JaggedArray.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cg\cgstress\CgStress1.cmd" >
-             <Issue>1039</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\opt\Inline\Inline_Handler.cmd" >
              <Issue>487</Issue>
         </ExcludeList>
@@ -185,7 +179,7 @@
              <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Arrays\misc\arrres.cmd" >
-             <Issue>31</Issue>
+             <Issue>CoreClr/1373</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Invoke\SEH\catchfinally.cmd" >
              <Issue>13</Issue>
