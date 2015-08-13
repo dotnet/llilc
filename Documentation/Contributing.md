@@ -28,6 +28,11 @@ Any code being submitted must be formatted per the instructions in the
 [code formatting document](Code-Formatting.md).  We follow LLVM's coding
 conventions, as described in our [coding conventions document](llilc-Coding-Conventions-and-Commenting-Style.md).
 
+The clang-format and clang-tidy exes used in the lab are generated nightly
+and can be downloaded for local use: 
+[here for clang-format](http://dotnet-ci.cloudapp.net/view/dotnet_llilc/job/dotnet_llilc_code_formatter_drop/lastSuccessfulBuild/Azure/processDownloadRequest/build/Release/bin/clang-format.exe)
+and [here for clang-tidy](http://dotnet-ci.cloudapp.net/view/dotnet_llilc/job/dotnet_llilc_code_formatter_drop/lastSuccessfulBuild/Azure/processDownloadRequest/build/Release/bin/clang-tidy.exe).
+
 ## Testing
 The [test harness document](Testing.md) describes the tests we expect to be
 run for each submission and how to run them.
