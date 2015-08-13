@@ -37,11 +37,10 @@ GCInfo::GCInfo(LLILCJitContext *JitCtx, uint8_t *StackMapData,
 #endif // defined(PARTIALLY_INTERRUPTIBLE_GC_SUPPORTED)
 }
 
-void GCInfo::encodeHeader() {
+void GCInfo::encodeHeader(const Function &F) {
 #if !defined(NDEBUG)
   if (EmitLogs) {
-    dbgs() << "GcTable for Function: " << JitContext->MethodName << "\n"
-           << "  Size: " << JitContext->HotCodeSize << "\n";
+    dbgs() << "GcTable for Function: " << F.getName() << "\n";
   }
 #endif // !NDEBUG
 
@@ -50,15 +49,41 @@ void GCInfo::encodeHeader() {
   // JitContext->HotCodeSize is the size of the allocated code block.
   // It is not the actual length of the current function's code.
   Encoder.SetCodeLength(JitContext->HotCodeSize);
+#if !defined(NDEBUG)
+  if (EmitLogs) {
+    dbgs() << "  Size: " << JitContext->HotCodeSize << "\n";
+  }
+#endif // !NDEBUG
+
+  if (isStackBaseFramePointer(F)) {
+    Encoder.SetStackBaseRegister(REGNUM_FPBASE);
+#if !defined(NDEBUG)
+    if (EmitLogs) {
+      dbgs() << "  StackBaseRegister: FP\n";
+    }
+#endif // !NDEBUG
+  } else {
+#if !defined(NDEBUG)
+    if (EmitLogs) {
+      dbgs() << "  StackBaseRegister: SP\n";
+    }
+#endif // !NDEBUG
+  }
 
 #if defined(FIXED_STACK_PARAMETER_SCRATCH_AREA)
   // TODO: Set size of outgoing/scratch area accurately
   // https://github.com/dotnet/llilc/issues/681
-  Encoder.SetSizeOfStackOutgoingAndScratchArea(0);
+  const unsigned ScratchAreaSize = 0;
+  Encoder.SetSizeOfStackOutgoingAndScratchArea(ScratchAreaSize);
+#if !defined(NDEBUG)
+  if (EmitLogs) {
+    dbgs() << "  Scratch Area Size: " << ScratchAreaSize << "\n";
+  }
+#endif // !NDEBUG
 #endif // defined(FIXED_STACK_PARAMETER_SCRATCH_AREA)
 }
 
-void GCInfo::encodeLiveness() {
+void GCInfo::encodeLiveness(const Function &F) {
   if (LLVMStackMapData == nullptr) {
     return;
   }
@@ -73,6 +98,9 @@ void GCInfo::encodeLiveness() {
 #endif
   StackMapParserType StackMapParser(StackMapContentsArray);
 
+  // TODO: Once StackMap v2 is implemented, remove this assertion about
+  // one function per module, and emit the GcInfo for the records
+  // corresponding to the Function 'F'
   assert(StackMapParser.getNumFunctions() == 1 &&
          "Expect only one function with GcInfo in the module");
 
@@ -239,6 +267,11 @@ void GCInfo::encodeLiveness() {
       }
     }
 
+    // __LLVM_Stackmap reports the liveness of pointers wrt SP even for
+    // certain methods which have a FP. So, we cannot
+    // assert((SpBase == GC_FRAMEREG_REL) ?
+    //          isStackBaseFramePointer(F) : !isStackBaseFramePointer(F));
+
     for (GcSlotId SlotID = 0; SlotID < NumSlots; SlotID++) {
       if (!OldLiveSet[SlotID] && NewLiveSet[SlotID]) {
 #if !defined(NDEBUG)
@@ -297,8 +330,40 @@ GCInfo::~GCInfo() {
 #endif // defined(PARTIALLY_INTERRUPTIBLE_GC_SUPPORTED)
 }
 
-void GCInfo::emitGCInfo() {
-  encodeHeader();
-  encodeLiveness();
+void GCInfo::emitGCInfo(const Function &F) {
+  encodeHeader(F);
+  encodeLiveness(F);
   emitEncoding();
+}
+
+void GCInfo::emitGCInfo() {
+  const Module::FunctionListType &FunctionList =
+      JitContext->CurrentModule->getFunctionList();
+  Module::const_iterator Iterator = FunctionList.begin();
+  Module::const_iterator End = FunctionList.end();
+
+  for (; Iterator != End; ++Iterator) {
+    const Function &F = *Iterator;
+    if (shouldEmitGCInfo(F)) {
+      emitGCInfo(F);
+    }
+  }
+}
+
+bool GCInfo::shouldEmitGCInfo(const Function &F) {
+  if (F.isDeclaration()) {
+    return false;
+  }
+
+  if (!F.hasGC()) {
+    return false;
+  }
+
+  const StringRef CoreCLRName("coreclr");
+  return (CoreCLRName == F.getGC());
+}
+
+bool GCInfo::isStackBaseFramePointer(const llvm::Function &F) {
+  Attribute Attribute = F.getFnAttribute("no-frame-pointer-elim");
+  return (Attribute.getValueAsString() == "true");
 }
