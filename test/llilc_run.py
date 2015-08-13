@@ -60,8 +60,8 @@ def UnquoteArg(arg):
 
 def log(*objs):
     '''Print log message to both stdout and stderr'''
-    print("llilc-run: ", *objs)
-    print("llilc-run: ", *objs, file=sys.stderr)
+    print("llilc_run\stdout: ", *objs)
+    print("llilc_run\stderr: ", *objs, file=sys.stderr)
     
 def RunCommand(command):
     ''' Run a command and return its exit code, optionally echoing it.'''
