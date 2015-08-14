@@ -662,7 +662,7 @@
              <Issue>633</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M13-RTM\b91223\b91223.cmd" >
-             <Issue>637</Issue>
+             <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b77304\b77304.cmd" >
              <Issue>637</Issue>

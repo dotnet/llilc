@@ -319,6 +319,21 @@ public:
   IRNode *ckFinite(IRNode *Arg1) override {
     throw NotYetImplementedException("ckFinite");
   };
+
+  /// \brief Modify comparison arguments, if needed, to have equal types.
+  ///
+  /// LLVM comparisons require that the operands have the same type
+  /// whereas MSIL operands may have different type, subject to
+  /// the conditions in the ECMA spec, partition III, table 4,
+  /// except we relax these conditions somewhat by allowing comparison
+  /// of int64 with int32 or native int. Promote the arguments
+  /// as needed to achieve type equality.
+  ///
+  /// \param [in,out] Arg1 Pointer to first argument.
+  /// \param [in,out] Arg2 Pointer to second argument.
+  /// \returns True if the comparison is a floating comparison.
+  bool prepareArgsForCompare(IRNode *&Arg1, IRNode *&Arg2);
+
   IRNode *cmp(ReaderBaseNS::CmpOpcode Opode, IRNode *Arg1,
               IRNode *Arg2) override;
   void condBranch(ReaderBaseNS::CondBranchOpcode Opcode, IRNode *Arg1,

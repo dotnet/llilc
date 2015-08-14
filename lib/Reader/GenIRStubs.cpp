@@ -17,6 +17,11 @@
 #include "earlyincludes.h"
 #include "reader.h"
 #include <cstdarg>
+#include <cstdio>
+
+#ifdef _MSC_VER
+#define vsnprintf _vsnprintf
+#endif
 
 // Get the special block-start placekeeping node
 IRNode *fgNodeGetStartIRNode(FlowGraphNode *FgNode) { return (IRNode *)FgNode; }
@@ -507,8 +512,13 @@ void ReaderBase::verGlobalError(const char *Message) { return; }
 int _cdecl dbPrint(const char *Format, ...) {
   va_list Args;
   va_start(Args, Format);
-  int NumChars = vfprintf(stderr, Format, Args);
+  const int BufferSize = 200;
+  char Buffer[BufferSize];
+  int NumChars = vsnprintf(Buffer, BufferSize, Format, Args);
   va_end(Args);
+  if (NumChars > 0) {
+    llvm::dbgs() << Buffer;
+  }
   return NumChars;
 }
 
