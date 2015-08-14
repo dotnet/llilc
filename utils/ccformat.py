@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+﻿#!/usr/bin/env python
 
 import sys
 import argparse
@@ -58,7 +58,7 @@ def runTidy(args):
         "-fms-extensions",
         "-fms-compatibility",
         "-fmsc-version=1800",
-        "–fexceptions",
+        "-fexceptions",
         "-fcxx-exceptions"
     ]
     includes = [
