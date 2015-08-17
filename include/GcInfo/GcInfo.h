@@ -39,6 +39,8 @@ public:
   /// Emit GC Info to the EE using GcInfoEncoder.
   void emitGCInfo();
 
+  static bool isGCFunction(const llvm::Function &F);
+
   /// Destructor -- delete allocated memory
   ~GCInfo();
 

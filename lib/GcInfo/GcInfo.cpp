@@ -351,10 +351,10 @@ void GCInfo::emitGCInfo() {
 }
 
 bool GCInfo::shouldEmitGCInfo(const Function &F) {
-  if (F.isDeclaration()) {
-    return false;
-  }
+  return !F.isDeclaration() && isGCFunction(F);
+}
 
+bool GCInfo::isGCFunction(const llvm::Function &F) {
   if (!F.hasGC()) {
     return false;
   }

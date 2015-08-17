@@ -15,6 +15,7 @@
 
 #include "earlyincludes.h"
 #include "readerir.h"
+#include "GcInfo.h"
 #include "imeta.h"
 #include "newvstate.h"
 #include "llvm/ADT/Triple.h"
@@ -649,7 +650,8 @@ void GenIR::insertIRForUnmanagedCallFrame() {
 
   // Mark this function as requiring a frame pointer and as using GC.
   Function->addFnAttr("no-frame-pointer-elim", "true");
-  Function->setGC("coreclr");
+
+  assert(GCInfo::isGCFunction(*Function));
 
   // The call frame data structure is modeled as an opaque blob of bytes.
   Type *CallFrameTy = ArrayType::get(Int8Ty, CallFrameInfo.size);
