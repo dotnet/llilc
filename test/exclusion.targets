@@ -712,9 +712,6 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\refany\seq.cmd" >
              <Issue>637</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b67744\b67744.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b49104\b49104.cmd" >
              <Issue>637</Issue>
         </ExcludeList>
@@ -726,9 +723,6 @@
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M11-Beta1\b45956\b45956.cmd" >
              <Issue>13</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M11-Beta1\b44983\b44983.cmd" >
-             <Issue>637</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M11-Beta1\b40199\b40199.cmd" >
              <Issue>13</Issue>
@@ -751,9 +745,6 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\ELEMENT_TYPE_IU\u_vfld.cmd" >
              <Issue>637</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b59947\b59947.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b55216\b55216.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
@@ -768,9 +759,6 @@
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b63732\b63732.cmd" >
              <Issue>13</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b60194\b60194.cmd" >
-             <Issue>637</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\IL\leave\leave2.cmd" >
              <Issue>13</Issue>
@@ -789,9 +777,6 @@
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b65087\b65087.cmd" >
              <Issue>13</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b62145\b62145.cmd" >
-             <Issue>637</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b70992\b70992.cmd" >
              <Issue>13</Issue>
@@ -922,9 +907,6 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\ldc_conv_ovf_u4_u2.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\refany\native.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b33125\b33125.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
@@ -1035,9 +1017,6 @@
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M10\b05617\b05617.cmd" >
              <Issue>645</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M11-Beta1\b43994\b43994.cmd" >
-             <Issue>637</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b84909\b84909.cmd" >
              <Issue>13</Issue>
@@ -1195,9 +1174,6 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\ELEMENT_TYPE_IU\i_flow_merge.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b59478\b59478.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\ldc_conv_ovf_i8_i4.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
@@ -1242,9 +1218,6 @@
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-EJIT\V1-M11-Beta1\b45046\b45046.cmd" >
              <Issue>642</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b35486\b35486.cmd" >
-             <Issue>637</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M11-Beta1\b39946\b39946.cmd" >
              <Issue>13</Issue>
@@ -1293,12 +1266,6 @@
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\casts\array\arrays.cmd" >
              <Issue>13</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1.1-M1-Beta1\b140118\b140118.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\regress\vsw\534486\exchange.cmd" >
-             <Issue>637</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b73207\b73207.cmd" >
              <Issue>637</Issue>
@@ -1471,14 +1438,8 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V2.0-Beta2\b309576\bug2.cmd" >
              <Issue>637</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b73079\b73079.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b75890\b75890.cmd" >
              <Issue>13</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b54006\b54006.cmd" >
-             <Issue>637</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\PREFIX\volatile\1\arglist64.cmd" >
              <Issue>645</Issue>
@@ -1540,9 +1501,6 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\IL\rethrow\rethrow2.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\coverage\oldtests\arrgetlen.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1.2-Beta1\b223924\bug2.cmd" >
              <Issue>637</Issue>
         </ExcludeList>
@@ -1560,9 +1518,6 @@
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b72828\b72828.cmd" >
              <Issue>13</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b61215\b61215.cmd" >
-             <Issue>637</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b74939\b74939.cmd" >
              <Issue>13</Issue>
@@ -1657,9 +1612,6 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b51420\b51420.cmd" >
              <Issue>637</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b59477\b59477.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M09.5-PDC\b27657\b27657.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
@@ -1732,9 +1684,6 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M11-Beta1\b44879\b44879.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\clr-x64-JIT\v4.0\b602182\b602182.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b50027\b50027.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
@@ -1774,12 +1723,6 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\regress\vswhidbey\223862\mul_exception.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b67819\b67819.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M11-Beta1\b49101\b49101.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b31292\b31292.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
@@ -1815,15 +1758,6 @@
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Arrays\range\negIndexRngChkElim.cmd" >
              <Issue>13</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\flowgraph\dev10_bug679053\flowgraph.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\flowgraph\dev10_bug679053\cpblkInt32.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\flowgraph\dev10_bug679955\volatileLocal1.cmd" >
-             <Issue>637</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\casts\ilseq\typeEqualOp.cmd" >
              <Issue>637</Issue>
@@ -2467,25 +2401,7 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\int64\signed\_speed_rels_ldsfld_mulovf.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\coverage\oldtests\arrgetlen_il_d.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\coverage\oldtests\arrgetlen_il_r.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Arrays\range\_il_relnegIndexRngChkElim.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\ELEMENT_TYPE_IU\_il_dbgconv_i8_i.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\ELEMENT_TYPE_IU\_il_dbgconv_i8_u.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\ELEMENT_TYPE_IU\_il_dbgconvovf_i8_i.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\ELEMENT_TYPE_IU\_il_dbgconvovf_i8_u.cmd" >
              <Issue>637</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\ELEMENT_TYPE_IU\_il_dbgi_fld.cmd" >
@@ -2500,25 +2416,10 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\ELEMENT_TYPE_IU\_il_dbgptr.cmd" >
              <Issue>637</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\ELEMENT_TYPE_IU\_il_dbgqperm.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\ELEMENT_TYPE_IU\_il_dbgu_fld.cmd" >
              <Issue>637</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\ELEMENT_TYPE_IU\_il_dbgu_vfld.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\ELEMENT_TYPE_IU\_il_relconv_i8_i.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\ELEMENT_TYPE_IU\_il_relconv_i8_u.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\ELEMENT_TYPE_IU\_il_relconvovf_i8_i.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\ELEMENT_TYPE_IU\_il_relconvovf_i8_u.cmd" >
              <Issue>637</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\ELEMENT_TYPE_IU\_il_reli_fld.cmd" >
@@ -2533,28 +2434,10 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\ELEMENT_TYPE_IU\_il_relptr.cmd" >
              <Issue>637</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\ELEMENT_TYPE_IU\_il_relqperm.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\ELEMENT_TYPE_IU\_il_relu_fld.cmd" >
              <Issue>637</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\ELEMENT_TYPE_IU\_il_relu_vfld.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Invoke\implicit\_il_dbgfr4.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Invoke\implicit\_il_relfr4.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\casts\ilseq\_il_reltypeEqualOp.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\tailcall\_il_dbgcompat_i4_u.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\tailcall\_il_relcompat_i4_u.cmd" >
              <Issue>637</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b49435\b49435.cmd" >
@@ -2679,12 +2562,6 @@
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\explicit\basic\_il_relrefarg_i1.cmd" >
              <Issue>645</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Arrays\lcs\_il_dbglcs_ldlen.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Arrays\lcs\_il_rellcs_ldlen.cmd" >
-             <Issue>637</Issue>
         </ExcludeList>
     </ItemGroup>
     <ItemGroup Condition="'$(XunitTestBinBase)' != '' and '$(COMPLUS_INSERTSTATEPOINTS)' != ''">	
