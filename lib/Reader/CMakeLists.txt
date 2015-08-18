@@ -2,12 +2,17 @@ get_filename_component(LLILC_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR}/../../include 
 
 include_directories(${LLILC_INCLUDES}/clr
                     ${LLILC_INCLUDES}/Pal
+                    ${LLILC_INCLUDES}/GcInfo                    
                     ${LLILC_INCLUDES}/Reader
                     ${LLILC_INCLUDES}/Jit)
+
+set(LLILCJIT_LINK_LIBRARIES GcInfo)
 
 if( WIN32 )
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -EHsc")
 endif()
+
+add_definitions(-DSTANDALONE_BUILD)
 
 add_llilcjit_library(LLILCReader
   abi.cpp

@@ -17,10 +17,19 @@
 #define GCINFO_TARGET_H
 
 #include "global.h"
+#include "corinfo.h"
 
 #if (defined(_TARGET_X86_) || defined(_TARGET_X64_) || defined(_TARGET_AMD64_))
 
-// Define DWARF encodings for registers
+// Identify the frame-pointer register number
+
+#if defined(_TARGET_X86_)
+#define REGNUM_FPBASE ICorDebugInfo::RegNum::REGNUM_EBP
+#else
+#define REGNUM_FPBASE ICorDebugInfo::RegNum::REGNUM_RBP
+#endif // defined(_TARGET_X86_)
+
+// Define encodings for DWARF registers
 // Size variants (ex: AL,AH,AX,EAX,RAX) all get the same Dwarf register number
 
 #define DW_RAX 0

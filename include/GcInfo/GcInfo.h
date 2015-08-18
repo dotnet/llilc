@@ -39,13 +39,19 @@ public:
   /// Emit GC Info to the EE using GcInfoEncoder.
   void emitGCInfo();
 
+  static bool isGCFunction(const llvm::Function &F);
+
   /// Destructor -- delete allocated memory
   ~GCInfo();
 
 private:
-  void encodeHeader();
-  void encodeLiveness();
+  void emitGCInfo(const llvm::Function &F);
+  void encodeHeader(const llvm::Function &F);
+  void encodeLiveness(const llvm::Function &F);
   void emitEncoding();
+
+  bool shouldEmitGCInfo(const llvm::Function &F);
+  bool isStackBaseFramePointer(const llvm::Function &F);
 
   const LLILCJitContext *JitContext;
   const uint8_t *LLVMStackMapData;
