@@ -7347,12 +7347,13 @@ void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
         fgNodeSetOperandStack(SuccessorBlock, SuccessorStack);
         CreatePHIs = true;
       }
-      
+
       // We need to be very careful about reasoning about or iterating through
       // instructions in empty blocks or blocks with no terminators.
       Instruction *TermInst = SuccessorBlock->getTerminator();
       const bool SuccessorDegenerate = (TermInst == nullptr);
-      Instruction *CurrentInst = SuccessorBlock->empty() ? nullptr : SuccessorBlock->begin();
+      Instruction *CurrentInst =
+          SuccessorBlock->empty() ? nullptr : SuccessorBlock->begin();
       PHINode *Phi = nullptr;
       for (IRNode *Current : *ReaderOperandStack) {
         Value *CurrentValue = (Value *)Current;
@@ -7391,11 +7392,11 @@ void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
 
       // The number of PHI instructions should match the number of values on the
       // stack, so if we're not creating PHIs, try and verify that the next
-      // instruction is not a PHI. 
+      // instruction is not a PHI.
       //
       // Note when SuccessorBlock is degenerate we can't be sure CurrentInst is
       // valid, so we can't do this check.
-      assert(CreatePHIs|| SuccessorDegenerate || !isa<PHINode>(CurrentInst));
+      assert(CreatePHIs || SuccessorDegenerate || !isa<PHINode>(CurrentInst));
     }
     SuccessorList = fgEdgeListGetNextSuccessorActual(SuccessorList);
   }
