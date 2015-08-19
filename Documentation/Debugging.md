@@ -142,8 +142,10 @@ All of the environment variables must start with the
   The name of this dll as built is "llilc.dll". However
   some of our tools insert a time-stamp in the name when
   copying it to the CLR directory. 
-* COMPlus_GCConservative, if non-null use conservative garbage collection.
-* COMPlus_InsertStatePoints, if non-null use precise garbage collection. 
+* COMPlus_GCConservative, if non-null and non-empty,
+  use conservative garbage collection.
+* COMPlus_InsertStatePoints, if non-null and non-empty,
+  use precise garbage collection. 
 * COMPlus_ZapDisable. If set to 1 means CLR should not use
   precompiled NGen methods but require that all methods be
   JITed. 
@@ -153,7 +155,7 @@ All of the environment variables must start with the
   of JITTING each method. If the method failed to compile
   a reason is given. If "verbose" is specified then in 
   addition the LLVM IR is dumped for every method.
-* COMPlus_JitGCInfoLogging, if non-null, 
+* COMPlus_JitGCInfoLogging, if non-null and non-empty, 
   GCInfo encoding logs should be emitted
 * COMPlus_ALtJitExclude is a MethodSet. LLILC will only
   attempt to compile methods which are in the COMPlus_AltJit
@@ -179,6 +181,11 @@ All of the environment variables must start with the
   code, and the code size, is printed after the method has
   been JITTED. This can be useful in identifying which
   method contains a given address.
+* COMPlus_SIMDIntrinc, if non-null and non-empty, 
+  use SIMD intrinsics.
+* COMPlus_AltJitOptions. If specified, this contains
+  options that are passed to the LLVM backend via its
+  cl::ParseEnvironmentOptions method.
 
 ### Environment Variables Affecting the CoreCLR
 There are a large number environment variables that
@@ -215,8 +222,41 @@ you can run a single test, possibly under the control of
 a debugger, then you may need to set this manually.
 
 ## Running A Single Test from the command line
-TBD
+To run a single test from the command line, use the
+python script llilc_run.py. Assuming your 
+current directory is at the LLILC root, use
+
+```
+python test\llilc_run.py -h
+```
+
+to get help on the options the script takes.
+
 ## Running A Single Test using Visual Studio
-TBD
+To run a single test from Visual Studio, use the
+python script make_sln.py to make a solution
+file. Assuming your current directory is at the LLILC root, use
+
+```
+python test\make_sln.py -h
+```
+
+to get help on the options the script takes.  The solution is setup to
+run the test you specify with environment variables set to specify
+LLILC as the alternate JIT. The solution file has the full set of
+environment variables that LLILC recognizes, but by default with empty
+values.  You can then change these as desired.  If you specify the
+--invoke-vs option then Visual Studio will be invoked to open the
+solution after creating it.
+
+By default the solution has the debugger type set to
+"Managed (CoreClr)". This is the setting that lets you do 
+source-level debugging of the application. To set breakpoints
+and step in the LLILC code you should set this to "Auto" instead.
+
 ## Runing A Single Test using windbg
-TBD
+You can also use llilc_run.py to run a single test using windbg.
+To do that, supply the --windbg-and-args option followed
+by the full path to windbg and any parameters you want to
+pass to windbg. 
+

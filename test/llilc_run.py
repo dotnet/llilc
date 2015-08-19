@@ -3,12 +3,12 @@
 # title           : llilcrun.py
 # description     : Run a managed application using LLILC jit.
 #
-# This script expects to be run on Python 3.4 or later.
+# This script has been tested running on both Python 2.7 and Python 3.4.
 #
-# usage: llilc_run.py [-h] [-d {verbose,summary}] [-x [EXTRA [EXTRA ...]]] [-n]
+# usage: llilc_run.py [-h] [-d {summary,verbose}] [-x [EXTRA [EXTRA ...]]] [-n]
 #                     [-p] [-v] [-r [CORERUN_AND_ARGS [CORERUN_AND_ARGS ...]]]
-#                     [-j JIT_PATH] -a APP_PATH -c CORECLR_RUNTIME_PATH
-#                     [ -- [APPLICATION_ARGUMENT ...] ]
+#                     [-j JIT_PATH] [-w [WINDBG_AND_ARGS [WINDBG_AND_ARGS ...]]]
+#                     -a APP_PATH -c CORECLR_RUNTIME_PATH
 # 
 # Run a managed application with LLILC as the JIT. If the application has any
 # arguments, they must be appended to the end of the command line, preceded by
@@ -16,7 +16,7 @@
 # 
 # optional arguments:
 #   -h, --help            show this help message and exit
-#   -d {verbose,summary}, --dump-level {verbose,summary}
+#   -d {summary,verbose}, --dump-level {summary,verbose}
 #                         the dump level: summary, or verbose
 #   -x [EXTRA [EXTRA ...]], --extra [EXTRA [EXTRA ...]]
 #                         list of extra COMPlus settings. Each item is
@@ -33,6 +33,9 @@
 #                         full path to jit .dll. If given it is copied to
 #                         coreclr directory. If not given we check that it
 #                         exists in the coreclr directory.
+#   -w [WINDBG_AND_ARGS [WINDBG_AND_ARGS ...]], --windbg-and-args [WINDBG_AND_ARGS [WINDBG_AND_ARGS ...]]
+#                         Full path to windbg executable followed by any
+#                         arguments you want to pass to windbg.
 # 
 # required arguments:
 #   -a APP_PATH, --app-path APP_PATH
@@ -58,10 +61,20 @@ def UnquoteArg(arg):
     ''' Remove single and double quotes from front and back of arg'''
     return arg.strip("'").strip('"')
 
+def GetPrintString(*args):
+    return ' '.join(map(str, args))
+
+def Print(*args):
+    print (GetPrintString(*args))
+
+def PrintError(*args):
+    ''' Mimic the python 3.x print statement (should the community ever go to 3.4, we would not need to change much.)'''
+    sys.stderr.write(GetPrintString(*args) + '\n')
+
 def log(*objs):
     '''Print log message to both stdout and stderr'''
-    print("llilc_run\stdout: ", *objs)
-    print("llilc_run\stderr: ", *objs, file=sys.stderr)
+    Print("llilc_run\stdout: ", *objs)
+    PrintError("llilc_run\stderr: ", *objs)
     
 def RunCommand(command):
     ''' Run a command and return its exit code, optionally echoing it.'''
@@ -97,6 +110,10 @@ def main(argv):
     parser.add_argument('-j', '--jit-path', type=str,
                         help='''full path to jit .dll. If given it is copied to coreclr directory.
                                 If not given we check that it exists in the coreclr directory.
+                             ''')
+    parser.add_argument('-w', '--windbg-and-args', type=str, nargs='*', default=[],
+                        help='''Full path to windbg executable followed by any arguments you
+                                want to pass to windbg.
                              ''')
     required = parser.add_argument_group('required arguments')
     required.add_argument('-a', '--app-path', type=str, required=True, 
@@ -140,7 +157,7 @@ def main(argv):
     if args.dump_level:
         os.environ["COMPlus_DumpLLVMIR"]=args.dump_level
     for arg in args.extra:
-        pair = UnquoteArg(arg).split('=', maxsplit = 1)
+        pair = UnquoteArg(arg).split('=', 1)
         name = 'COMPLUS_AltJit' + pair[0]
         value = pair[1]
         os.environ[name] = value
@@ -151,12 +168,18 @@ def main(argv):
         RunCommand('set CORE_ROOT')
         RunCommand('set CORE_LIBRARIES')
     command = ''
+    if args.windbg_and_args:
+        for arg in args.windbg_and_args:
+            arg = QuoteArg(arg)
+            command += ' ' + arg
     if args.corerun_and_args:
+        first_corerun = True
         for arg in args.corerun_and_args:
-            if command == '':
+            if first_corerun:
                 # First of these will be the CoreRun.exe, so prefix with
                 # the path.
                 arg = os.path.join(args.coreclr_runtime_path, arg)
+                first_corerun = False
             arg = QuoteArg(arg)
             command += ' ' + arg
         
