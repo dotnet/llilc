@@ -105,6 +105,13 @@ private:
   static bool queryMethodSet(LLILCJitContext &JitContext, MethodSet &TheSet,
                              const char16_t *Name);
 
+  /// \brief Check for non-null non-empty configuration variable.
+  ///
+  /// \param Name The name of the configuration variable
+  /// \returns true if configuration variable is non-null and non-empty.
+  static bool queryNonNullNonEmpty(LLILCJitContext &JitContext,
+                                   const char16_t *Name);
+
   /// \brief Set SIMD intrinsics using.
   ///
   /// \returns true if SIMD_INTRINSIC is set in the environment set.
