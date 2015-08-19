@@ -23,6 +23,7 @@
 #include "abi.h"
 #include "EEMemoryManager.h"
 #include "EEObjectLinkingLayer.h"
+#include "llvm/Analysis/CallGraph.h"
 #include "llvm/CodeGen/GCs.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/DebugInfo/DIContext.h"
@@ -290,6 +291,18 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
 
         Passes.add(createRewriteStatepointsForGCPass(false));
         Passes.run(*M);
+
+        // PlaceSafepoints phase inlines the contents of gc.safepointPoll()
+        // at all polling locations. So, once the phase has run, remove the
+        // @gc.safepointPoll() function from the module.
+        Function *SafepointPoll = Context.SafepointPoll;
+#if !defined(NDEBUG)
+        // Ensure that there are no more callers for SafepointPoll function.
+        CallGraph CG(*Context.CurrentModule);
+        CallGraphNode *PollNode = CG[SafepointPoll];
+        assert(PollNode->getNumReferences() == 0);
+#endif
+        SafepointPoll->eraseFromParent();
       }
 
       // Use a custom resolver that will tell the dynamic linker to skip
