@@ -588,8 +588,9 @@ void ObjectLoadListener::recordRelocations(
         continue;
       }
 
-      section_iterator SymbolSection(Obj.section_end());
-      Symbol->getSection(SymbolSection);
+      ErrorOr<section_iterator> SymbolSectionOrErr = Symbol->getSection();
+      assert(!SymbolSectionOrErr.getError());
+      object::section_iterator SymbolSection = *SymbolSectionOrErr;
       const bool IsExtern = SymbolSection == Obj.section_end();
       uint64_t RelType = I->getType();
       uint64_t Offset = I->getOffset();
