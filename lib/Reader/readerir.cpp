@@ -581,6 +581,11 @@ void GenIR::insertIRToKeepGenericContextAlive() {
 
   // TODO: we must convey the offset of this local to the runtime
   // via the GC encoding.
+  // https://github.com/dotnet/llilc/issues/766
+
+  if (JitContext->Options->DoInsertStatepoints) {
+    throw NotYetImplementedException("NYI: Generic Context reporting");
+  }
 }
 
 void GenIR::insertIRForSecurityObject() {
@@ -617,6 +622,11 @@ void GenIR::insertIRForSecurityObject() {
 
   // TODO: we must convey the offset of the security object to the runtime
   // via the GC encoding.
+  // https://github.com/dotnet/llilc/issues/767
+
+  if (JitContext->Options->DoInsertStatepoints) {
+    throw NotYetImplementedException("NYI: Security Object Reporting");
+  }
 }
 
 void GenIR::callMonitorHelper(bool IsEnter) {
