@@ -27,7 +27,9 @@
 #   -d {summary,verbose}, --dump-level {summary,verbose}
 #                         the dump level: summary, or verbose
 #   -n, --ngen            Use ngened mscorlib
-#   -p, --precise-gc      Test with Precise GC
+#   -p, --precise-gc      Test with Precise GC (default: Test with Conservative GC)
+#   -s,  --insert-statepoints 
+#                         Test with Statepoints inserted, regardless of GC settings.
 #   -r RESULT_PATH, --result-path RESULT_PATH
 #                         the path to runtest result output directory
 # 
@@ -120,6 +122,8 @@ def main(argv):
     parser.add_argument('-t', '--runtest-path', type=str,
                         default=None, help='the full path to the CoreCLR\\tests directory')
     parser.add_argument('-n', '--ngen', help='use ngened mscorlib', default=False, action="store_true")
+    parser.add_argument('-s', '--insert-statepoints', help='Insert GC Statepoints',
+                         default=False, action="store_true")
     parser.add_argument('-p', '--precise-gc', help='test with precise gc', default=False, action="store_true")
     required = parser.add_argument_group('required arguments')
     required.add_argument('-j', '--jit-path', required=True, 
@@ -172,6 +176,8 @@ def main(argv):
                 test_env.write('set COMPlus_InsertStatepoints=1\n')
             else:
                 test_env.write('set COMPlus_GCConservative=1\n')
+            if (args.insert_statepoints):
+                test_env.write('set COMPlus_InsertStatepoints=1\n')
             if (not args.ngen):
               test_env.write('set COMPlus_ZapDisable=1\n')
             test_env.write('chcp 65001\n')
