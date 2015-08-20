@@ -119,7 +119,8 @@ private:
   ///
   /// \param DwarfContext Dwarf Context to extract debug info from
   /// \param Size Size of the function we are gathering info from
-  void getDebugInfoForLocals(DWARFContextInMemory *DwarfContext, uint64_t Size);
+  void getDebugInfoForLocals(DWARFContextInMemory *DwarfContext, uint64_t Addr,
+                             uint64_t Size);
 
   /// \brief Convert DWARF register number to CLR register number
   ///
@@ -587,7 +588,7 @@ void ObjectLoadListener::getDebugInfoForObject(
       Context->JitInfo->setBoundaries(MethodHandle, NumDebugRanges, OM);
     }
 
-    getDebugInfoForLocals(DwarfContext, Size);
+    getDebugInfoForLocals(DwarfContext, Addr, Size);
   }
 }
 
@@ -677,7 +678,7 @@ void ObjectLoadListener::getRelocationTypeAndAddend(uint8_t *FixupAddress,
 }
 
 void ObjectLoadListener::getDebugInfoForLocals(
-    DWARFContextInMemory *DwarfContext, uint64_t Size) {
+    DWARFContextInMemory *DwarfContext, uint64_t Addr, uint64_t Size) {
   for (const auto &CU : DwarfContext->compile_units()) {
     const DWARFDebugInfoEntryMinimal *UnitDIE = CU->getUnitDIE(false);
     const DWARFDebugInfoEntryMinimal *SubprogramDIE = getSubprogramDIE(UnitDIE);
@@ -707,8 +708,8 @@ void ObjectLoadListener::getDebugInfoForLocals(
       unsigned CurrentDebugEntry = 0;
 
       for (auto &Offset : Offsets) {
-        LocalVars[CurrentDebugEntry].startOffset = 0;
-        LocalVars[CurrentDebugEntry].endOffset = Size;
+        LocalVars[CurrentDebugEntry].startOffset = Addr;
+        LocalVars[CurrentDebugEntry].endOffset = Addr + Size;
         LocalVars[CurrentDebugEntry].varNumber = CurrentDebugEntry;
 
         // Assume all locals are on the stack
