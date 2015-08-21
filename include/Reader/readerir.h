@@ -392,7 +392,8 @@ public:
 
   IRNode *loadLen(IRNode *Array, bool ArrayMayBeNull = true) override;
 
-  bool arrayAddress(CORINFO_SIG_INFO *Sig, IRNode **RetVal);
+  bool arrayAddress(CORINFO_SIG_INFO *Sig, IRNode **RetVal) override;
+
   IRNode *loadStringLen(IRNode *Arg1) override;
 
   IRNode *getTypeFromHandle(IRNode *HandleNode) override;
@@ -783,7 +784,7 @@ public:
   /// \returns Generated call instruction if NullCheckArg is null; otherwise,
   /// PHI of NullCheckArg and the generated call instruction.
   IRNode *callRuntimeHandleHelper(CorInfoHelpFunc Helper, IRNode *Arg1,
-                                  IRNode *Arg2, IRNode *NullCheckArg);
+                                  IRNode *Arg2, IRNode *NullCheckArg) override;
 
   /// Generate a helper call to enter or exit a monitor used by synchronized
   /// methods.
@@ -1618,7 +1619,7 @@ private:
                                           bool IsConstant);
   std::string appendClassNameAsString(CORINFO_CLASS_HANDLE Class,
                                       bool IncludeNamespace, bool FullInst,
-                                      bool IncludeAssembly);
+                                      bool IncludeAssembly) override;
 
   IRNode *vectorAdd(IRNode *Vector1, IRNode *Vector2) override;
   IRNode *vectorSub(IRNode *Vector1, IRNode *Vector2) override;
