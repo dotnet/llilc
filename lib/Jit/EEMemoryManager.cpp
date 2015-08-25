@@ -181,8 +181,23 @@ void EEMemoryManager::registerEHFrames(uint8_t *Addr, uint64_t LoadAddr,
           ? Size - 4
           : Size - (CountOfUnwindCodes & 1) * SizeOfUnwindCode;
 
+#if !defined(NDEBUG)
+  // Check that we actually have only one function with unwind info
+  // within the module.
+  const Module &M = *LLILCJit::TheJit->getLLILCJitContext()->CurrentModule;
+  size_t NumFunctionsWithUnwindInfo = 0;
+  for (const Function &F : M) {
+    if (!F.isDeclaration() && !F.hasFnAttribute(Attribute::NoUnwind)) {
+      NumFunctionsWithUnwindInfo++;
+    }
+  }
+
+  assert(NumFunctionsWithUnwindInfo == 1);
+#endif
+
   // Assume this unwind covers the entire method. Later when
   // we have multiple unwind regions we'll need something more clever.
+
   uint32_t StartOffset = 0;
   uint32_t EndOffset = this->Context->HotCodeSize;
   this->Context->JitInfo->allocUnwindInfo(

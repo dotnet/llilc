@@ -979,6 +979,13 @@ void GenIR::createSafepointPoll() {
 
   assert(SafepointPoll->empty());
 
+  // Safepoint Poll function itself is never expected to be called
+  // at runtime, so we can save generating unwind information for it.
+  //
+  // PlaceSafepoints phase inlines the contents of @gc.SafepointPoll()
+  // at all gc-polling locations.
+  SafepointPoll->addFnAttr(Attribute::NoUnwind);
+
   BasicBlock *EntryBlock =
       BasicBlock::Create(*LLVMContext, "entry", SafepointPoll);
 
