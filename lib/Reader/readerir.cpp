@@ -7462,11 +7462,21 @@ void GenIR::addPHIOperand(PHINode *Phi, Value *NewOperand,
     LLVMBuilder->restoreIP(SavedInsertPoint);
   }
 
-  int BlockIndex = Phi->getBasicBlockIndex(NewBlock);
-  if (BlockIndex >= 0)
-    Phi->setIncomingValue(BlockIndex, NewOperand);
-  else
-    Phi->addIncoming(NewOperand, NewBlock);
+  bool FoundBlockOperand = false;
+  for (unsigned I = 0, N = Phi->getNumOperands(); I != N; ++I) {
+    if (Phi->block_begin()[I] == NewBlock) {
+      Value *CurrentOperand = Phi->getIncomingValue(I);
+      if (isa<UndefValue>(CurrentOperand)) {
+        Phi->setIncomingValue(I, NewOperand);
+        FoundBlockOperand = true;
+        break;
+      }
+      else {
+        assert(CurrentOperand == NewOperand);
+      }
+    }
+  }
+  assert(FoundBlockOperand);
 }
 
 Value *GenIR::changePHIOperandType(Value *Operand, BasicBlock *OperandBlock,

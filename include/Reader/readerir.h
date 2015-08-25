@@ -1412,12 +1412,13 @@ private:
                                unsigned int NumReservedValues,
                                const llvm::Twine &NameStr);
 
-  /// Add a new operand to the PHI instruction. The type of the new operand may
-  /// or may not equal to the type of the PHI instruction. Adjust the types as
-  /// necessary.
+  /// Update all undef placeholders corresponding to the new operand in the
+  /// PHI instruction. The type of the new operand may or may not equal the type
+  /// of the PHI instruction. Adjust the types as necessary.
   ///
   /// \param PHI PHI instruction.
   /// \param NewOperand Operand to add to the PHI instruction.
+  /// \param NewBlock Basic block corresponding to NewOperand.
   void addPHIOperand(llvm::PHINode *PHI, llvm::Value *NewOperand,
                      llvm::BasicBlock *NewBlock);
 
