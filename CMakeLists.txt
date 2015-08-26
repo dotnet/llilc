@@ -30,6 +30,8 @@ if( CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
         list(APPEND LLVM_CONFIG_SEARCH_PATHS
           "${WITH_LLVM_ABS}/bin/Debug"
           "${WITH_LLVM_ABS}/Debug/bin"
+          "${WITH_LLVM_ABS}/bin/RelWithDebInfo"
+          "${WITH_LLVM_ABS}/RelWithDebInfo/bin"
           "${WITH_LLVM_ABS}/bin/Release"
           "${WITH_LLVM_ABS}/Release/bin")
       endif()
