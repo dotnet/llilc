@@ -693,6 +693,18 @@ void ObjectLoadListener::getDebugInfoForLocals(
       FrameBaseRegister = mapDwarfRegisterToRegNum(FormValues->back());
     }
 
+    if (SubprogramDIE->getAttributeValue(CU.get(), dwarf::DW_AT_low_pc,
+                                         FormValue)) {
+      Optional<uint64_t> FormAddress = FormValue.getAsAddress(CU.get());
+      
+      // If the Form address doesn't match the address for the function passed
+      // do not collect debug for locals since they do not go with the current
+      // function being processed
+      if (FormAddress.getValue() != Addr){
+        return;
+      }
+    }
+
     std::vector<uint64_t> Offsets;
     extractLocalLocations(CU.get(), SubprogramDIE, Offsets);
 
