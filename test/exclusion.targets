@@ -47,28 +47,25 @@
              <Issue>420</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\fieldExprUnchecked1.cmd" >
-             <Issue>462</Issue>
+             <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\HugeArray.cmd" >
-             <Issue>462</Issue>
+             <Issue>794</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\HugeArray1.cmd" >
-             <Issue>462</Issue>
+             <Issue>794</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\hugeexpr1.cmd" >
-             <Issue>462</Issue>
+             <Issue>794</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\HugeField1.cmd" >
-             <Issue>462</Issue>
+             <Issue>794</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\HugeField2.cmd" >
-             <Issue>462</Issue>
+             <Issue>794</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\hugeSimpleExpr1.cmd" >
-             <Issue>462</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\staticFieldExprUnchecked1.cmd" >
-             <Issue>462</Issue>
+             <Issue>794</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\regress\vsw\471729\test.cmd" >
              <Issue>13</Issue>
