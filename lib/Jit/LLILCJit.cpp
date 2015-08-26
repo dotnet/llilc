@@ -588,7 +588,10 @@ void ObjectLoadListener::getDebugInfoForObject(
       Context->JitInfo->setBoundaries(MethodHandle, NumDebugRanges, OM);
     }
 
-    getDebugInfoForLocals(DwarfContext, Addr, Size);
+    // TODO: Remove this opt-out when #776 is fixed
+    if (!Context->Options->DoInsertStatepoints) {
+      getDebugInfoForLocals(DwarfContext, Addr, Size);
+    }
   }
 }
 
