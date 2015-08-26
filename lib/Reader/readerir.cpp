@@ -872,9 +872,9 @@ void GenIR::zeroInitBlock(Value *Address, Value *Size) {
                  (IRNode *)ZeroByte, (IRNode *)Size);
 }
 
-void GenIR::copyStruct(Type *StructTy, Value *DestinationAddress,
-                       Value *SourceAddress, bool IsVolatile,
-                       ReaderAlignType Alignment) {
+void GenIR::copyStructNoBarrier(Type *StructTy, Value *DestinationAddress,
+                                Value *SourceAddress, bool IsVolatile,
+                                ReaderAlignType Alignment) {
   // TODO: For small structs we may want to generate an integer StoreInst
   // instead of calling a helper.
   const DataLayout *DataLayout = &JitContext->CurrentModule->getDataLayout();
@@ -885,6 +885,89 @@ void GenIR::copyStruct(Type *StructTy, Value *DestinationAddress,
                                  TheStructLayout->getSizeInBytes());
   cpBlk(StructSize, (IRNode *)SourceAddress, (IRNode *)DestinationAddress,
         Alignment, IsVolatile);
+}
+
+void GenIR::copyStruct(CORINFO_CLASS_HANDLE Class, IRNode *Dst, IRNode *Src,
+                       ReaderAlignType Alignment, bool IsVolatile,
+                       bool IsUnchecked) {
+  if (classHasGCPointers(Class)) {
+    GCLayout *RuntimeGCInfo = getClassGCLayout(Class);
+    const uint32_t PointerSize = getPointerByteSize();
+    uint32_t OffsetAfterLastGCPointer = 0;
+    StructType *StructTy =
+        cast<StructType>(getType(CORINFO_TYPE_VALUECLASS, Class));
+    const DataLayout *DataLayout = &JitContext->CurrentModule->getDataLayout();
+    const StructLayout *TheStructLayout = DataLayout->getStructLayout(StructTy);
+    uint64_t StructSizeInBytes = TheStructLayout->getSizeInBytes();
+    for (uint64_t CurrentOffset = 0; CurrentOffset < StructSizeInBytes;
+         CurrentOffset += PointerSize) {
+      uint32_t I = CurrentOffset / PointerSize;
+      if (RuntimeGCInfo->GCPointers[I] != CorInfoGCType::TYPE_GC_NONE) {
+        // Check if there is a block without GC pointers that we need to copy.
+        // This covers cases when the block is before the first GC pointer or
+        // between GC pointers.
+        if (CurrentOffset != OffsetAfterLastGCPointer) {
+          IRNode *Size =
+              loadConstantI4(CurrentOffset - OffsetAfterLastGCPointer);
+          IRNode *Offset = loadConstantI4(OffsetAfterLastGCPointer);
+          IRNode *NonGCSrcAddr = binaryOp(ReaderBaseNS::Add, Src, Offset);
+          IRNode *NonGCDstAddr = binaryOp(ReaderBaseNS::Add, Dst, Offset);
+          cpBlk(Size, NonGCSrcAddr, NonGCDstAddr, Alignment, IsVolatile);
+        }
+
+        // Copy GC pointer with a write barrier.
+        IRNode *GCPointerOffset = loadConstantI4(CurrentOffset);
+        IRNode *GCSrcAddr = binaryOp(ReaderBaseNS::Add, Src, GCPointerOffset);
+        IRNode *GCDstAddr = binaryOp(ReaderBaseNS::Add, Dst, GCPointerOffset);
+
+        // Find the type of the GC pointer.
+        // We may have nested structs. Loop until GC pointer is found.
+        uint32_t OffsetInElementType = CurrentOffset;
+        Type *ElementType = StructTy;
+        do {
+          StructType *ElementStructTy = cast<StructType>(ElementType);
+          const StructLayout *ElementStructLayout =
+              DataLayout->getStructLayout(ElementStructTy);
+          unsigned int ElementIndex =
+              ElementStructLayout->getElementContainingOffset(
+                  OffsetInElementType);
+          uint64_t ElementOffset =
+              ElementStructLayout->getElementOffset(ElementIndex);
+          ElementType = ElementStructTy->getElementType(ElementIndex);
+          OffsetInElementType = OffsetInElementType - ElementOffset;
+        } while (!isManagedPointerType(ElementType));
+
+        Type *ElementTypePointer = PointerType::get(
+            ElementType, GCSrcAddr->getType()->getPointerAddressSpace());
+        GCSrcAddr = (IRNode *)LLVMBuilder->CreatePointerCast(
+            GCSrcAddr, ElementTypePointer);
+        IRNode *GCSrc = (IRNode *)makeLoadNonNull(GCSrcAddr, IsVolatile);
+        const bool MayThrow = true;
+        CorInfoHelpFunc HelperID = IsUnchecked
+                                       ? CORINFO_HELP_ASSIGN_REF
+                                       : CORINFO_HELP_CHECKED_ASSIGN_REF;
+        IRNode *CallDst = nullptr;
+        IRNode *Arg3 = nullptr;
+        IRNode *Arg4 = nullptr;
+        callHelper(HelperID, MayThrow, CallDst, GCDstAddr, GCSrc, Arg3, Arg4,
+                   Alignment, IsVolatile);
+        OffsetAfterLastGCPointer = CurrentOffset + PointerSize;
+      }
+    }
+    // Check if we need to copy the tail after the last GC pointer.
+    if (OffsetAfterLastGCPointer < StructSizeInBytes) {
+      IRNode *Size =
+          loadConstantI4(StructSizeInBytes - OffsetAfterLastGCPointer);
+      IRNode *Offset = loadConstantI4(OffsetAfterLastGCPointer);
+      IRNode *NonGCSrcAddr = binaryOp(ReaderBaseNS::Add, Src, Offset);
+      IRNode *NonGCDstAddr = binaryOp(ReaderBaseNS::Add, Dst, Offset);
+      cpBlk(Size, NonGCSrcAddr, NonGCDstAddr, Alignment, IsVolatile);
+    }
+  } else {
+    // If the class doesn't have a gc layout then use a memcopy
+    IRNode *Size = loadConstantI4(getClassSize(Class));
+    cpBlk(Size, Src, Dst, Alignment, IsVolatile);
+  }
 }
 
 bool GenIR::doesValueRepresentStruct(Value *TheValue) {
@@ -1427,6 +1510,7 @@ GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool GetAggregateFields,
     // Now that this aggregate's fields are filled in, go back
     // and fill in the details for those aggregates we deferred
     // handling earlier.
+
     std::list<CORINFO_CLASS_HANDLE>::iterator It =
         TheDeferredDetailAggregates.begin();
     while (It != TheDeferredDetailAggregates.end()) {
@@ -1678,6 +1762,44 @@ Type *GenIR::getClassTypeWorker(
     }
   }
 
+  uint32_t EEClassSize = 0;
+  bool HaveClassSize = false;
+  if (!IsRefClass) {
+    try {
+      EEClassSize = getClassSize(ClassHandle);
+      HaveClassSize = true;
+    } catch (...) {
+      // In ReadyToRun mode a call to getClassSize triggers encoding of special
+      // fixups in the image so that the runtime can verify the assumptions
+      // about value type layouts before native code can be used. The runtime
+      // will fall back to jit if value type layout changed. Currently
+      // encoding of fixups is limited to just the existing assembly references.
+      // If the jit asks about a valuetype from an assembly that's not
+      // referenced from the current assembly, an exception is thrown.
+      // Consider this example:
+      //   Assembly A: public struct SA { SB b; }
+      //   Assembly B : public struct  SB { SC c; }
+      //   Assembly C : public struct  SC {}
+      // If we are compiling a method in A and creating a type for
+      // SA, we'll eventually get to SC. Since C is not referenced from A, the
+      // call to getClassSize will throw.
+      // Catching and swallowing the exception should be safe as long as
+      // we won't use SC directly, only as part of SB or SA. Any change in SC
+      // layout will change the SA and SB layout and the runtime will detect
+      // those changes.
+      // The LLVM type for SC may miss padding at the end. That shouldn't be a
+      // problem since we'll insert the missing padding in the enclosing struct
+      // (SB in this case).
+      // The long-term plan of record is to get framework build-time tooling in
+      // place that marks valuetype layout changes as breaking changes. With
+      // that in place getClassSize won't throw.
+      // TODO: we may want to add validation that the exception is caught only
+      // for types that are embedded into other types.
+      assert(JitContext->Flags & CORJIT_FLG_READYTORUN);
+      HaveClassSize = false;
+    }
+  }
+
   // System.Object is a special case, it has no explicit
   // fields but we need to account for the vtable slot.
   if (IsObject) {
@@ -1877,8 +1999,8 @@ Type *GenIR::getClassTypeWorker(
     // We'd like to get the overall size right for
     // other types, but we have no way to check. So we'll have to
     // settle for having their fields at the right offsets.
-    if (!IsRefClass) {
-      const uint32_t EEClassSize = getClassSize(ClassHandle);
+
+    if (HaveClassSize) {
       ASSERT(EEClassSize >= ByteOffset);
       const uint32_t EndPadSize = EEClassSize - ByteOffset;
 
@@ -1932,10 +2054,9 @@ Type *GenIR::getClassTypeWorker(
   //
   // Note the runtime only gives us size and gc info for value classes so
   // we can't do this more generally.
-  if (!IsRefClass) {
 
-    // Verify overall size matches up.
-    const uint32_t EEClassSize = getClassSize(ClassHandle);
+  // Verify overall size matches up.
+  if (HaveClassSize) {
     ASSERT(EEClassSize == DataLayout->getTypeSizeInBits(StructTy) / 8);
 
     // Verify that the LLVM type contains the same information
@@ -3544,28 +3665,32 @@ Type *GenIR::binaryOpType(ReaderBaseNS::BinaryOpcode Opcode, Type *Type1,
 IRNode *GenIR::simpleFieldAddress(IRNode *BaseAddress,
                                   CORINFO_RESOLVED_TOKEN *ResolvedToken,
                                   CORINFO_FIELD_INFO *FieldInfo) {
-  // Determine field index and referent type.
-  CORINFO_FIELD_HANDLE FieldHandle = ResolvedToken->hField;
-  Type *BaseAddressTy = BaseAddress->getType();
-  ASSERT(BaseAddressTy->isPointerTy());
-  Type *BaseObjTy = cast<PointerType>(BaseAddressTy)->getElementType();
   Value *Address = nullptr;
 
-  if (BaseObjTy->isStructTy() &&
-      (FieldIndexMap->find(FieldHandle) != FieldIndexMap->end())) {
+  if (!(JitContext->Flags & CORJIT_FLG_READYTORUN)) {
+    // Determine field index and referent type.
+    CORINFO_FIELD_HANDLE FieldHandle = ResolvedToken->hField;
+    Type *BaseAddressTy = BaseAddress->getType();
+    ASSERT(BaseAddressTy->isPointerTy());
+    Type *BaseObjTy = cast<PointerType>(BaseAddressTy)->getElementType();
 
-    const uint32_t FieldIndex = (*FieldIndexMap)[FieldHandle];
-    StructType *BaseObjStructTy = cast<StructType>(BaseObjTy);
+    if (BaseObjTy->isStructTy() &&
+        (FieldIndexMap->find(FieldHandle) != FieldIndexMap->end())) {
 
-    // Double-check that the field index is sensible. Note
-    // in unverifiable IL we may not have proper referent types and
-    // so may see what appear to be unrelated field accesses.
-    if (BaseObjStructTy->getNumElements() > FieldIndex) {
-      ASSERT(JitContext->CurrentModule->getDataLayout()
-                 .getStructLayout(BaseObjStructTy)
-                 ->getElementOffset(FieldIndex) == FieldInfo->offset);
+      const uint32_t FieldIndex = (*FieldIndexMap)[FieldHandle];
+      StructType *BaseObjStructTy = cast<StructType>(BaseObjTy);
 
-      Address = LLVMBuilder->CreateStructGEP(nullptr, BaseAddress, FieldIndex);
+      // Double-check that the field index is sensible. Note
+      // in unverifiable IL we may not have proper referent types and
+      // so may see what appear to be unrelated field accesses.
+      if (BaseObjStructTy->getNumElements() > FieldIndex) {
+        ASSERT(JitContext->CurrentModule->getDataLayout()
+                   .getStructLayout(BaseObjStructTy)
+                   ->getElementOffset(FieldIndex) == FieldInfo->offset);
+
+        Address =
+            LLVMBuilder->CreateStructGEP(nullptr, BaseAddress, FieldIndex);
+      }
     }
   }
 
@@ -3575,9 +3700,31 @@ IRNode *GenIR::simpleFieldAddress(IRNode *BaseAddress,
     // It can happen, for example, if we cast native int pointer to
     // IntPtr pointer. Unfortunately we can't get the enclosing type
     // via ICorJitInfo interface so we can't create a struct version of GEP.
+    // Also, in ReadyToRun mode we have to get field offset in a special way.
 
-    Address = binaryOp(ReaderBaseNS::Add, BaseAddress,
-                       loadConstantI(FieldInfo->offset));
+    if ((JitContext->Flags & CORJIT_FLG_READYTORUN) &&
+        (FieldInfo->fieldAccessor == CORINFO_FIELD_INSTANCE_WITH_BASE)) {
+      void *EmbHandle = FieldInfo->fieldLookup.addr;
+      if (EmbHandle != nullptr) {
+        void *RealHandle = nullptr;
+        bool IsIndirect = (FieldInfo->fieldLookup.accessType == IAT_PVALUE);
+        const bool IsReadOnly = true;
+        const bool IsRelocatable = true;
+        const bool IsCallTarget = false;
+        std::string HandleName = "BaseSize";
+        IRNode *BaseClassSize =
+            handleToIRNode(HandleName, EmbHandle, RealHandle, IsIndirect,
+                           IsReadOnly, IsRelocatable, IsCallTarget);
+        BaseAddress = binaryOp(ReaderBaseNS::Add, BaseAddress, BaseClassSize);
+      }
+    }
+
+    if (FieldInfo->offset != 0) {
+      IRNode *FieldOffset = loadConstantI(FieldInfo->offset);
+      Address = binaryOp(ReaderBaseNS::Add, BaseAddress, FieldOffset);
+    } else {
+      Address = BaseAddress;
+    }
   }
 
   return (IRNode *)Address;
@@ -3968,7 +4115,7 @@ void GenIR::storeAtAddressNoBarrierNonNull(IRNode *Address,
     assert(ValueToStore->getType()->isPointerTy() &&
            (ValueToStore->getType()->getPointerElementType() == Ty));
     assert(doesValueRepresentStruct(ValueToStore));
-    copyStruct(StructTy, Address, ValueToStore, IsVolatile);
+    copyStructNoBarrier(StructTy, Address, ValueToStore, IsVolatile);
   } else {
     makeStoreNonNull(ValueToStore, Address, IsVolatile);
   }
@@ -4853,18 +5000,70 @@ IRNode *GenIR::callHelper(CorInfoHelpFunc HelperID, bool MayThrow, IRNode *Dst,
       .getInstruction();
 }
 
+IRNode *GenIR::callHelper(CorInfoHelpFunc HelperID, IRNode *HelperAddress,
+                          bool MayThrow, IRNode *Dst, IRNode *Arg1,
+                          IRNode *Arg2, IRNode *Arg3, IRNode *Arg4,
+                          ReaderAlignType Alignment, bool IsVolatile,
+                          bool NoCtor, bool CanMoveUp) {
+  LLVMContext &LLVMContext = *this->JitContext->LLVMContext;
+  Type *ReturnType =
+      (Dst == nullptr) ? Type::getVoidTy(LLVMContext) : Dst->getType();
+  return (IRNode *)callHelperImpl(HelperID, HelperAddress, MayThrow, ReturnType,
+                                  Arg1, Arg2, Arg3, Arg4, Alignment, IsVolatile,
+                                  NoCtor, CanMoveUp)
+      .getInstruction();
+}
+
+IRNode *GenIR::callReadyToRunHelper(CorInfoHelpFunc HelperID, bool MayThrow,
+                                    IRNode *Dst,
+                                    CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                                    IRNode *Arg1, IRNode *Arg2, IRNode *Arg3,
+                                    IRNode *Arg4, ReaderAlignType Alignment,
+                                    bool IsVolatile, bool NoCtor,
+                                    bool CanMoveUp) {
+  LLVMContext &LLVMContext = *this->JitContext->LLVMContext;
+  Type *ReturnType =
+      (Dst == nullptr) ? Type::getVoidTy(LLVMContext) : Dst->getType();
+  return (IRNode *)callReadyToRunHelperImpl(
+             HelperID, MayThrow, ReturnType, ResolvedToken, Arg1, Arg2, Arg3,
+             Arg4, Alignment, IsVolatile, NoCtor, CanMoveUp)
+      .getInstruction();
+}
+
 CallSite GenIR::callHelperImpl(CorInfoHelpFunc HelperID, bool MayThrow,
                                Type *ReturnType, IRNode *Arg1, IRNode *Arg2,
                                IRNode *Arg3, IRNode *Arg4,
                                ReaderAlignType Alignment, bool IsVolatile,
                                bool NoCtor, bool CanMoveUp) {
-  ASSERT(HelperID != CORINFO_HELP_UNDEF);
+  assert(HelperID != CORINFO_HELP_UNDEF);
 
   // TODO: We can turn some of these helper calls into intrinsics.
   // When doing so, make sure the intrinsics are not optimized
   // for the volatile operations.
   IRNode *Address = getHelperCallAddress(HelperID);
 
+  return callHelperImpl(HelperID, Address, MayThrow, ReturnType, Arg1, Arg2,
+                        Arg3, Arg4, Alignment, IsVolatile, NoCtor, CanMoveUp);
+}
+
+CallSite GenIR::callReadyToRunHelperImpl(
+    CorInfoHelpFunc HelperID, bool MayThrow, Type *ReturnType,
+    CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1, IRNode *Arg2,
+    IRNode *Arg3, IRNode *Arg4, ReaderAlignType Alignment, bool IsVolatile,
+    bool NoCtor, bool CanMoveUp) {
+  assert(HelperID != CORINFO_HELP_UNDEF);
+
+  IRNode *Address = getReadyToRunHelperCallAddress(HelperID, ResolvedToken);
+
+  return callHelperImpl(HelperID, Address, MayThrow, ReturnType, Arg1, Arg2,
+                        Arg3, Arg4, Alignment, IsVolatile, NoCtor, CanMoveUp);
+}
+
+CallSite GenIR::callHelperImpl(CorInfoHelpFunc HelperID, IRNode *Address,
+                               bool MayThrow, Type *ReturnType, IRNode *Arg1,
+                               IRNode *Arg2, IRNode *Arg3, IRNode *Arg4,
+                               ReaderAlignType Alignment, bool IsVolatile,
+                               bool NoCtor, bool CanMoveUp) {
   // We can't get the signature of the helper from the CLR so we generate
   // FunctionType based on the types of dst and the args passed to this method.
   Value *AllArguments[4];
@@ -4930,6 +5129,31 @@ IRNode *GenIR::getHelperCallAddress(CorInfoHelpFunc HelperId) {
   // IMetaMakeJitHelperToken(helperId)
   return handleToIRNode((mdToken)(mdtJitHelper | HelperId), Descriptor, 0,
                         IsIndirect, IsIndirect, true, false);
+}
+
+IRNode *
+GenIR::getReadyToRunHelperCallAddress(CorInfoHelpFunc HelperId,
+                                      CORINFO_RESOLVED_TOKEN *ResolvedToken) {
+  bool IsIndirect;
+  void *Descriptor;
+
+  CORINFO_CONST_LOOKUP Lookup;
+  // CORINFO_ACCESS_ATYPICAL_CALLSITE means that we can't guarantee
+  // that we'll be able to generate call [rel32] form of the helper call so
+  // crossgen shouldn't try to disassemble the call instruction.
+  HelperId =
+      (CorInfoHelpFunc)(HelperId | CORINFO_HELP_READYTORUN_ATYPICAL_CALLSITE);
+  JitContext->JitInfo->getReadyToRunHelper(ResolvedToken, HelperId, &Lookup);
+  Descriptor = Lookup.addr;
+  assert(Lookup.accessType != InfoAccessType::IAT_PPVALUE);
+  IsIndirect = (Lookup.accessType == InfoAccessType::IAT_PVALUE);
+
+  // TODO: figure out how much of imeta.cpp we need;
+  // the token here is really an inlined call to
+  // IMetaMakeJitHelperToken(helperId)
+  bool IsReadOnly = false;
+  return handleToIRNode((mdToken)(mdtJitHelper | HelperId), Descriptor, 0,
+                        IsIndirect, IsReadOnly, true, false);
 }
 
 // Generate special generics helper that might need to insert flow.
@@ -5222,11 +5446,18 @@ IRNode *GenIR::genNewObjThisArg(ReaderCallTargetData *CallTargetData,
   // 'this' pointer to be passed as the first argument to the constructor.
 
   // Create the address operand for the newobj helper.
-  CorInfoHelpFunc HelperId = getNewHelper(CallTargetData->getResolvedToken());
+  CallSite TheCallSite;
   const bool MayThrow = true;
-  Value *ThisPointer = callHelperImpl(HelperId, MayThrow, ThisType,
-                                      CallTargetData->getClassHandleNode())
-                           .getInstruction();
+  if (JitContext->Flags & CORJIT_FLG_READYTORUN) {
+    TheCallSite =
+        callReadyToRunHelperImpl(CORINFO_HELP_READYTORUN_NEW, MayThrow,
+                                 ThisType, CallTargetData->getResolvedToken());
+  } else {
+    IRNode *ClassHandleNode = CallTargetData->getClassHandleNode();
+    CorInfoHelpFunc HelperId = getNewHelper(CallTargetData->getResolvedToken());
+    TheCallSite = callHelperImpl(HelperId, MayThrow, ThisType, ClassHandleNode);
+  }
+  Value *ThisPointer = TheCallSite.getInstruction();
   return (IRNode *)ThisPointer;
 }
 
@@ -6398,10 +6629,28 @@ IRNode *GenIR::handleToIRNode(mdToken Token, void *EmbHandle, void *RealHandle,
                               bool IsRelocatable, bool IsCallTarget,
                               bool IsFrozenObject /* default = false */
                               ) {
+  std::string HandleName;
+  if (IsRelocatable) {
+    uint64_t LookupHandle =
+        RealHandle ? (uint64_t)RealHandle : (uint64_t)EmbHandle;
+    HandleName = getNameForToken(Token, (CORINFO_GENERIC_HANDLE)LookupHandle,
+                                 getCurrentContext(), getCurrentModuleHandle());
+  }
+  return handleToIRNode(HandleName, EmbHandle, RealHandle, IsIndirect,
+                        IsReadOnly, IsRelocatable, IsCallTarget,
+                        IsFrozenObject);
+}
+
+IRNode *GenIR::handleToIRNode(const std::string &HandleName, void *EmbHandle,
+                              void *RealHandle, bool IsIndirect,
+                              bool IsReadOnly, bool IsRelocatable,
+                              bool IsCallTarget,
+                              bool IsFrozenObject /* default = false */
+                              ) {
   LLVMContext &LLVMContext = *JitContext->LLVMContext;
 
-  if (IsCallTarget || IsFrozenObject) {
-    throw NotYetImplementedException("NYI handle cases");
+  if (IsFrozenObject) {
+    throw NotYetImplementedException("frozen object");
   }
 
   uint64_t LookupHandle =
@@ -6412,9 +6661,6 @@ IRNode *GenIR::handleToIRNode(mdToken Token, void *EmbHandle, void *RealHandle,
   Type *HandleTy = Type::getIntNTy(LLVMContext, TargetPointerSizeInBits);
 
   if (IsRelocatable) {
-    std::string HandleName =
-        getNameForToken(Token, (CORINFO_GENERIC_HANDLE)LookupHandle,
-                        getCurrentContext(), getCurrentModuleHandle());
     GlobalVariable *GlobalVar = getGlobalVariable(
         LookupHandle, ValueHandle, HandleTy, HandleName, IsReadOnly);
     HandleValue = LLVMBuilder->CreatePtrToInt(GlobalVar, HandleTy);
@@ -6779,18 +7025,46 @@ IRNode *GenIR::conditionalDerefAddress(IRNode *Address) {
 
 IRNode *GenIR::loadVirtFunc(IRNode *Arg1, CORINFO_RESOLVED_TOKEN *ResolvedToken,
                             CORINFO_CALL_INFO *CallInfo) {
-  IRNode *TypeToken = genericTokenToNode(ResolvedToken, true);
-  IRNode *MethodToken = genericTokenToNode(ResolvedToken);
+  if (JitContext->Flags & CORJIT_FLG_READYTORUN) {
+    return getReadyToRunVirtFuncPtr(Arg1, ResolvedToken, CallInfo);
+  } else {
+    Type *Ty = Type::getIntNTy(*this->JitContext->LLVMContext,
+                               TargetPointerSizeInBits);
+    const bool MayThrow = true;
+    IRNode *TypeToken = genericTokenToNode(ResolvedToken, true);
+    IRNode *MethodToken = genericTokenToNode(ResolvedToken);
 
-  Type *Ty =
-      Type::getIntNTy(*this->JitContext->LLVMContext, TargetPointerSizeInBits);
-  const bool MayThrow = true;
-  IRNode *CodeAddress =
-      (IRNode *)callHelperImpl(CORINFO_HELP_VIRTUAL_FUNC_PTR, MayThrow, Ty,
-                               Arg1, TypeToken, MethodToken)
-          .getInstruction();
+    return (IRNode *)callHelperImpl(CORINFO_HELP_VIRTUAL_FUNC_PTR, MayThrow, Ty,
+                                    Arg1, TypeToken, MethodToken)
+        .getInstruction();
+  }
+}
 
-  return CodeAddress;
+IRNode *GenIR::getReadyToRunVirtFuncPtr(IRNode *Arg1,
+                                        CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                                        CORINFO_CALL_INFO *CallInfo) {
+  if (CallInfo->kind != CORINFO_VIRTUALCALL_LDVIRTFTN) {
+    return rdrMakeLdFtnTargetNode(ResolvedToken, CallInfo);
+  } else {
+    Type *Ty = Type::getIntNTy(*this->JitContext->LLVMContext,
+                               TargetPointerSizeInBits);
+    const bool MayThrow = true;
+    InfoAccessType AccessType =
+        CallInfo->codePointerLookup.constLookup.accessType;
+    void *Address = CallInfo->codePointerLookup.constLookup.addr;
+    assert(Address != nullptr);
+    assert(AccessType != IAT_PPVALUE);
+    bool IsIndirect = AccessType != IAT_VALUE;
+    void *RealHandle = nullptr;
+    const bool IsRelocatable = true;
+    const bool IsCallTarget = true;
+    IRNode *HelperAddress =
+        handleToIRNode(ResolvedToken->token, Address, RealHandle, IsIndirect,
+                       IsIndirect, IsRelocatable, IsCallTarget);
+    return (IRNode *)callHelperImpl(CORINFO_HELP_READYTORUN_VIRTUAL_FUNC_PTR,
+                                    HelperAddress, MayThrow, Ty, Arg1)
+        .getInstruction();
+  }
 }
 
 IRNode *GenIR::getTypedAddress(IRNode *Addr, CorInfoType CorInfoType,
@@ -6908,7 +7182,8 @@ IRNode *GenIR::loadNonPrimitiveObj(StructType *StructTy, IRNode *Address,
   }
 
   IRNode *Copy = (IRNode *)createTemporary(StructTy);
-  copyStruct(cast<StructType>(StructTy), Copy, Address, IsVolatile, Alignment);
+  copyStructNoBarrier(cast<StructType>(StructTy), Copy, Address, IsVolatile,
+                      Alignment);
   setValueRepresentsStruct(Copy);
   return Copy;
 }
@@ -7197,25 +7472,47 @@ IRNode *GenIR::newArr(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1) {
   IRNode *NumOfElements =
       convertToStackType(Arg1, CorInfoType::CORINFO_TYPE_NATIVEINT);
 
-  // Or token with CORINFO_ANNOT_ARRAY so that we get back an array-type handle
-  bool EmbedParent = false;
-  bool MustRestoreHandle = true;
-  IRNode *Token =
-      genericTokenToNode(ResolvedToken, EmbedParent, MustRestoreHandle,
-                         (CORINFO_GENERIC_HANDLE *)&ElementType, nullptr);
-
   Type *ArrayType =
       getType(CorInfoType::CORINFO_TYPE_CLASS, ResolvedToken->hClass);
   Value *Destination = Constant::getNullValue(ArrayType);
 
   const bool MayThrow = true;
-  return callHelper(getNewArrHelper(ElementType), MayThrow,
-                    (IRNode *)Destination, Token, NumOfElements);
+  if (JitContext->Flags & CORJIT_FLG_READYTORUN) {
+    return callReadyToRunHelper(CORINFO_HELP_READYTORUN_NEWARR_1, MayThrow,
+                                (IRNode *)Destination, ResolvedToken,
+                                NumOfElements);
+  } else {
+    // Or token with CORINFO_ANNOT_ARRAY so that we get back an array-type
+    // handle.
+    bool EmbedParent = false;
+    bool MustRestoreHandle = true;
+    IRNode *Token =
+        genericTokenToNode(ResolvedToken, EmbedParent, MustRestoreHandle,
+                           (CORINFO_GENERIC_HANDLE *)&ElementType, nullptr);
+
+    return callHelper(getNewArrHelper(ElementType), MayThrow,
+                      (IRNode *)Destination, Token, NumOfElements);
+  }
 }
 
 // CastOp - Generates code for castclass or isinst.
 IRNode *GenIR::castOp(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *ObjRefNode,
                       CorInfoHelpFunc HelperId) {
+  CORINFO_CLASS_HANDLE Class = ResolvedToken->hClass;
+  Type *ResultType = nullptr;
+  if (JitContext->JitInfo->isValueClass(Class)) {
+    ResultType = getBoxedType(Class);
+  } else {
+    ResultType = getType(CORINFO_TYPE_CLASS, Class);
+  }
+
+  const bool MayThrow = true;
+  if (JitContext->Flags & CORJIT_FLG_READYTORUN) {
+    return (IRNode *)callReadyToRunHelperImpl(HelperId, MayThrow, ResultType,
+                                              ResolvedToken, ObjRefNode)
+        .getInstruction();
+  }
+
   CORINFO_GENERIC_HANDLE HandleType = nullptr;
 
   // Create the type node
@@ -7251,18 +7548,9 @@ IRNode *GenIR::castOp(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *ObjRefNode,
     }
   }
 
-  CORINFO_CLASS_HANDLE Class = ResolvedToken->hClass;
-  Type *ResultType = nullptr;
-  if (JitContext->JitInfo->isValueClass(Class)) {
-    ResultType = getBoxedType(Class);
-  } else {
-    ResultType = getType(CORINFO_TYPE_CLASS, Class);
-  }
-
   // Generate the helper call or intrinsic
   const bool IsVolatile = false;
   const bool DoesNotInvokeStaticCtor = Optimize;
-  const bool MayThrow = true;
   return (IRNode *)callHelperImpl(HelperId, MayThrow, ResultType,
                                   ClassHandleNode, ObjRefNode, nullptr, nullptr,
                                   Reader_AlignUnknown, IsVolatile,
@@ -7502,8 +7790,8 @@ void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
         CreatePHIs = true;
       }
 
-      // We need to be very careful about reasoning about or iterating through
-      // instructions in empty blocks or blocks with no terminators.
+// We need to be very careful about reasoning about or iterating through
+// instructions in empty blocks or blocks with no terminators.
 #ifndef NDEBUG
       Instruction *TermInst = SuccessorBlock->getTerminator();
       const bool SuccessorDegenerate = (TermInst == nullptr);

@@ -189,6 +189,7 @@ def main(argv):
         # Todo: Test Env is right now only for Windows. Will expand when cross platform
         with open(time_stamped_test_env_path, 'w') as test_env:
             test_env.write('set COMPlus_AltJit=*\n')
+            test_env.write('set COMPlus_AltJitNgen=*\n')
             test_env.write('set COMPlus_AltJitName=' + time_stamped_jit_name + '\n')
             if (args.precise_gc):
                 test_env.write('set COMPlus_InsertStatepoints=1\n')

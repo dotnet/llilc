@@ -274,15 +274,28 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
     }
     TargetOptions Options;
     CodeGenOpt::Level OptLevel;
-    if (Context.Options->OptLevel != ::OptLevel::DEBUG_CODE) {
+    bool IsNgen = Context.Flags & CORJIT_FLG_PREJIT;
+    bool IsReadyToRun = Context.Flags & CORJIT_FLG_READYTORUN;
+
+    // Optimal code for ReadyToRun should have all calls in call [rel32] form to
+    // enable crossgen to use shared delay-load thunks. We can't guarantee that
+    // LLVM will always generate this form so we currently don't take advantage
+    // of that and use non-shared delay-load thunks. The plan is to have as many
+    // calls as possible in that form and use shared delay-load thunks when
+    // possible. Setting OptLevel to Default increases the chances of calls via
+    // memory and setting CodeModel to Default enables rel32 relocations.
+    if ((Context.Options->OptLevel != ::OptLevel::DEBUG_CODE) || IsNgen ||
+        IsReadyToRun) {
       OptLevel = CodeGenOpt::Level::Default;
     } else {
       OptLevel = CodeGenOpt::Level::None;
       // Options.NoFramePointerElim = true;
     }
-    TargetMachine *TM = TheTarget->createTargetMachine(
-        LLILC_TARGET_TRIPLE, "", "", Options, Reloc::Default,
-        CodeModel::JITDefault, OptLevel);
+    llvm::CodeModel::Model CodeModel =
+        (IsNgen || IsReadyToRun) ? CodeModel::Default : CodeModel::JITDefault;
+    TargetMachine *TM =
+        TheTarget->createTargetMachine(LLILC_TARGET_TRIPLE, "", "", Options,
+                                       Reloc::Default, CodeModel, OptLevel);
     Context.TM = TM;
 
     // Set target machine datalayout on the method module.

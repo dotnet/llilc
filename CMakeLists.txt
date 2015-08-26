@@ -440,6 +440,7 @@ endif()
 
 add_definitions( -D_GNU_SOURCE )
 add_definitions( -DFEATURE_CORECLR )
+add_definitions( -DFEATURE_READYTORUN_COMPILER )
 
 if (UNIX)
   link_directories("${WITH_CORECLR_ABS}")
