@@ -794,7 +794,7 @@ public:
   void callMonitorHelper(bool IsEnter);
 
   IRNode *convertToBoxHelperArgumentType(IRNode *Opr,
-                                         CorInfoType CorType) override;
+                                         uint32_t DestSize) override;
 
   IRNode *makeBoxDstOperand(CORINFO_CLASS_HANDLE Class) override;
 

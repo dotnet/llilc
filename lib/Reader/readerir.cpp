@@ -5279,8 +5279,7 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo, bool MayThrow,
   }
 }
 
-IRNode *GenIR::convertToBoxHelperArgumentType(IRNode *Opr,
-                                              CorInfoType DestType) {
+IRNode *GenIR::convertToBoxHelperArgumentType(IRNode *Opr, uint32_t DestSize) {
   Type *Ty = Opr->getType();
   switch (Ty->getTypeID()) {
   case Type::TypeID::IntegerTyID: {
@@ -5289,9 +5288,9 @@ IRNode *GenIR::convertToBoxHelperArgumentType(IRNode *Opr,
     ASSERT((Ty->getIntegerBitWidth() == 32) ||
            (Ty->getIntegerBitWidth() == 64));
 
-    // If Size were smaller than DestinationSize the boxing helper would grab
-    // data from outside the smaller datatype.
-    ASSERT(size(DestType) <= Ty->getIntegerBitWidth());
+    // If the operand size is smaller than DestSize the boxing helper will grab
+    // data from outside the smaller operand.
+    ASSERT(DestSize <= Ty->getIntegerBitWidth());
     break;
   }
   // If the data type is a float64 and we want to box it to a
@@ -5301,7 +5300,7 @@ IRNode *GenIR::convertToBoxHelperArgumentType(IRNode *Opr,
   // destroy the value.
   case Type::TypeID::FloatTyID:
   case Type::TypeID::DoubleTyID:
-    if (Ty->getPrimitiveSizeInBits() > size(DestType)) {
+    if (Ty->getPrimitiveSizeInBits() > DestSize) {
       Opr = (IRNode *)LLVMBuilder->CreateFPCast(Opr, Ty);
     }
     break;

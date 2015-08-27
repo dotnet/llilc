@@ -3196,11 +3196,11 @@ public:
 
   /// Converts the operand to an argument type understood by the boxing helper
   ///
-  /// \param Opr Operand
-  /// \param CorType CorInfoType of the operand.
-  /// \returns Converted operand
+  /// \param Opr      Operand to pass to the boxing helper.
+  /// \param DestSize Size of the box type in bytes.
+  /// \returns        Converted operand
   virtual IRNode *convertToBoxHelperArgumentType(IRNode *Opr,
-                                                 CorInfoType CorType) = 0;
+                                                 uint32_t DestSize) = 0;
 
   virtual IRNode *genNullCheck(IRNode *Node) = 0;
 
