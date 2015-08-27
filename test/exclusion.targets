@@ -2,7 +2,7 @@
     xmlns="http://schemas.microsoft.com/developer/msbuild/2003" >
     <ItemGroup Condition="'$(XunitTestBinBase)' != ''">
         <ExcludeList Include="$(XunitTestBinBase)\Interop\ICastable\Castable.cmd" >
-             <Issue>547</Issue>
+             <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\CodeGenBringUpTests\div2.cmd" >
              <Issue>13</Issue>
@@ -23,28 +23,25 @@
              <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\gc\misc\eh1.cmd" >
-             <Issue>420</Issue>
+             <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\gc\misc\funclet.cmd" >
-             <Issue>420</Issue>
+             <Issue>CoreClr/1440</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\gc\misc\fgtest1.cmd" >
-             <Issue>420</Issue>
+             <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\gc\misc\fgtest2.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\gc\misc\structfpseh5_1.cmd" >
-             <Issue>420</Issue>
+             <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\gc\misc\structfpseh6_1.cmd" >
-             <Issue>420</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\gc\regress\vswhidbey\339415.cmd" >
-             <Issue>420</Issue>
+             <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\gc\regress\vswhidbey\143837.cmd" >
-             <Issue>420</Issue>
+             <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\fieldExprUnchecked1.cmd" >
              <Issue>13</Issue>
@@ -275,13 +272,13 @@
              <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-EJIT\V1-M11-Beta1\b40138\b40138.cmd" >
-             <Issue>616</Issue>
+             <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-EJIT\V1-M11-Beta1\b45679\b45679.cmd" >
-             <Issue>616</Issue>
+             <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-EJIT\V1-M12-Beta2\b46847\b46847.cmd" >
-             <Issue>616</Issue>
+             <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M09\b15864\b15864.cmd" >
              <Issue>13</Issue>
