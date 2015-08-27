@@ -3648,10 +3648,10 @@ IRNode *ReaderBase::box(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg2,
     return Arg2;
   }
 
-  // Ensure that operand from operand stack has type that is
+  // Ensure that operand from operand stack has size that is
   // compatible with box destination, then get the (possibly
   // converted) operand's address.
-  Arg2 = convertToBoxHelperArgumentType(Arg2, getClassType(Class));
+  Arg2 = convertToBoxHelperArgumentType(Arg2, getClassSize(Class));
 
   Dst = makeBoxDstOperand(Class);
 

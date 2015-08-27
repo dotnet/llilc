@@ -742,9 +742,6 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\ldc_sub_ovf_u1.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\Dev11\Dev11_b473131\b473131_struct.cmd" >
-             <Issue>643</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\ldc_add_ovf_i8.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
