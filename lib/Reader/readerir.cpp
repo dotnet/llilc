@@ -5993,8 +5993,40 @@ void GenIR::switchOpcode(IRNode *Opr) {
   BasicBlock *CurrBlock = LLVMBuilder->GetInsertBlock();
   TerminatorInst *TermInst = CurrBlock->getTerminator();
   SwitchInst *SwitchInstruction = cast<SwitchInst>(TermInst);
-
   SwitchInstruction->setCondition(Opr);
+
+  Type *OprType = Opr->getType();
+  IntegerType *OprIntType = cast<IntegerType>(OprType);
+  unsigned OprBitWidth = OprIntType->getBitWidth();
+
+  // LLVM requires that for a switch instruction the type of the selector and
+  // the type of the case values all be of the same integer type.
+  // The purpose of the following code is to adjust the type of the
+  // case values to match the type of the selector if they are different.
+
+  // If a small selector type was used, e.g. i8, the type might not
+  // be big enough to hold all the case values. But the value for the
+  // selector is popped off the evaluation stack, so it should be at
+  // least 32 bits. So check that.
+  assert((OprBitWidth >= 32) && "Selector bit width is less then 32");
+
+  // If we have to adjust the types of the operands we use a
+  // uint64_t to transfer the value, so we cannot handle larger selector.
+  assert((OprBitWidth <= 64) && "Selector bit width is greater than 64");
+
+  LLVMContext &LLVMContext = *JitContext->LLVMContext;
+  for (SwitchInst::CaseIt Case : SwitchInstruction->cases()) {
+    ConstantInt *OldValue = Case.getCaseValue();
+    unsigned OldBitWidth = OldValue->getBitWidth();
+    if (OldBitWidth != OprBitWidth) {
+      // Need to adjust type.
+      assert((OldBitWidth <= 64) && "Old value bit width is greater than 64");
+      uint64_t CaseValue = OldValue->getZExtValue();
+      ConstantInt *Value =
+          ConstantInt::get(LLVMContext, APInt(OprBitWidth, CaseValue, false));
+      Case.setValue(Value);
+    }
+  }
 }
 
 void GenIR::throwOpcode(IRNode *Arg1) {
@@ -7476,8 +7508,7 @@ void GenIR::addPHIOperand(PHINode *Phi, Value *NewOperand,
         Phi->setIncomingValue(I, NewOperand);
         FoundBlockOperand = true;
         break;
-      }
-      else {
+      } else {
         assert(CurrentOperand == NewOperand);
       }
     }
@@ -7514,12 +7545,12 @@ Type *GenIR::getStackMergeType(Type *Ty1, Type *Ty2, bool IsStruct1,
 
   LLVMContext &LLVMContext = *this->JitContext->LLVMContext;
 
-  // If we have nativeint and int32 the result is nativeint.
+  // If we have nativeint and int32 the result is the first type.
   Type *NativeIntTy = Type::getIntNTy(LLVMContext, TargetPointerSizeInBits);
   Type *Int32Ty = Type::getInt32Ty(LLVMContext);
   if (((Ty1 == NativeIntTy) && (Ty2 == Int32Ty)) ||
       ((Ty2 == NativeIntTy) && (Ty1 == Int32Ty))) {
-    return NativeIntTy;
+    return Ty1;
   }
 
   // If we have float and double the result is double.

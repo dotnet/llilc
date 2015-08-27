@@ -1252,8 +1252,9 @@ private:
 
   /// Get the type of the result of the merge of two values from operand stacks
   /// of a block's predecessors. The allowed combinations are nativeint and
-  // int32 (resulting in nativeint), float and double (resulting in double),
-  /// and GC pointers (resulting in the closest common supertype).
+  /// int32 (resulting in whichever was first), float and double
+  /// (resulting in double), and GC pointers (resulting in the closest common
+  /// supertype).
   ///
   /// \param Ty1 Type of the first value.
   /// \param Ty1 Type of the second value.
