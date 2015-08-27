@@ -100,6 +100,10 @@ def CountFiles(path, suffix):
                 total = total + 1
     return total
 
+# Expand the absolute path
+def expandPath(path):
+    return os.path.abspath(os.path.expanduser(path))
+
 def main(argv):
     # define return code const value
     const.RunTestFail = 1
@@ -107,7 +111,7 @@ def main(argv):
     const.GeneralError = -1
     const.UnknownArguments = -2
     const.NormalizationFail = -3
-    const.WrongRunDir = -4
+    const.InvalidPath = -4
 
     # Parse the command line    
     parser = argparse.ArgumentParser()
@@ -135,7 +139,21 @@ def main(argv):
     if unknown:
         print('Unknown argument(s): ', ', '.join(unknown))
         return const.UnknowArguments
-        
+
+    coreclr_runtime_full_path = expandPath(args.coreclr_runtime_path)
+    if (not os.path.isdir(coreclr_runtime_full_path)):
+        print('Please specify valid --coreclr-runtime-path to CoreCLR run-time binary directory')
+        return const.InvalidPath
+
+    jit_full_path = expandPath(args.jit_path)
+    if (not os.path.isfile(jit_full_path)):
+        print('Please specify valid --jit-path to the jit .dll')
+        return const.InvalidPath
+    print('path',args.result_path)
+
+    result_full_path = expandPath(args.result_path)
+    print('Result path: ', result_full_path);
+
     # Ensure the command run from a CoreCLR tests directory
     runtest_dir = args.runtest_path
     if (args.runtest_path is None):
@@ -150,7 +168,7 @@ def main(argv):
 
     if (not os.path.isfile(runtest_full_path)):
         print('Please specify --runtest-path or run from theests directory in a CoreCLR repository')
-        return const.WrongRunDir
+        return const.InvalidPath
 
     try:
         # Determine the built test location
@@ -161,12 +179,12 @@ def main(argv):
 
         # Copy in llilcjit.dll with time stamp
         time_stamped_jit_name = 'LLILCJit' + time_stamp + '.dll'
-        time_stamped_jit_path = os.path.join(args.coreclr_runtime_path, time_stamped_jit_name)
-        shutil.copy2(args.jit_path, time_stamped_jit_path)
+        time_stamped_jit_path = os.path.join(coreclr_runtime_full_path, time_stamped_jit_name)
+        shutil.copy2(jit_full_path, time_stamped_jit_path)
 
         # Create llilctestenv.cmd with time stamp
         time_stamped_test_env_name = 'LLILCTestEnv' + time_stamp + '.cmd'
-        time_stamped_test_env_path = os.path.join(args.coreclr_runtime_path, time_stamped_test_env_name)
+        time_stamped_test_env_path = os.path.join(coreclr_runtime_full_path, time_stamped_test_env_name)
 
         # Todo: Test Env is right now only for Windows. Will expand when cross platform
         with open(time_stamped_test_env_path, 'w') as test_env:
@@ -197,7 +215,7 @@ def main(argv):
     runtest_command = runtest_full_path + ' ' + args.arch + ' ' + args.build 
     runtest_command = runtest_command + ' Exclude ' + exclusion
     runtest_command = runtest_command + ' Testenv ' + time_stamped_test_env_path
-    runtest_command = runtest_command + ' ' + args.coreclr_runtime_path 
+    runtest_command = runtest_command + ' ' + coreclr_runtime_full_path
     print(runtest_command)
     error_level = subprocess.call(runtest_command, shell=True)
     if error_level == 1:
@@ -218,23 +236,23 @@ def main(argv):
     if args.dump_level is not None:
         try:
             coreclr_result_path = os.path.join(build_test_path, 'Reports')
-            if os.path.exists(args.result_path):
-                shutil.rmtree(args.result_path, onerror=del_rw)            
-            shutil.copytree(coreclr_result_path, args.result_path)
-            CleanUpResultFiles(args.result_path)
-            total = CountFiles(args.result_path, 'error.txt')
+            if os.path.exists(result_full_path):
+                shutil.rmtree(result_full_path, onerror=del_rw)
+            shutil.copytree(coreclr_result_path, result_full_path)
+            CleanUpResultFiles(result_full_path)
+            total = CountFiles(result_full_path, 'error.txt')
             if args.dump_level == 'verbose':
                 print('Verbose-mode post-processing started')
                 print('found ', total, 'valid raw test outputs (error.txt) under ', str(coreclr_result_path))
-                print('creating normalized outputs (error.txt) under ', str(args.result_path))
-                print('creating summary outputs (sum.txt) under ', str(args.result_path))
-                applyfilter.ApplyAll(args.result_path)
+                print('creating normalized outputs (error.txt) under ', str(result_full_path))
+                print('creating summary outputs (sum.txt) under ', str(result_full_path))
+                applyfilter.ApplyAll(result_full_path)
                 print('Verbose-mode post-processing finished')
             if args.dump_level == 'summary':
                 print('Summary-mode post-processing started')
                 print('found ', total, 'valid raw test outputs (error.txt) under ', os.path.abspath(coreclr_result_path))
-                print('creating summary outputs (sum.txt) under ', str(args.result_path))
-                applyfilter.SummaryRenameAll(args.result_path) 
+                print('creating summary outputs (sum.txt) under ', str(result_full_path))
+                applyfilter.SummaryRenameAll(result_full_path)
                 print('Summary-mode post-processing finished')
         except:
             e = sys.exc_info()[0]
