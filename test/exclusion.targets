@@ -619,9 +619,6 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M11-Beta1\b42387\b42387.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Invoke\fptr\instftn.cmd" >
-             <Issue>633</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M13-RTM\b91223\b91223.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
@@ -876,9 +873,6 @@
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\ExcepFilters\excepobj\excepobj.cmd" >
              <Issue>13</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\casts\coverage\isinst_calli.cmd" >
-             <Issue>633</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b53942\b53942a.cmd" >
              <Issue>13</Issue>
@@ -1228,9 +1222,6 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\zeroinit\Dev10_863995.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Invoke\fptr\virtftn.cmd" >
-             <Issue>633</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1.2-Beta1\b223936\bug4.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
@@ -1471,9 +1462,6 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Coverage\b518440.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Invoke\fptr\valftn.cmd" >
-             <Issue>633</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Invoke\SEH\catchfinally_jmp.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
@@ -1528,17 +1516,11 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M09.5-PDC\b32551\b32551a.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\Misc\function_pointer\funcptrtest.cmd" >
-             <Issue>633</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M11-Beta1\b44724\b44724.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M11-Beta1\b39455\b39455.cmd" >
              <Issue>13</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\casts\coverage\castclass_calli.cmd" >
-             <Issue>633</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b59782\b59782.cmd" >
              <Issue>13</Issue>
@@ -2287,12 +2269,6 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Arrays\range\_il_relnegIndexRngChkElim.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\ELEMENT_TYPE_IU\_il_dbgptr.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\ELEMENT_TYPE_IU\_il_relptr.cmd" >
-             <Issue>637</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b49435\b49435.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
@@ -2303,46 +2279,16 @@
              <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Invoke\SEH\_il_dbgcatchfinally_ind.cmd" >
-             <Issue>633</Issue>
+             <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Invoke\SEH\_il_relcatchfinally_ind.cmd" >
-             <Issue>633</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Invoke\deep\_il_dbgdeep1.cmd" >
-             <Issue>633</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Invoke\deep\_il_reldeep1.cmd" >
-             <Issue>633</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Invoke\fptr\_il_dbginstftn.cmd" >
-             <Issue>633</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Invoke\fptr\_il_dbgvalftn.cmd" >
-             <Issue>633</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Invoke\fptr\_il_dbgvirtftn.cmd" >
-             <Issue>633</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Invoke\fptr\_il_relinstftn.cmd" >
-             <Issue>633</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Invoke\fptr\_il_relvalftn.cmd" >
-             <Issue>633</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Invoke\fptr\_il_relvirtftn.cmd" >
-             <Issue>633</Issue>
+             <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\casts\coverage\_il_dbgcastclass_calli.cmd" >
-             <Issue>633</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\casts\coverage\_il_dbgisinst_calli.cmd" >
-             <Issue>633</Issue>
+             <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\casts\coverage\_il_relcastclass_calli.cmd" >
-             <Issue>633</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\casts\coverage\_il_relisinst_calli.cmd" >
-             <Issue>633</Issue>
+             <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\shift\nativeint_il_d.cmd" >
              <Issue>634</Issue>

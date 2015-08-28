@@ -5182,6 +5182,18 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo, bool MayThrow,
                        std::vector<IRNode *> Args, IRNode **CallNode) {
   IRNode *Call = nullptr;
   IRNode *TargetNode = CallTargetInfo->getCallTargetNode();
+  if (TargetNode->getType()->isPointerTy()) {
+    // According to the ECMA CLI standard, II.14.5, the preferred
+    // representation of method pointers is a native int
+    // which is an int the size of a pointer.
+    // However the type returned by the CoreClr for a method pointer
+    // is a pointer to a struct named "(fnptr)". So convert it
+    // to native int.
+    LLVMContext &LLVMContext = *this->JitContext->LLVMContext;
+    IntegerType *NativeInt =
+        Type::getIntNTy(LLVMContext, TargetPointerSizeInBits);
+    TargetNode = (IRNode *)LLVMBuilder->CreatePtrToInt(TargetNode, NativeInt);
+  }
   const ReaderCallSignature &Signature =
       CallTargetInfo->getCallTargetSignature();
 
