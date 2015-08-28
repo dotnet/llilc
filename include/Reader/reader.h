@@ -2878,6 +2878,11 @@ public:
                                  bool IsVolatile) {
     storePrimitiveType(Value, Address, CorType, Alignment, IsVolatile, false);
   }
+  virtual void storeNonPrimitiveType(IRNode *Value, IRNode *Addr,
+                                     CORINFO_CLASS_HANDLE Class,
+                                     ReaderAlignType Alignment, bool IsVolatile,
+                                     CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                                     bool IsField) = 0;
   virtual void storeLocal(uint32_t LocOrdinal, IRNode *Arg1,
                           ReaderAlignType Alignment, bool IsVolatile) = 0;
   virtual void storeObj(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Value,
@@ -3287,13 +3292,6 @@ public:
   // Used to expand multidimensional array access intrinsics
   virtual bool arrayGet(CORINFO_SIG_INFO *Sig, IRNode **RetVal) = 0;
   virtual bool arraySet(CORINFO_SIG_INFO *Sig) = 0;
-
-  /// \brief Check whether structs are represented by pointers on the operand
-  /// stack.
-  ///
-  /// \returns true iff structs are represented by pointers on the operand
-  /// stack.
-  virtual bool structsAreRepresentedByPointers() = 0;
 
 #if !defined(NDEBUG)
   virtual void dbDumpFunction(void) = 0;

@@ -480,6 +480,12 @@ public:
                           ReaderAlignType Alignment, bool IsVolatile,
                           bool AddressMayBeNull = true) override;
 
+  void storeNonPrimitiveType(IRNode *Value, IRNode *Addr,
+                             CORINFO_CLASS_HANDLE Class,
+                             ReaderAlignType Alignment, bool IsVolatile,
+                             CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                             bool IsField) override;
+
   void storeLocal(uint32_t LocOrdinal, IRNode *Arg1, ReaderAlignType Alignment,
                   bool IsVolatile) override;
   void storeStaticField(CORINFO_RESOLVED_TOKEN *FieldToken,
@@ -875,8 +881,6 @@ public:
   // Used to expand multidimensional array access intrinsics
   bool arrayGet(CORINFO_SIG_INFO *Sig, IRNode **RetVal) override;
   bool arraySet(CORINFO_SIG_INFO *Sig) override;
-
-  bool structsAreRepresentedByPointers() override { return true; }
 
 #if !defined(NDEBUG)
   void dbDumpFunction(void) override {
@@ -1735,15 +1739,6 @@ private:
     llvm::DICompileUnit *TheCU;
     llvm::DIScope *FunctionScope;
   } LLILCDebugInfo;
-
-  static llvm::Type *Vector2Ty;
-  static llvm::Type *Vector3Ty;
-  static llvm::Type *Vector4Ty;
-  static llvm::Type *FloatTy;
-  static llvm::Type *FloatPtrTy;
-  static llvm::Type *Vector2PtrTy;
-  static llvm::Type *Vector3PtrTy;
-  static llvm::Type *Vector4PtrTy;
 };
 
 #endif // MSIL_READER_IR_H

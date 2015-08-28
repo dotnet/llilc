@@ -3792,12 +3792,8 @@ void ReaderBase::storeObj(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Value,
     storePrimitiveType(Value, Address, TheCorInfoType, Alignment, IsVolatile,
                        AddressMayBeNull);
   } else {
-    // Get the minimum Alignment for the class
-    Alignment = getMinimumClassAlignment(Class, Alignment);
-    bool IsValueIsPointer = structsAreRepresentedByPointers();
-    rdrCallWriteBarrierHelper(Address, Value, Alignment, IsVolatile,
-                              ResolvedToken, false, IsValueIsPointer, IsField,
-                              false);
+    storeNonPrimitiveType(Value, Address, Class, Alignment, IsVolatile,
+                          ResolvedToken, IsField);
   }
 }
 
