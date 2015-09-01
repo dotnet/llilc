@@ -826,9 +826,6 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1.2-M01\b07947\b07947.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\shift\nativeuint.cmd" >
-             <Issue>634</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\throwbox\filter.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
@@ -1356,9 +1353,6 @@
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\FaultHandlers\Nesting\Nesting.cmd" >
              <Issue>13</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\shift\nativeint.cmd" >
-             <Issue>634</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\ldc_sub_ovf_i8.cmd" >
              <Issue>13</Issue>
@@ -2265,30 +2259,6 @@
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\casts\coverage\_il_relcastclass_calli.cmd" >
              <Issue>13</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\shift\nativeint_il_d.cmd" >
-             <Issue>634</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\shift\nativeint_il_r.cmd" >
-             <Issue>634</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\shift\nativeuint_il_d.cmd" >
-             <Issue>634</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\shift\nativeuint_il_r.cmd" >
-             <Issue>634</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\ELEMENT_TYPE_IU\_il_dbgi_qsort2.cmd" >
-             <Issue>634</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\ELEMENT_TYPE_IU\_il_dbgu_qsort2.cmd" >
-             <Issue>634</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\ELEMENT_TYPE_IU\_il_reli_qsort2.cmd" >
-             <Issue>634</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\ELEMENT_TYPE_IU\_il_relu_qsort2.cmd" >
-             <Issue>634</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\PREFIX\unaligned\1\arglist.cmd" >
              <Issue>52</Issue>
