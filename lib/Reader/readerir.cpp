@@ -7339,12 +7339,24 @@ IRNode *GenIR::makeRefAny(CORINFO_RESOLVED_TOKEN *ResolvedToken,
   // managed pointers.
   const unsigned ValueIndex = 0;
   const unsigned TypeIndex = 1;
-  assert(isManagedPointerType(Object->getType()) &&
-         "wrong type for refany value");
+
+  // Ecma-335 is clear that the object passed to mkrefany must be a managed
+  // pointer type (or native int in unverifiable code). But traditionally .Net
+  // jits have allowed arbitrary integers here too. So, tolerate this.
+  Type *ExpectedObjectTy = RefAnyStructTy->getContainedType(ValueIndex);
+  assert(isManagedPointerType(ExpectedObjectTy));
+  Value *CastObject;
+  if (!isManagedPointerType(Object->getType())) {
+    assert(Object->getType()->isIntegerTy());
+    IntegerType *ObjectType = cast<IntegerType>(Object->getType());
+    // Not clear what should happen on a size mismatch, so we'll just let
+    // LLVM do what it thinks is reasonable.
+    CastObject = LLVMBuilder->CreateIntToPtr(Object, ExpectedObjectTy);
+  } else {
+    CastObject = LLVMBuilder->CreatePointerCast(Object, ExpectedObjectTy);
+  }
   Value *ValueFieldAddress =
       LLVMBuilder->CreateStructGEP(RefAnyTy, RefAny, ValueIndex);
-  Value *CastObject = LLVMBuilder->CreatePointerCast(
-      Object, RefAnyStructTy->getContainedType(ValueIndex));
   makeStoreNonNull(CastObject, ValueFieldAddress, IsVolatile);
 
   // Store the type handle in the type field.
