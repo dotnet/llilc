@@ -250,7 +250,7 @@ EndProject
     env["core_root"]=args.coreclr_runtime_path
     env["core_libraries"]=app_dir
 
-    # Convdrt environment into tab-separated string.
+    # Convert environment into tab-separated string.
     tabbed_app_environment = ''
     keys = list(env.keys())
     keys.sort()
