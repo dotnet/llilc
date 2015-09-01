@@ -1655,6 +1655,16 @@ private:
 
   int getElementCountOfSIMDType(CORINFO_CLASS_HANDLE Class) override;
 
+  /// Create the IR for a finally dispatch.
+  ///
+  /// Creates an alloca for the selector variable, and then a load and switch
+  /// on the selector value. The load and switch are not inserted into any
+  /// block. Sets the region's switch to the switch.
+  ///
+  /// \param FinallyRegion         Finally region needing dispatch IR.
+  /// \returns                     Dispatch switch instruction.
+  llvm::SwitchInst *createFinallyDispatch(EHRegion *FinallyRegion);
+
 private:
   LLILCJitContext *JitContext;
   ABIInfo *TheABIInfo;
