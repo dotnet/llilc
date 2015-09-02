@@ -3672,10 +3672,10 @@ IRNode *ReaderBase::box(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg2,
     return Arg2;
   }
 
-  // Ensure that operand from operand stack has type that is
+  // Ensure that operand from operand stack has size that is
   // compatible with box destination, then get the (possibly
   // converted) operand's address.
-  Arg2 = convertToBoxHelperArgumentType(Arg2, getClassType(Class));
+  Arg2 = convertToBoxHelperArgumentType(Arg2, getClassSize(Class));
 
   Dst = makeBoxDstOperand(Class);
 
@@ -3816,12 +3816,8 @@ void ReaderBase::storeObj(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Value,
     storePrimitiveType(Value, Address, TheCorInfoType, Alignment, IsVolatile,
                        AddressMayBeNull);
   } else {
-    // Get the minimum Alignment for the class
-    Alignment = getMinimumClassAlignment(Class, Alignment);
-    bool IsValueIsPointer = structsAreRepresentedByPointers();
-    rdrCallWriteBarrierHelper(Address, Value, Alignment, IsVolatile,
-                              ResolvedToken, false, IsValueIsPointer, IsField,
-                              false);
+    storeNonPrimitiveType(Value, Address, Class, Alignment, IsVolatile,
+                          ResolvedToken, IsField);
   }
 }
 

@@ -591,8 +591,8 @@ No.  | Implementation | Testing | Issue | Status
 1 | Insert GC Safepoints: Run the PlaceSafepoints and RewriteSafepointsForGC phases before Code generation, and ensure that statepoints are inserted and lowered correctly | LLILC tests pass with Conservative GC | [32](https://github.com/dotnet/llilc/issues/32) | Completed 
 2 |	Bring GCInfo library to LLILC: Use the GCInfo library to encode Function size correctly; no live pointers reported at GC-safe points | LLILC tests pass with Conservative GC  | [30](https://github.com/dotnet/llilc/issues/30) | Completed
 3 | Report GC liveness: Encode GC pointer liveness information in the CLR format using the GC-Encoding library | A few functions compiled by LLILC with correct GCInfo | [31](https://github.com/dotnet/llilc/issues/31) | Completed
-4 | Test Pass |  LLILC tests pass with Precise GC, bail out on unimplemented features (see 7,8,9 below). Standard lab testing switched over to use Precise GC | [670](https://github.com/dotnet/llilc/issues/670) | In Progress
-5 | Add GC-specific stress tests| All existing and new tests pass | [696](https://github.com/dotnet/llilc/issues/696) | 
+4 | Test Pass |  LLILC tests pass with Precise GC, bail out on unimplemented features (see 7,8,9 below). Standard lab testing switched over to use Precise GC | [670](https://github.com/dotnet/llilc/issues/670) | In Progress (2303/2414 tests pass)
+5 | Add GC-specific stress tests| All existing and new tests pass | [696](https://github.com/dotnet/llilc/issues/696) | In Progress | 
 6 | GC Stress testing | Run the LLILC tests in GCStress mode; some GCStress testing running regularly in the lab | |
 7 | Special reporting for pinned pointers | Code with pinned pointers handled by LLILC | [29](https://github.com/dotnet/llilc/issues/29) | |
 8 | Support aggregates containing GC pointers  | Code with GC-aggregates handled by LLILC | [33](https://github.com/dotnet/llilc/issues/33) | |
@@ -602,3 +602,4 @@ No.  | Implementation | Testing | Issue | Status
 12 | Track GC-pointers in registers | Test and GCStress Pass | [474](https://github.com/dotnet/llilc/issues/474) | | 
 13 | Implement GC Checker | Test and GCStress Pass | [34](https://github.com/dotnet/llilc/issues/34) | |
 14 | Identify Object and Managed pointers differently| Test and GCStress Pass | [28](https://github.com/dotnet/llilc/issues/28) | |
+15 | Implement necessary support to enable Precise GC when LLVM optimizations are turned on for LLILC | Test and GCStress Pass in an optimized LLILC build | | |

@@ -318,6 +318,21 @@ public:
   IRNode *ckFinite(IRNode *Arg1) override {
     throw NotYetImplementedException("ckFinite");
   };
+
+  /// \brief Modify comparison arguments, if needed, to have equal types.
+  ///
+  /// LLVM comparisons require that the operands have the same type
+  /// whereas MSIL operands may have different type, subject to
+  /// the conditions in the ECMA spec, partition III, table 4,
+  /// except we relax these conditions somewhat by allowing comparison
+  /// of int64 with int32 or native int. Promote the arguments
+  /// as needed to achieve type equality.
+  ///
+  /// \param [in,out] Arg1 Pointer to first argument.
+  /// \param [in,out] Arg2 Pointer to second argument.
+  /// \returns True if the comparison is a floating comparison.
+  bool prepareArgsForCompare(IRNode *&Arg1, IRNode *&Arg2);
+
   IRNode *cmp(ReaderBaseNS::CmpOpcode Opode, IRNode *Arg1,
               IRNode *Arg2) override;
   void condBranch(ReaderBaseNS::CondBranchOpcode Opcode, IRNode *Arg1,
@@ -379,7 +394,8 @@ public:
 
   IRNode *loadLen(IRNode *Array, bool ArrayMayBeNull = true) override;
 
-  bool arrayAddress(CORINFO_SIG_INFO *Sig, IRNode **RetVal);
+  bool arrayAddress(CORINFO_SIG_INFO *Sig, IRNode **RetVal) override;
+
   IRNode *loadStringLen(IRNode *Arg1) override;
 
   IRNode *getTypeFromHandle(IRNode *HandleNode) override;
@@ -465,6 +481,12 @@ public:
   void storePrimitiveType(IRNode *Value, IRNode *Addr, CorInfoType CorInfoType,
                           ReaderAlignType Alignment, bool IsVolatile,
                           bool AddressMayBeNull = true) override;
+
+  void storeNonPrimitiveType(IRNode *Value, IRNode *Addr,
+                             CORINFO_CLASS_HANDLE Class,
+                             ReaderAlignType Alignment, bool IsVolatile,
+                             CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                             bool IsField) override;
 
   void storeLocal(uint32_t LocOrdinal, IRNode *Arg1, ReaderAlignType Alignment,
                   bool IsVolatile) override;
@@ -819,7 +841,7 @@ public:
   /// \returns Generated call instruction if NullCheckArg is null; otherwise,
   /// PHI of NullCheckArg and the generated call instruction.
   IRNode *callRuntimeHandleHelper(CorInfoHelpFunc Helper, IRNode *Arg1,
-                                  IRNode *Arg2, IRNode *NullCheckArg);
+                                  IRNode *Arg2, IRNode *NullCheckArg) override;
 
   /// Generate a helper call to enter or exit a monitor used by synchronized
   /// methods.
@@ -829,7 +851,7 @@ public:
   void callMonitorHelper(bool IsEnter);
 
   IRNode *convertToBoxHelperArgumentType(IRNode *Opr,
-                                         CorInfoType CorType) override;
+                                         uint32_t DestSize) override;
 
   IRNode *makeBoxDstOperand(CORINFO_CLASS_HANDLE Class) override;
 
@@ -910,8 +932,6 @@ public:
   // Used to expand multidimensional array access intrinsics
   bool arrayGet(CORINFO_SIG_INFO *Sig, IRNode **RetVal) override;
   bool arraySet(CORINFO_SIG_INFO *Sig) override;
-
-  bool structsAreRepresentedByPointers() override { return true; }
 
 #if !defined(NDEBUG)
   void dbDumpFunction(void) override {
@@ -1287,8 +1307,9 @@ private:
 
   /// Get the type of the result of the merge of two values from operand stacks
   /// of a block's predecessors. The allowed combinations are nativeint and
-  // int32 (resulting in nativeint), float and double (resulting in double),
-  /// and GC pointers (resulting in the closest common supertype).
+  /// int32 (resulting in whichever was first), float and double
+  /// (resulting in double), and GC pointers (resulting in the closest common
+  /// supertype).
   ///
   /// \param Ty1 Type of the first value.
   /// \param Ty1 Type of the second value.
@@ -1448,12 +1469,13 @@ private:
                                unsigned int NumReservedValues,
                                const llvm::Twine &NameStr);
 
-  /// Add a new operand to the PHI instruction. The type of the new operand may
-  /// or may not equal to the type of the PHI instruction. Adjust the types as
-  /// necessary.
+  /// Update all undef placeholders corresponding to the new operand in the
+  /// PHI instruction. The type of the new operand may or may not equal the type
+  /// of the PHI instruction. Adjust the types as necessary.
   ///
   /// \param PHI PHI instruction.
   /// \param NewOperand Operand to add to the PHI instruction.
+  /// \param NewBlock Basic block corresponding to NewOperand.
   void addPHIOperand(llvm::PHINode *PHI, llvm::Value *NewOperand,
                      llvm::BasicBlock *NewBlock);
 
@@ -1658,7 +1680,7 @@ private:
                                           bool IsConstant);
   std::string appendClassNameAsString(CORINFO_CLASS_HANDLE Class,
                                       bool IncludeNamespace, bool FullInst,
-                                      bool IncludeAssembly);
+                                      bool IncludeAssembly) override;
 
   IRNode *vectorAdd(IRNode *Vector1, IRNode *Vector2) override;
   IRNode *vectorSub(IRNode *Vector1, IRNode *Vector2) override;
@@ -1687,6 +1709,16 @@ private:
   IRNode *generateIsHardwareAccelerated(CORINFO_CLASS_HANDLE Class) override;
 
   int getElementCountOfSIMDType(CORINFO_CLASS_HANDLE Class) override;
+
+  /// Create the IR for a finally dispatch.
+  ///
+  /// Creates an alloca for the selector variable, and then a load and switch
+  /// on the selector value. The load and switch are not inserted into any
+  /// block. Sets the region's switch to the switch.
+  ///
+  /// \param FinallyRegion         Finally region needing dispatch IR.
+  /// \returns                     Dispatch switch instruction.
+  llvm::SwitchInst *createFinallyDispatch(EHRegion *FinallyRegion);
 
   /// Access the address of a root function local.  If the current region is a
   /// filter (which will be outlined), insert appropriate code in the root
@@ -1854,15 +1886,6 @@ private:
     llvm::DICompileUnit *TheCU;
     llvm::DIScope *FunctionScope;
   } LLILCDebugInfo;
-
-  static llvm::Type *Vector2Ty;
-  static llvm::Type *Vector3Ty;
-  static llvm::Type *Vector4Ty;
-  static llvm::Type *FloatTy;
-  static llvm::Type *FloatPtrTy;
-  static llvm::Type *Vector2PtrTy;
-  static llvm::Type *Vector3PtrTy;
-  static llvm::Type *Vector4PtrTy;
 };
 
 #endif // MSIL_READER_IR_H

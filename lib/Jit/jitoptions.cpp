@@ -224,32 +224,34 @@ bool JitOptions::queryMethodSet(LLILCJitContext &JitContext, MethodSet &TheSet,
   return IsInMethodSet;
 }
 
+bool JitOptions::queryNonNullNonEmpty(LLILCJitContext &JitContext,
+                                      const char16_t *Name) {
+  char16_t *ConfigStr = getStringConfigValue(JitContext.JitInfo, Name);
+  return (ConfigStr != nullptr) && (*ConfigStr != 0);
+}
+
 // Get the GC-Scheme used by the runtime -- conservative/precise
 bool JitOptions::queryUseConservativeGC(LLILCJitContext &Context) {
-  char16_t *GCStr =
-      getStringConfigValue(Context.JitInfo, UTF16("GCCONSERVATIVE"));
-  return (GCStr != nullptr);
+  return queryNonNullNonEmpty(Context,
+                              (const char16_t *)UTF16("GCCONSERVATIVE"));
 }
 
 // Determine if GC statepoints should be inserted.
 bool JitOptions::queryDoInsertStatepoints(LLILCJitContext &Context) {
-  char16_t *StatePointStr =
-      getStringConfigValue(Context.JitInfo, UTF16("INSERTSTATEPOINTS"));
-  return (StatePointStr != nullptr);
+  return queryNonNullNonEmpty(Context,
+                              (const char16_t *)UTF16("INSERTSTATEPOINTS"));
 }
 
 // Determine if GCInfo encoding logs should be emitted
 bool JitOptions::queryLogGcInfo(LLILCJitContext &Context) {
-  char16_t *LogGcInfoStr =
-      getStringConfigValue(Context.JitInfo, UTF16("JitGCInfoLogging"));
-  return (LogGcInfoStr != nullptr);
+  return queryNonNullNonEmpty(Context,
+                              (const char16_t *)UTF16("JitGCInfoLogging"));
 }
 
 // Determine if SIMD intrinsics should be used.
 bool JitOptions::queryDoSIMDIntrinsic(LLILCJitContext &Context) {
-  char16_t *StatePointStr =
-      getStringConfigValue(Context.JitInfo, UTF16("SIMDINTRINSIC"));
-  return (StatePointStr != nullptr);
+  return queryNonNullNonEmpty(Context,
+                              (const char16_t *)UTF16("SIMDINTRINSIC"));
 }
 
 OptLevel JitOptions::queryOptLevel(LLILCJitContext &Context) {

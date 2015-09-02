@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+﻿#!/usr/bin/env python
 
 import sys
 import argparse
@@ -58,7 +58,7 @@ def runTidy(args):
         "-fms-extensions",
         "-fms-compatibility",
         "-fmsc-version=1800",
-        "–fexceptions",
+        "-fexceptions",
         "-fcxx-exceptions"
     ]
     includes = [
@@ -179,6 +179,8 @@ def runFormat(args):
 
   if returncode == -1:
     print("There were formatting errors. Rerun with --fix")
+    print("Up-to-date clang-format.exe can be found at",
+          "http://dotnet-ci.cloudapp.net/view/dotnet_llilc/job/dotnet_llilc_code_formatter_drop/")
   return returncode
 
 def main(argv):

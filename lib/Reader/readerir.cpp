@@ -15,6 +15,7 @@
 
 #include "earlyincludes.h"
 #include "readerir.h"
+#include "GcInfo.h"
 #include "imeta.h"
 #include "newvstate.h"
 #include "llvm/ADT/Triple.h"
@@ -344,15 +345,6 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   EntryBlock = BasicBlock::Create(LLVMContext, "entry", RootFunction);
 
   LLVMBuilder = new IRBuilder<>(LLVMContext);
-  llvm::LLVMContext &Context = LLVMBuilder->getContext();
-  FloatTy = llvm::Type::getFloatTy(Context);
-  FloatPtrTy = llvm::Type::getFloatPtrTy(Context);
-  Vector2Ty = llvm::VectorType::get(FloatTy, 2);
-  Vector3Ty = llvm::VectorType::get(FloatTy, 3);
-  Vector4Ty = llvm::VectorType::get(FloatTy, 4);
-  Vector2PtrTy = llvm::PointerType::get(Vector2Ty, 0);
-  Vector3PtrTy = llvm::PointerType::get(Vector3Ty, 0);
-  Vector4PtrTy = llvm::PointerType::get(Vector4Ty, 0);
 
   DBuilder = new DIBuilder(*JitContext->CurrentModule);
   LLILCDebugInfo.TheCU = DBuilder->createCompileUnit(dwarf::DW_LANG_C_plus_plus,
@@ -375,6 +367,21 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   UnreachableContinuationBlock = nullptr;
   // Personality function is created on-demand.
   PersonalityFunction = nullptr;
+
+  // Setup function for emiting debug locations
+  DIFile *Unit = DBuilder->createFile(LLILCDebugInfo.TheCU->getFilename(),
+                                      LLILCDebugInfo.TheCU->getDirectory());
+  bool IsOptimized = (JitContext->Flags & CORJIT_FLG_DEBUG_CODE) == 0;
+  DIScope *FContext = Unit;
+  unsigned LineNo = 0;
+  unsigned ScopeLine = ICorDebugInfo::PROLOG;
+  bool IsDefinition = true;
+  DISubprogram *SP = DBuilder->createFunction(
+      FContext, RootFunction->getName(), StringRef(), Unit, LineNo,
+      createFunctionType(RootFunction, Unit), RootFunction->hasInternalLinkage(),
+      IsDefinition, ScopeLine, DINode::FlagPrototyped, IsOptimized, RootFunction);
+
+  LLILCDebugInfo.FunctionScope = SP;
 
   initParamsAndAutos(MethodSignature);
 
@@ -476,22 +483,6 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
           MayThrow, Void, JustMyCodeFlag, Zero, CallReturns, "JustMyCodeHook");
     }
   }
-
-  // Setup function for emiting debug locations
-  DIFile *Unit = DBuilder->createFile(LLILCDebugInfo.TheCU->getFilename(),
-                                      LLILCDebugInfo.TheCU->getDirectory());
-  bool IsOptimized = (JitContext->Flags & CORJIT_FLG_DEBUG_CODE) == 0;
-  DIScope *FContext = Unit;
-  unsigned LineNo = 0;
-  unsigned ScopeLine = ICorDebugInfo::PROLOG;
-  bool IsDefinition = true;
-  DISubprogram *SP = DBuilder->createFunction(
-      FContext, RootFunction->getName(), StringRef(), Unit, LineNo,
-      createFunctionType(RootFunction, Unit),
-      RootFunction->hasInternalLinkage(), IsDefinition, ScopeLine,
-      DINode::FlagPrototyped, IsOptimized, RootFunction);
-
-  LLILCDebugInfo.FunctionScope = SP;
 
   // TODO: Insert class initialization check if necessary
   CorInfoInitClassResult InitResult =
@@ -676,6 +667,11 @@ void GenIR::insertIRToKeepGenericContextAlive() {
 
   // TODO: we must convey the offset of this local to the runtime
   // via the GC encoding.
+  // https://github.com/dotnet/llilc/issues/766
+
+  if (JitContext->Options->DoInsertStatepoints) {
+    throw NotYetImplementedException("NYI: Generic Context reporting");
+  }
 }
 
 void GenIR::insertIRForSecurityObject() {
@@ -712,6 +708,11 @@ void GenIR::insertIRForSecurityObject() {
 
   // TODO: we must convey the offset of the security object to the runtime
   // via the GC encoding.
+  // https://github.com/dotnet/llilc/issues/767
+
+  if (JitContext->Options->DoInsertStatepoints) {
+    throw NotYetImplementedException("NYI: Security Object Reporting");
+  }
 }
 
 void GenIR::callMonitorHelper(bool IsEnter) {
@@ -824,7 +825,8 @@ void GenIR::insertIRForUnmanagedCallFrame() {
 void GenIR::setAttributesForUnmanagedCallFrame(Function *F) {
   // Mark this function as requiring a frame pointer and as using GC.
   F->addFnAttr("no-frame-pointer-elim", "true");
-  F->setGC("coreclr");
+
+  assert(GCInfo::isGCFunction(*F));
 }
 
 #pragma endregion
@@ -891,10 +893,35 @@ void GenIR::createSym(uint32_t Num, bool IsAuto, CorInfoType CorType,
       LLVMType, nullptr,
       UseNumber ? Twine(SymName) + Twine(Number) : Twine(SymName));
 
+  DIFile *Unit = DBuilder->createFile(LLILCDebugInfo.TheCU->getFilename(),
+                                      LLILCDebugInfo.TheCU->getDirectory());
+
+  DIType *DebugType = convertType(LLVMType);
+  bool AlwaysPreserve = false;
+  unsigned Flags = 0;
+
+  std::string Name =
+      (UseNumber ? Twine(SymName) + Twine(Number) : Twine(SymName)).str();
+
   if (IsAuto) {
+    auto *DebugVar =
+        DBuilder->createAutoVariable(LLILCDebugInfo.FunctionScope, Name, Unit,
+                                     0, DebugType, AlwaysPreserve, Flags);
+    auto DL = llvm::DebugLoc::get(0, 0, LLILCDebugInfo.FunctionScope);
+    DBuilder->insertDeclare(AllocaInst, DebugVar, DBuilder->createExpression(),
+                            DL, LLVMBuilder->GetInsertBlock());
+
     LocalVars[Num] = AllocaInst;
     LocalVarCorTypes[Num] = CorType;
   } else {
+    unsigned ArgNo = Num + 1;
+
+    auto *DebugVar = DBuilder->createParameterVariable(
+        LLILCDebugInfo.FunctionScope, Name, ArgNo, Unit, 0, DebugType,
+        AlwaysPreserve, Flags);
+    auto DL = llvm::DebugLoc::get(0, 0, LLILCDebugInfo.FunctionScope);
+    DBuilder->insertDeclare(AllocaInst, DebugVar, DBuilder->createExpression(),
+                            DL, LLVMBuilder->GetInsertBlock());
     Arguments[Num] = AllocaInst;
   }
 }
@@ -1080,6 +1107,13 @@ void GenIR::createSafepointPoll() {
 
   assert(SafepointPoll->empty());
 
+  // Safepoint Poll function itself is never expected to be called
+  // at runtime, so we can save generating unwind information for it.
+  //
+  // PlaceSafepoints phase inlines the contents of @gc.SafepointPoll()
+  // at all gc-polling locations.
+  SafepointPoll->addFnAttr(Attribute::NoUnwind);
+
   BasicBlock *EntryBlock =
       BasicBlock::Create(*LLVMContext, "entry", SafepointPoll);
 
@@ -1190,9 +1224,38 @@ llvm::DIType *GenIR::convertType(Type *Ty) {
 
     return DbgTy;
   }
-  // TODO: add support for aggregate types
-  // Types we are missing: LabelTy, MetadataTy, X86_MMXTy, FunctionTy, StructTy
-  // ArrayTy, VectoryTy
+
+  // TODO: These are currently empty types to prevent LLVM from accessing a
+  // nullptr. Since we do not care about the types for debugging with the CLR,
+  // this is sufficient, however, eventually we may want to actually fill these
+  // out
+
+  if (Ty->isStructTy()) {
+    DIFile *Unit = DBuilder->createFile(LLILCDebugInfo.TheCU->getFilename(),
+                                        LLILCDebugInfo.TheCU->getDirectory());
+    llvm::DIType *DbgTy =
+        DBuilder->createStructType(LLILCDebugInfo.TheCU, "csharp_object", Unit,
+                                   0, 0, 0, 0, nullptr, llvm::DINodeArray());
+
+    return DbgTy;
+  }
+
+  if (Ty->isArrayTy()) {
+    llvm::DIType *DbgTy = DBuilder->createArrayType(
+        0, 0, convertType(Ty->getArrayElementType()), llvm::DINodeArray());
+
+    return DbgTy;
+  }
+
+  if (Ty->isVectorTy()) {
+    llvm::DIType *DbgTy = DBuilder->createVectorType(
+        0, 0, convertType(Ty->getVectorElementType()), llvm::DINodeArray());
+
+    return DbgTy;
+  }
+
+  // LabelTy and MetadataTy do not correspond to a DIType.
+  // Need to implement X86_MMX and Function types here
   return nullptr;
 }
 
@@ -1454,13 +1517,16 @@ GenIR::getClassType(CORINFO_CLASS_HANDLE ClassHandle, bool GetAggregateFields,
         appendClassNameAsString(ClassHandle, true, false, false);
     if (ClassName.compare(0, 22, "System.Numerics.Vector") == 0 &&
         ClassName.length() == 23) {
+      LLVMContext &LLVMContext = *JitContext->LLVMContext;
+      Type *FloatTy = Type::getFloatTy(LLVMContext);
+
       switch (ClassName[22]) {
       case '2':
-        return Vector2Ty;
+        return VectorType::get(FloatTy, 2);
       case '3':
-        return Vector3Ty;
+        return VectorType::get(FloatTy, 3);
       case '4':
-        return Vector4Ty;
+        return VectorType::get(FloatTy, 4);
       default:
         assert(UNREACHED);
       }
@@ -2193,6 +2259,11 @@ Type *GenIR::getBoxedType(CORINFO_CLASS_HANDLE Class) {
     }
   }
 
+  VectorType *TheVectorType = dyn_cast<VectorType>(ValueType);
+  if (TheVectorType != nullptr) {
+    BoxedTypeName = "Boxed_Vector";
+  }
+
   if (BoxedTypeName.empty()) {
     assert(ValueType->isFloatTy() || ValueType->isDoubleTy() ||
            ValueType->isIntegerTy());
@@ -2803,6 +2874,7 @@ FlowGraphNode *GenIR::fgSplitBlock(FlowGraphNode *Block, IRNode *Node) {
       BranchInst::Create(NewBlock, TheBasicBlock);
     }
   } else {
+    assert(TheBasicBlock != nullptr);
     if (TheBasicBlock->getTerminator() != nullptr) {
       NewBlock = TheBasicBlock->splitBasicBlock(Inst);
     } else {
@@ -2874,6 +2946,28 @@ IRNode *GenIR::fgMakeThrow(IRNode *Insert) {
   return (IRNode *)Unreachable;
 }
 
+SwitchInst *GenIR::createFinallyDispatch(EHRegion *FinallyRegion) {
+  LLVMContext &Context = *JitContext->LLVMContext;
+  Type *SelectorType = IntegerType::getInt32Ty(Context);
+  Value *SelectorAddr = createTemporary(SelectorType, "finally_cont");
+
+  if (UnreachableContinuationBlock == nullptr) {
+    // First finally for this function; generate an unreachable block
+    // that can be used as the default switch target.
+    UnreachableContinuationBlock =
+        createPointBlock(MethodInfo->ILCodeSize, "NullDefault");
+    new UnreachableInst(Context, UnreachableContinuationBlock);
+    fgNodeSetPropagatesOperandStack(
+        (FlowGraphNode *)UnreachableContinuationBlock, false);
+  }
+
+  LoadInst *Load = new LoadInst(SelectorAddr);
+  SwitchInst *Switch =
+      SwitchInst::Create(Load, UnreachableContinuationBlock, 4);
+  FinallyRegion->EndFinallySwitch = Switch;
+  return Switch;
+}
+
 IRNode *GenIR::fgMakeEndFinally(IRNode *InsertNode, EHRegion *FinallyRegion,
                                 uint32_t CurrentOffset) {
   assert(FinallyRegion != nullptr);
@@ -2881,9 +2975,10 @@ IRNode *GenIR::fgMakeEndFinally(IRNode *InsertNode, EHRegion *FinallyRegion,
   BasicBlock *Block = (BasicBlock *)InsertNode;
   SwitchInst *Switch = FinallyRegion->EndFinallySwitch;
   if (Switch == nullptr) {
-    // This finally is never invoked.
-    LLVMBuilder->SetInsertPoint(Block);
-    return (IRNode *)LLVMBuilder->CreateUnreachable();
+    // We haven't yet seen a leave from the associated protected region. We may
+    // well never see one. Assume the latter is rare and create the necessary
+    // dispatch machinery.
+    Switch = createFinallyDispatch(FinallyRegion);
   }
 
   BasicBlock *TargetBlock = Switch->getParent();
@@ -3182,6 +3277,7 @@ void GenIR::genFilterDispatch(EHRegion *FilterRegion,
   FilterFunction->addFnAttr("wineh-parent", RootFunction->getName());
   assert(PersonalityFunction != nullptr);
   FilterFunction->setPersonalityFn(PersonalityFunction);
+  FilterFunction->setGC("coreclr");
 
   // Give the arguments names to make the IR easier to read.
   auto ArgIter = FilterFunction->arg_begin();
@@ -4570,6 +4666,22 @@ void GenIR::storePrimitiveType(IRNode *Value, IRNode *Addr,
   StoreInst->setAlignment(Align);
 }
 
+void GenIR::storeNonPrimitiveType(IRNode *Value, IRNode *Addr,
+                                  CORINFO_CLASS_HANDLE Class,
+                                  ReaderAlignType Alignment, bool IsVolatile,
+                                  CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                                  bool IsField) {
+  // Get the minimum Alignment for the class
+  Alignment = getMinimumClassAlignment(Class, Alignment);
+  bool IsValueIsPointer = !Value->getType()->isVectorTy();
+  assert(!IsValueIsPointer || doesValueRepresentStruct(Value));
+  if (Value->getType()->isVectorTy()) {
+    IsValueIsPointer = false;
+  }
+  rdrCallWriteBarrierHelper(Addr, Value, Alignment, IsVolatile, ResolvedToken,
+                            false, IsValueIsPointer, IsField, false);
+}
+
 void GenIR::storeIndirectArg(const CallArgType &ValueArgType,
                              llvm::Value *ValueToStore, llvm::Value *Address,
                              bool IsVolatile) {
@@ -4622,7 +4734,10 @@ StoreInst *GenIR::makeStore(Value *ValueToStore, Value *Address,
       // to generate.
     }
   }
-
+  if (ValueToStore->getType()->isVectorTy()) {
+    return LLVMBuilder->CreateAlignedStore(ValueToStore, Address, 1,
+                                           IsVolatile);
+  }
   return LLVMBuilder->CreateStore(ValueToStore, Address, IsVolatile);
 }
 
@@ -4638,7 +4753,10 @@ LoadInst *GenIR::makeLoad(Value *Address, bool IsVolatile,
       // to generate.
     }
   }
-
+  if (Address->getType()->isPointerTy() &&
+      Address->getType()->getPointerElementType()->isVectorTy()) {
+    return LLVMBuilder->CreateAlignedLoad(Address, 1, IsVolatile);
+  }
   return LLVMBuilder->CreateLoad(Address, IsVolatile);
 }
 
@@ -5779,6 +5897,18 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo, bool MayThrow,
                        std::vector<IRNode *> Args, IRNode **CallNode) {
   IRNode *Call = nullptr;
   IRNode *TargetNode = CallTargetInfo->getCallTargetNode();
+  if (TargetNode->getType()->isPointerTy()) {
+    // According to the ECMA CLI standard, II.14.5, the preferred
+    // representation of method pointers is a native int
+    // which is an int the size of a pointer.
+    // However the type returned by the CoreClr for a method pointer
+    // is a pointer to a struct named "(fnptr)". So convert it
+    // to native int.
+    LLVMContext &LLVMContext = *this->JitContext->LLVMContext;
+    IntegerType *NativeInt =
+        Type::getIntNTy(LLVMContext, TargetPointerSizeInBits);
+    TargetNode = (IRNode *)LLVMBuilder->CreatePtrToInt(TargetNode, NativeInt);
+  }
   const ReaderCallSignature &Signature =
       CallTargetInfo->getCallTargetSignature();
 
@@ -5876,8 +6006,7 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo, bool MayThrow,
   }
 }
 
-IRNode *GenIR::convertToBoxHelperArgumentType(IRNode *Opr,
-                                              CorInfoType DestType) {
+IRNode *GenIR::convertToBoxHelperArgumentType(IRNode *Opr, uint32_t DestSize) {
   Type *Ty = Opr->getType();
   switch (Ty->getTypeID()) {
   case Type::TypeID::IntegerTyID: {
@@ -5886,9 +6015,9 @@ IRNode *GenIR::convertToBoxHelperArgumentType(IRNode *Opr,
     ASSERT((Ty->getIntegerBitWidth() == 32) ||
            (Ty->getIntegerBitWidth() == 64));
 
-    // If Size were smaller than DestinationSize the boxing helper would grab
-    // data from outside the smaller datatype.
-    ASSERT(size(DestType) <= Ty->getIntegerBitWidth());
+    // If the operand size is smaller than DestSize the boxing helper will grab
+    // data from outside the smaller operand.
+    ASSERT(DestSize <= Ty->getIntegerBitWidth());
     break;
   }
   // If the data type is a float64 and we want to box it to a
@@ -5898,7 +6027,7 @@ IRNode *GenIR::convertToBoxHelperArgumentType(IRNode *Opr,
   // destroy the value.
   case Type::TypeID::FloatTyID:
   case Type::TypeID::DoubleTyID:
-    if (Ty->getPrimitiveSizeInBits() > size(DestType)) {
+    if (Ty->getPrimitiveSizeInBits() > DestSize) {
       Opr = (IRNode *)LLVMBuilder->CreateFPCast(Opr, Ty);
     }
     break;
@@ -6591,8 +6720,40 @@ void GenIR::switchOpcode(IRNode *Opr) {
   BasicBlock *CurrBlock = LLVMBuilder->GetInsertBlock();
   TerminatorInst *TermInst = CurrBlock->getTerminator();
   SwitchInst *SwitchInstruction = cast<SwitchInst>(TermInst);
-
   SwitchInstruction->setCondition(Opr);
+
+  Type *OprType = Opr->getType();
+  IntegerType *OprIntType = cast<IntegerType>(OprType);
+  unsigned OprBitWidth = OprIntType->getBitWidth();
+
+  // LLVM requires that for a switch instruction the type of the selector and
+  // the type of the case values all be of the same integer type.
+  // The purpose of the following code is to adjust the type of the
+  // case values to match the type of the selector if they are different.
+
+  // If a small selector type was used, e.g. i8, the type might not
+  // be big enough to hold all the case values. But the value for the
+  // selector is popped off the evaluation stack, so it should be at
+  // least 32 bits. So check that.
+  assert((OprBitWidth >= 32) && "Selector bit width is less then 32");
+
+  // If we have to adjust the types of the operands we use a
+  // uint64_t to transfer the value, so we cannot handle larger selector.
+  assert((OprBitWidth <= 64) && "Selector bit width is greater than 64");
+
+  LLVMContext &LLVMContext = *JitContext->LLVMContext;
+  for (SwitchInst::CaseIt Case : SwitchInstruction->cases()) {
+    ConstantInt *OldValue = Case.getCaseValue();
+    unsigned OldBitWidth = OldValue->getBitWidth();
+    if (OldBitWidth != OprBitWidth) {
+      // Need to adjust type.
+      assert((OldBitWidth <= 64) && "Old value bit width is greater than 64");
+      uint64_t CaseValue = OldValue->getZExtValue();
+      ConstantInt *Value =
+          ConstantInt::get(LLVMContext, APInt(OprBitWidth, CaseValue, false));
+      Case.setValue(Value);
+    }
+  }
 }
 
 void GenIR::throwOpcode(IRNode *Arg1) {
@@ -6778,39 +6939,16 @@ uint32_t GenIR::updateLeaveOffset(EHRegion *Region, uint32_t LeaveOffset,
     BasicBlock *TargetBlock = (BasicBlock *)TargetNode;
 
     // Get or create the switch that terminates the finally.
-    LLVMContext &Context = *JitContext->LLVMContext;
     SwitchInst *Switch = FinallyRegion->EndFinallySwitch;
-    IntegerType *SelectorType;
-    Value *SelectorAddr;
-    ConstantInt *SelectorValue;
 
     if (Switch == nullptr) {
-      // First leave exiting this finally; generate a new switch.
-      SelectorType = IntegerType::getInt32Ty(Context);
-      SelectorAddr = createTemporary(SelectorType, "finally_cont");
-      SelectorValue = nullptr;
-
-      if (UnreachableContinuationBlock == nullptr) {
-        // First finally for this function; generate an unreachable block
-        // that can be used as the default switch target.
-        UnreachableContinuationBlock =
-            createPointBlock(MethodInfo->ILCodeSize, "NullDefault");
-        new UnreachableInst(Context, UnreachableContinuationBlock);
-        fgNodeSetPropagatesOperandStack(
-            (FlowGraphNode *)UnreachableContinuationBlock, false);
-      }
-
-      LoadInst *Load = new LoadInst(SelectorAddr);
-      FinallyRegion->EndFinallySwitch = Switch =
-          SwitchInst::Create(Load, UnreachableContinuationBlock, 4);
-    } else {
-      // This finally already has a switch.  See if it already has a case for
-      // this target continuation.
-      LoadInst *Load = (LoadInst *)Switch->getCondition();
-      SelectorAddr = Load->getPointerOperand();
-      SelectorType = (IntegerType *)Load->getType();
-      SelectorValue = Switch->findCaseDest(TargetBlock);
+      Switch = createFinallyDispatch(FinallyRegion);
     }
+
+    LoadInst *Load = (LoadInst *)Switch->getCondition();
+    Value *SelectorAddr = Load->getPointerOperand();
+    IntegerType *SelectorType = (IntegerType *)Load->getType();
+    ConstantInt *SelectorValue = Switch->findCaseDest(TargetBlock);
 
     if (SelectorValue == nullptr) {
       // The switch doesn't have a case for this target continuation yet;
@@ -7432,8 +7570,11 @@ IRNode *GenIR::loadNonPrimitiveObj(IRNode *Addr,
   IRNode *TypedAddr =
       getTypedAddress(Addr, CorType, ClassHandle, Alignment, &Align);
 
-  StructType *StructTy = cast<StructType>(getType(CorType, ClassHandle));
-
+  Type *Type = getType(CorType, ClassHandle);
+  if (Type->isVectorTy()) {
+    return (IRNode *)makeLoad(Addr, IsVolatile, AddressMayBeNull);
+  }
+  StructType *StructTy = cast<StructType>(Type);
   return loadNonPrimitiveObj(StructTy, TypedAddr, Alignment, IsVolatile,
                              AddressMayBeNull);
 }
@@ -7481,8 +7622,7 @@ void GenIR::classifyCmpType(Type *Ty, uint32_t &Size, bool &IsPointer,
   }
 }
 
-IRNode *GenIR::cmp(ReaderBaseNS::CmpOpcode Opcode, IRNode *Arg1, IRNode *Arg2) {
-
+bool GenIR::prepareArgsForCompare(IRNode *&Arg1, IRNode *&Arg2) {
   // Grab the types to be compared.
   Type *Ty1 = Arg1->getType();
   Type *Ty2 = Arg2->getType();
@@ -7545,6 +7685,13 @@ IRNode *GenIR::cmp(ReaderBaseNS::CmpOpcode Opcode, IRNode *Arg1, IRNode *Arg2) {
   // Types should now match up.
   ASSERT(Arg1->getType() == Arg2->getType());
 
+  return IsFloat1;
+}
+
+IRNode *GenIR::cmp(ReaderBaseNS::CmpOpcode Opcode, IRNode *Arg1, IRNode *Arg2) {
+
+  bool IsFloat = prepareArgsForCompare(Arg1, Arg2);
+
   static const CmpInst::Predicate IntCmpMap[ReaderBaseNS::LastCmpOpcode] = {
       CmpInst::Predicate::ICMP_EQ,  // CEQ,
       CmpInst::Predicate::ICMP_SGT, // CGT,
@@ -7563,7 +7710,7 @@ IRNode *GenIR::cmp(ReaderBaseNS::CmpOpcode Opcode, IRNode *Arg1, IRNode *Arg2) {
 
   Value *Cmp;
 
-  if (IsFloat1) {
+  if (IsFloat) {
     Cmp = LLVMBuilder->CreateFCmp(FloatCmpMap[Opcode], Arg1, Arg2);
   } else {
     Cmp = LLVMBuilder->CreateICmp(IntCmpMap[Opcode], Arg1, Arg2);
@@ -7598,52 +7745,7 @@ void GenIR::boolBranch(ReaderBaseNS::BoolBranchOpcode Opcode, IRNode *Arg1) {
 void GenIR::condBranch(ReaderBaseNS::CondBranchOpcode Opcode, IRNode *Arg1,
                        IRNode *Arg2) {
 
-  // TODO: make this bit of code (which also appears in Cmp)
-  // into a helper routine.
-
-  // Grab the types to be compared.
-  Type *Ty1 = Arg1->getType();
-  Type *Ty2 = Arg2->getType();
-
-  // Types can only be int32, int64, float, double, or pointer.
-  // They must match in bit size.
-  uint32_t Size1 = 0;
-  uint32_t Size2 = 0;
-  bool IsFloat1 = false;
-  bool IsFloat2 = false;
-  bool IsPointer1 = false;
-  bool IsPointer2 = false;
-
-  classifyCmpType(Ty1, Size1, IsPointer1, IsFloat1);
-  classifyCmpType(Ty2, Size2, IsPointer2, IsFloat2);
-
-  ASSERT(Size1 == Size2);
-  ASSERT((Size1 == 32) || (Size1 == 64));
-  ASSERT(IsFloat1 == IsFloat2);
-
-  // Make types agree without perturbing bit patterns.
-  if (Ty1 != Ty2) {
-    // Must be ptr-ptr or int-ptr case.
-    ASSERT(IsPointer1 || IsPointer2);
-
-    // For the ptr-ptr case we pointer cast arg2 to match arg1.
-    // For the ptr-int cases we cast the pointer to int.
-    if (IsPointer1) {
-      if (IsPointer2) {
-        // PointerCast Arg2 to match Arg1
-        Arg2 = (IRNode *)LLVMBuilder->CreatePointerCast(Arg2, Ty1);
-      } else {
-        // Cast ptr Arg1 to match int Arg2
-        Arg1 = (IRNode *)LLVMBuilder->CreatePointerCast(Arg1, Ty2);
-      }
-    } else {
-      // Cast ptr Arg2 to match int Arg1
-      Arg2 = (IRNode *)LLVMBuilder->CreatePointerCast(Arg2, Ty1);
-    }
-  }
-
-  // Types should now match up.
-  ASSERT(Arg1->getType() == Arg2->getType());
+  bool IsFloat = prepareArgsForCompare(Arg1, Arg2);
 
   static const CmpInst::Predicate
       IntBranchMap[ReaderBaseNS::LastCondBranchOpcode] = {
@@ -7694,8 +7796,8 @@ void GenIR::condBranch(ReaderBaseNS::CondBranchOpcode Opcode, IRNode *Arg1,
       };
 
   Value *Condition =
-      IsFloat1 ? LLVMBuilder->CreateFCmp(FloatBranchMap[Opcode], Arg1, Arg2)
-               : LLVMBuilder->CreateICmp(IntBranchMap[Opcode], Arg1, Arg2);
+      IsFloat ? LLVMBuilder->CreateFCmp(FloatBranchMap[Opcode], Arg1, Arg2)
+              : LLVMBuilder->CreateICmp(IntBranchMap[Opcode], Arg1, Arg2);
 
   // Patch up the branch instruction
   TerminatorInst *TermInst = LLVMBuilder->GetInsertBlock()->getTerminator();
@@ -7964,12 +8066,24 @@ IRNode *GenIR::makeRefAny(CORINFO_RESOLVED_TOKEN *ResolvedToken,
   // managed pointers.
   const unsigned ValueIndex = 0;
   const unsigned TypeIndex = 1;
-  assert(isManagedPointerType(Object->getType()) &&
-         "wrong type for refany value");
+
+  // Ecma-335 is clear that the object passed to mkrefany must be a managed
+  // pointer type (or native int in unverifiable code). But traditionally .Net
+  // jits have allowed arbitrary integers here too. So, tolerate this.
+  Type *ExpectedObjectTy = RefAnyStructTy->getContainedType(ValueIndex);
+  assert(isManagedPointerType(ExpectedObjectTy));
+  Value *CastObject;
+  if (!isManagedPointerType(Object->getType())) {
+    assert(Object->getType()->isIntegerTy());
+    IntegerType *ObjectType = cast<IntegerType>(Object->getType());
+    // Not clear what should happen on a size mismatch, so we'll just let
+    // LLVM do what it thinks is reasonable.
+    CastObject = LLVMBuilder->CreateIntToPtr(Object, ExpectedObjectTy);
+  } else {
+    CastObject = LLVMBuilder->CreatePointerCast(Object, ExpectedObjectTy);
+  }
   Value *ValueFieldAddress =
       LLVMBuilder->CreateStructGEP(RefAnyTy, RefAny, ValueIndex);
-  Value *CastObject = LLVMBuilder->CreatePointerCast(
-      Object, RefAnyStructTy->getContainedType(ValueIndex));
   makeStoreNonNull(CastObject, ValueFieldAddress, IsVolatile);
 
   // Store the type handle in the type field.
@@ -8074,7 +8188,12 @@ void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
         CreatePHIs = true;
       }
 
-      Instruction *CurrentInst = SuccessorBlock->begin();
+      // We need to be very careful about reasoning about or iterating through
+      // instructions in empty blocks or blocks with no terminators.
+      Instruction *TermInst = SuccessorBlock->getTerminator();
+      const bool SuccessorDegenerate = (TermInst == nullptr);
+      Instruction *CurrentInst =
+          SuccessorBlock->empty() ? nullptr : SuccessorBlock->begin();
       PHINode *Phi = nullptr;
       for (IRNode *Current : *ReaderOperandStack) {
         Value *CurrentValue = (Value *)Current;
@@ -8099,7 +8218,9 @@ void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
                 fgEdgeListGetNextPredecessorActual(PredecessorList);
           }
         } else {
-          // PHI instructions should have been inserted already
+          // PHI instructions should have been inserted already.
+          assert(CurrentInst != nullptr);
+          assert(isa<PHINode>(CurrentInst));
           Phi = cast<PHINode>(CurrentInst);
           CurrentInst = CurrentInst->getNextNode();
         }
@@ -8110,8 +8231,12 @@ void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
       }
 
       // The number of PHI instructions should match the number of values on the
-      // stack.
-      ASSERT(CreatePHIs || !isa<PHINode>(CurrentInst));
+      // stack, so if we're not creating PHIs, try and verify that the next
+      // instruction is not a PHI.
+      //
+      // Note when SuccessorBlock is degenerate we can't be sure CurrentInst is
+      // valid, so we can't do this check.
+      assert(CreatePHIs || SuccessorDegenerate || !isa<PHINode>(CurrentInst));
     }
     SuccessorList = fgEdgeListGetNextSuccessorActual(SuccessorList);
   }
@@ -8150,11 +8275,20 @@ void GenIR::addPHIOperand(PHINode *Phi, Value *NewOperand,
     LLVMBuilder->restoreIP(SavedInsertPoint);
   }
 
-  int BlockIndex = Phi->getBasicBlockIndex(NewBlock);
-  if (BlockIndex >= 0)
-    Phi->setIncomingValue(BlockIndex, NewOperand);
-  else
-    Phi->addIncoming(NewOperand, NewBlock);
+  bool FoundBlockOperand = false;
+  for (unsigned I = 0, N = Phi->getNumOperands(); I != N; ++I) {
+    if (Phi->block_begin()[I] == NewBlock) {
+      Value *CurrentOperand = Phi->getIncomingValue(I);
+      if (isa<UndefValue>(CurrentOperand)) {
+        Phi->setIncomingValue(I, NewOperand);
+        FoundBlockOperand = true;
+        break;
+      } else {
+        assert(CurrentOperand == NewOperand);
+      }
+    }
+  }
+  assert(FoundBlockOperand);
 }
 
 Value *GenIR::changePHIOperandType(Value *Operand, BasicBlock *OperandBlock,
@@ -8186,12 +8320,12 @@ Type *GenIR::getStackMergeType(Type *Ty1, Type *Ty2, bool IsStruct1,
 
   LLVMContext &LLVMContext = *this->JitContext->LLVMContext;
 
-  // If we have nativeint and int32 the result is nativeint.
+  // If we have nativeint and int32 the result is the first type.
   Type *NativeIntTy = Type::getIntNTy(LLVMContext, TargetPointerSizeInBits);
   Type *Int32Ty = Type::getInt32Ty(LLVMContext);
   if (((Ty1 == NativeIntTy) && (Ty2 == Int32Ty)) ||
       ((Ty2 == NativeIntTy) && (Ty1 == Int32Ty))) {
-    return NativeIntTy;
+    return Ty1;
   }
 
   // If we have float and double the result is double.
@@ -8424,15 +8558,6 @@ void VerificationState::print() {
 //
 //===----------------------------------------------------------------------===//
 
-Type *GenIR::FloatTy;
-Type *GenIR::FloatPtrTy;
-Type *GenIR::Vector2Ty;
-Type *GenIR::Vector3Ty;
-Type *GenIR::Vector4Ty;
-Type *GenIR::Vector2PtrTy;
-Type *GenIR::Vector3PtrTy;
-Type *GenIR::Vector4PtrTy;
-
 // BinOperations
 
 IRNode *GenIR::vectorAdd(IRNode *Vector1, IRNode *Vector2) {
@@ -8552,6 +8677,8 @@ IRNode *GenIR::vectorCtorFromFloats(int VectorSize, IRNode *Vector,
                                     std::vector<IRNode *> Args) {
   assert(Args.size() == VectorSize);
   std::vector<Type *> Types;
+  llvm::LLVMContext &LLVMContext = *JitContext->LLVMContext;
+  Type *FloatTy = Type::getFloatTy(LLVMContext);
   for (int Counter = 0; Counter < VectorSize; ++Counter) {
     Types.push_back(FloatTy);
   }
@@ -8576,7 +8703,8 @@ IRNode *GenIR::vectorCtor(CORINFO_CLASS_HANDLE Class, IRNode *This,
   }
   Type *VectorType = llvm::VectorType::get(ElementType, VectorSize);
   IRNode *Vector = (IRNode *)UndefValue::get(VectorType);
-
+  llvm::LLVMContext &LLVMContext = *JitContext->LLVMContext;
+  Type *FloatTy = Type::getFloatTy(LLVMContext);
   IRNode *Return = 0;
   if (!IsGeneric) {
     if (Args.size() == 1) {
@@ -8599,7 +8727,7 @@ IRNode *GenIR::vectorCtor(CORINFO_CLASS_HANDLE Class, IRNode *This,
       switch (VectorSize) {
       case 3:
         assert(Args.size() == 2);
-        Types.push_back(Vector2Ty);
+        Types.push_back(VectorType::get(FloatTy, 2));
         Types.push_back(FloatTy);
         if (checkVectorSignature(Args, Types)) {
           IRNode *Vector2 = Args[0];
@@ -8613,7 +8741,7 @@ IRNode *GenIR::vectorCtor(CORINFO_CLASS_HANDLE Class, IRNode *This,
 
       case 4:
         if (Args.size() == 2) {
-          Types.push_back(Vector3Ty);
+          Types.push_back(VectorType::get(FloatTy, 3));
           Types.push_back(FloatTy);
           if (checkVectorSignature(Args, Types)) {
             IRNode *Vector3 = Args[0];
@@ -8627,7 +8755,7 @@ IRNode *GenIR::vectorCtor(CORINFO_CLASS_HANDLE Class, IRNode *This,
           }
         } else {
           assert(Args.size() == 3);
-          Types.push_back(Vector2Ty);
+          Types.push_back(VectorType::get(FloatTy, 2));
           Types.push_back(FloatTy);
           Types.push_back(FloatTy);
           if (checkVectorSignature(Args, Types)) {
@@ -8656,8 +8784,7 @@ IRNode *GenIR::vectorCtor(CORINFO_CLASS_HANDLE Class, IRNode *This,
   }
   if (Return) {
     if (This) {
-      return (IRNode *)LLVMBuilder->CreateStore(
-          Return, This); // TODO sandreenko: is volatile?
+      return (IRNode *)LLVMBuilder->CreateStore(Return, This);
     } else {
       return Return;
     }
@@ -8670,9 +8797,8 @@ bool GenIR::checkVectorType(IRNode *Arg) {
   return Arg->getType()->isVectorTy();
 }
 
-llvm::Type *GenIR::getBaseTypeAndSizeOfSIMDType(CORINFO_CLASS_HANDLE Class,
-                                                int &VectorLength,
-                                                bool &IsGeneric) {
+Type *GenIR::getBaseTypeAndSizeOfSIMDType(CORINFO_CLASS_HANDLE Class,
+                                          int &VectorLength, bool &IsGeneric) {
   VectorLength = 0;
   IsGeneric = false;
   // TODO t-seand : issue #720, check thread safety.
@@ -8696,52 +8822,52 @@ llvm::Type *GenIR::getBaseTypeAndSizeOfSIMDType(CORINFO_CLASS_HANDLE Class,
   if (Class == SIMDFloatHandle) {
     IsGeneric = true;
     VectorLength = 4;
-    return llvm::Type::getFloatTy(Context);
+    return Type::getFloatTy(Context);
   } else if (Class == SIMDDoubleHandle) {
     IsGeneric = true;
     VectorLength = 2;
-    return llvm::Type::getDoubleTy(Context);
+    return Type::getDoubleTy(Context);
   } else if (Class == SIMDIntHandle) {
     IsGeneric = true;
     VectorLength = 4;
-    return llvm::Type::getInt32Ty(Context);
+    return Type::getInt32Ty(Context);
   } else if (Class == SIMDUShortHandle) {
     IsGeneric = true;
     VectorLength = 8;
-    return llvm::Type::getInt16Ty(Context);
+    return Type::getInt16Ty(Context);
   } else if (Class == SIMDUByteHandle) {
     IsGeneric = true;
     VectorLength = 16;
-    return llvm::Type::getInt8Ty(Context);
+    return Type::getInt8Ty(Context);
   } else if (Class == SIMDShortHandle) {
     IsGeneric = true;
     VectorLength = 8;
-    return llvm::Type::getInt16Ty(Context);
+    return Type::getInt16Ty(Context);
   } else if (Class == SIMDByteHandle) {
     IsGeneric = true;
     VectorLength = 16;
-    return llvm::Type::getInt8Ty(Context);
+    return Type::getInt8Ty(Context);
   } else if (Class == SIMDLongHandle) {
     IsGeneric = true;
     VectorLength = 2;
-    return llvm::Type::getInt64Ty(Context);
+    return Type::getInt64Ty(Context);
   } else if (Class == SIMDUIntHandle) {
     IsGeneric = true;
     VectorLength = 4;
-    return llvm::Type::getInt32Ty(Context);
+    return Type::getInt32Ty(Context);
   } else if (Class == SIMDULongHandle) {
     IsGeneric = true;
     VectorLength = 2;
-    return llvm::Type::getInt64Ty(Context);
+    return Type::getInt64Ty(Context);
   } else if (Class == SIMDVector2Handle) {
     VectorLength = 2;
-    return llvm::Type::getFloatTy(Context);
+    return Type::getFloatTy(Context);
   } else if (Class == SIMDVector3Handle) {
     VectorLength = 3;
-    return llvm::Type::getFloatTy(Context);
+    return Type::getFloatTy(Context);
   } else if (Class == SIMDVector4Handle) {
     VectorLength = 4;
-    return llvm::Type::getFloatTy(Context);
+    return Type::getFloatTy(Context);
   }
 
   // Doesn't match with any of the cached type handles.
@@ -8754,56 +8880,56 @@ llvm::Type *GenIR::getBaseTypeAndSizeOfSIMDType(CORINFO_CLASS_HANDLE Class,
       if (ClassName.compare(25, 13, "System.Single") == 0) {
         SIMDFloatHandle = Class;
         VectorLength = 4;
-        return llvm::Type::getFloatTy(Context);
+        return Type::getFloatTy(Context);
       } else if (ClassName.compare(25, 12, "System.Int32") == 0) {
         SIMDIntHandle = Class;
         VectorLength = 4;
-        return llvm::Type::getInt32Ty(Context);
+        return Type::getInt32Ty(Context);
       } else if (ClassName.compare(25, 13, "System.UInt16") == 0) {
         SIMDUShortHandle = Class;
         VectorLength = 8;
-        return llvm::Type::getInt16Ty(Context);
+        return Type::getInt16Ty(Context);
       } else if (ClassName.compare(25, 11, "System.Byte") == 0) {
         SIMDUByteHandle = Class;
         VectorLength = 16;
-        return llvm::Type::getInt8Ty(Context);
+        return Type::getInt8Ty(Context);
       } else if (ClassName.compare(25, 13, "System.Double") == 0) {
         SIMDDoubleHandle = Class;
         VectorLength = 2;
-        return llvm::Type::getDoubleTy(Context);
+        return Type::getDoubleTy(Context);
       } else if (ClassName.compare(25, 12, "System.Int64") == 0) {
         SIMDLongHandle = Class;
         VectorLength = 2;
-        return llvm::Type::getInt64Ty(Context);
+        return Type::getInt64Ty(Context);
       } else if (ClassName.compare(25, 12, "System.Int16") == 0) {
         SIMDShortHandle = Class;
         VectorLength = 8;
-        return llvm::Type::getInt16Ty(Context);
+        return Type::getInt16Ty(Context);
       } else if (ClassName.compare(25, 12, "System.SByte") == 0) {
         SIMDByteHandle = Class;
         VectorLength = 16;
-        return llvm::Type::getInt8Ty(Context);
+        return Type::getInt8Ty(Context);
       } else if (ClassName.compare(25, 13, "System.UInt32") == 0) {
         SIMDUIntHandle = Class;
         VectorLength = 4;
-        return llvm::Type::getInt32Ty(Context);
+        return Type::getInt32Ty(Context);
       } else if (ClassName.compare(25, 13, "System.UInt64") == 0) {
         SIMDULongHandle = Class;
         VectorLength = 2;
-        return llvm::Type::getInt64Ty(Context);
+        return Type::getInt64Ty(Context);
       }
     } else if (ClassName.compare(22, 2, "2") == 0) {
       SIMDVector2Handle = Class;
       VectorLength = 2;
-      return llvm::Type::getFloatTy(Context);
+      return Type::getFloatTy(Context);
     } else if (ClassName.compare(22, 2, "3") == 0) {
       SIMDVector3Handle = Class;
       VectorLength = 3;
-      return llvm::Type::getFloatTy(Context);
+      return Type::getFloatTy(Context);
     } else if (ClassName.compare(22, 2, "4") == 0) {
       SIMDVector4Handle = Class;
       VectorLength = 4;
-      return llvm::Type::getFloatTy(Context);
+      return Type::getFloatTy(Context);
     }
   }
   return 0;
