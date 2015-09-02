@@ -2833,6 +2833,28 @@ IRNode *GenIR::fgMakeThrow(IRNode *Insert) {
   return (IRNode *)Unreachable;
 }
 
+SwitchInst *GenIR::createFinallyDispatch(EHRegion *FinallyRegion) {
+  LLVMContext &Context = *JitContext->LLVMContext;
+  Type *SelectorType = IntegerType::getInt32Ty(Context);
+  Value *SelectorAddr = createTemporary(SelectorType, "finally_cont");
+
+  if (UnreachableContinuationBlock == nullptr) {
+    // First finally for this function; generate an unreachable block
+    // that can be used as the default switch target.
+    UnreachableContinuationBlock =
+        createPointBlock(MethodInfo->ILCodeSize, "NullDefault");
+    new UnreachableInst(Context, UnreachableContinuationBlock);
+    fgNodeSetPropagatesOperandStack(
+        (FlowGraphNode *)UnreachableContinuationBlock, false);
+  }
+
+  LoadInst *Load = new LoadInst(SelectorAddr);
+  SwitchInst *Switch =
+      SwitchInst::Create(Load, UnreachableContinuationBlock, 4);
+  FinallyRegion->EndFinallySwitch = Switch;
+  return Switch;
+}
+
 IRNode *GenIR::fgMakeEndFinally(IRNode *InsertNode, EHRegion *FinallyRegion,
                                 uint32_t CurrentOffset) {
   assert(FinallyRegion != nullptr);
@@ -2840,9 +2862,10 @@ IRNode *GenIR::fgMakeEndFinally(IRNode *InsertNode, EHRegion *FinallyRegion,
   BasicBlock *Block = (BasicBlock *)InsertNode;
   SwitchInst *Switch = FinallyRegion->EndFinallySwitch;
   if (Switch == nullptr) {
-    // This finally is never invoked.
-    LLVMBuilder->SetInsertPoint(Block);
-    return (IRNode *)LLVMBuilder->CreateUnreachable();
+    // We haven't yet seen a leave from the associated protected region. We may
+    // well never see one. Assume the latter is rare and create the necessary
+    // dispatch machinery.
+    Switch = createFinallyDispatch(FinallyRegion);
   }
 
   BasicBlock *TargetBlock = Switch->getParent();
@@ -6240,39 +6263,16 @@ uint32_t GenIR::updateLeaveOffset(EHRegion *Region, uint32_t LeaveOffset,
     BasicBlock *TargetBlock = (BasicBlock *)TargetNode;
 
     // Get or create the switch that terminates the finally.
-    LLVMContext &Context = *JitContext->LLVMContext;
     SwitchInst *Switch = FinallyRegion->EndFinallySwitch;
-    IntegerType *SelectorType;
-    Value *SelectorAddr;
-    ConstantInt *SelectorValue;
 
     if (Switch == nullptr) {
-      // First leave exiting this finally; generate a new switch.
-      SelectorType = IntegerType::getInt32Ty(Context);
-      SelectorAddr = createTemporary(SelectorType, "finally_cont");
-      SelectorValue = nullptr;
-
-      if (UnreachableContinuationBlock == nullptr) {
-        // First finally for this function; generate an unreachable block
-        // that can be used as the default switch target.
-        UnreachableContinuationBlock =
-            createPointBlock(MethodInfo->ILCodeSize, "NullDefault");
-        new UnreachableInst(Context, UnreachableContinuationBlock);
-        fgNodeSetPropagatesOperandStack(
-            (FlowGraphNode *)UnreachableContinuationBlock, false);
-      }
-
-      LoadInst *Load = new LoadInst(SelectorAddr);
-      FinallyRegion->EndFinallySwitch = Switch =
-          SwitchInst::Create(Load, UnreachableContinuationBlock, 4);
-    } else {
-      // This finally already has a switch.  See if it already has a case for
-      // this target continuation.
-      LoadInst *Load = (LoadInst *)Switch->getCondition();
-      SelectorAddr = Load->getPointerOperand();
-      SelectorType = (IntegerType *)Load->getType();
-      SelectorValue = Switch->findCaseDest(TargetBlock);
+      Switch = createFinallyDispatch(FinallyRegion);
     }
+
+    LoadInst *Load = (LoadInst *)Switch->getCondition();
+    Value *SelectorAddr = Load->getPointerOperand();
+    IntegerType *SelectorType = (IntegerType *)Load->getType();
+    ConstantInt *SelectorValue = Switch->findCaseDest(TargetBlock);
 
     if (SelectorValue == nullptr) {
       // The switch doesn't have a case for this target continuation yet;
