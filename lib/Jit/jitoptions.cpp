@@ -83,6 +83,12 @@ JitOptions::JitOptions(LLILCJitContext &Context) {
   IsLLVMDumpMethod = queryIsLLVMDumpMethod(Context);
   IsCodeRangeMethod = queryIsCodeRangeMethod(Context);
 
+  if (IsAltJit) {
+    PreferredIntrinsicSIMDVectorLength = 0;
+  } else {
+    PreferredIntrinsicSIMDVectorLength = 32;
+  }
+
   // Validate Statepoint and Conservative GC state.
   assert(DoInsertStatepoints ||
          UseConservativeGC && "Statepoints required for precise-GC");

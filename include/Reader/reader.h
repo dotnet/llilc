@@ -259,11 +259,17 @@ enum ReaderSIMDIntrinsic {
   SUB,
   MUL,
   DIV,
+  MIN,
+  MAX,
+  BITOR,
+  BITAND,
+  BITEXOR,
   ABS,
   SQRT,
   EQ,
   NEQ,
-  GETCOUNTOP
+  GETCOUNTOP,
+  GETITEM
 };
 
 /// Common base class for reader exceptions
@@ -2871,7 +2877,6 @@ public:
   virtual void storePrimitiveType(IRNode *Value, IRNode *Address,
                                   CorInfoType CorType,
                                   ReaderAlignType Alignment, bool IsVolatile,
-
                                   bool AddressMayBeNull = true) = 0;
   void storePrimitiveTypeNonNull(IRNode *Value, IRNode *Address,
                                  CorInfoType CorType, ReaderAlignType Alignment,
@@ -3326,7 +3331,8 @@ public:
   /// \returns an IRNode representing the result of the intrinsic
   /// or nullptr if the intrinsic is not supported.
 
-  IRNode *generateSIMDBinOp(ReaderSIMDIntrinsic OperationCode);
+  IRNode *generateSIMDBinOp(ReaderSIMDIntrinsic OperationCode,
+                            CORINFO_CLASS_HANDLE Class);
   IRNode *generateSIMDUnOp(ReaderSIMDIntrinsic OperationCode);
 
   /// \brief Return IRNode* Result of BinOp.
@@ -3339,7 +3345,18 @@ public:
   virtual IRNode *vectorAdd(IRNode *Vector1, IRNode *Vector2) = 0;
   virtual IRNode *vectorSub(IRNode *Vector1, IRNode *Vector2) = 0;
   virtual IRNode *vectorMul(IRNode *Vector1, IRNode *Vector2) = 0;
-  virtual IRNode *vectorDiv(IRNode *Vector1, IRNode *Vector2) = 0;
+  virtual IRNode *vectorDiv(IRNode *Vector1, IRNode *Vector2,
+                            bool IsSigned) = 0;
+  virtual IRNode *vectorMax(IRNode *Vector1, IRNode *Vector2,
+                            bool IsSigned) = 0;
+  virtual IRNode *vectorMin(IRNode *Vector1, IRNode *Vector2,
+                            bool IsSigned) = 0;
+  virtual IRNode *vectorBitOr(IRNode *Vector1, IRNode *Vector2,
+                              unsigned VectorByteSize) = 0;
+  virtual IRNode *vectorBitAnd(IRNode *Vector1, IRNode *Vector2,
+                               unsigned VectorByteSize) = 0;
+  virtual IRNode *vectorBitExOr(IRNode *Vector1, IRNode *Vector2,
+                                unsigned VectorByteSize) = 0;
 
   virtual IRNode *vectorEqual(IRNode *Vector1, IRNode *Vector2) = 0;
   virtual IRNode *vectorNotEqual(IRNode *Vector1, IRNode *Vector2) = 0;
@@ -3359,7 +3376,7 @@ public:
   /// \param Opcode Operation Opcode to distinguish newobj from ctor.
   /// \returns an IRNode representing the result of ctor
   /// or nullptr if ctor is not supported.
-  IRNode *generateSMIDCtor(CORINFO_CLASS_HANDLE Class, int ArgsCount,
+  IRNode *generateSIMDCtor(CORINFO_CLASS_HANDLE Class, int ArgsCount,
                            ReaderBaseNS::CallOpcode Opcode);
 
   /// \brief Return IRNode* Result of ctor.
@@ -3379,6 +3396,19 @@ public:
   /// or nullptr if getCount or Class is not supported.
   virtual IRNode *vectorGetCount(CORINFO_CLASS_HANDLE Class) = 0;
 
+  /// \brief Return result of get_Item operation on SIMD Vector Types.
+  ///
+  /// \returns an IRNode representing the result of get_Item.
+  IRNode *generateSIMDGetItem(CorInfoType ResType);
+
+  /// \brief Return IRNode* Result of get item from vector.
+  ///
+  /// \param VectorPointer is address of vector.
+  /// \param Index of dst element.
+  /// \returns an IRNode representing the result element.
+  virtual IRNode *vectorGetItem(IRNode *VectorPointer, IRNode *Index,
+                                CorInfoType ResType) = 0;
+
   /// \brief Return IRNode* The result of the intrinsic or nullptr, if it is
   /// unnsupported.
   ///
@@ -3396,13 +3426,22 @@ public:
   ///
   /// \param Arg The target for checking.
   /// \returns true if Arg is supported vector type.
-  virtual bool checkVectorType(IRNode *Arg) = 0;
+  virtual bool isVectorType(IRNode *Arg) = 0;
 
   /// \brief Return length of Vector or 0 if it is not Vector.
   ///
   /// \param Class The class handle for the call target method's class.
   /// \returns number of elements in vector.
   virtual int getElementCountOfSIMDType(CORINFO_CLASS_HANDLE Class) = 0;
+
+  /// \brief Return is vector element signed or not.
+  ///
+  /// \param Class The class handle for the call target method's class.
+  /// \returns true if signed.
+  virtual bool getIsSigned(CORINFO_CLASS_HANDLE Class) = 0;
+
+  virtual unsigned
+  getMaxIntrinsicSIMDVectorLength(CORINFO_CLASS_HANDLE Class) = 0;
 
 private:
   ///////////////////////////////////////////////////////////////////////

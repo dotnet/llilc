@@ -258,6 +258,9 @@ public:
   ///        instances this is.
   static void signalHandler(void *Cookie);
 
+  /// Return SIMD generic vector length if LLILC is primary JIT.
+  unsigned getMaxIntrinsicSIMDVectorLength(DWORD CpuCompileFlags) override;
+
 private:
   /// Convert a method into LLVM IR.
   /// \param JitContext Context record for the method's jit request.

@@ -1623,6 +1623,17 @@ private:
                                           uint64_t ValueHandle, llvm::Type *Ty,
                                           llvm::StringRef Name,
                                           bool IsConstant);
+
+  /// Get a name as std::string.
+  ///
+  /// \param Class                     The handle to get a name for.
+  /// \param IncludeNamespace          Include the namespace/enclosing classes
+  ///                                  if true.
+  /// \param FullInst                  Include namespace and assembly for any
+  ///                                  type parameters if true.
+  /// \param IncludeAssembly           Suffix with a comma and the full assembly
+  ///                                  qualification if true.
+  /// \returns                         Class name corresponding to the handle.
   std::string appendClassNameAsString(CORINFO_CLASS_HANDLE Class,
                                       bool IncludeNamespace, bool FullInst,
                                       bool IncludeAssembly) override;
@@ -1630,30 +1641,64 @@ private:
   IRNode *vectorAdd(IRNode *Vector1, IRNode *Vector2) override;
   IRNode *vectorSub(IRNode *Vector1, IRNode *Vector2) override;
   IRNode *vectorMul(IRNode *Vector1, IRNode *Vector2) override;
-  IRNode *vectorDiv(IRNode *Vector1, IRNode *Vector2) override;
+  IRNode *vectorDiv(IRNode *Vector1, IRNode *Vector2, bool IsSigned) override;
   IRNode *vectorEqual(IRNode *Vector1, IRNode *Vector2) override;
   IRNode *vectorNotEqual(IRNode *Vector1, IRNode *Vector2) override;
+  IRNode *vectorMax(IRNode *Vector1, IRNode *Vector2, bool IsSigned) override;
+  IRNode *vectorMin(IRNode *Vector1, IRNode *Vector2, bool IsSigned) override;
+
+  llvm::Type *getVectorIntType(unsigned VectorByteSize);
+
+  IRNode *vectorBitOr(IRNode *Vector1, IRNode *Vector2,
+                      unsigned VectorByteSize) override;
+  IRNode *vectorBitAnd(IRNode *Vector1, IRNode *Vector2,
+                       unsigned VectorByteSize) override;
+  IRNode *vectorBitExOr(IRNode *Vector1, IRNode *Vector2,
+                        unsigned VectorByteSize) override;
   IRNode *vectorAbs(IRNode *Vector) override;
   IRNode *vectorSqrt(IRNode *Vector) override;
 
-  bool checkVectorType(IRNode *Arg) override;
+  bool isVectorType(IRNode *Arg) override;
 
   bool checkVectorSignature(std::vector<IRNode *> Args,
                             std::vector<llvm::Type *> Types);
+
+  IRNode *vectorFixType(IRNode *Arg, llvm::Type *DstType);
+
   IRNode *vectorCtor(CORINFO_CLASS_HANDLE Class, IRNode *This,
                      std::vector<IRNode *> Args) override;
   IRNode *vectorCtorFromOne(int VectorSize, IRNode *This,
                             std::vector<IRNode *> Args);
   IRNode *vectorCtorFromFloats(int VectorSize, IRNode *This,
                                std::vector<IRNode *> Args);
+  IRNode *vectorCtorFromArray(int VectorSize, IRNode *Vector, IRNode *Array,
+                              IRNode *Index);
+  IRNode *vectorCtorFromPointer(int VectorSize, IRNode *Vector, IRNode *Pointer,
+                                IRNode *Index);
 
   IRNode *vectorGetCount(CORINFO_CLASS_HANDLE Class) override;
 
+  IRNode *vectorGetItem(IRNode *VectorPointer, IRNode *Index,
+                        CorInfoType ResType) override;
+
+  /// Get information corresponding to the handle.
+  ///
+  /// \param Class                     The handle to get a type for.
+  /// \param VectorLength              Return vector length in elements.
+  /// \param IsGeneric                 Return is it generic vector or vector
+  ///                                  with fixed size.
+  /// \param IsSigned                  Return is it signed type or not.
+  /// \returns                         Type corresponding to the handle.
   llvm::Type *getBaseTypeAndSizeOfSIMDType(CORINFO_CLASS_HANDLE Class,
-                                           int &VectorLength, bool &IsGeneric);
+                                           int &VectorLength, bool &IsGeneric,
+                                           bool &IsSigned);
+
   IRNode *generateIsHardwareAccelerated(CORINFO_CLASS_HANDLE Class) override;
 
+  unsigned getMaxIntrinsicSIMDVectorLength(CORINFO_CLASS_HANDLE Class) override;
+
   int getElementCountOfSIMDType(CORINFO_CLASS_HANDLE Class) override;
+  bool getIsSigned(CORINFO_CLASS_HANDLE Class) override;
 
   /// Create the IR for a finally dispatch.
   ///
@@ -1749,6 +1794,10 @@ private:
     llvm::DICompileUnit *TheCU;
     llvm::DIScope *FunctionScope;
   } LLILCDebugInfo;
+
+  /// \brief Map from llvm vector types for SIMD vector types
+  /// to llvm struct type.
+  std::map<llvm::Type *, llvm::Type *> VectorTypeToStructType;
 };
 
 #endif // MSIL_READER_IR_H
