@@ -114,8 +114,14 @@ public:
   EHRegionList *Children;
   uint32_t StartMsilOffset;
   uint32_t EndMsilOffset;
+  llvm::Instruction *HandlerEHPad;
+  union {
+    llvm::SwitchInst *EndFinallySwitch; // Only used for Finally regions
+    mdToken CatchClassToken;            // Only used for Catch regions
+    EHRegion *HandlerRegion;            // Only used for Filter regions
+    llvm::Function *FilterFunction;     // Only used for Filter-Handler regions
+  };
   ReaderBaseNS::RegionKind Kind;
-  llvm::SwitchInst *EndFinallySwitch;
 };
 
 struct EHRegionList {
@@ -190,6 +196,19 @@ void rgnSetParent(EHRegion *Region, EHRegion *Parent) {
 
 EHRegion *rgnGetParent(EHRegion *Region) { return Region->Parent; }
 
+bool rgnIsOutsideParent(EHRegion *Region) {
+  switch (Region->Kind) {
+  case ReaderBaseNS::RegionKind::RGN_Fault:
+  case ReaderBaseNS::RegionKind::RGN_Finally:
+  case ReaderBaseNS::RegionKind::RGN_Filter:
+  case ReaderBaseNS::RegionKind::RGN_MExcept:
+  case ReaderBaseNS::RegionKind::RGN_MCatch:
+    return true;
+  default:
+    return false;
+  }
+}
+
 void rgnSetChildList(EHRegion *Region, EHRegionList *Children) {
   Region->Children = Children;
 }
@@ -221,8 +240,12 @@ void rgnSetExceptUsesExCode(EHRegion *Region, bool UsesExceptionCode) {
 }
 EHRegion *rgnGetFilterTryRegion(EHRegion *Region) { return nullptr; }
 void rgnSetFilterTryRegion(EHRegion *Region, EHRegion *TryRegion) { return; }
-EHRegion *rgnGetFilterHandlerRegion(EHRegion *Region) { return nullptr; }
-void rgnSetFilterHandlerRegion(EHRegion *Region, EHRegion *Handler) { return; }
+EHRegion *rgnGetFilterHandlerRegion(EHRegion *Region) {
+  return Region->HandlerRegion;
+}
+void rgnSetFilterHandlerRegion(EHRegion *Region, EHRegion *Handler) {
+  Region->HandlerRegion = Handler;
+}
 EHRegion *rgnGetFinallyTryRegion(EHRegion *FinallyRegion) { return nullptr; }
 void rgnSetFinallyTryRegion(EHRegion *FinallyRegion, EHRegion *TryRegion) {
   return;
@@ -239,8 +262,12 @@ EHRegion *rgnGetCatchTryRegion(EHRegion *CatchRegion) { return nullptr; }
 void rgnSetCatchTryRegion(EHRegion *CatchRegion, EHRegion *TryRegion) {
   return;
 }
-mdToken rgnGetCatchClassToken(EHRegion *CatchRegion) { return 0; }
-void rgnSetCatchClassToken(EHRegion *CatchRegion, mdToken Token) { return; }
+mdToken rgnGetCatchClassToken(EHRegion *CatchRegion) {
+  return CatchRegion->CatchClassToken;
+}
+void rgnSetCatchClassToken(EHRegion *CatchRegion, mdToken Token) {
+  CatchRegion->CatchClassToken = Token;
+}
 
 #pragma endregion
 
@@ -2676,11 +2703,18 @@ Type *GenIR::getBuiltInStringType() {
 //
 //===----------------------------------------------------------------------===//
 
-EHRegion *fgNodeGetRegion(FlowGraphNode *Node) { return nullptr; }
+EHRegion *GenIR::fgNodeGetRegion(FlowGraphNode *Node) {
+  return FlowGraphInfoMap[Node].Region;
+}
 
-EHRegion *fgNodeGetRegion(llvm::Function *Function) { return nullptr; }
+void GenIR::fgNodeSetRegion(FlowGraphNode *Node, EHRegion *Region) {
+  assert(fgNodeGetRegion(Node) == nullptr && "unexpected region change");
+  FlowGraphInfoMap[Node].Region = Region;
+}
 
-void fgNodeSetRegion(FlowGraphNode *Node, EHRegion *Region) { return; }
+void GenIR::fgNodeChangeRegion(FlowGraphNode *Node, EHRegion *Region) {
+  FlowGraphInfoMap[Node].Region = Region;
+}
 
 FlowGraphNode *GenIR::fgGetHeadBlock() {
   return ((FlowGraphNode *)&Function->getEntryBlock());
@@ -2691,8 +2725,7 @@ FlowGraphNode *GenIR::fgGetTailBlock() {
 }
 
 FlowGraphNode *GenIR::makeFlowGraphNode(uint32_t TargetOffset,
-                                        FlowGraphNode *PreviousNode,
-                                        EHRegion *Region) {
+                                        FlowGraphNode *PreviousNode) {
   BasicBlock *NextBlock =
       (PreviousNode == nullptr ? nullptr : PreviousNode->getNextNode());
   FlowGraphNode *Node = (FlowGraphNode *)BasicBlock::Create(
@@ -2909,6 +2942,25 @@ void GenIR::beginFlowGraphNode(FlowGraphNode *Fg, uint32_t CurrOffset,
   }
 }
 
+void GenIR::fgEnterRegion(EHRegion *Region) {
+  // Find the outer region handler first.
+  EHRegion *Parent = rgnGetParent(Region);
+
+  if (rgnIsOutsideParent(Region)) {
+    // Get the nearest enclosing ancestor, not the immediate parent
+    Parent = rgnGetParent(Parent);
+  }
+
+  Instruction *EHPad = Parent->HandlerEHPad;
+
+  if (Region->Kind == ReaderBaseNS::RegionKind::RGN_Try) {
+    // TODO: Create a new inner EH pad
+  }
+
+  // Record the handler so we can hook up exception edges later.
+  Region->HandlerEHPad = EHPad;
+}
+
 void GenIR::endFlowGraphNode(FlowGraphNode *Fg, uint32_t CurrOffset) { return; }
 
 IRNode *GenIR::findBlockSplitPointAfterNode(IRNode *Node) {
@@ -2982,8 +3034,7 @@ FlowGraphNode *GenIR::fgNodeGetIDom(FlowGraphNode *FgNode) {
   //  is not a true dominance relationship. Progress to the next
   //  dominator in the chain until we reach a true dominating
   //  block or there are no more blocks.
-  while (nullptr != Idom &&
-         fgNodeGetRegion(Idom) != fgNodeGetRegion(Function) &&
+  while (nullptr != Idom && fgNodeGetRegion(Idom) != EhRegionTree &&
          fgNodeGetRegion(Idom) != fgNodeGetRegion(FgNode)) {
     Idom = getNextIDom(Idom);
   }
@@ -4118,8 +4169,26 @@ LoadInst *GenIR::makeLoad(Value *Address, bool IsVolatile,
 
 CallSite GenIR::makeCall(Value *Callee, bool MayThrow, ArrayRef<Value *> Args) {
   if (MayThrow) {
-    // TODO: Generate an invoke with an appropriate unwind label.
+    Instruction *EHPad =
+        (CurrentRegion == nullptr ? nullptr : CurrentRegion->HandlerEHPad);
+    if (EHPad == nullptr) {
+      // The call may throw but is not in a protected region, so if it does
+      // throw it will unwind all the way to this function's caller.  LLVM
+      // models this behavior with the `call` operator, not `invoke`.  Fall
+      // down to the code that generates a call.
+    } else {
+      BasicBlock *ExceptionSuccessor = EHPad->getParent();
+      TerminatorInst *Goto;
+      BasicBlock *NormalSuccessor = splitCurrentBlock(&Goto);
+      InvokeInst *Invoke =
+          InvokeInst::Create(Callee, NormalSuccessor, ExceptionSuccessor, Args);
+      replaceInstruction(Goto, Invoke);
+
+      return Invoke;
+    }
   }
+
+  // Generate a simple call.
   return LLVMBuilder->CreateCall(Callee, Args);
 }
 
@@ -6575,6 +6644,9 @@ BasicBlock *GenIR::createPointBlock(uint32_t PointOffset,
   fgNodeSetStartMSILOffset(PointFlowGraphNode, PointOffset);
   fgNodeSetEndMSILOffset(PointFlowGraphNode, PointOffset);
 
+  // Make the point block part of the current region
+  fgNodeSetRegion(PointFlowGraphNode, CurrentRegion);
+
   // Point blocks don't need an operand stack: they don't have any MSIL and
   // any successor block will get the stack propagated from the other
   // predecessor.
@@ -6613,9 +6685,16 @@ BasicBlock *GenIR::insertConditionalPointBlock(Value *Condition,
   replaceInstruction(Goto, Branch);
 
   if (Rejoin) {
-    ASSERT(PointBlock->getTerminator() == nullptr);
+    BasicBlock *RejoinFromBlock = PointBlock;
+    // Allow that the point block may have been split to insert invoke
+    // instructions.
+    TerminatorInst *Terminator;
+    while ((Terminator = PointBlock->getTerminator()) != nullptr) {
+      assert(isa<InvokeInst>(Terminator));
+      RejoinFromBlock = cast<InvokeInst>(Terminator)->getNormalDest();
+    }
     IRBuilder<>::InsertPoint SavedInsertPoint = LLVMBuilder->saveIP();
-    LLVMBuilder->SetInsertPoint(PointBlock);
+    LLVMBuilder->SetInsertPoint(RejoinFromBlock);
     LLVMBuilder->CreateBr(ContinueBlock);
     LLVMBuilder->restoreIP(SavedInsertPoint);
   }

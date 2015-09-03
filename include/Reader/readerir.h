@@ -48,8 +48,9 @@ public:
   FlowGraphNodeInfo() {
     StartMSILOffset = 0;
     EndMSILOffset = 0;
-    IsVisited = false;
+    Region = nullptr;
     TheReaderStack = nullptr;
+    IsVisited = false;
     PropagatesOperandStack = true;
   };
 
@@ -61,12 +62,15 @@ public:
   /// Block.
   uint32_t EndMSILOffset;
 
-  /// In algorithms traversing the flow graph, used to track which basic blocks
-  /// have been visited.
-  bool IsVisited;
+  /// Region containing this block
+  EHRegion *Region;
 
   /// Used to track what is on the operand stack on entry to the basic block.
   ReaderStack *TheReaderStack;
+
+  /// In algorithms traversing the flow graph, used to track which basic blocks
+  /// have been visited.
+  bool IsVisited;
 
   /// true iff this basic block uses an operand stack and propagates it to the
   /// block's successors when it's not empty on exit.
@@ -350,6 +354,9 @@ public:
   void fgNodeSetStartMSILOffset(FlowGraphNode *Fg, uint32_t Offset) override;
   uint32_t fgNodeGetEndMSILOffset(FlowGraphNode *Fg) override;
   void fgNodeSetEndMSILOffset(FlowGraphNode *FgNode, uint32_t Offset) override;
+  EHRegion *fgNodeGetRegion(FlowGraphNode *FgNode) override;
+  void fgNodeSetRegion(FlowGraphNode *FgNode, EHRegion *EhRegion) override;
+  void fgNodeChangeRegion(FlowGraphNode *FgNode, EHRegion *EhRegion) override;
 
   bool fgNodeIsVisited(FlowGraphNode *FgNode) override;
   void fgNodeSetVisited(FlowGraphNode *FgNode, bool Visited) override;
@@ -597,6 +604,7 @@ public:
   FlowGraphNode *fgGetTailBlock(void) override;
   FlowGraphNode *fgNodeGetIDom(FlowGraphNode *Fg) override;
 
+  void fgEnterRegion(EHRegion *Region) override;
   IRNode *fgNodeFindStartLabel(FlowGraphNode *Block) override;
 
   BranchList *fgGetLabelBranchList(IRNode *LabelNode) override {
@@ -677,8 +685,7 @@ public:
     throw NotYetImplementedException("insertEHAnnotationNode");
   };
   FlowGraphNode *makeFlowGraphNode(uint32_t TargetOffset,
-                                   FlowGraphNode *PreviousNode,
-                                   EHRegion *Region) override;
+                                   FlowGraphNode *PreviousNode) override;
   void markAsEHLabel(IRNode *LabelNode) override {
     throw NotYetImplementedException("markAsEHLabel");
   };
