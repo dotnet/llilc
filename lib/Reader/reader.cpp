@@ -8847,6 +8847,21 @@ IRNode *ReaderBase::generateSIMDBinOp(ReaderSIMDIntrinsic OperationCode,
     case BITEXOR:
       ReturnNode = vectorBitExOr(Vector1, Vector2, VectorByteSize);
       break;
+    case EQUALS:
+      ReturnNode = vectorEquals(Vector1, Vector2, Class);
+      break;
+    case LESSTHAN:
+      ReturnNode = vectorLessThan(Vector1, Vector2, Class);
+      break;
+    case LESSTHANOREQUAL:
+      ReturnNode = vectorLessThanOrEqual(Vector1, Vector2, Class);
+      break;
+    case GREATERTHAN:
+      ReturnNode = vectorGreaterThan(Vector1, Vector2, Class);
+      break;
+    case GREATERTHAROREQUAL:
+      ReturnNode = vectorGreaterThanOrEqual(Vector1, Vector2, Class);
+      break;
     default:
       break;
     }
@@ -8854,7 +8869,6 @@ IRNode *ReaderBase::generateSIMDBinOp(ReaderSIMDIntrinsic OperationCode,
       return ReturnNode;
     }
   }
-
   ReaderOperandStack->push(Arg1);
   ReaderOperandStack->push(Arg2);
   return 0;
@@ -8929,8 +8943,35 @@ IRNode *ReaderBase::generateSIMDIntrinsicCall(CORINFO_CLASS_HANDLE Class,
     OperationType = GETCOUNTOP;
   } else if (!strcmp(MethodName, "get_Item")) {
     OperationType = GETITEM;
+  } else if (!strcmp(MethodName, "get_AllOnes")) {
+    OperationType = GETALONES;
+  } else if (!strcmp(MethodName, "get_Zero")) {
+    OperationType = GETZERO;
+  } else if (!strcmp(MethodName, "get_One")) {
+    OperationType = GETONE;
+  } else if (!strcmp(MethodName, "Equals")) {
+    if (!isVectorClass(ModuleName)) {
+      OperationType = EQUALS;
+    }
+  } else if (!strcmp(MethodName, "LessThan")) {
+    if (!isVectorClass(ModuleName)) {
+      OperationType = LESSTHAN;
+    }
+  } else if (!strcmp(MethodName, "LessThanOrEqual")) {
+    if (!isVectorClass(ModuleName)) {
+      OperationType = LESSTHANOREQUAL;
+    }
+  } else if (!strcmp(MethodName, "GreaterThan")) {
+    if (!isVectorClass(ModuleName)) {
+      OperationType = GREATERTHAN;
+    }
+  } else if (!strcmp(MethodName, "GreaterThanOrEqual")) {
+    if (!isVectorClass(ModuleName)) {
+      OperationType = GREATERTHAROREQUAL;
+    }
+  } else if (!strcmp(MethodName, "op_Explicit")) {
+    OperationType = EXPLICIT;
   }
-  CorInfoType ResType = SigInfo->retType;
 
   switch (OperationType) {
   case ADD:
@@ -8942,6 +8983,11 @@ IRNode *ReaderBase::generateSIMDIntrinsicCall(CORINFO_CLASS_HANDLE Class,
   case BITOR:
   case BITAND:
   case BITEXOR:
+  case EQUALS:
+  case LESSTHAN:
+  case LESSTHANOREQUAL:
+  case GREATERTHAN:
+  case GREATERTHAROREQUAL:
     ReturnNode = generateSIMDBinOp(OperationType, Class);
     break;
   case ABS:
@@ -8957,8 +9003,19 @@ IRNode *ReaderBase::generateSIMDIntrinsicCall(CORINFO_CLASS_HANDLE Class,
     ReturnNode = vectorGetCount(Class);
     break;
   case GETITEM:
-    ReturnNode = generateSIMDGetItem(ResType);
+    ReturnNode = generateSIMDGetItem(SigInfo->retType);
     break;
+  case GETZERO:
+    ReturnNode = vectorGetAllZeroValue(Class);
+    break;
+  case GETALONES:
+    ReturnNode = vectorGetAllOnesValue(Class);
+    break;
+  case GETONE:
+    ReturnNode = vectorGetOneValue(Class);
+    break;
+  case EXPLICIT:
+    ReturnNode = generateSIMDExplicitCast(SigInfo->retTypeClass);
   default:
     break;
   }
@@ -8998,6 +9055,22 @@ IRNode *ReaderBase::generateSIMDGetItem(CorInfoType ResType) {
   }
   ReaderOperandStack->push(VectorPointer);
   ReaderOperandStack->push(Index);
+  return 0;
+}
+
+bool ReaderBase::isVectorClass(const char *ModuleName) {
+  int Length = strlen(ModuleName);
+  // Distinguish System.Numerics.Vector from System.Numerics.Vector1'<T>.
+  return Length < 25;
+}
+
+IRNode *ReaderBase::generateSIMDExplicitCast(CORINFO_CLASS_HANDLE ReturnClass) {
+  IRNode *Arg = ReaderOperandStack->pop();
+  IRNode *ReturnNode = vectorExplicitCast(ReturnClass, Arg);
+  if (ReturnNode) {
+    return ReturnNode;
+  }
+  ReaderOperandStack->push(Arg);
   return 0;
 }
 

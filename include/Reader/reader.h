@@ -268,7 +268,16 @@ enum ReaderSIMDIntrinsic {
   EQ,
   NEQ,
   GETCOUNTOP,
-  GETITEM
+  GETITEM,
+  GETZERO,
+  GETALONES,
+  GETONE,
+  EQUALS,
+  LESSTHAN,
+  LESSTHANOREQUAL,
+  GREATERTHAN,
+  GREATERTHAROREQUAL,
+  EXPLICIT
 };
 
 /// Common base class for reader exceptions
@@ -3548,14 +3557,23 @@ public:
                                unsigned VectorByteSize) = 0;
   virtual IRNode *vectorBitExOr(IRNode *Vector1, IRNode *Vector2,
                                 unsigned VectorByteSize) = 0;
-
+  virtual IRNode *vectorEquals(IRNode *Vector1, IRNode *Vector2,
+                               CORINFO_CLASS_HANDLE Class) = 0;
+  virtual IRNode *vectorLessThan(IRNode *Vector1, IRNode *Vector2,
+                                 CORINFO_CLASS_HANDLE Class) = 0;
+  virtual IRNode *vectorLessThanOrEqual(IRNode *Vector1, IRNode *Vector2,
+                                        CORINFO_CLASS_HANDLE Class) = 0;
+  virtual IRNode *vectorGreaterThan(IRNode *Vector1, IRNode *Vector2,
+                                    CORINFO_CLASS_HANDLE Class) = 0;
+  virtual IRNode *vectorGreaterThanOrEqual(IRNode *Vector1, IRNode *Vector2,
+                                           CORINFO_CLASS_HANDLE Class) = 0;
   virtual IRNode *vectorEqual(IRNode *Vector1, IRNode *Vector2) = 0;
   virtual IRNode *vectorNotEqual(IRNode *Vector1, IRNode *Vector2) = 0;
 
   /// \brief Return IRNode* Result of UnOp.
   ///
   /// \param Vector  argument for UnOp.
-  /// \returns an IRNode representing the result of UnOp
+  /// \returns an IRNode representing the result of UnOp.
   /// or nullptr if UnOp is not supported.
   virtual IRNode *vectorAbs(IRNode *Vector) = 0;
   virtual IRNode *vectorSqrt(IRNode *Vector) = 0;
@@ -3587,6 +3605,23 @@ public:
   /// or nullptr if getCount or Class is not supported.
   virtual IRNode *vectorGetCount(CORINFO_CLASS_HANDLE Class) = 0;
 
+  /// \brief Return result of explicit cast.
+  /// \brief It get argument from stack.
+  ///
+  /// \param ReturnClass
+  /// \returns an IRNode representing the result of the cast
+  /// or nullptr cast is not supported.
+  IRNode *generateSIMDExplicitCast(CORINFO_CLASS_HANDLE ReturnClass);
+
+  /// \brief Return result of explicit cast.
+  ///
+  /// \param ReturnClass The class handle for the return type.
+  /// \param Arg is address of vector for cast.
+  /// \returns an IRNode representing the length of Class
+  /// or nullptr if getCount or Class is not supported.
+  virtual IRNode *vectorExplicitCast(CORINFO_CLASS_HANDLE ReturnClass,
+                                     IRNode *Arg) = 0;
+
   /// \brief Return result of get_Item operation on SIMD Vector Types.
   ///
   /// \returns an IRNode representing the result of get_Item.
@@ -3599,6 +3634,27 @@ public:
   /// \returns an IRNode representing the result element.
   virtual IRNode *vectorGetItem(IRNode *VectorPointer, IRNode *Index,
                                 CorInfoType ResType) = 0;
+
+  /// \brief Return IRNode *, that represents vector, which elements have all
+  /// bits set.
+  ///
+  /// \param  The class handle for the call target method's class.
+  /// \returns an IRNode representing the result vector.
+  virtual IRNode *vectorGetAllOnesValue(CORINFO_CLASS_HANDLE Class) = 0;
+
+  /// \brief Return IRNode *, that represents vector, which elements have 1
+  /// value.
+  ///
+  /// \param  The class handle for the call target method's class.
+  /// \returns an IRNode representing the result vector.
+  virtual IRNode *vectorGetOneValue(CORINFO_CLASS_HANDLE Class) = 0;
+
+  /// \brief Return IRNode *, that represents vector, which elements have all
+  /// bits zero.
+  ///
+  /// \param  The class handle for the call target method's class.
+  /// \returns an IRNode representing the result vector.
+  virtual IRNode *vectorGetAllZeroValue(CORINFO_CLASS_HANDLE Class) = 0;
 
   /// \brief Return IRNode* The result of the intrinsic or nullptr, if it is
   /// unnsupported.
@@ -3631,6 +3687,17 @@ public:
   /// \returns true if signed.
   virtual bool getIsSigned(CORINFO_CLASS_HANDLE Class) = 0;
 
+  /// \brief Distinguish System.Numerics.Vector from
+  /// System.Numerics.Vector1'<T>.
+  ///
+  /// \param ModuleName is class name.
+  /// \returns true if it is System.Numerics.Vector.
+  bool isVectorClass(const char *ModuleName);
+
+  /// \brief Return size of Class in bytes.
+  ///
+  /// \param Class The class handle for the get length call.
+  /// \returns size in bytes of the class.
   virtual unsigned
   getMaxIntrinsicSIMDVectorLength(CORINFO_CLASS_HANDLE Class) = 0;
 
