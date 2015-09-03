@@ -4449,9 +4449,11 @@ IRNode *GenIR::genArrayElemAddress(IRNode *Array, IRNode *Index,
   StructType *ReferentTy = cast<StructType>(Ty->getPointerElementType());
   unsigned int RawArrayStructFieldIndex = ReferentTy->getNumElements() - 1;
 
+#ifndef NDEBUG
   Type *ArrayTy = ReferentTy->getElementType(RawArrayStructFieldIndex);
   assert(ArrayTy->isArrayTy());
   assert(ArrayTy->getArrayElementType() == ElementTy);
+#endif
 
   LLVMContext &Context = *this->JitContext->LLVMContext;
 
@@ -5433,11 +5435,13 @@ void GenIR::jmp(ReaderBaseNS::CallOpcode Opcode, mdToken Token) {
   IRNode *CallNode = nullptr;
   rdrCall(&Data, Opcode, &CallNode);
 
+#ifndef NDEBUG
   const bool IsSynchronizedMethod =
       ((getCurrentMethodAttribs() & CORINFO_FLG_SYNCH) != 0);
   assert(!IsSynchronizedMethod);
+#endif
 
-  // LLVM requires muttail calls to be immediatley followed by a ret.
+  // LLVM requires musttail calls to be immediatley followed by a ret.
   if (Function->getReturnType()->isVoidTy()) {
     LLVMBuilder->CreateRetVoid();
   } else {
@@ -6805,9 +6809,11 @@ IRNode *GenIR::getTypedAddress(IRNode *Addr, CorInfoType CorInfoType,
 
       // The result of the load is an object reference or a typed reference.
       if (ReferentTy->isStructTy()) {
+#ifndef NDEBUG
         // This is the typed reference case. We shouldn't need a cast here.
         Type *ExpectedTy = this->getType(CorInfoType, ClassHandle);
         assert(ReferentTy == ExpectedTy);
+#endif
       } else {
         // This is the object reference case so addr should be ptr to managed
         // ptr to struct.
@@ -7384,7 +7390,6 @@ IRNode *GenIR::makeRefAny(CORINFO_RESOLVED_TOKEN *ResolvedToken,
   Value *CastObject;
   if (!isManagedPointerType(Object->getType())) {
     assert(Object->getType()->isIntegerTy());
-    IntegerType *ObjectType = cast<IntegerType>(Object->getType());
     // Not clear what should happen on a size mismatch, so we'll just let
     // LLVM do what it thinks is reasonable.
     CastObject = LLVMBuilder->CreateIntToPtr(Object, ExpectedObjectTy);
@@ -7499,8 +7504,10 @@ void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
 
       // We need to be very careful about reasoning about or iterating through
       // instructions in empty blocks or blocks with no terminators.
+#ifndef NDEBUG
       Instruction *TermInst = SuccessorBlock->getTerminator();
       const bool SuccessorDegenerate = (TermInst == nullptr);
+#endif
       Instruction *CurrentInst =
           SuccessorBlock->empty() ? nullptr : SuccessorBlock->begin();
       PHINode *Phi = nullptr;
@@ -8058,7 +8065,7 @@ IRNode *GenIR::generateIsHardwareAccelerated(CORINFO_CLASS_HANDLE Class) {
 bool GenIR::checkVectorSignature(std::vector<IRNode *> Args,
                                  std::vector<Type *> Types) {
   assert(Args.size() == Types.size());
-  for (int Counter = 0; Counter < Args.size(); ++Counter) {
+  for (unsigned int Counter = 0; Counter < Args.size(); ++Counter) {
     assert(Args[Counter]);
     if (Args[Counter]->getType() != Types[Counter]) {
       assert(UNREACHED);
