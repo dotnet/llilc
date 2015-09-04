@@ -2975,6 +2975,27 @@ void GenIR::fgEnterRegion(EHRegion *Region) {
 
   if (Region->Kind == ReaderBaseNS::RegionKind::RGN_Try) {
     // TODO: Create a new inner EH pad
+    for (EHRegionList *ChildNode = rgnGetChildList(Region); ChildNode;
+         ChildNode = rgnListGetNext(ChildNode)) {
+      EHRegion *ChildRegion = rgnListGetRgn(ChildNode);
+      if (ChildRegion->Kind == ReaderBaseNS::RegionKind::RGN_MCatch ||
+          ChildRegion->Kind == ReaderBaseNS::RegionKind::RGN_MExcept) {
+        // Create a dummy predecessor so that we'll know there's an exception
+        // pointer on the stack when processing the handler code.
+        BasicBlock *PointPred =
+          createPointBlock(ChildRegion->StartMsilOffset, "eh_dummy");
+        FlowGraphNode *HandlerNode = nullptr;
+        fgAddNodeMSILOffset(&HandlerNode, ChildRegion->StartMsilOffset);
+        BranchInst::Create((BasicBlock *)HandlerNode, PointPred);
+        fgNodeSetPropagatesOperandStack((FlowGraphNode *)PointPred, false);
+        ReaderStack *PointStack = createStack();
+        Type *ExceptionTy =
+          getType(CORINFO_TYPE_CLASS,
+            getBuiltinClass(CorInfoClassId::CLASSID_SYSTEM_OBJECT));
+        PointStack->push((IRNode *)UndefValue::get(ExceptionTy));
+        fgNodeSetOperandStack((FlowGraphNode *)PointPred, PointStack);
+      }
+    }
   }
 
   // Record the handler so we can hook up exception edges later.
