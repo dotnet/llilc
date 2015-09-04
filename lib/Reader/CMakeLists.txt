@@ -8,10 +8,6 @@ include_directories(${LLILC_INCLUDES}/clr
 
 set(LLILCJIT_LINK_LIBRARIES GcInfo)
 
-if( WIN32 )
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -EHsc")
-endif()
-
 add_definitions(-DSTANDALONE_BUILD)
 
 add_llilcjit_library(LLILCReader

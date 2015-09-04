@@ -4,10 +4,6 @@ include_directories(${LLILC_INCLUDES}/clr
                     ${LLILC_INCLUDES}/GcInfo
                     ${LLILC_INCLUDES}/Jit
                     ${LLILC_INCLUDES}/Pal)
-
-if( WIN32 )
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -EHsc")
-endif()
 					
 add_definitions(-DSTANDALONE_BUILD)
 					

@@ -261,6 +261,15 @@ if (DEBUG)
   add_definitions( -DDEBUG -D_DEBUG )
 endif()
 
+# Add appropriate flags for MSVC
+if (MSVC)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -EHsc")
+  # Force -WX on even if it's not enabled for LLVM.
+  if (NOT LLVM_ENABLE_WERROR)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -WX")
+  endif()
+endif()
+
 # Add appropriate flags for GCC
 if (LLVM_COMPILER_IS_GCC_COMPATIBLE)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-common -Woverloaded-virtual -Wcast-qual -fno-strict-aliasing -fno-rtti")
