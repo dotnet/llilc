@@ -7877,6 +7877,13 @@ void ReaderBase::msilToIR(void) {
   FlowGraphNodeWorkList *Worklist;
   FlowGraphNode *FgHead, *FgTail;
 
+  bool IsImportOnly = (Flags & CORJIT_FLG_IMPORT_ONLY) != 0;
+
+  // If asked to verify
+  if (IsImportOnly) {
+    throw NotYetImplementedException("verification");
+  }
+
   // Initialize the NodeOffsetListArray so it can be used even in the
   // reader pre-pass
   NodeOffsetListArraySize =
@@ -7969,8 +7976,6 @@ void ReaderBase::msilToIR(void) {
   ReaderOperandStack = createStack();
   ASSERTNR(ReaderOperandStack);
   fgNodeSetOperandStack(FgHead, ReaderOperandStack);
-
-  bool IsImportOnly = (Flags & CORJIT_FLG_IMPORT_ONLY) != 0;
 
   // Walk the graph in depth-first order to discover reachable nodes but don't
   // process them yet. All reachable nodes are marked as visited.
