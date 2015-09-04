@@ -42,6 +42,14 @@ def runTidy(args):
                            "CORECLRBUILD environment variable."
       return 1
 
+    if os.environ.get('VS140COMNTOOLS') is not None:
+      msc_version = "1900"
+    elif os.environ.get('VS120COMNTOOLS') is not None:
+      msc_version = "1800"
+    else:
+      print >> sys.stderr, "Need a VS2013 or VS2015 environment"
+      return 1
+      
     coreclrbuild = expandPath(args.coreclr_build)
     llvmbuild = expandPath(args.llvm_build)
     llilcSrc = expandPath(args.llilc_source)
@@ -57,7 +65,7 @@ def runTidy(args):
         "-target x86_64-pc-win32-msvc",
         "-fms-extensions",
         "-fms-compatibility",
-        "-fmsc-version=1800",
+        "-fmsc-version=" + msc_version,
         "-fexceptions",
         "-fcxx-exceptions"
     ]

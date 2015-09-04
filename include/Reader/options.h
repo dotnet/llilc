@@ -55,5 +55,7 @@ struct Options {
   bool DoTailCallOpt;       ///< Tail call optimization.
   bool LogGcInfo;           ///< Generate GCInfo Translation logs
   bool DoSIMDIntrinsic;     ///< True if SIMD intrinsic is on.
+  unsigned PreferredIntrinsicSIMDVectorLength; ///< Prefer Intrinsic SIMD Vector
+  /// Length in bytes.
 };
 #endif // OPTIONS_H

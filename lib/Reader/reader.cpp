@@ -3836,7 +3836,6 @@ IRNode *ReaderBase::loadObj(CORINFO_RESOLVED_TOKEN *ResolvedToken,
     Class = ResolvedToken->hClass;
     TheCorInfoType = getClassType(Class);
   }
-
   if (!(getClassAttribs(Class) & CORINFO_FLG_VALUECLASS)) {
     return loadIndir(ReaderBaseNS::LdindRef, Address, Alignment, IsVolatile,
                      false, AddressMayBeNull);
@@ -7898,6 +7897,13 @@ void ReaderBase::msilToIR(void) {
   FlowGraphNodeWorkList *Worklist;
   FlowGraphNode *FgHead, *FgTail;
 
+  bool IsImportOnly = (Flags & CORJIT_FLG_IMPORT_ONLY) != 0;
+
+  // If asked to verify
+  if (IsImportOnly) {
+    throw NotYetImplementedException("verification");
+  }
+
   // Initialize the NodeOffsetListArray so it can be used even in the
   // reader pre-pass
   NodeOffsetListArraySize =
@@ -7990,8 +7996,6 @@ void ReaderBase::msilToIR(void) {
   ReaderOperandStack = createStack();
   ASSERTNR(ReaderOperandStack);
   fgNodeSetOperandStack(FgHead, ReaderOperandStack);
-
-  bool IsImportOnly = (Flags & CORJIT_FLG_IMPORT_ONLY) != 0;
 
   // Walk the graph in depth-first order to discover reachable nodes but don't
   // process them yet. All reachable nodes are marked as visited.
@@ -8661,15 +8665,18 @@ void ReaderBase::resolveToken(mdToken Token, CorInfoTokenKind TokenType,
 //
 //===----------------------------------------------------------------------===//
 
-IRNode *ReaderBase::generateSIMDBinOp(ReaderSIMDIntrinsic OperationCode) {
+IRNode *ReaderBase::generateSIMDBinOp(ReaderSIMDIntrinsic OperationCode,
+                                      CORINFO_CLASS_HANDLE Class) {
   IRNode *Arg2 = ReaderOperandStack->pop();
   IRNode *Arg1 = ReaderOperandStack->pop();
-  if (checkVectorType(Arg1) && checkVectorType(Arg2)) {
+  if (isVectorType(Arg1) && isVectorType(Arg2)) {
 
     IRNode *Vector1 = Arg1;
     IRNode *Vector2 = Arg2;
 
     IRNode *ReturnNode = 0;
+    bool IsSigned = getIsSigned(Class);
+    unsigned VectorByteSize = getMaxIntrinsicSIMDVectorLength(Class);
     switch (OperationCode) {
     case ADD:
       ReturnNode = vectorAdd(Vector1, Vector2);
@@ -8681,7 +8688,22 @@ IRNode *ReaderBase::generateSIMDBinOp(ReaderSIMDIntrinsic OperationCode) {
       ReturnNode = vectorMul(Vector1, Vector2);
       break;
     case DIV:
-      ReturnNode = vectorDiv(Vector1, Vector2);
+      ReturnNode = vectorDiv(Vector1, Vector2, IsSigned);
+      break;
+    case MIN:
+      ReturnNode = vectorMin(Vector1, Vector2, IsSigned);
+      break;
+    case MAX:
+      ReturnNode = vectorMax(Vector1, Vector2, IsSigned);
+      break;
+    case BITOR:
+      ReturnNode = vectorBitOr(Vector1, Vector2, VectorByteSize);
+      break;
+    case BITAND:
+      ReturnNode = vectorBitAnd(Vector1, Vector2, VectorByteSize);
+      break;
+    case BITEXOR:
+      ReturnNode = vectorBitExOr(Vector1, Vector2, VectorByteSize);
       break;
     default:
       break;
@@ -8698,7 +8720,7 @@ IRNode *ReaderBase::generateSIMDBinOp(ReaderSIMDIntrinsic OperationCode) {
 
 IRNode *ReaderBase::generateSIMDUnOp(ReaderSIMDIntrinsic OperationCode) {
   IRNode *Arg = ReaderOperandStack->pop();
-  if (checkVectorType(Arg)) {
+  if (isVectorType(Arg)) {
     IRNode *Vector = Arg;
     IRNode *ReturnNode = 0;
     switch (OperationCode) {
@@ -8724,7 +8746,6 @@ IRNode *ReaderBase::generateSIMDIntrinsicCall(CORINFO_CLASS_HANDLE Class,
                                               CORINFO_METHOD_HANDLE Method,
                                               CORINFO_SIG_INFO *SigInfo,
                                               ReaderBaseNS::CallOpcode Opcode) {
-
   const char *ModuleName;
   const char *MethodName = getMethodName(Method, &ModuleName, JitInfo);
   if (!strcmp(MethodName, "get_IsHardwareAccelerated")) { // Special case.
@@ -8744,23 +8765,42 @@ IRNode *ReaderBase::generateSIMDIntrinsicCall(CORINFO_CLASS_HANDLE Class,
     OperationType = MUL;
   } else if (!strcmp(MethodName, "op_Division")) {
     OperationType = DIV;
+  } else if (!strcmp(MethodName, "Min")) {
+    OperationType = MIN;
+  } else if (!strcmp(MethodName, "Max")) {
+    OperationType = MAX;
   } else if (!strcmp(MethodName, "op_Equality")) {
     OperationType = EQ;
   } else if (!strcmp(MethodName, "op_Inequality")) {
     OperationType = NEQ;
+  } else if (!strcmp(MethodName, "op_BitwiseOr")) {
+    OperationType = BITOR;
+  } else if (!strcmp(MethodName, "op_BitwiseAnd")) {
+    OperationType = BITAND;
+  } else if (!strcmp(MethodName, "op_ExclusiveOr")) {
+    OperationType = BITEXOR;
   } else if (!strcmp(MethodName, "Abs")) {
     OperationType = ABS;
   } else if (!strcmp(MethodName, "SquareRoot")) {
     OperationType = SQRT;
   } else if (!strcmp(MethodName, "get_Count")) {
     OperationType = GETCOUNTOP;
+  } else if (!strcmp(MethodName, "get_Item")) {
+    OperationType = GETITEM;
   }
+  CorInfoType ResType = SigInfo->retType;
+
   switch (OperationType) {
   case ADD:
   case SUB:
   case MUL:
   case DIV:
-    ReturnNode = generateSIMDBinOp(OperationType);
+  case MIN:
+  case MAX:
+  case BITOR:
+  case BITAND:
+  case BITEXOR:
+    ReturnNode = generateSIMDBinOp(OperationType, Class);
     break;
   case ABS:
   case SQRT:
@@ -8769,7 +8809,13 @@ IRNode *ReaderBase::generateSIMDIntrinsicCall(CORINFO_CLASS_HANDLE Class,
   case CTOR:
     assert(SigInfo->numArgs <= ReaderOperandStack->size());
     assert(SigInfo->hasThis());
-    ReturnNode = generateSMIDCtor(Class, SigInfo->numArgs, Opcode);
+    ReturnNode = generateSIMDCtor(Class, SigInfo->numArgs, Opcode);
+    break;
+  case GETCOUNTOP:
+    ReturnNode = vectorGetCount(Class);
+    break;
+  case GETITEM:
+    ReturnNode = generateSIMDGetItem(ResType);
     break;
   default:
     break;
@@ -8777,9 +8823,10 @@ IRNode *ReaderBase::generateSIMDIntrinsicCall(CORINFO_CLASS_HANDLE Class,
   return ReturnNode;
 }
 
-IRNode *ReaderBase::generateSMIDCtor(CORINFO_CLASS_HANDLE Class, int ArgsCount,
+IRNode *ReaderBase::generateSIMDCtor(CORINFO_CLASS_HANDLE Class, int ArgsCount,
                                      ReaderBaseNS::CallOpcode Opcode) {
   std::vector<IRNode *> Args(ArgsCount);
+
   for (int Counter = ArgsCount - 1; Counter >= 0; --Counter) {
     Args[Counter] = ReaderOperandStack->pop();
   }
@@ -8797,6 +8844,18 @@ IRNode *ReaderBase::generateSMIDCtor(CORINFO_CLASS_HANDLE Class, int ArgsCount,
   for (int Counter = 0; Counter < ArgsCount; ++Counter) {
     ReaderOperandStack->push(Args[Counter]);
   }
+  return 0;
+}
+
+IRNode *ReaderBase::generateSIMDGetItem(CorInfoType ResType) {
+  IRNode *Index = ReaderOperandStack->pop();
+  IRNode *VectorPointer = ReaderOperandStack->pop();
+  IRNode *ReturnNode = vectorGetItem(VectorPointer, Index, ResType);
+  if (ReturnNode) {
+    return ReturnNode;
+  }
+  ReaderOperandStack->push(VectorPointer);
+  ReaderOperandStack->push(Index);
   return 0;
 }
 
