@@ -63,7 +63,7 @@ Steps that are different:
 
         ```
         > cd $llvm-build-dir
-        > cmake -G "Visual Studio 12 2013 Win64" $llvm-repo-dir -DLLVM_TARGETS_TO_BUILD:STRING=X86 -DLLVM_ENABLE_DOXYGEN=ON
+        > cmake -G "Visual Studio 12 2013 Win64" $llvm-repo-dir -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_TARGETS_TO_BUILD:STRING=X86 -DLLVM_ENABLE_DOXYGEN=ON
         ```
 
   * This will generate `LLVM.sln` inside the $llvm-build-dir directory.
@@ -96,7 +96,7 @@ Steps that are different:
 
         ```
         > cd $llilc-build-dir
-        > cmake -G "Visual Studio 12 2013 Win64" $llilc-repo-dir -DWITH_CORECLR=$coreclr-build-dir -DWITH_LLVM=$llvm-build-dir -DLLVM_TARGETS_TO_BUILD:STRING=X86 -DLLVM_ENABLE_DOXYGEN=ON
+        > cmake -G "Visual Studio 12 2013 Win64" $llilc-repo-dir -DWITH_CORECLR=$coreclr-build-dir -DWITH_LLVM=$llvm-build-dir -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_TARGETS_TO_BUILD:STRING=X86 -DLLVM_ENABLE_DOXYGEN=ON
         ```
   * This will generate `LLILC.sln` inside the $llilc-build-dir directory.
   * Currently there is a bug in the LLVM configuration that leaves some file

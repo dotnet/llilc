@@ -60,7 +60,7 @@ and building both can be found below.
     ```
     $ mkdir build
     $ cd build
-    $ cmake -DWITH_CORECLR=../../coreclr/path/to/CoreCLR/binaries ..
+    $ cmake -DWITH_CORECLR=../../coreclr/path/to/CoreCLR/binaries -DLLVM_OPTIMIZED_TABLEGEN=ON ..
     ```
 
 5. Build LLVM and LLILC:

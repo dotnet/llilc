@@ -77,7 +77,7 @@ may be replaced in all commands below with the directory of your choice.
 
         ```
         > cd llvm-build
-        > cmake -G "Visual Studio 12 2013 Win64" ..\llvm -DWITH_CORECLR=<coreclr path>\bin\Product\$platform.$arch.$build>
+        > cmake -G "Visual Studio 12 2013 Win64" ..\llvm -DWITH_CORECLR=<coreclr path>\bin\Product\$platform.$arch.$build> -DLLVM_OPTIMIZED_TABLEGEN=ON
         ```
         note: for Windows $platform should resolve to 'Windows_NT'
 
@@ -85,7 +85,7 @@ may be replaced in all commands below with the directory of your choice.
 
         ```
         > cd llvm-build
-        > cmake -G "Visual Studio 12 2013 Win64" ..\llvm -DLLVM_ENABLE_DOXYGEN=ON -DWITH_CORECLR=<coreclr path>\bin\Product\$platform.$arch.$build>
+        > cmake -G "Visual Studio 12 2013 Win64" ..\llvm -DLLVM_ENABLE_DOXYGEN=ON -DWITH_CORECLR=<coreclr path>\bin\Product\$platform.$arch.$build> -DLLVM_OPTIMIZED_TABLEGEN=ON
         ```
 
   * This will generate `LLVM.sln` inside the `llvm-build` directory.
