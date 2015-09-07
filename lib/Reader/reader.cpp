@@ -615,7 +615,7 @@ GCLayout *ReaderBase::getClassGCLayout(CORINFO_CLASS_HANDLE Class) {
   const uint32_t ClassSize = JitInfo->getClassSize(Class);
   const uint32_t GcLayoutSize = ((ClassSize + PointerSize - 1) / PointerSize);
 
-  // Our internal data strcutures prepend the number of GC pointers
+  // Our internal data structures prepend the number of GC pointers
   // before the struct.  Therefore we add the size of the
   // GCLAYOUT_STRUCT to our computed size above.
   GCLayout *GCLayoutInfo =
@@ -785,6 +785,14 @@ ReaderBase::getFieldInClass(CORINFO_CLASS_HANDLE Class, uint32_t Ordinal) {
 void ReaderBase::getFieldInfo(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                               CORINFO_ACCESS_FLAGS AccessFlags,
                               CORINFO_FIELD_INFO *FieldInfo) {
+  if (Flags & CORJIT_FLG_READYTORUN) {
+    // CORINFO_ACCESS_ATYPICAL_CALLSITE means that we can't guarantee
+    // that we'll be able to generate call [rel32] form of the helper call so
+    // crossgen shouldn't try to disassemble the call instruction.
+    AccessFlags =
+        (CORINFO_ACCESS_FLAGS)(AccessFlags | CORINFO_ACCESS_ATYPICAL_CALLSITE);
+  }
+
   JitInfo->getFieldInfo(ResolvedToken, getCurrentMethodHandle(), AccessFlags,
                         FieldInfo);
 }
@@ -1095,6 +1103,14 @@ void ReaderBase::getCallInfo(CORINFO_RESOLVED_TOKEN *ResolvedToken,
   Flags = (CORINFO_CALLINFO_FLAGS)(Flags | CORINFO_CALLINFO_SECURITYCHECKS);
   if (VerificationNeeded)
     Flags = (CORINFO_CALLINFO_FLAGS)(Flags | CORINFO_CALLINFO_VERIFICATION);
+
+  if (this->Flags & CORJIT_FLG_READYTORUN) {
+    // CORINFO_ACCESS_ATYPICAL_CALLSITE means that we can't guarantee
+    // that we'll be able to generate call [rel32] form so crossgen shouldn't
+    // try to disassemble the call instruction.
+    Flags =
+        (CORINFO_CALLINFO_FLAGS)(Flags | CORINFO_CALLINFO_ATYPICAL_CALLSITE);
+  }
 
   JitInfo->getCallInfo(ResolvedToken, ConstrainedResolvedToken, Caller, Flags,
                        Result);
@@ -3694,7 +3710,11 @@ IRNode *ReaderBase::box(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg2,
 // CastClass - Generate a simple helper call for the cast class.
 IRNode *ReaderBase::castClass(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                               IRNode *ObjRefNode) {
-  CorInfoHelpFunc HelperId = JitInfo->getCastingHelper(ResolvedToken, true);
+  const bool IsThrowing = true;
+  CorInfoHelpFunc HelperId =
+      (Flags & CORJIT_FLG_READYTORUN)
+          ? CORINFO_HELP_READYTORUN_CHKCAST
+          : JitInfo->getCastingHelper(ResolvedToken, IsThrowing);
 
   return castOp(ResolvedToken, ObjRefNode, HelperId);
 }
@@ -3702,7 +3722,11 @@ IRNode *ReaderBase::castClass(CORINFO_RESOLVED_TOKEN *ResolvedToken,
 // IsInst - Default reader processing of CEE_ISINST.
 IRNode *ReaderBase::isInst(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                            IRNode *ObjRefNode) {
-  CorInfoHelpFunc HelperId = JitInfo->getCastingHelper(ResolvedToken, false);
+  const bool IsThrowing = false;
+  CorInfoHelpFunc HelperId =
+      (Flags & CORJIT_FLG_READYTORUN)
+          ? CORINFO_HELP_READYTORUN_ISINSTANCEOF
+          : JitInfo->getCastingHelper(ResolvedToken, IsThrowing);
 
   return castOp(ResolvedToken, ObjRefNode, HelperId);
 }
@@ -3936,6 +3960,17 @@ void ReaderBase::insertClassConstructor() {
 
     // Record that this block initialized the class.
     domInfoRecordClassInit(CurrentFgNode, Class);
+
+    if (Flags & CORJIT_FLG_READYTORUN) {
+      CORINFO_RESOLVED_TOKEN ResolvedToken;
+      memset(&ResolvedToken, 0, sizeof(ResolvedToken));
+      ResolvedToken.hClass = Class;
+      const bool MayThrow = false;
+      IRNode *Dst = nullptr;
+      callReadyToRunHelper(CORINFO_HELP_READYTORUN_STATIC_BASE, MayThrow, Dst,
+                           &ResolvedToken);
+      return;
+    }
 
     // Use the shared static base helper as it is faster than InitClass
     CorInfoHelpFunc HelperId = getSharedCCtorHelper(Class);
@@ -4196,28 +4231,7 @@ void ReaderBase::rdrCallWriteBarrierHelper(
       Class = ResolvedToken->hClass;
     }
 
-    if (classHasGCPointers(Class)) {
-      // We are able to speed up perf with shared methods
-      // by using the representative class handle (getClassHandle(Token))
-      // rather than the exact class handle (genericTokenToNode(Token)).
-      //
-      // For the purposes of the write barrier helper, the gclayout should
-      // be the same for both representative and exact class handles.
-      bool IsIndirect;
-      void *ClassHandle = embedClassHandle(Class, &IsIndirect);
-
-      IRNode *ClassHandleNode =
-          handleToIRNode(ResolvedToken->token, ClassHandle, Class, IsIndirect,
-                         IsIndirect, true, false);
-
-      const bool MayThrow = true;
-      callHelper(CORINFO_HELP_ASSIGN_STRUCT, MayThrow, nullptr, Dst, Src,
-                 ClassHandleNode, nullptr, Alignment, IsVolatile);
-    } else {
-      // If the class doesn't have a gc layout then use a memcopy
-      IRNode *Size = loadConstantI4(getClassSize(Class));
-      cpBlk(Size, Src, Dst, Alignment, IsVolatile);
-    }
+    copyStruct(Class, Dst, Src, Alignment, IsVolatile, IsUnchecked);
   }
 }
 
@@ -4328,7 +4342,8 @@ ReaderBase::rdrGetStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
           HelperId == CORINFO_HELP_GETSHARED_NONGCTHREADSTATIC_BASE_NOCTOR ||
           HelperId == CORINFO_HELP_GETSHARED_GCTHREADSTATIC_BASE_DYNAMICCLASS ||
           HelperId ==
-              CORINFO_HELP_GETSHARED_NONGCTHREADSTATIC_BASE_DYNAMICCLASS);
+              CORINFO_HELP_GETSHARED_NONGCTHREADSTATIC_BASE_DYNAMICCLASS ||
+          HelperId == CORINFO_HELP_READYTORUN_STATIC_BASE);
 
       // If possible, use the result of a previous sharedStaticBase call.
       // This will possibly switch the HelperId to a NoCtor version
@@ -4346,9 +4361,8 @@ ReaderBase::rdrGetStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
             HelperId == CORINFO_HELP_GETSHARED_NONGCSTATIC_BASE_DYNAMICCLASS ||
             HelperId == CORINFO_HELP_GETSHARED_GCTHREADSTATIC_BASE ||
             HelperId == CORINFO_HELP_GETSHARED_GCTHREADSTATIC_BASE_NOCTOR ||
-            HelperId == CORINFO_HELP_GETSHARED_GCTHREADSTATIC_BASE_DYNAMICCLASS)
-
-        {
+            HelperId ==
+                CORINFO_HELP_GETSHARED_GCTHREADSTATIC_BASE_DYNAMICCLASS) {
           // Again, we happen to know that the results of these helper
           // calls should be interpreted as interior GC pointers.
           SharedStaticsBaseNode = makePtrNode(Reader_PtrGcInterior);
@@ -4374,13 +4388,31 @@ ReaderBase::rdrGetStaticFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
         // Record that this block initialized class typeRef.
         domInfoRecordClassInit(CurrentFgNode, Class);
 
-        // Call helper under rdrCallGetStaticBase uses dst operand
-        // to infer type for the call instruction.
-        // Ideally, we should pass the type, which needs refactoring.
-        // So, SharedStaticsBaseNode now becomes the defined instruction.
-        SharedStaticsBaseNode =
-            rdrCallGetStaticBase(Class, ResolvedToken->token, HelperId, NoCtor,
-                                 CanMoveUp, SharedStaticsBaseNode);
+        if (Flags & CORJIT_FLG_READYTORUN) {
+          assert(HelperId == CORINFO_HELP_READYTORUN_STATIC_BASE);
+          InfoAccessType AccessType = FieldInfo->fieldLookup.accessType;
+          void *Address = FieldInfo->fieldLookup.addr;
+          assert(Address != nullptr);
+          assert(AccessType != IAT_PPVALUE);
+          bool IsIndirect = (AccessType != IAT_VALUE);
+          const bool IsRelocatable = true;
+          const bool IsCallTarget = false;
+          void *RealHandle = nullptr;
+          IRNode *HelperAddress = handleToIRNode(
+              ResolvedToken->token, Address, RealHandle, IsIndirect, IsIndirect,
+              IsRelocatable, IsCallTarget);
+          const bool MayThrow = false;
+          SharedStaticsBaseNode = callHelper(HelperId, HelperAddress, MayThrow,
+                                             SharedStaticsBaseNode);
+        } else {
+          // Call helper under rdrCallGetStaticBase uses dst operand
+          // to infer type for the call instruction.
+          // Ideally, we should pass the type, which needs refactoring.
+          // So, SharedStaticsBaseNode now becomes the defined instruction.
+          SharedStaticsBaseNode =
+              rdrCallGetStaticBase(Class, ResolvedToken->token, HelperId,
+                                   NoCtor, CanMoveUp, SharedStaticsBaseNode);
+        }
 
         // Record (def) instruction that holds shared statics base
         domInfoRecordSharedStaticBaseDefine(CurrentFgNode, HelperId, Class,
@@ -4540,7 +4572,8 @@ IRNode *ReaderBase::rdrGetFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
 
   handleMemberAccess(FieldInfo->accessAllowed, FieldInfo->accessCalloutHelper);
 
-  if (FieldInfo->fieldAccessor != CORINFO_FIELD_INSTANCE) {
+  if ((FieldInfo->fieldAccessor != CORINFO_FIELD_INSTANCE) &&
+      (FieldInfo->fieldAccessor != CORINFO_FIELD_INSTANCE_WITH_BASE)) {
     // Need to generate a helper call to get the address.
     // the helper calls do an explicit null check
     IRNode *Arg1, *Arg2, *Dst;
@@ -5072,41 +5105,47 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
           }
 #endif // FEATURE_CORECLR
 
-          CORINFO_METHOD_HANDLE AlternateCtor = nullptr;
+          // TODO: In ReadyToRun mode this optimization is available for
+          // non-virtual function pointers only for now. It can be implemented
+          // via CORINFO_HELP_READYTORUN_DELEGATE_CTOR helper.
 
-          DelegateCtorArgs *CtorData =
-              (DelegateCtorArgs *)getTempMemory(sizeof(DelegateCtorArgs));
-          memset(CtorData, 0, sizeof(DelegateCtorArgs)); // zero out the struct
-          CtorData->pMethod = getCurrentMethodHandle();
+          if (!(Flags & CORJIT_FLG_READYTORUN)) {
+            CORINFO_METHOD_HANDLE AlternateCtor = nullptr;
 
-          AlternateCtor =
-              JitInfo->GetDelegateCtor(Method, Class, TargetMethod, CtorData);
+            DelegateCtorArgs *CtorData =
+                (DelegateCtorArgs *)getTempMemory(sizeof(DelegateCtorArgs));
+            memset(CtorData, 0, sizeof(DelegateCtorArgs));
+            CtorData->pMethod = getCurrentMethodHandle();
 
-          if (AlternateCtor != Method) {
-            // TODO: Ideally we would like the JIT to inline this alternate
-            // ctor method
+            AlternateCtor =
+                JitInfo->GetDelegateCtor(Method, Class, TargetMethod, CtorData);
 
-            Data->setOptimizedDelegateCtor(AlternateCtor);
+            if (AlternateCtor != Method) {
+              // TODO: Ideally we would like the JIT to inline this alternate
+              // ctor method
 
-            IRNode *ArgIR;
-            mdToken TargetMethodToken = Data->getMethodToken();
+              Data->setOptimizedDelegateCtor(AlternateCtor);
 
-            // Add the additional Args (if any)
-            if (CtorData->pArg3) {
-              ArgIR =
-                  handleToIRNode(TargetMethodToken, CtorData->pArg3,
-                                 CtorData->pArg3, false, false, true, false);
-              ReaderOperandStack->push(ArgIR);
-              if (CtorData->pArg4) {
+              IRNode *ArgIR;
+              mdToken TargetMethodToken = Data->getMethodToken();
+
+              // Add the additional Args (if any)
+              if (CtorData->pArg3) {
                 ArgIR =
-                    handleToIRNode(TargetMethodToken, CtorData->pArg4,
-                                   CtorData->pArg4, false, false, true, false);
+                    handleToIRNode(TargetMethodToken, CtorData->pArg3,
+                                   CtorData->pArg3, false, false, true, false);
                 ReaderOperandStack->push(ArgIR);
-                if (CtorData->pArg5) {
-                  ArgIR = handleToIRNode(TargetMethodToken, CtorData->pArg5,
-                                         CtorData->pArg5, false, false, true,
+                if (CtorData->pArg4) {
+                  ArgIR = handleToIRNode(TargetMethodToken, CtorData->pArg4,
+                                         CtorData->pArg4, false, false, true,
                                          false);
                   ReaderOperandStack->push(ArgIR);
+                  if (CtorData->pArg5) {
+                    ArgIR = handleToIRNode(TargetMethodToken, CtorData->pArg5,
+                                           CtorData->pArg5, false, false, true,
+                                           false);
+                    ReaderOperandStack->push(ArgIR);
+                  }
                 }
               }
             }
@@ -5419,6 +5458,7 @@ ReaderBase::rdrMakeLdFtnTargetNode(CORINFO_RESOLVED_TOKEN *ResolvedToken,
   case CORINFO_CALL:
     // Direct Call
     return rdrGetDirectCallTarget(CallInfo->hMethod, ResolvedToken->token,
+                                  CallInfo->codePointerLookup,
                                   CallInfo->nullInstanceCheck == TRUE, true);
   case CORINFO_CALL_CODE_POINTER:
     // Runtime lookup required (code sharing w/o using inst param)
@@ -5434,6 +5474,7 @@ IRNode *
 ReaderBase::rdrGetDirectCallTarget(ReaderCallTargetData *CallTargetData) {
   return rdrGetDirectCallTarget(
       CallTargetData->getMethodHandle(), CallTargetData->getMethodToken(),
+      CallTargetData->CallInfo.codePointerLookup,
       CallTargetData->NeedsNullCheck, canMakeDirectCall(CallTargetData));
 }
 
@@ -5442,25 +5483,37 @@ ReaderBase::rdrGetDirectCallTarget(ReaderCallTargetData *CallTargetData) {
 // calls through the method descriptor.
 IRNode *ReaderBase::rdrGetDirectCallTarget(CORINFO_METHOD_HANDLE Method,
                                            mdToken MethodToken,
+                                           CORINFO_LOOKUP CodePointerLookup,
                                            bool NeedsNullCheck,
                                            bool CanMakeDirectCall) {
-  CORINFO_CONST_LOOKUP AddressInfo;
-  getFunctionEntryPoint(Method, &AddressInfo, NeedsNullCheck
-                                                  ? CORINFO_ACCESS_NONNULL
-                                                  : CORINFO_ACCESS_ANY);
+  InfoAccessType AccessType;
+  void *Address;
+  if (Flags & CORJIT_FLG_READYTORUN) {
+    AccessType = CodePointerLookup.constLookup.accessType;
+    Address = CodePointerLookup.constLookup.addr;
+    assert(Address != nullptr);
+  } else {
+    CORINFO_CONST_LOOKUP AddressInfo;
+    getFunctionEntryPoint(Method, &AddressInfo, NeedsNullCheck
+                                                    ? CORINFO_ACCESS_NONNULL
+                                                    : CORINFO_ACCESS_ANY);
+    AccessType = AddressInfo.accessType;
+    Address = AddressInfo.addr;
+  }
 
   IRNode *TargetNode;
-  if ((AddressInfo.accessType == IAT_VALUE) && CanMakeDirectCall) {
-    TargetNode =
-        makeDirectCallTargetNode(Method, MethodToken, AddressInfo.addr);
+  if ((AccessType == IAT_VALUE) && CanMakeDirectCall) {
+    TargetNode = makeDirectCallTargetNode(Method, MethodToken, Address);
   } else {
-    bool IsIndirect = AddressInfo.accessType != IAT_VALUE;
-    TargetNode = handleToIRNode(MethodToken, AddressInfo.addr, 0, IsIndirect,
-                                IsIndirect, true, IsIndirect);
+    bool IsIndirect = AccessType != IAT_VALUE;
+    const bool IsReadOnly = false;
+    const bool IsRelocatable = true;
+    TargetNode = handleToIRNode(MethodToken, Address, 0, IsIndirect, IsReadOnly,
+                                IsRelocatable, IsIndirect);
 
     // TODO: call to same constant dominates this load then the load is
     // invariant
-    if (AddressInfo.accessType == IAT_PPVALUE) {
+    if (AccessType == IAT_PPVALUE) {
       TargetNode = derefAddressNonNull(TargetNode, false, true);
     }
   }
@@ -5513,31 +5566,36 @@ ReaderBase::rdrGetCodePointerLookupCallTarget(CORINFO_CALL_INFO *CallInfo,
 // return value of this helper call is then called indirectly.
 IRNode *ReaderBase::rdrGetIndirectVirtualCallTarget(
     ReaderCallTargetData *CallTargetData, IRNode **ThisPtr) {
-  IRNode *ClassHandle = CallTargetData->getClassHandleNode();
-  IRNode *MethodHandle = CallTargetData->getMethodHandleNode();
+  if (Flags & CORJIT_FLG_READYTORUN) {
+    return getReadyToRunVirtFuncPtr(*ThisPtr, &CallTargetData->ResolvedToken,
+                                    &CallTargetData->CallInfo);
+  } else {
+    IRNode *ClassHandle = CallTargetData->getClassHandleNode();
+    IRNode *MethodHandle = CallTargetData->getMethodHandleNode();
 
-  ASSERTMNR(!CallTargetData->getSigInfo()->isVarArg(),
-            "varargs + generics is not supported\n");
-  ASSERTNR(ThisPtr); // ensure we have a this pointer
-  ASSERTNR(ClassHandle);
-  ASSERTNR(MethodHandle);
+    ASSERTMNR(!CallTargetData->getSigInfo()->isVarArg(),
+              "varargs + generics is not supported\n");
+    ASSERTNR(ThisPtr); // ensure we have a this pointer
+    ASSERTNR(ClassHandle);
+    ASSERTNR(MethodHandle);
 
-  // treat as indirect call
-  CallTargetData->IsIndirect = true;
+    // treat as indirect call
+    CallTargetData->IsIndirect = true;
 
-  // We need to make a copy because the "this"
-  // pointer will be used twice:
-  //     1) to look up the virtual function
-  //     2) to call the method itself
-  IRNode *ThisPtrCopy;
-  dup(*ThisPtr, &ThisPtrCopy, ThisPtr);
+    // We need to make a copy because the "this"
+    // pointer will be used twice:
+    //     1) to look up the virtual function
+    //     2) to call the method itself
+    IRNode *ThisPtrCopy;
+    dup(*ThisPtr, &ThisPtrCopy, ThisPtr);
 
-  // Get the address of the target function by calling helper.
-  // Type it as a native int, it will be recast later.
-  IRNode *Dst = loadConstantI(0);
-  const bool MayThrow = true;
-  return callHelper(CORINFO_HELP_VIRTUAL_FUNC_PTR, MayThrow, Dst, ThisPtrCopy,
-                    ClassHandle, MethodHandle);
+    // Get the address of the target function by calling helper.
+    // Type it as a native int, it will be recast later.
+    IRNode *Dst = loadConstantI(0);
+    const bool MayThrow = true;
+    return callHelper(CORINFO_HELP_VIRTUAL_FUNC_PTR, MayThrow, Dst, ThisPtrCopy,
+                      ClassHandle, MethodHandle);
+  }
 }
 
 // Generate the target for a virtual stub dispatch call. This is the
@@ -7227,8 +7285,9 @@ void ReaderBase::readBytesForFlowGraphNodeHelper(
       resolveToken(LoadFtnToken, CORINFO_TOKENKIND_Method, &ResolvedToken);
 
       CORINFO_CALL_INFO CallInfo;
-      getCallInfo(&ResolvedToken, nullptr /*constraint*/,
-                  CORINFO_CALLINFO_LDFTN, &CallInfo);
+      CORINFO_CALLINFO_FLAGS Flags = (CORINFO_CALLINFO_FLAGS)(
+          CORINFO_CALLINFO_LDFTN | CORINFO_CALLINFO_CALLVIRT);
+      getCallInfo(&ResolvedToken, nullptr /*constraint*/, Flags, &CallInfo);
 
       verifyLoadFtn(TheVerificationState, Opcode, &ResolvedToken,
                     ILInput + CurrentOffset, &CallInfo);
@@ -8444,8 +8503,12 @@ IRNode *ReaderCallTargetData::getTypeContextNode() {
   if (SigInfo.hasTypeArg()) {
     if (((SIZE_T)CallInfo.contextHandle & CORINFO_CONTEXTFLAGS_MASK) ==
         CORINFO_CONTEXTFLAGS_METHOD) {
+      CORINFO_METHOD_HANDLE Method = (CORINFO_METHOD_HANDLE)(
+          (SIZE_T)CallInfo.contextHandle & ~CORINFO_CONTEXTFLAGS_MASK);
       // Instantiated generic method
-      if (CallInfo.exactContextNeedsRuntimeLookup) {
+      if (Reader->Flags & CORJIT_FLG_READYTORUN) {
+        return getReadyToRunTypeContextNode(mdtMethodHandle, (void *)Method);
+      } else if (CallInfo.exactContextNeedsRuntimeLookup) {
         if (Reader->getCurrentMethodHandle() != Reader->MethodBeingCompiled) {
           // The runtime passes back bogus values for runtime lookups
           // of inlinees so the inliner only allows it if the handle
@@ -8457,47 +8520,75 @@ IRNode *ReaderCallTargetData::getTypeContextNode() {
         }
       } else {
         // embed the handle passed back from getCallInfo
-        CORINFO_METHOD_HANDLE Method = (CORINFO_METHOD_HANDLE)(
-            (SIZE_T)CallInfo.contextHandle & ~CORINFO_CONTEXTFLAGS_MASK);
         Reader->methodMustBeLoadedBeforeCodeIsRun(Method);
         bool IsIndirect = false;
         void *MethodHandle = Reader->embedMethodHandle(Method, &IsIndirect);
         return Reader->handleToIRNode(mdtMethodHandle, MethodHandle, Method,
                                       IsIndirect, true, true, false);
       }
-    } else if ((getClassAttribs() & CORINFO_FLG_ARRAY) && IsReadonlyCall) {
-      // We indicate "readonly" to the Array::Address operation by
-      // using a null instParam. This effectively tells it to not do
-      // type validation.
-      return Reader->loadConstantI(0);
     } else {
-      // otherwise must be an instance method in a generic struct, a
-      // static method in a generic type, or a runtime-generated array
-      // method which all use the class handle
-      if (CallInfo.exactContextNeedsRuntimeLookup) {
-        if (Reader->getCurrentMethodHandle() != Reader->MethodBeingCompiled) {
-          // The runtime passes back invalid values for runtime lookups
-          // of inlinees so the inliner only allows it if the handle
-          // is never used
-          return Reader->loadConstantI(0);
-        } else {
-          // runtime lookup based on the class token
-          return getClassHandleNode();
-        }
+      ASSERTNR(((SIZE_T)CallInfo.contextHandle & CORINFO_CONTEXTFLAGS_MASK) ==
+               CORINFO_CONTEXTFLAGS_CLASS);
+      CORINFO_CLASS_HANDLE Class = (CORINFO_CLASS_HANDLE)(
+          (SIZE_T)CallInfo.contextHandle & ~CORINFO_CONTEXTFLAGS_MASK);
+
+      if ((getClassAttribs() & CORINFO_FLG_ARRAY) && IsReadonlyCall) {
+        // We indicate "readonly" to the Array::Address operation by
+        // using a null instParam. This effectively tells it to not do
+        // type validation.
+        return Reader->loadConstantI(0);
+      } else if (Reader->Flags & CORJIT_FLG_READYTORUN) {
+        return getReadyToRunTypeContextNode(mdtClassHandle, (void *)Class);
       } else {
-        ASSERTNR(((SIZE_T)CallInfo.contextHandle & CORINFO_CONTEXTFLAGS_MASK) ==
-                 CORINFO_CONTEXTFLAGS_CLASS);
-        CORINFO_CLASS_HANDLE Class = (CORINFO_CLASS_HANDLE)(
-            (SIZE_T)CallInfo.contextHandle & ~CORINFO_CONTEXTFLAGS_MASK);
-        Reader->classMustBeLoadedBeforeCodeIsRun(Class);
-        bool IsIndirect = false;
-        void *ClassHandle = Reader->embedClassHandle(Class, &IsIndirect);
-        return Reader->handleToIRNode(mdtClassHandle, ClassHandle, Class,
-                                      IsIndirect, true, true, false);
+        // otherwise must be an instance method in a generic struct, a
+        // static method in a generic type, or a runtime-generated array
+        // method which all use the class handle
+        if (CallInfo.exactContextNeedsRuntimeLookup) {
+          if (Reader->getCurrentMethodHandle() != Reader->MethodBeingCompiled) {
+            // The runtime passes back invalid values for runtime lookups
+            // of inlinees so the inliner only allows it if the handle
+            // is never used
+            return Reader->loadConstantI(0);
+          } else {
+            // runtime lookup based on the class token
+            return getClassHandleNode();
+          }
+        } else {
+          Reader->classMustBeLoadedBeforeCodeIsRun(Class);
+          bool IsIndirect = false;
+          void *ClassHandle = Reader->embedClassHandle(Class, &IsIndirect);
+          return Reader->handleToIRNode(mdtClassHandle, ClassHandle, Class,
+                                        IsIndirect, true, true, false);
+        }
       }
     }
   }
   return nullptr;
+}
+
+IRNode *
+ReaderCallTargetData::getReadyToRunTypeContextNode(mdToken Token,
+                                                   void *CompileHandle) {
+  InfoAccessType AccessType = CallInfo.instParamLookup.accessType;
+  void *EmbedHandle = nullptr;
+  assert(AccessType != IAT_PPVALUE);
+  bool IsIndirect;
+  if (AccessType == IAT_VALUE) {
+    EmbedHandle = CallInfo.instParamLookup.handle;
+    IsIndirect = false;
+  } else {
+    assert(AccessType == IAT_PVALUE);
+    EmbedHandle = CallInfo.instParamLookup.addr;
+    IsIndirect = true;
+  }
+  const bool IsReadOnly = true;
+  const bool IsRelocatable = true;
+  const bool IsCallTarget = false;
+  IRNode *InstParam =
+      Reader->handleToIRNode(Token, EmbedHandle, CompileHandle, IsIndirect,
+                             IsReadOnly, IsRelocatable, IsCallTarget);
+  assert(InstParam != nullptr);
+  return InstParam;
 }
 
 void ReaderCallTargetData::setOptimizedDelegateCtor(

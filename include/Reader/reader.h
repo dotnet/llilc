@@ -735,6 +735,12 @@ public:
   /// \returns      Specified client IR, or nullptr if none.
   IRNode *getTypeContextNode();
 
+  /// Get the client IR for the type context when compiling in ReadyToRun mode.
+  /// \param Token Method or class token.
+  /// \param CompileHandle Method or class handle.
+  /// \returns      Specified client IR.
+  IRNode *getReadyToRunTypeContextNode(mdToken Token, void *CompileHandle);
+
   /// \brief Modify the \p this parameter as necessary at the call site.
   ///
   /// Certain calls may require indirection or boxing to obtain the proper
@@ -2316,14 +2322,25 @@ private:
   void rdrMakeCallTargetNode(ReaderCallTargetData *CallTargetData,
                              IRNode **ThisPointer);
 
-  IRNode *rdrMakeLdFtnTargetNode(CORINFO_RESOLVED_TOKEN *ResolvedToken,
-                                 CORINFO_CALL_INFO *CallInfo);
-
   IRNode *rdrGetDirectCallTarget(ReaderCallTargetData *CallTargetData);
 
+  /// \brief Generate IR for getting the target of a direct call. "Direct call"
+  /// can either be a true direct call if the runtime allows, or it can be an
+  /// indirect call through the method descriptor.
+  ///
+  /// \param Method            Method handle.
+  /// \param MethodToken       Method token.
+  /// \param CodePointerLookup Info to get the address to call in ReadyToRun
+  ///                          mode.
+  /// \param NeedsNullCheck    True iff 'this' pointer is not guaranteed to be
+  ///                          non-null.
+  /// \param CanMakeDirectCall True iff a true direct call can be generated.
+  ///
+  /// \returns An \p IRNode that represents the target of the direct call.
   IRNode *rdrGetDirectCallTarget(CORINFO_METHOD_HANDLE Method,
-                                 mdToken MethodToken, bool NeedsNullCheck,
-                                 bool CanMakeDirectCall);
+                                 mdToken MethodToken,
+                                 CORINFO_LOOKUP CodePointerLookup,
+                                 bool NeedsNullCheck, bool CanMakeDirectCall);
   IRNode *
   rdrGetCodePointerLookupCallTarget(ReaderCallTargetData *CallTargetData);
 
@@ -2372,6 +2389,9 @@ public:
   IRNode *rdrCallGetStaticBase(CORINFO_CLASS_HANDLE Class, mdToken ClassToken,
                                CorInfoHelpFunc HelperId, bool NoCtor,
                                bool CanMoveUp, IRNode *Dst);
+
+  IRNode *rdrMakeLdFtnTargetNode(CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                                 CORINFO_CALL_INFO *CallInfo);
 
 public:
   // //////////////////////////////////////////////////////////////////////////
@@ -2819,6 +2839,9 @@ public:
   virtual IRNode *loadVirtFunc(IRNode *Arg1,
                                CORINFO_RESOLVED_TOKEN *ResolvedToken,
                                CORINFO_CALL_INFO *CallInfo) = 0;
+  virtual IRNode *
+  getReadyToRunVirtFuncPtr(IRNode *Arg1, CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                           CORINFO_CALL_INFO *CallInfo) = 0;
   virtual IRNode *loadPrimitiveType(IRNode *Address, CorInfoType CorType,
                                     ReaderAlignType Alignment, bool IsVolatile,
                                     bool IsInterfConst,
@@ -3197,7 +3220,23 @@ public:
 
   virtual bool canMakeDirectCall(ReaderCallTargetData *CallTargetData) = 0;
 
-  // Generate call to helper
+  /// \brief Generate call to a helper.
+  ///
+  /// \param HelperID        Helper ID.
+  /// \param MayThrow        True iff this helper may throw.
+  /// \param Dst             Destination node.
+  /// \param Arg1            First helper argument.
+  /// \param Arg2            Second helper argument.
+  /// \param Arg3            Third helper argument.
+  /// \param Arg4            Fourth helper argument.
+  /// \param Alignment       Memory alignment for helpers that care about it.
+  /// \param IsVolatile      True iff the operation performed by the helper is
+  ///                        volatile.
+  /// \param NoCtor          True if the operation definitely will NOT invoke
+  ///                        the static constructor.
+  /// \param CanMoveUp       True iff the call may be moved up out of loops.
+  ///
+  /// \returns An \p IRNode that represents the result of the helper call.
   virtual IRNode *callHelper(CorInfoHelpFunc HelperID, bool MayThrow,
                              IRNode *Dst, IRNode *Arg1 = nullptr,
                              IRNode *Arg2 = nullptr, IRNode *Arg3 = nullptr,
@@ -3205,6 +3244,57 @@ public:
                              ReaderAlignType Alignment = Reader_AlignUnknown,
                              bool IsVolatile = false, bool NoCtor = false,
                              bool CanMoveUp = false) = 0;
+
+  /// \brief Generate call to a helper.
+  ///
+  /// \param HelperID        Helper ID.
+  /// \param HelperAddress   Address of the helper.
+  /// \param MayThrow        True iff this helper may throw.
+  /// \param Dst             Destination node.
+  /// \param Arg1            First helper argument.
+  /// \param Arg2            Second helper argument.
+  /// \param Arg3            Third helper argument.
+  /// \param Arg4            Fourth helper argument.
+  /// \param Alignment       Memory alignment for helpers that care about it.
+  /// \param IsVolatile      True iff the operation performed by the helper is
+  ///                        volatile.
+  /// \param NoCtor          True if the operation definitely will NOT invoke
+  ///                        the static constructor.
+  /// \param CanMoveUp       True iff the call may be moved up out of loops.
+  ///
+  /// \returns An \p IRNode that represents the result of the helper call.
+  virtual IRNode *callHelper(CorInfoHelpFunc HelperID, IRNode *HelperAddress,
+                             bool MayThrow, IRNode *Dst, IRNode *Arg1 = nullptr,
+                             IRNode *Arg2 = nullptr, IRNode *Arg3 = nullptr,
+                             IRNode *Arg4 = nullptr,
+                             ReaderAlignType Alignment = Reader_AlignUnknown,
+                             bool IsVolatile = false, bool NoCtor = false,
+                             bool CanMoveUp = false) = 0;
+
+  /// \brief Generate call to a ReadyToRun helper.
+  ///
+  /// \param HelperID        Helper ID.
+  /// \param MayThrow        True iff this helper may throw.
+  /// \param Dst             Destination node.
+  /// \param ResolvedToken   Token corresponding to the helper.
+  /// \param Arg1            First helper argument.
+  /// \param Arg2            Second helper argument.
+  /// \param Arg3            Third helper argument.
+  /// \param Arg4            Fourth helper argument.
+  /// \param Alignment       Memory alignment for helpers that care about it.
+  /// \param IsVolatile      True iff the operation performed by the helper is
+  ///                        volatile.
+  /// \param NoCtor          True if the operation definitely will NOT invoke
+  ///                        the static constructor.
+  /// \param CanMoveUp       True iff the call may be moved up out of loops.
+  ///
+  /// \returns An \p IRNode that represents the result of the helper call.
+  virtual IRNode *callReadyToRunHelper(
+      CorInfoHelpFunc HelperID, bool MayThrow, IRNode *Dst,
+      CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1 = nullptr,
+      IRNode *Arg2 = nullptr, IRNode *Arg3 = nullptr, IRNode *Arg4 = nullptr,
+      ReaderAlignType Alignment = Reader_AlignUnknown, bool IsVolatile = false,
+      bool NoCtor = false, bool CanMoveUp = false) = 0;
 
   // Generate special generics helper that might need to insert flow
   virtual IRNode *callRuntimeHandleHelper(CorInfoHelpFunc Helper, IRNode *Arg1,
@@ -3241,6 +3331,18 @@ public:
                                      CORINFO_RESOLVED_TOKEN *ResolvedToken,
                                      CORINFO_FIELD_INFO *FieldInfo) = 0;
 
+  /// \brief Convert handle into an \p IRNode.
+  ///
+  /// \param Token           Token corresponding to the handle.
+  /// \param EmbedHandle     Handle to convert.
+  /// \param RealHandle      Optional compile-time handle.
+  /// \param IsIndirect      True iff the handle represents an indirection.
+  /// \param IsReadonly      True iff the handle represent a read-only value.
+  /// \param IsRelocatable   True iff the handle is relocatable.
+  /// \param IsCallTarget    True iff the handle represents a call target.
+  /// \param IsFrozenObject  True iff the handle represents a frozen object.
+  ///
+  /// \returns An \p IRNode corresponding to the handle.
   virtual IRNode *handleToIRNode(mdToken Token, void *EmbedHandle,
                                  void *RealHandle, bool IsIndirect,
                                  bool IsReadOnly, bool IsRelocatable,
@@ -3304,6 +3406,18 @@ public:
   // Used to expand multidimensional array access intrinsics
   virtual bool arrayGet(CORINFO_SIG_INFO *Sig, IRNode **RetVal) = 0;
   virtual bool arraySet(CORINFO_SIG_INFO *Sig) = 0;
+
+  /// \brief Copy struct pointed to by Src to Dst address. The struct may have
+  //  GC pointers so copying may involve write barriers.
+  ///
+  /// \param Class Struct's class handle.
+  /// \param Dst Destination address.
+  /// \param Src Source address.
+  /// \param Alignment.
+  /// \returns The class handle that corresponds to the type of the node.
+  virtual void copyStruct(CORINFO_CLASS_HANDLE Class, IRNode *Dst, IRNode *Src,
+                          ReaderAlignType Alignment, bool IsVolatile,
+                          bool IsUnchecked) = 0;
 
 #if !defined(NDEBUG)
   virtual void dbDumpFunction(void) = 0;
