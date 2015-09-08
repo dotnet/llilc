@@ -5211,6 +5211,13 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
 
   std::vector<CallArgType> &ArgumentTypes =
       Data->CallTargetSignature.ArgumentTypes;
+
+  // Initialize ArgumentTypes for the first time
+  //
+  // CallTargetSignature's constructor has not been called at this
+  // point. Therefore, a placement new is required to initialize
+  // ArgumentTypes.
+
   new (&ArgumentTypes) std::vector<CallArgType>(TotalArgs);
   std::vector<IRNode *> Arguments(TotalArgs);
 
@@ -5810,7 +5817,7 @@ void ReaderBase::initMethodInfo(bool HasSecretParameter,
 
   // Build up parameter info
   std::vector<CallArgType> &ArgumentTypes = Signature.ArgumentTypes;
-  new (&ArgumentTypes) std::vector<CallArgType>(NumArgs);
+  ArgumentTypes.resize(NumArgs);
 
   uint32_t ParamIndex = 0;
 
