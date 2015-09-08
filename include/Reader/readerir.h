@@ -86,64 +86,23 @@ public:
 /// llvm::Value.
 class IRNode : public llvm::Value {};
 
-/// \brief Abstract class representing a list of flow graph edges.
-///
-/// The list acts like an iterator which has a current position from which
-/// source and sink nodes can be found.
-class FlowGraphEdgeList {
-public:
-  /// Constructor
-  FlowGraphEdgeList(){};
-
-  /// Move the current location in the flow graph edge list to the next edge.
-  virtual void moveNext() = 0;
-
-  /// \return The sink (aka target or destination) node of the current edge.
-  virtual FlowGraphNode *getSink() = 0;
-
-  /// \return The source (aka From) node of the current edge.
-  virtual FlowGraphNode *getSource() = 0;
-};
-
-/// \brief A list of predecessor edges of a given flow graph node.
-///
-/// This is used for iterating over the predecessors of a flow graph node.
-/// After creating the predecessor edge list the getSource method is used
-/// to get the first predecessor (if any). As long as the result of getSource()
-/// is non-null, the moveNext() method may be used to advance to the next
-/// predecessor edge. When getSource() returns null there are no more
-/// predecessor edges (or predecessors).
-/// \invariant The current edge iterator either points to a real edge or else
-/// equals the end iterator meaning the list has been exhausted.
-class FlowGraphPredecessorEdgeList : public FlowGraphEdgeList {
+/// \brief An iterator for the predecessor edges of a given flow graph node.
+class FlowGraphPredecessorEdgeIteratorImpl : public FlowGraphEdgeIteratorImpl {
 public:
   /// Construct a flow graph edge list for iterating over the predecessors
   /// of the \p Fg node.
   /// \param Fg The node whose predecessors are desired.
-  /// \pre \p Fg != nullptr.
-  /// \post **this** is a predecessor edge list representing the predecessors
-  /// of \p Fg.
-  FlowGraphPredecessorEdgeList(FlowGraphNode *Fg)
-      : FlowGraphEdgeList(), PredIterator(Fg), PredIteratorEnd(Fg, true) {}
+  FlowGraphPredecessorEdgeIteratorImpl(FlowGraphNode *Fg)
+      : FlowGraphEdgeIteratorImpl(), PredIterator(Fg),
+        PredIteratorEnd(Fg, true) {}
 
-  /// Move the current location in the flow graph edge list to the next edge.
-  /// \pre The current edge has not reached the end of the edge list.
-  /// \post The current edge has been advanced to the next, or has possibly
-  /// reached the end iterator (meaning no more predecessors).
+  bool isEnd() override { return PredIterator == PredIteratorEnd; }
   void moveNext() override { PredIterator++; }
-
-  /// \return The sink of the current edge which will be \p Fg node.
-  /// \pre The current edge has not reached the end of the edge list.
   FlowGraphNode *getSink() override {
     return (FlowGraphNode *)PredIterator.getUse().get();
   }
-
-  /// \return The source of the current edge which will be one of the
-  /// predecessors of the \p Fg node, unless the list has been exhausted in
-  /// which case return nullptr.
   FlowGraphNode *getSource() override {
-    return (PredIterator == PredIteratorEnd) ? nullptr
-                                             : (FlowGraphNode *)*PredIterator;
+    return (isEnd()) ? nullptr : (FlowGraphNode *)*PredIterator;
   }
 
 private:
@@ -151,44 +110,21 @@ private:
   llvm::pred_iterator PredIteratorEnd;
 };
 
-/// \brief A list of successor edges of a given flow graph node.
-///
-/// This is used for iterating over the successors of a flow graph node.
-/// After creating the successor edge list the getSink method is used
-/// to get the first successor (if any). As long as the result of getSink()
-/// is non-null, the moveNext() method may be used to advance to the next
-/// successor edge. When getSink() returns null there are no more
-/// successor edges (or successors).
-/// \invariant The current edge iterator either points to a real edge or else
-/// equals the end iterator meaning the list has been exhausted.
-class FlowGraphSuccessorEdgeList : public FlowGraphEdgeList {
+/// \brief An iterator for successor edges of a given flow graph node.
+class FlowGraphSuccessorEdgeIteratorImpl : public FlowGraphEdgeIteratorImpl {
 public:
   /// Construct a flow graph edge list for iterating over the successors
   /// of the \p Fg node.
   /// \param Fg The node whose successors are desired.
-  /// \pre \p Fg != nullptr.
-  /// \post **this** is a successor edge list representing the successors
-  /// of \p Fg.
-  FlowGraphSuccessorEdgeList(FlowGraphNode *Fg)
-      : FlowGraphEdgeList(), SuccIterator(Fg->getTerminator()),
+  FlowGraphSuccessorEdgeIteratorImpl(FlowGraphNode *Fg)
+      : FlowGraphEdgeIteratorImpl(), SuccIterator(Fg->getTerminator()),
         SuccIteratorEnd(Fg->getTerminator(), true) {}
 
-  /// Move the current location in the flow graph edge list to the next edge.
-  /// \pre The current edge has not reached the end of the edge list.
-  /// \post The current edge has been advanced to the next, or has possibly
-  /// reached the end iterator (meaning no more successors).
+  bool isEnd() override { return SuccIterator == SuccIteratorEnd; }
   void moveNext() override { SuccIterator++; }
-
-  /// \return The sink of the current edge which will be one of the successors
-  /// of the \p Fg node, unless the list has been exhausted in which case
-  /// return nullptr.
   FlowGraphNode *getSink() override {
-    return (SuccIterator == SuccIteratorEnd) ? nullptr
-                                             : (FlowGraphNode *)*SuccIterator;
+    return (isEnd()) ? nullptr : (FlowGraphNode *)*SuccIterator;
   }
-
-  /// \return The source of the current edge which will be \p Fg node.
-  /// \pre The current edge has not reached the end of the edge list.
   FlowGraphNode *getSource() override {
     return (FlowGraphNode *)SuccIterator.getSource();
   }
@@ -631,9 +567,9 @@ public:
 
   void fgRemoveUnusedBlocks(FlowGraphNode *FgHead) override;
   void fgDeleteBlock(FlowGraphNode *Block) override;
-  void fgDeleteEdge(FlowGraphEdgeList *Arc) override {
+  void fgDeleteEdge(FlowGraphEdgeIterator &Iterator) override {
     throw NotYetImplementedException("fgDeleteEdge");
-  };
+  }
   void fgDeleteNodesFromBlock(FlowGraphNode *Block) override;
   IRNode *fgNodeGetEndInsertIRNode(FlowGraphNode *FgNode) override;
 
