@@ -147,6 +147,7 @@ def main(argv):
     
     RunCommand('chcp 65001')
     os.environ["COMPlus_AltJit"]="*"
+    os.environ["COMPlus_AltJitNgen"]="*"
     os.environ["COMPlus_AltJitName"]=jit_name
     if (args.precise_gc):
         os.environ["COMPlus_InsertStatepoints"]="1"

@@ -426,6 +426,10 @@ public:
   IRNode *loadVirtFunc(IRNode *Arg1, CORINFO_RESOLVED_TOKEN *ResolvedToken,
                        CORINFO_CALL_INFO *CallInfo) override;
 
+  IRNode *getReadyToRunVirtFuncPtr(IRNode *Arg1,
+                                   CORINFO_RESOLVED_TOKEN *ResolvedToken,
+                                   CORINFO_CALL_INFO *CallInfo) override;
+
   IRNode *loadPrimitiveType(IRNode *Addr, CorInfoType CorInfoType,
                             ReaderAlignType Alignment, bool IsVolatile,
                             bool IsInterfConst,
@@ -821,7 +825,40 @@ public:
                      bool IsVolatile = false, bool NoCtor = false,
                      bool CanMoveUp = false) override;
 
-  // Generate call to helper
+  IRNode *callHelper(CorInfoHelpFunc HelperID, IRNode *HelperAddress,
+                     bool MayThrow, IRNode *Dst, IRNode *Arg1 = nullptr,
+                     IRNode *Arg2 = nullptr, IRNode *Arg3 = nullptr,
+                     IRNode *Arg4 = nullptr,
+                     ReaderAlignType Alignment = Reader_AlignUnknown,
+                     bool IsVolatile = false, bool NoCtor = false,
+                     bool CanMoveUp = false) override;
+
+  IRNode *callReadyToRunHelper(CorInfoHelpFunc HelperID, bool MayThrow,
+                               IRNode *Dst,
+                               CORINFO_RESOLVED_TOKEN *pResolvedToken,
+                               IRNode *Arg1 = nullptr, IRNode *Arg2 = nullptr,
+                               IRNode *Arg3 = nullptr, IRNode *Arg4 = nullptr,
+                               ReaderAlignType Alignment = Reader_AlignUnknown,
+                               bool IsVolatile = false, bool NoCtor = false,
+                               bool CanMoveUp = false) override;
+
+  /// \brief Generate call to a helper.
+  ///
+  /// \param HelperID        Helper ID.
+  /// \param MayThrow        True iff this helper may throw.
+  /// \param ReturnType      Return type.
+  /// \param Arg1            First helper argument.
+  /// \param Arg2            Second helper argument.
+  /// \param Arg3            Third helper argument.
+  /// \param Arg4            Fourth helper argument.
+  /// \param Alignment       Memory alignment for helpers that care about it.
+  /// \param IsVolatile      True iff the operation performed by the helper is
+  ///                        volatile.
+  /// \param NoCtor          True if the operation definitely will NOT invoke
+  ///                        the static constructor.
+  /// \param CanMoveUp       True iff the call may be moved up out of loops.
+  ///
+  /// \returns An \p CallSite corresponding to the helper call.
   llvm::CallSite callHelperImpl(CorInfoHelpFunc HelperID, bool MayThrow,
                                 llvm::Type *ReturnType, IRNode *Arg1 = nullptr,
                                 IRNode *Arg2 = nullptr, IRNode *Arg3 = nullptr,
@@ -829,6 +866,57 @@ public:
                                 ReaderAlignType Alignment = Reader_AlignUnknown,
                                 bool IsVolatile = false, bool NoCtor = false,
                                 bool CanMoveUp = false);
+
+  /// \brief Generate call to a helper.
+  ///
+  /// \param HelperID        Helper ID.
+  /// \param HelperAddress   Address of the helper.
+  /// \param MayThrow        True iff this helper may throw.
+  /// \param ReturnType      Return type.
+  /// \param Arg1            First helper argument.
+  /// \param Arg2            Second helper argument.
+  /// \param Arg3            Third helper argument.
+  /// \param Arg4            Fourth helper argument.
+  /// \param Alignment       Memory alignment for helpers that care about it.
+  /// \param IsVolatile      True iff the operation performed by the helper is
+  ///                        volatile.
+  /// \param NoCtor          True if the operation definitely will NOT invoke
+  ///                        the static constructor.
+  /// \param CanMoveUp       True iff the call may be moved up out of loops.
+  ///
+  /// \returns An \p CallSite corresponding to the helper call.
+  llvm::CallSite callHelperImpl(CorInfoHelpFunc HelperID, IRNode *HelperAddress,
+                                bool MayThrow, llvm::Type *ReturnType,
+                                IRNode *Arg1 = nullptr, IRNode *Arg2 = nullptr,
+                                IRNode *Arg3 = nullptr, IRNode *Arg4 = nullptr,
+                                ReaderAlignType Alignment = Reader_AlignUnknown,
+                                bool IsVolatile = false, bool NoCtor = false,
+                                bool CanMoveUp = false);
+
+  /// \brief Generate call to a ReadyToRun helper.
+  ///
+  /// \param HelperID        Helper ID.
+  /// \param MayThrow        True iff this helper may throw.
+  /// \param ReturnType      Return type.
+  /// \param ResolvedToken   Token corresponding to the helper.
+  /// \param Arg1            First helper argument.
+  /// \param Arg2            Second helper argument.
+  /// \param Arg3            Third helper argument.
+  /// \param Arg4            Fourth helper argument.
+  /// \param Alignment       Memory alignment for helpers that care about it.
+  /// \param IsVolatile      True iff the operation performed by the helper is
+  ///                        volatile.
+  /// \param NoCtor          True if the operation definitely will NOT invoke
+  ///                        the static constructor.
+  /// \param CanMoveUp       True iff the call may be moved up out of loops.
+  ///
+  /// \returns An \p CallSite corresponding to the helper call.
+  llvm::CallSite callReadyToRunHelperImpl(
+      CorInfoHelpFunc HelperID, bool MayThrow, llvm::Type *ReturnType,
+      CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Arg1 = nullptr,
+      IRNode *Arg2 = nullptr, IRNode *Arg3 = nullptr, IRNode *Arg4 = nullptr,
+      ReaderAlignType Alignment = Reader_AlignUnknown, bool IsVolatile = false,
+      bool NoCtor = false, bool CanMoveUp = false);
 
   /// Generate special generics helper that might need to insert flow. The
   /// helper is called if NullCheckArg is null at compile-time or if it
@@ -869,10 +957,37 @@ public:
 
   IRNode *getHelperCallAddress(CorInfoHelpFunc HelperId) override;
 
+  /// \brief Get address of a ReadyToRun helper.
+  ///
+  /// \param HelperID        Helper ID.
+  /// \param ResolvedToken   Token corresponding to the helper.
+  ///
+  /// \returns An \p IRNode corresponding to the helper address.
+  IRNode *getReadyToRunHelperCallAddress(CorInfoHelpFunc HelperID,
+                                         CORINFO_RESOLVED_TOKEN *ResolvedToken);
+
   IRNode *handleToIRNode(mdToken Token, void *EmbedHandle, void *RealHandle,
                          bool IsIndirect, bool IsReadOnly, bool IsRelocatable,
                          bool IsCallTarget,
                          bool IsFrozenObject = false) override;
+
+  /// \brief Convert handle into an \p IRNode.
+  ///
+  /// \param HandleName      Name to use for the GlobalVariable corresponding
+  ///                        to a relocatable handle.
+  /// \param EmbedHandle     Handle to convert.
+  /// \param RealHandle      Optional compile-time handle.
+  /// \param IsIndirect      True iff the handle represents an indirection.
+  /// \param IsReadonly      True iff the handle represent a read-only value.
+  /// \param IsRelocatable   True iff the handle is relocatable.
+  /// \param IsCallTarget    True iff the handle represents a call target.
+  /// \param IsFrozenObject  True iff the handle represents a frozen object.
+  ///
+  /// \returns An \p IRNode corresponding to the handle.
+  IRNode *handleToIRNode(const std::string &HandleName, void *EmbedHandle,
+                         void *RealHandle, bool IsIndirect, bool IsReadOnly,
+                         bool IsRelocatable, bool IsCallTarget,
+                         bool IsFrozenObject = false);
 
   /// Generate a name for the given token, handle, context and scope. The names
   /// generated by this method are used for GlobalVariables corresponding to the
@@ -1550,15 +1665,21 @@ private:
   void zeroInitBlock(llvm::Value *Address, llvm::Value *Size);
 
   /// Copy an instance of a struct from SourceAddress to DestinationAddress.
+  /// Copying is done without write barriers.
   ///
   /// \param StructTy Type of the struct.
   /// \param DestinationAddress Address to copy to.
   /// \param SourceAddress Address to copy from.
   /// \param IsVolatile true iff copy is volatile.
   /// \param Alignment Alignment of the copy.
-  void copyStruct(llvm::Type *StructTy, llvm::Value *DestinationAddress,
-                  llvm::Value *SourceAddress, bool IsVolatile,
-                  ReaderAlignType Alignment = Reader_AlignNatural);
+  void copyStructNoBarrier(llvm::Type *StructTy,
+                           llvm::Value *DestinationAddress,
+                           llvm::Value *SourceAddress, bool IsVolatile,
+                           ReaderAlignType Alignment = Reader_AlignNatural);
+
+  void copyStruct(CORINFO_CLASS_HANDLE Class, IRNode *Dst, IRNode *Src,
+                  ReaderAlignType Alignment, bool IsVolatile,
+                  bool IsUnchecked) override;
 
   /// Check if this value represents a struct.
   ///

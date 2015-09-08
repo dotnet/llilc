@@ -418,7 +418,7 @@ Value *ABICallSignature::emitCall(GenIR &Reader, Value *Target, bool MayThrow,
           ArgumentTypes[I] = ArgType;
           Temp = Reader.createTemporary(ArgStructTy);
           const bool IsVolatile = false;
-          Reader.copyStruct(ArgStructTy, Temp, Arg, IsVolatile);
+          Reader.copyStructNoBarrier(ArgStructTy, Temp, Arg, IsVolatile);
         } else {
           ArgumentTypes[I] = ArgType->getPointerTo();
           Temp = Reader.createTemporary(ArgType);
