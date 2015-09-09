@@ -199,45 +199,40 @@ ReaderBase::ReaderBase(ICorJitInfo *JitInfo, CORINFO_METHOD_INFO *MethodInfo,
   IsVerifiableCode = true;
 }
 
-// Common FlowGraphEdgeList getters/setters
-FlowGraphEdgeList *fgEdgeListGetNextSuccessorActual(FlowGraphEdgeList *FgEdge) {
-  if (FgEdge) {
-    FgEdge = fgEdgeListGetNextSuccessor(FgEdge);
+bool fgEdgeIteratorMoveNextSuccessorActual(FlowGraphEdgeIterator &Iterator) {
+  bool HasEdge = fgEdgeIteratorMoveNextSuccessor(Iterator);
+  while (HasEdge && fgEdgeIsNominal(Iterator)) {
+    HasEdge = fgEdgeIteratorMoveNextSuccessor(Iterator);
   }
-  while (FgEdge && fgEdgeListIsNominal(FgEdge)) {
-    FgEdge = fgEdgeListGetNextSuccessor(FgEdge);
-  }
-  return FgEdge;
+  return HasEdge;
 }
 
-FlowGraphEdgeList *
-fgEdgeListGetNextPredecessorActual(FlowGraphEdgeList *FgEdge) {
-  if (FgEdge) {
-    FgEdge = fgEdgeListGetNextPredecessor(FgEdge);
+bool fgEdgeIteratorMoveNextPredecessorActual(FlowGraphEdgeIterator &Iterator) {
+  bool HasEdge = fgEdgeIteratorMoveNextPredecessor(Iterator);
+  while (HasEdge && fgEdgeIsNominal(Iterator)) {
+    HasEdge = fgEdgeIteratorMoveNextPredecessor(Iterator);
   }
-  while (FgEdge && fgEdgeListIsNominal(FgEdge)) {
-    FgEdge = fgEdgeListGetNextPredecessor(FgEdge);
-  }
-  return FgEdge;
+  return HasEdge;
 }
 
-FlowGraphEdgeList *fgNodeGetSuccessorListActual(FlowGraphNode *Fg) {
-  FlowGraphEdgeList *FgEdge;
-
-  FgEdge = fgNodeGetSuccessorList(Fg);
-
-  if ((FgEdge != nullptr) && fgEdgeListIsNominal(FgEdge))
-    FgEdge = fgEdgeListGetNextSuccessorActual(FgEdge);
-  return FgEdge;
+FlowGraphEdgeIterator fgNodeGetSuccessorsActual(FlowGraphNode *Fg) {
+  const bool IsSuccessor = true;
+  FlowGraphEdgeIterator Iterator(Fg, IsSuccessor);
+  bool HasEdge = !fgEdgeIteratorIsEnd(Iterator);
+  while (HasEdge && fgEdgeIsNominal(Iterator)) {
+    HasEdge = fgEdgeIteratorMoveNextSuccessor(Iterator);
+  }
+  return Iterator;
 }
 
-FlowGraphEdgeList *fgNodeGetPredecessorListActual(FlowGraphNode *Fg) {
-  FlowGraphEdgeList *FgEdge;
-
-  FgEdge = fgNodeGetPredecessorList(Fg);
-  if (FgEdge != nullptr && fgEdgeListIsNominal(FgEdge))
-    FgEdge = fgEdgeListGetNextPredecessorActual(FgEdge);
-  return FgEdge;
+FlowGraphEdgeIterator fgNodeGetPredecessorsActual(FlowGraphNode *Fg) {
+  const bool IsSuccessor = false;
+  FlowGraphEdgeIterator Iterator(Fg, IsSuccessor);
+  bool HasEdge = !fgEdgeIteratorIsEnd(Iterator);
+  while (HasEdge && fgEdgeIsNominal(Iterator)) {
+    HasEdge = fgEdgeIteratorMoveNextPredecessor(Iterator);
+  }
+  return Iterator;
 }
 
 // getMSILInstrLength
@@ -1902,20 +1897,22 @@ FlowGraphNodeOffsetList *ReaderBase::fgAddNodeMSILOffset(
 }
 
 void ReaderBase::fgDeleteBlockAndNodes(FlowGraphNode *Block) {
-  FlowGraphEdgeList *Arc, *ArcNext;
 
   // TODO: decide if we want to rewrite this code.  Our implementation
   // of DeleteNodesFromBlock also deletes the successors.
 
   fgDeleteNodesFromBlock(Block);
 
-  for (Arc = fgNodeGetSuccessorList(Block); Arc != nullptr; Arc = ArcNext) {
-    ArcNext = fgEdgeListGetNextSuccessor(Arc);
-    fgDeleteEdge(Arc);
+  for (FlowGraphEdgeIterator SuccessorIterator = fgNodeGetSuccessors(Block);
+       !fgEdgeIteratorIsEnd(SuccessorIterator);
+       fgEdgeIteratorMoveNextSuccessor(SuccessorIterator)) {
+    fgDeleteEdge(SuccessorIterator);
   }
-  for (Arc = fgNodeGetPredecessorList(Block); Arc != nullptr; Arc = ArcNext) {
-    ArcNext = fgEdgeListGetNextPredecessor(Arc);
-    fgDeleteEdge(Arc);
+
+  for (FlowGraphEdgeIterator PredecessorIterator = fgNodeGetPredecessors(Block);
+       !fgEdgeIteratorIsEnd(PredecessorIterator);
+       fgEdgeIteratorMoveNextPredecessor(PredecessorIterator)) {
+    fgDeleteEdge(PredecessorIterator);
   }
 
   fgDeleteBlock(Block);
@@ -7865,12 +7862,7 @@ void ReaderBase::readBytesForFlowGraphNode(FlowGraphNode *Fg,
         false; // Blocks with errors can't have this verified
 
     // Delete all (non-EH reachability) flow edges that come from this block.
-    FlowGraphEdgeList *Arc, *ArcNext;
-    for (Arc = fgNodeGetSuccessorListActual(Fg); Arc != nullptr;
-         Arc = ArcNext) {
-      ArcNext = fgEdgeListGetNextSuccessorActual(Arc);
-      fgDeleteEdge(Arc);
-    }
+    fgRemoveAllActualSuccessorEdges(Fg);
 
     // Clear operand and verifier stack since block
     // successor edges are now cut and the operands
@@ -7906,15 +7898,24 @@ void ReaderBase::readBytesForFlowGraphNode(FlowGraphNode *Fg,
   }
 }
 
+void ReaderBase::fgRemoveAllActualSuccessorEdges(FlowGraphNode *Block) {
+  for (FlowGraphEdgeIterator SuccessorIterator =
+           fgNodeGetSuccessorsActual(Block);
+       !fgEdgeIteratorIsEnd(SuccessorIterator);
+       fgEdgeIteratorMoveNextSuccessorActual(SuccessorIterator)) {
+    fgDeleteEdge(SuccessorIterator);
+  }
+}
+
 FlowGraphNodeWorkList *
 ReaderBase::fgPrependUnvisitedSuccToWorklist(FlowGraphNodeWorkList *Worklist,
                                              FlowGraphNode *CurrBlock) {
-  FlowGraphNode *Successor;
 
-  for (FlowGraphEdgeList *FgEdge = fgNodeGetSuccessorList(CurrBlock);
-       FgEdge != nullptr; FgEdge = fgEdgeListGetNextSuccessor(FgEdge)) {
+  for (FlowGraphEdgeIterator SuccessorIterator = fgNodeGetSuccessors(CurrBlock);
+       !fgEdgeIteratorIsEnd(SuccessorIterator);
+       fgEdgeIteratorMoveNextSuccessor(SuccessorIterator)) {
 
-    Successor = fgEdgeListGetSink(FgEdge);
+    FlowGraphNode *Successor = fgEdgeIteratorGetSink(SuccessorIterator);
 
     if (!fgNodeIsVisited(Successor)) {
 #ifndef NODEBUG
@@ -8027,21 +8028,20 @@ void ReaderBase::msilToIR(void) {
 // fake up edges to unreachable code for peverify
 // (so we can report errors in unreachable code)
 #ifdef CC_PEVERIFY
-  FlowGraphNode *Block;
-  for (Block = FgHead; Block != FgTail;) {
-    FlowGraphNode *nextBlock;
-    nextBlock = fgNodeGetNext(Block);
+  for (FlowGraphNode *Block = FgHead; Block != FgTail;) {
+    FlowGraphNode *NextBlock = fgNodeGetNext(Block);
+    FlowGraphEdgeIterator SuccessorIterator = fgNodeGetSuccessors(Block);
 
-    if (!fgNodeGetPredecessorList(Block) && Block != FgHead &&
+    if (!fgEdgeIteratorIsDone(SuccessorIterator) && (Block != FgHead) &&
         (fgNodeGetStartMSILOffset(Block) != fgNodeGetEndMSILOffset(Block))) {
       fgAddArc(nullptr, FgHead, Block);
-      FlowGraphEdgeList *edgeList = fgNodeGetSuccessorList(FgHead);
-      while (edgeList) {
-        FlowGraphNode *succBlock = fgEdgeListGetSink(edgeList);
+      FlowGraphEdgeIterator HeadSuccessorIterator = fgNodeGetSuccessors(FgHead);
+      while (!fgEdgeIteratorIsDone(HeadSuccessorIterator)) {
+        FlowGraphNode *succBlock = fgEdgeIteratorGetSink(HeadSuccessorIterator);
         if (succBlock == Block) {
-          FgEdgeListMakeFake(edgeList);
+          fgEdgeIteratorMakeFake(HeadSuccessorIterator);
         }
-        edgeList = fgEdgeListGetNextSuccessor(edgeList);
+        fgEdgeIteratorMoveNextSuccessor(HeadSuccessorIterator);
       }
     }
     Block = nextBlock;
@@ -8104,10 +8104,12 @@ void ReaderBase::msilToIR(void) {
 #endif // !CC_PEVERIFY
 
     // Check whether we created new FlowGraphNodes while processing CurrentNode.
-    for (FlowGraphEdgeList *FgEdge = fgNodeGetSuccessorList(CurrentNode);
-         FgEdge != nullptr; FgEdge = fgEdgeListGetNextSuccessor(FgEdge)) {
+    for (FlowGraphEdgeIterator SuccessorIterator =
+             fgNodeGetSuccessors(CurrentNode);
+         !fgEdgeIteratorIsEnd(SuccessorIterator);
+         fgEdgeIteratorMoveNextSuccessor(SuccessorIterator)) {
 
-      FlowGraphNode *Successor = fgEdgeListGetSink(FgEdge);
+      FlowGraphNode *Successor = fgEdgeIteratorGetSink(SuccessorIterator);
       if (!fgNodeIsVisited(Successor)) {
         // Check that CurrentNode is the only predecessor of Successor that
         // propagates stack.
@@ -8188,12 +8190,12 @@ void ReaderBase::msilToIR(void) {
 
 bool ReaderBase::fgNodeHasMultiplePredsPropagatingStack(FlowGraphNode *Node) {
   int NumberOfPredecessorsPropagatingStack = 0;
-  for (FlowGraphEdgeList *NodePredecessorList =
-           fgNodeGetPredecessorListActual(Node);
-       NodePredecessorList != nullptr;
-       NodePredecessorList =
-           fgEdgeListGetNextPredecessorActual(NodePredecessorList)) {
-    FlowGraphNode *PredecessorNode = fgEdgeListGetSource(NodePredecessorList);
+  for (FlowGraphEdgeIterator PredecessorIterator =
+           fgNodeGetPredecessorsActual(Node);
+       !fgEdgeIteratorIsEnd(PredecessorIterator);
+       fgEdgeIteratorMoveNextPredecessorActual(PredecessorIterator)) {
+    FlowGraphNode *PredecessorNode =
+        fgEdgeIteratorGetSource(PredecessorIterator);
     if (fgNodePropagatesOperandStack(PredecessorNode)) {
       ++NumberOfPredecessorsPropagatingStack;
       if (NumberOfPredecessorsPropagatingStack > 1) {
@@ -8205,12 +8207,12 @@ bool ReaderBase::fgNodeHasMultiplePredsPropagatingStack(FlowGraphNode *Node) {
 }
 
 bool ReaderBase::fgNodeHasNoPredsPropagatingStack(FlowGraphNode *Node) {
-  for (FlowGraphEdgeList *NodePredecessorList =
-           fgNodeGetPredecessorListActual(Node);
-       NodePredecessorList != nullptr;
-       NodePredecessorList =
-           fgEdgeListGetNextPredecessorActual(NodePredecessorList)) {
-    FlowGraphNode *PredecessorNode = fgEdgeListGetSource(NodePredecessorList);
+  for (FlowGraphEdgeIterator PredecessorIterator =
+           fgNodeGetPredecessorsActual(Node);
+       !fgEdgeIteratorIsEnd(PredecessorIterator);
+       fgEdgeIteratorMoveNextPredecessorActual(PredecessorIterator)) {
+    FlowGraphNode *PredecessorNode =
+        fgEdgeIteratorGetSource(PredecessorIterator);
     if (fgNodePropagatesOperandStack(PredecessorNode)) {
       return false;
     }

@@ -19,6 +19,7 @@
 #include "imeta.h"
 #include "newvstate.h"
 #include "llvm/ADT/Triple.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/IR/DebugLoc.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Intrinsics.h"
@@ -3166,9 +3167,13 @@ void GenIR::replaceFlowGraphNodeUses(FlowGraphNode *OldNode,
   OldBlock->eraseFromParent();
 }
 
-bool fgEdgeListIsNominal(FlowGraphEdgeList *FgEdge) {
+bool fgEdgeIsNominal(FlowGraphEdgeIterator &FgEdgeIterator) {
   // This is supposed to return true for exception edges.
   return false;
+}
+
+bool fgEdgeIteratorIsEnd(FlowGraphEdgeIterator &FgEdgeIterator) {
+  return FgEdgeIterator.isEnd();
 }
 
 // Hook called from reader fg builder to identify potential inline candidates.
@@ -3204,44 +3209,48 @@ FlowGraphNode *GenIR::fgNodeGetIDom(FlowGraphNode *FgNode) {
   return Idom;
 }
 
-FlowGraphEdgeList *fgNodeGetSuccessorList(FlowGraphNode *FgNode) {
-  FlowGraphEdgeList *FgEdge = new FlowGraphSuccessorEdgeList(FgNode);
-  if (fgEdgeListGetSink(FgEdge) == nullptr) {
-    return nullptr;
+FlowGraphEdgeIterator::FlowGraphEdgeIterator(FlowGraphNode *Fg,
+                                             bool IsSuccessor)
+    : Impl(nullptr) {
+  if (IsSuccessor) {
+    Impl = llvm::make_unique<FlowGraphSuccessorEdgeIteratorImpl>(Fg);
+  } else {
+    Impl = llvm::make_unique<FlowGraphPredecessorEdgeIteratorImpl>(Fg);
   }
-  return FgEdge;
 }
 
-FlowGraphEdgeList *fgEdgeListGetNextSuccessor(FlowGraphEdgeList *FgEdge) {
-  FgEdge->moveNext();
-  if (fgEdgeListGetSink(FgEdge) == nullptr) {
-    return nullptr;
-  }
-  return FgEdge;
+FlowGraphEdgeIterator fgNodeGetSuccessors(FlowGraphNode *FgNode) {
+  const bool IsSuccessor = true;
+  FlowGraphEdgeIterator Iterator(FgNode, IsSuccessor);
+  return Iterator;
 }
 
-FlowGraphEdgeList *fgNodeGetPredecessorList(FlowGraphNode *Fg) {
-  FlowGraphEdgeList *FgEdge = new FlowGraphPredecessorEdgeList(Fg);
-  if (fgEdgeListGetSource(FgEdge) == nullptr) {
-    return nullptr;
-  }
-  return FgEdge;
+bool fgEdgeIteratorMoveNextSuccessor(FlowGraphEdgeIterator &Iterator) {
+  assert(!Iterator.isEnd() && "iterating past end!");
+  Iterator.moveNext();
+  return !Iterator.isEnd();
 }
 
-FlowGraphEdgeList *fgEdgeListGetNextPredecessor(FlowGraphEdgeList *FgEdge) {
-  FgEdge->moveNext();
-  if (fgEdgeListGetSource(FgEdge) == nullptr) {
-    return nullptr;
-  }
-  return FgEdge;
+FlowGraphEdgeIterator fgNodeGetPredecessors(FlowGraphNode *FgNode) {
+  const bool IsSuccessor = false;
+  FlowGraphEdgeIterator Iterator(FgNode, IsSuccessor);
+  return Iterator;
 }
 
-FlowGraphNode *fgEdgeListGetSink(FlowGraphEdgeList *FgEdge) {
-  return FgEdge->getSink();
+bool fgEdgeIteratorMoveNextPredecessor(FlowGraphEdgeIterator &Iterator) {
+  assert(!Iterator.isEnd() && "iterating past end!");
+  Iterator.moveNext();
+  return !Iterator.isEnd();
 }
 
-FlowGraphNode *fgEdgeListGetSource(FlowGraphEdgeList *FgEdge) {
-  return FgEdge->getSource();
+FlowGraphNode *fgEdgeIteratorGetSink(FlowGraphEdgeIterator &Iterator) {
+  assert(!Iterator.isEnd() && "iterator at end!");
+  return Iterator.getSink();
+}
+
+FlowGraphNode *fgEdgeIteratorGetSource(FlowGraphEdgeIterator &Iterator) {
+  assert(!Iterator.isEnd() && "iterator at end!");
+  return Iterator.getSource();
 }
 
 void GenIR::fgNodeSetOperandStack(FlowGraphNode *Fg, ReaderStack *Stack) {
@@ -7867,15 +7876,17 @@ void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
     return;
   }
 
-  FlowGraphEdgeList *SuccessorList = fgNodeGetSuccessorListActual(CurrentBlock);
+  FlowGraphEdgeIterator SuccessorIterator =
+      fgNodeGetSuccessorsActual(CurrentBlock);
+  bool Done = SuccessorIterator.isEnd();
 
-  if (SuccessorList == nullptr) {
+  if (Done) {
     clearStack();
     return;
   }
 
-  while (SuccessorList != nullptr) {
-    FlowGraphNode *SuccessorBlock = fgEdgeListGetSink(SuccessorList);
+  while (!Done) {
+    FlowGraphNode *SuccessorBlock = fgEdgeIteratorGetSink(SuccessorIterator);
 
     if (!fgNodeHasMultiplePredsPropagatingStack(SuccessorBlock)) {
       // We need to create a stack for the Successor and copy the items from the
@@ -7928,13 +7939,12 @@ void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
 
           // Preemptively add all predecessors to the PHI node to ensure
           // that we don't forget any once we're done.
-          FlowGraphEdgeList *PredecessorList =
-              fgNodeGetPredecessorListActual(SuccessorBlock);
-          while (PredecessorList != nullptr) {
+          FlowGraphEdgeIterator PredecessorIterator =
+              fgNodeGetPredecessorsActual(SuccessorBlock);
+          while (!PredecessorIterator.isEnd()) {
             Phi->addIncoming(UndefValue::get(CurrentValue->getType()),
-                             fgEdgeListGetSource(PredecessorList));
-            PredecessorList =
-                fgEdgeListGetNextPredecessorActual(PredecessorList);
+                             fgEdgeIteratorGetSource(PredecessorIterator));
+            fgEdgeIteratorMoveNextPredecessorActual(PredecessorIterator);
           }
         } else {
           // PHI instructions should have been inserted already.
@@ -7957,7 +7967,9 @@ void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
       // valid, so we can't do this check.
       assert(CreatePHIs || SuccessorDegenerate || !isa<PHINode>(CurrentInst));
     }
-    SuccessorList = fgEdgeListGetNextSuccessorActual(SuccessorList);
+
+    fgEdgeIteratorMoveNextSuccessorActual(SuccessorIterator);
+    Done = fgEdgeIteratorIsEnd(SuccessorIterator);
   }
 
   clearStack();

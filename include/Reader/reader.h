@@ -142,7 +142,6 @@ class GenIR;  // Compiler dependent IR production
 class IRNode; // Your compiler intermediate representation
 class ReaderStack;
 class FlowGraphNode;
-class FlowGraphEdgeList;
 class BranchList;
 class ReaderBitVector;
 struct EHRegion;
@@ -1020,19 +1019,83 @@ EHRegion *getFinallyRegion(EHRegion *TryRegion);
 ///
 ///@{
 
-/// \brief Obtain a list of the successor edges of a FlowGraphNode
+/// \brief Class implementing an iterable list of flow graph edges.
 ///
-/// \param FgNode   The FlowGraphNode of interest.
-/// \returns        A list of the successor edges, or nullptr if there are no
-///                 successors.
-FlowGraphEdgeList *fgNodeGetSuccessorList(FlowGraphNode *FgNode);
+/// Abstract class that serves as a common base for the client-supplied
+/// predecessor and successor iterator implementations.
+class FlowGraphEdgeIteratorImpl {
+public:
+  /// \brief Check if the iterator is at end.
+  ///
+  /// \returns True if there are no more edges to iterate.
+  virtual bool isEnd() = 0;
 
-/// \brief Obtain a list of the predecessor edges of a FlowGraphNode
+  /// \brief Advance the iterato
+  virtual void moveNext() = 0;
+
+  /// \brief Obtain the sink for the current edge.
+  /// \returns The sink (aka target or destination) node of the current edge.
+  virtual FlowGraphNode *getSink() = 0;
+
+  /// \brief Obtain the source for the current edge.
+  /// \return The source (aka From) node of the current edge.
+  virtual FlowGraphNode *getSource() = 0;
+};
+
+/// \brief Class representing an iterable list of flow graph edges.
+///
+/// An iterator for flow graph edges that does not assume there is an actual
+/// object representing the edge. At construction time specify whether the
+/// iterator can traverse the successor or predecessor edges of a block.
+class FlowGraphEdgeIterator {
+public:
+  /// \brief Construct an iterator.
+  ///
+  /// This method must be implemented by the client.
+  ///
+  /// \param Block         The basic block to use as edge source or sink.
+  /// \param IsSuccessor   If true, iterate the successor edges of the block.
+  FlowGraphEdgeIterator(FlowGraphNode *Block, bool IsSuccessor);
+
+  /// \brief Move-Construct an iterator from an rvalue reference.
+  /// \param Other   Temporary iterator to copy state from.
+  FlowGraphEdgeIterator(FlowGraphEdgeIterator &&Other)
+      : Impl(std::move(Other.Impl)) {}
+
+  FlowGraphEdgeIterator(const FlowGraphEdgeIterator &) = delete;
+  FlowGraphEdgeIterator &operator=(const FlowGraphEdgeIterator &) = delete;
+
+  /// \brief Check if the iterator is at end.
+  ///
+  /// \returns True if there are no more edges to iterate.
+  bool isEnd() { return Impl->isEnd(); }
+
+  /// \brief Advance the iterator.
+  void moveNext() { Impl->moveNext(); }
+
+  /// \brief Obtain the sink for the current edge.
+  /// \returns The sink (aka target or destination) node of the current edge.
+  FlowGraphNode *getSink() { return Impl->getSink(); }
+
+  /// \brief Obtain the source for the current edge.
+  /// \return The source (aka From) node of the current edge.
+  FlowGraphNode *getSource() { return Impl->getSource(); }
+
+private:
+  std::unique_ptr<FlowGraphEdgeIteratorImpl> Impl;
+};
+
+/// \brief Obtain an iterator for the successor edges of a FlowGraphNode
 ///
 /// \param FgNode   The FlowGraphNode of interest.
-/// \returns        A list of the predecessor edges, or nullptr if there are no
-///                 predecessors.
-FlowGraphEdgeList *fgNodeGetPredecessorList(FlowGraphNode *FgNode);
+/// \returns        An iterator for the successor edges.
+FlowGraphEdgeIterator fgNodeGetSuccessors(FlowGraphNode *FgNode);
+
+/// \brief Obtain an iterator for the predecessor edges of a FlowGraphNode
+///
+/// \param FgNode   The FlowGraphNode of interest.
+/// \returns        An itetrator for the predecessor edges.
+FlowGraphEdgeIterator fgNodeGetPredecessors(FlowGraphNode *FgNode);
 
 /// \brief Get the IRNode that is the label for a flow graph node.
 ///
@@ -1064,79 +1127,79 @@ void fgNodeSetGlobalVerifyData(FlowGraphNode *Fg, GlobalVerifyData *GvData);
 /// \returns        Number in range [0, number of blocks] unique to this node.
 uint32_t fgNodeGetBlockNum(FlowGraphNode *Fg);
 
-/// \brief Advance a successor edge list to the next edge.
+/// \brief Check if an iterator is at the end of its iteration range.
 ///
-/// \param FgEdge    The edge list in question.
-/// \returns         Edge list with head at the next edge, or nullptr
-///                  if there are no more successor edges.
-FlowGraphEdgeList *fgEdgeListGetNextSuccessor(FlowGraphEdgeList *FgEdge);
+/// \param Iterator  The iterator in question.
+/// \returns         True if the iterator is not yet at the end.
+bool fgEdgeIteratorIsEnd(FlowGraphEdgeIterator &Iterator);
 
-/// \brief Advance a predecessor edge list to the next edge.
+/// \brief Advance a flow graph iterator to the next successor edge.
 ///
-/// \param FgEdge    The edge list in question.
-/// \returns         Edge list with head at the next edge, or nullptr
-///                  if there are no more predecessor edges.
-FlowGraphEdgeList *fgEdgeListGetNextPredecessor(FlowGraphEdgeList *FgEdge);
+/// \param Iterator  The iterator in question.
+/// \returns         False if there are no more successor edges.
+bool fgEdgeIteratorMoveNextSuccessor(FlowGraphEdgeIterator &Iterator);
 
-/// \brief Get the source flow graph node for the first edge in a edge list
+/// \brief Advance a flow graph  iterator to the next predecessor edge.
 ///
-/// \param  FgEdge    The edge list in question.
-/// \returns          The source FlowGraphNode.
-FlowGraphNode *fgEdgeListGetSource(FlowGraphEdgeList *FgEdge);
+/// \param Iterator  The iterator in question.
+/// \returns         False if there are no more predecessor edges.
+bool fgEdgeIteratorMoveNextPredecessor(FlowGraphEdgeIterator &Iterator);
 
-/// \brief Get the sink flow graph node for the first edge in a edge list
+/// \brief Get the source flow graph node for the iterator's current edge.
 ///
-/// \param  FgEdge    The edge list in question.
-/// \returns          The sink FlowGraphNode.
-FlowGraphNode *fgEdgeListGetSink(FlowGraphEdgeList *FgEdge);
+/// \param  Iterator The iterator in question.
+/// \returns         The source FlowGraphNode.
+FlowGraphNode *fgEdgeIteratorGetSource(FlowGraphEdgeIterator &Iterator);
 
-/// \brief Determine if this edge represents exceptional control flow
+/// \brief Get the sink flow graph node for the iterator's current edge.
 ///
-/// \param  FgEdge    An edge list.
-/// \returns          True if the edge at the the head of the list describes
-///                   exceptional control flow.
-bool fgEdgeListIsNominal(FlowGraphEdgeList *FgEdge);
+/// \param  Iterator The iterator in question.
+/// \returns         The sink FlowGraphNode.
+FlowGraphNode *fgEdgeIteratorGetSink(FlowGraphEdgeIterator &Iterator);
+
+/// \brief Determine if the iterator's current edge represents exceptional
+/// control flow.
+///
+/// \param  Iterator The iterator in question.
+/// \returns         True if iterator's current edge describes exceptional flow.
+bool fgEdgeIsNominal(FlowGraphEdgeIterator &Iterator);
 
 #ifdef CC_PEVERIFY
-/// \brief Mark this edge as representing fake control flow added to ensure
-/// all blocks are reachable from the head block.
+/// \brief Mark the iterator's current edge as representing fake control flow
+/// added to ensureall blocks are reachable from the head block.
 ///
-/// \param   FgEdge  Edge to mark as fake control flow.
-void fgEdgeListMakeFake(FlowGraphEdgeList *FgEdge);
+/// \param   Iterator  The iterator in question.
+void fgEdgeListMakeFake(FlowGraphEdgeIterator &FgEdgeIterator);
 #endif
 
-/// \brief Advance a successor edge list to the next edge that represents
+/// \brief Advance a successor edge iterator to the next edge that represents
 /// actual (non-exceptional) control flow.
 ///
-/// \param FgEdge    The edge list in question.
-/// \returns         Edge list with head at the next edge, or nullptr
-///                  if there are no more successor edges.
-FlowGraphEdgeList *fgEdgeListGetNextSuccessorActual(FlowGraphEdgeList *FgEdge);
+/// \param Iterator  The iterator in question.
+/// \returns         False if there are no more non-exceptional edges.
+bool fgEdgeIteratorMoveNextSuccessorActual(FlowGraphEdgeIterator &Iterator);
 
-/// \brief Advance a predecessor edge list to the next edge that represents
+/// \brief Advance a predecessor edge iterator to the next edge that represents
 /// actual (non-exceptional) control flow.
 ///
-/// \param FgEdge    The edge list in question.
-/// \returns         Edge list with head at the next edge, or nullptr
-///                  if there are no more predecessor edges.
-FlowGraphEdgeList *
-fgEdgeListGetNextPredecessorActual(FlowGraphEdgeList *FgEdge);
+/// \param Iterator  The iterator in question.
+/// \returns         False if there are no more non-exceptional edges.
+bool fgEdgeIteratorMoveNextPredecessorActual(
+    FlowGraphEdgeIterator &FgEdgeIterator);
 
-/// \brief Obtain a list of the actual (non-exceptional) successor edges of a
-/// FlowGraphNode
+/// \brief Obtain an iterator for the actual (non-exceptional) successor edges
+/// of a FlowGraphNode
 ///
 /// \param FgNode   The FlowGraphNode of interest.
-/// \returns        A list of the actual successor edges, or nullptr if there
-///                 are no such successors.
-FlowGraphEdgeList *fgNodeGetSuccessorListActual(FlowGraphNode *Fg);
+/// \returns        An iterator for the actual successor edges.
+FlowGraphEdgeIterator fgNodeGetSuccessorsActual(FlowGraphNode *Fg);
 
-/// \brief Obtain a list of the actual (non-exceptional) predecessor edges of a
-/// FlowGraphNode
+/// \brief Obtain an iterator for the actual (non-exceptional) predecessor edges
+/// of a FlowGraphNode
 ///
 /// \param FgNode   The FlowGraphNode of interest.
-/// \returns        A list of the actual predecessor edges, or nullptr if there
-///                 are no such predecessors.
-FlowGraphEdgeList *fgNodeGetPredecessorListActual(FlowGraphNode *Fg);
+/// \returns        An iterator for the actual predecessor edges.
+FlowGraphEdgeIterator fgNodeGetPredecessorsActual(FlowGraphNode *Fg);
 
 ///@}
 
@@ -1874,6 +1937,14 @@ private:
   ///
   /// \param FgHead     the head block of the flow graph.
   virtual void fgRemoveUnusedBlocks(FlowGraphNode *FgHead);
+
+  /// \brief Remove all actual successor edges from this block.
+  ///
+  /// This method removes and deletes all actual successor edges of \p Block
+  /// from the flow graph.
+  ///
+  /// \param Block          The block in question.
+  void fgRemoveAllActualSuccessorEdges(FlowGraphNode *Block);
 
   /// Find the canonical landing point for leaves from an EH region.
   ///
@@ -3067,7 +3138,7 @@ public:
                         FlowGraphNode *Sink) = 0;
   virtual bool fgBlockHasFallThrough(FlowGraphNode *Block) = 0;
   virtual void fgDeleteBlock(FlowGraphNode *Block) = 0;
-  virtual void fgDeleteEdge(FlowGraphEdgeList *Arc) = 0;
+  virtual void fgDeleteEdge(FlowGraphEdgeIterator &Iterator) = 0;
   virtual void fgDeleteNodesFromBlock(FlowGraphNode *Block) = 0;
   virtual IRNode *fgNodeGetEndInsertIRNode(FlowGraphNode *FgNode) = 0;
 
