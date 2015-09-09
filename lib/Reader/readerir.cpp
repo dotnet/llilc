@@ -5979,8 +5979,23 @@ IRNode *GenIR::conv(ReaderBaseNS::ConvOpcode Opcode, IRNode *Source) {
     Conversion = SourceIsSigned ? LLVMBuilder->CreateSIToFP(Source, TargetTy)
                                 : LLVMBuilder->CreateUIToFP(Source, TargetTy);
   } else if (SourceTy->isFloatingPointTy() && TargetTy->isIntegerTy()) {
-    Conversion = DestIsSigned ? LLVMBuilder->CreateFPToSI(Source, TargetTy)
-                              : LLVMBuilder->CreateFPToUI(Source, TargetTy);
+    // The ECMA-335 spec says that for unchecked floating point to
+    // integer conversion, if there is overflow then the result
+    // is unspecified. However for compatibility with other jits
+    // we want to first convert to i64 and then truncate.
+    IntegerType *TargetIntegerType = cast<IntegerType>(TargetTy);
+    int TargetBitWidth = TargetIntegerType->getBitWidth();
+    if (TargetBitWidth < 64) {
+      IntegerType *Int64Ty = Type::getInt64Ty(*JitContext->LLVMContext);
+      Conversion = DestIsSigned ? LLVMBuilder->CreateFPToSI(Source, Int64Ty)
+                                : LLVMBuilder->CreateFPToUI(Source, Int64Ty);
+      // Now do the final conversion to the target type.
+      Conversion =
+          LLVMBuilder->CreateIntCast(Conversion, TargetTy, DestIsSigned);
+    } else {
+      Conversion = DestIsSigned ? LLVMBuilder->CreateFPToSI(Source, TargetTy)
+                                : LLVMBuilder->CreateFPToUI(Source, TargetTy);
+    }
   } else if (SourceTy->isFloatingPointTy() && TargetTy->isFloatingPointTy()) {
     Conversion = LLVMBuilder->CreateFPCast(Source, TargetTy);
   } else {

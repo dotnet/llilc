@@ -940,9 +940,6 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\casts\SEH\isinst_catch.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M10\b05617\b05617.cmd" >
-             <Issue>808</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b84909\b84909.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
