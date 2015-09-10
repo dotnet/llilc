@@ -1445,7 +1445,6 @@ protected:
   uint32_t CurrentBranchDepth;
 
   // EH Info
-  CORINFO_EH_CLAUSE *EhClauseInfo; // raw eh clause info
   EHRegion *EhRegionTree;
   EHRegionList *AllRegionList;
 
