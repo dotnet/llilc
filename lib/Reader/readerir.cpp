@@ -81,10 +81,8 @@ void GenStack::print() {
 #endif
 
 ReaderStack *GenStack::copy() {
-  GenStack *Copy;
-
   void *Buffer = Reader->getTempMemory(sizeof(GenStack));
-  Copy = new (Buffer) GenStack(Stack.capacity() + 1, Reader);
+  GenStack *Copy = new (Buffer) GenStack(Stack.capacity(), Reader);
   for (auto Value : *this) {
     Copy->push(Value);
   }
@@ -92,11 +90,8 @@ ReaderStack *GenStack::copy() {
 }
 
 ReaderStack *GenIR::createStack() {
-  uint32_t MaxStack =
-      std::min(MethodInfo->maxStack, std::min(100U, MethodInfo->ILCodeSize));
   void *Buffer = getTempMemory(sizeof(GenStack));
-  // extra 16 should reduce frequency of reallocation when inlining / jmp
-  return new (Buffer) GenStack(MaxStack + 16, this);
+  return new (Buffer) GenStack(4, this);
 }
 
 #pragma endregion
@@ -552,6 +547,7 @@ void GenIR::readerPostPass(bool IsImportOnly) {
 
   // Cleanup the memory we've been using.
   DBuilder->finalize();
+  delete DBuilder;
   delete LLVMBuilder;
 }
 
@@ -918,8 +914,9 @@ void GenIR::copyStructNoBarrier(Type *StructTy, Value *DestinationAddress,
 void GenIR::copyStruct(CORINFO_CLASS_HANDLE Class, IRNode *Dst, IRNode *Src,
                        ReaderAlignType Alignment, bool IsVolatile,
                        bool IsUnchecked) {
-  if (classHasGCPointers(Class)) {
-    GCLayout *RuntimeGCInfo = getClassGCLayout(Class);
+  // We should potentially cache this or leverage LLVM type info instead.
+  GCLayout *RuntimeGCInfo = getClassGCLayout(Class);
+  if (RuntimeGCInfo != nullptr) {
     const uint32_t PointerSize = getPointerByteSize();
     uint32_t OffsetAfterLastGCPointer = 0;
     StructType *StructTy =
@@ -991,6 +988,7 @@ void GenIR::copyStruct(CORINFO_CLASS_HANDLE Class, IRNode *Dst, IRNode *Src,
       IRNode *NonGCDstAddr = binaryOp(ReaderBaseNS::Add, Dst, Offset);
       cpBlk(Size, NonGCSrcAddr, NonGCDstAddr, Alignment, IsVolatile);
     }
+    free(RuntimeGCInfo);
   } else {
     // If the class doesn't have a gc layout then use a memcopy
     IRNode *Size = loadConstantI4(getClassSize(Class));
@@ -2142,6 +2140,7 @@ Type *GenIR::getClassTypeWorker(
       const bool IsGCPointer = isManagedPointerType(FieldTy);
       assert((ExpectGCPointer == IsGCPointer) &&
              "llvm type incorrectly describes location of gc references");
+      free(RuntimeGCInfo);
 #endif
     }
   }
@@ -3105,15 +3104,15 @@ void GenIR::fgEnterRegion(EHRegion *Region) {
         // Create a dummy predecessor so that we'll know there's an exception
         // pointer on the stack when processing the handler code.
         BasicBlock *PointPred =
-          createPointBlock(ChildRegion->StartMsilOffset, "eh_dummy");
+            createPointBlock(ChildRegion->StartMsilOffset, "eh_dummy");
         FlowGraphNode *HandlerNode = nullptr;
         fgAddNodeMSILOffset(&HandlerNode, ChildRegion->StartMsilOffset);
         BranchInst::Create((BasicBlock *)HandlerNode, PointPred);
         fgNodeSetPropagatesOperandStack((FlowGraphNode *)PointPred, false);
         ReaderStack *PointStack = createStack();
         Type *ExceptionTy =
-          getType(CORINFO_TYPE_CLASS,
-            getBuiltinClass(CorInfoClassId::CLASSID_SYSTEM_OBJECT));
+            getType(CORINFO_TYPE_CLASS,
+                    getBuiltinClass(CorInfoClassId::CLASSID_SYSTEM_OBJECT));
         PointStack->push((IRNode *)UndefValue::get(ExceptionTy));
         fgNodeSetOperandStack((FlowGraphNode *)PointPred, PointStack);
       }

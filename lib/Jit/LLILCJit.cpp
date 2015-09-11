@@ -119,7 +119,7 @@ private:
   ///
   /// \param DwarfContext Dwarf Context to extract debug info from
   /// \param Size Size of the function we are gathering info from
-  void getDebugInfoForLocals(DWARFContextInMemory *DwarfContext, uint64_t Addr,
+  void getDebugInfoForLocals(DWARFContextInMemory &DwarfContext, uint64_t Addr,
                              uint64_t Size);
 
   /// \brief Convert DWARF register number to CLR register number
@@ -515,7 +515,7 @@ void ObjectLoadListener::getDebugInfoForObject(
 
   // TODO: This extracts DWARF information from the object file, but we will
   // want to also be able to eventually extract WinCodeView information as well
-  DWARFContextInMemory *DwarfContext = new DWARFContextInMemory(DebugObj);
+  DWARFContextInMemory DwarfContext(DebugObj);
 
   // Use symbol info to iterate functions in the object.
   // TODO: This may have to change when we have funclets
@@ -544,8 +544,7 @@ void ObjectLoadListener::getDebugInfoForObject(
     unsigned NumDebugRanges = 0;
     ICorDebugInfo::OffsetMapping *OM;
 
-    DILineInfoTable Lines =
-        DwarfContext->getLineInfoForAddressRange(Addr, Size);
+    DILineInfoTable Lines = DwarfContext.getLineInfoForAddressRange(Addr, Size);
 
     DILineInfoTable::iterator Begin = Lines.begin();
     DILineInfoTable::iterator End = Lines.end();
@@ -691,8 +690,8 @@ void ObjectLoadListener::getRelocationTypeAndAddend(uint8_t *FixupAddress,
 }
 
 void ObjectLoadListener::getDebugInfoForLocals(
-    DWARFContextInMemory *DwarfContext, uint64_t Addr, uint64_t Size) {
-  for (const auto &CU : DwarfContext->compile_units()) {
+    DWARFContextInMemory &DwarfContext, uint64_t Addr, uint64_t Size) {
+  for (const auto &CU : DwarfContext.compile_units()) {
     const DWARFDebugInfoEntryMinimal *UnitDIE = CU->getUnitDIE(false);
     const DWARFDebugInfoEntryMinimal *SubprogramDIE = getSubprogramDIE(UnitDIE);
 

@@ -1590,30 +1590,18 @@ bool clauseLessThan(const CORINFO_EH_CLAUSE *Lhs,
 }
 
 void ReaderBase::rgnCreateRegionTree(void) {
-  CORINFO_EH_CLAUSE *EHClauses;
-  EHRegion *RegionTree, *RegionTreeRoot;
-  EHRegionList *AllRegionList;
 
-  // Initialize all region list to nullptr.
-  AllRegionList = nullptr;
-
-  RegionTreeRoot = nullptr;
-
-  EHClauses = nullptr;
-
-  if (MethodInfo->EHcount > 0) {
-    EHClauses = (CORINFO_EH_CLAUSE *)getProcMemory(sizeof(CORINFO_EH_CLAUSE) *
-                                                   MethodInfo->EHcount);
-    ASSERTNR(EHClauses);
-
-    for (uint32_t I = 0; I < MethodInfo->EHcount; I++) {
-      JitInfo->getEHinfo(getCurrentMethodHandle(), I, &(EHClauses[I]));
-    }
-  } else {
-    // No EH.
+  if (MethodInfo->EHcount == 0) {
+    // No EH in this method. Clear out the reader EH state.
     EhRegionTree = nullptr;
     AllRegionList = nullptr;
     return;
+  }
+
+  // Get the raw EH clause data
+  CORINFO_EH_CLAUSE *EHClauses = new CORINFO_EH_CLAUSE[MethodInfo->EHcount];
+  for (uint32_t I = 0; I < MethodInfo->EHcount; I++) {
+    JitInfo->getEHinfo(getCurrentMethodHandle(), I, &(EHClauses[I]));
   }
 
   CORINFO_EH_CLAUSE **ClauseList =
@@ -1647,12 +1635,12 @@ void ReaderBase::rgnCreateRegionTree(void) {
   // TODO: Find a way to enable the EIT dumper.
   // IMetaPrintCorInfoEHClause(EHClauses, MethodInfo->EHcount));
 
-  EhClauseInfo = EHClauses;
-
-  RegionTreeRoot = rgnMakeRegion(ReaderBaseNS::RGN_Root, nullptr,
-                                 RegionTreeRoot, &AllRegionList);
+  // Create root region.
+  EHRegionList *WorkingAllRegionList = nullptr;
+  EHRegion *RegionTreeRoot = rgnMakeRegion(ReaderBaseNS::RGN_Root, nullptr,
+                                           nullptr, &WorkingAllRegionList);
   rgnSetEndMSILOffset(RegionTreeRoot, MethodInfo->ILCodeSize);
-  RegionTree = RegionTreeRoot;
+  EHRegion *RegionTree = RegionTree = RegionTreeRoot;
 
   // Map the clause information into try regions for later processing
   // We need to map the EIT into the tryregion DAG as we need to
@@ -1694,7 +1682,7 @@ void ReaderBase::rgnCreateRegionTree(void) {
     } else {
       // create a new try region, make it a child of EnclosingRegion
       RegionTry = rgnMakeRegion(ReaderBaseNS::RGN_Try, EnclosingRegion,
-                                RegionTreeRoot, &AllRegionList);
+                                RegionTreeRoot, &WorkingAllRegionList);
 
       rgnSetStartMSILOffset(RegionTry, CurrentEHClause->TryOffset);
       rgnSetEndMSILOffset(RegionTry, CurrentEHClause->TryOffset +
@@ -1707,7 +1695,7 @@ void ReaderBase::rgnCreateRegionTree(void) {
     if (CurrentEHClause->Flags & CORINFO_EH_CLAUSE_FILTER) {
       EHRegion *RegionFilter;
       RegionHandler = rgnMakeRegion(ReaderBaseNS::RGN_MExcept, RegionTry,
-                                    RegionTreeRoot, &AllRegionList);
+                                    RegionTreeRoot, &WorkingAllRegionList);
 
       ReaderBaseNS::TryKind TryKind = rgnGetTryType(RegionTry);
       if (TryKind == ReaderBaseNS::TRY_MCatch) {
@@ -1722,7 +1710,7 @@ void ReaderBase::rgnCreateRegionTree(void) {
       }
 
       RegionFilter = rgnMakeRegion(ReaderBaseNS::RGN_Filter, RegionTry,
-                                   RegionTreeRoot, &AllRegionList);
+                                   RegionTreeRoot, &WorkingAllRegionList);
 
       rgnSetExceptFilterRegion(RegionHandler, RegionFilter);
       rgnSetExceptTryRegion(RegionHandler, RegionTry);
@@ -1738,7 +1726,7 @@ void ReaderBase::rgnCreateRegionTree(void) {
 
       if (CurrentEHClause->Flags & CORINFO_EH_CLAUSE_FINALLY) {
         RegionHandler = rgnMakeRegion(ReaderBaseNS::RGN_Finally, RegionTry,
-                                      RegionTreeRoot, &AllRegionList);
+                                      RegionTreeRoot, &WorkingAllRegionList);
 
         ASSERTNR(rgnGetTryType(RegionTry) == ReaderBaseNS::TRY_None);
         rgnSetTryType(RegionTry, ReaderBaseNS::TRY_Fin);
@@ -1749,7 +1737,7 @@ void ReaderBase::rgnCreateRegionTree(void) {
 
           ASSERTNR(rgnGetTryType(RegionTry) == ReaderBaseNS::TRY_None);
           RegionHandler = rgnMakeRegion(ReaderBaseNS::RGN_Fault, RegionTry,
-                                        RegionTreeRoot, &AllRegionList);
+                                        RegionTreeRoot, &WorkingAllRegionList);
           rgnSetTryType(RegionTry, ReaderBaseNS::TRY_Fault);
           rgnSetFaultTryRegion(RegionHandler, RegionTry);
         } else {
@@ -1767,7 +1755,7 @@ void ReaderBase::rgnCreateRegionTree(void) {
           // this will be a catch (EH_CLAUSE_NONE)
           // we need to keep the token somewhere
           RegionHandler = rgnMakeRegion(ReaderBaseNS::RGN_MCatch, RegionTry,
-                                        RegionTreeRoot, &AllRegionList);
+                                        RegionTreeRoot, &WorkingAllRegionList);
 
           ReaderBaseNS::TryKind TryKind;
 
@@ -1793,10 +1781,10 @@ void ReaderBase::rgnCreateRegionTree(void) {
                                            CurrentEHClause->HandlerLength);
   } while (I != 0);
 
-  // The memory allocated for EHClause will be freed when someone called
-  // THX_freemem(T_ALLOC)
-  // hopefully this happens in MSILReadProc somewhere
+  delete[] EHClauses;
 
+  // Propagate EH state to the reader.
+  AllRegionList = WorkingAllRegionList;
   EhRegionTree = RegionTreeRoot;
 }
 
@@ -1884,7 +1872,7 @@ FlowGraphNodeOffsetList *ReaderBase::fgAddNodeMSILOffset(
   }
   NewElement->setNode(*Node);
 
-  // Insert the new Elementent at the right spot
+  // Insert the new Element at the right spot
   if (PreviousElement) {
     NewElement->setNext(Element);
     PreviousElement->setNext(NewElement);
@@ -7814,9 +7802,22 @@ void ReaderBase::readBytesForFlowGraphNode(FlowGraphNode *Fg,
   // OPTIMIZATION: Continue using the existing stack in the common case
   // where it is left empty at the end of the block.
   if (!IsVerifyOnly) {
+    // Note we don't propagate empty stacks to successors, so if there is no
+    // stack for this block, verify that the current stack is empty.
     ReaderStack *Temp = fgNodeGetOperandStack(Fg);
-    if (Temp)
+    if (Temp) {
+      // If we are going to switch stacks make sure to clean up the active
+      // stack -- any important state was propagated to the successors
+      // already.
+      if (ReaderOperandStack != Temp) {
+        if (ReaderOperandStack != nullptr) {
+          delete ReaderOperandStack;
+        }
+      }
       ReaderOperandStack = Temp->copy();
+    } else {
+      ReaderOperandStack->assertEmpty();
+    }
   }
 
   // Find the offset at which to start reading the buffer
@@ -8057,14 +8058,12 @@ void ReaderBase::msilToIR(void) {
   // Walk the graph in depth-first order to discover reachable nodes but don't
   // process them yet. All reachable nodes are marked as visited.
   while (Worklist != nullptr) {
-    FlowGraphNode *Block;
-
     // Pop top block
-    Block = Worklist->Block;
-    Worklist = Worklist->Next;
-
+    FlowGraphNode *Block = Worklist->Block;
+    FlowGraphNodeWorkList *Next = Worklist->Next;
+    delete Worklist;
     // Prepend unvisited successors to worklist
-    Worklist = fgPrependUnvisitedSuccToWorklist(Worklist, Block);
+    Worklist = fgPrependUnvisitedSuccToWorklist(Next, Block);
   }
 
   // Process the blocks in the MSIL offset order. ECMA spec guarantees
@@ -8186,6 +8185,51 @@ void ReaderBase::msilToIR(void) {
   // Client post-pass
   //
   readerPostPass(IsImportOnly);
+
+  // Cleanup memory used
+  for (uint32_t Index = 0; Index < NodeOffsetListArraySize; Index++) {
+    FlowGraphNodeOffsetList *Element = NodeOffsetListArray[Index];
+    while (Element != nullptr) {
+      FlowGraphNodeOffsetList *NextElement = Element->getNext();
+      delete Element;
+      Element = NextElement;
+    }
+  }
+  delete NodeOffsetListArray;
+
+  for (FlowGraphNode *Block = FgHead; Block != nullptr;
+       Block = fgNodeGetNext(Block)) {
+    ReaderStack *Stack = fgNodeGetOperandStack(Block);
+    if (Stack != nullptr) {
+      delete Stack;
+      fgNodeSetOperandStack(Block, nullptr);
+    }
+  }
+
+  if (ReaderOperandStack != nullptr) {
+    delete ReaderOperandStack;
+    ReaderOperandStack = nullptr;
+  }
+
+  EHRegionList *RegionList = AllRegionList;
+  while (RegionList != nullptr) {
+    EHRegionList *Next = rgnListGetNext(RegionList);
+    EHRegion *Region = rgnListGetRgn(RegionList);
+    EHRegionList *Children = rgnGetChildList(Region);
+    while (Children != nullptr) {
+      EHRegionList *NextChild = rgnListGetNext(Children);
+      free(Children);
+      Children = NextChild;
+    }
+    free(RegionList);
+    free(Region);
+    RegionList = Next;
+  }
+
+  if (FgGetRegionCanonicalExitOffsetBuff != nullptr) {
+    free(FgGetRegionCanonicalExitOffsetBuff);
+    FgGetRegionCanonicalExitOffsetBuff = nullptr;
+  }
 }
 
 bool ReaderBase::fgNodeHasMultiplePredsPropagatingStack(FlowGraphNode *Node) {
