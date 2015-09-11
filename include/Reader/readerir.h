@@ -1911,6 +1911,24 @@ private:
   ///          outlined.
   llvm::Function *getCurrentFilter();
 
+  /// Copy the IR in each finally so that the exceptional path does not share
+  /// code with the non-exceptional path.
+  void cloneFinallyBodies();
+
+  /// Copy the IR in the given finally so that the exceptional path does not
+  /// share code with the non-exceptional path.
+  ///
+  /// \param FinallyRegion  The region whose IR is to be cloned.
+  void cloneFinallyBody(EHRegion *FinallyRegion);
+
+  /// Remove the unwind edge from the given terminator, indicating that if it
+  /// faults it will unwind to this function's caller rather than a handler in
+  /// this function.  The terminator will be replaced with a new terminator
+  /// that doesn't have the edge.
+  ///
+  /// \param Terminator  The terminator that is to be replaced.
+  void removeUnwindDest(llvm::TerminatorInst *Terminator);
+
   /// Record that the given address needs to escape by call to
   /// @llvm.localescape, and return the index that may be used to recover it by
   /// call to @llvm.localrecover.  May be called multiple times for the same
