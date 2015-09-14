@@ -545,6 +545,19 @@ void GenIR::readerPostPass(bool IsImportOnly) {
     }
   }
 
+  // Crossgen in ReadyToRun mode records structs that method compilation
+  // depends on via getClassSize calls. Therefore, we shouldn't cache type info
+  // across methods.
+  if (JitContext->Flags & CORJIT_FLG_READYTORUN) {
+    // Clearing the cache is only safe if we're at the "top-level" context.
+    // We shouldn't have re-entrant jit requests in a prejit scenario.
+    assert(JitContext->Next == nullptr);
+    ClassTypeMap->clear();
+    ArrayTypeMap->clear();
+    ReverseClassTypeMap->clear();
+    BoxedTypeMap->clear();
+  }
+
   // Cleanup the memory we've been using.
   DBuilder->finalize();
   delete DBuilder;
