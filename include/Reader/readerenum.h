@@ -490,15 +490,14 @@ enum StIndirOpcode {
 
 /// \brief Describes the set of region kinds.
 typedef enum {
-  RGN_Root,        ///< Indicates the root of a region tree.
-  RGN_Try,         ///< Indicates a try region.
-  RGN_Fault,       ///< Indicates a fault region.
-  RGN_Finally,     ///< Indicates a finally region.
-  RGN_Filter,      ///< Indicates a filter region.
-  RGN_MExcept,     ///< Indicates a managed except region.
-  RGN_MCatch       ///< Indicates a managed catch region.
+  RGN_Root,    ///< Indicates the root of a region tree.
+  RGN_Try,     ///< Indicates a try region.
+  RGN_Fault,   ///< Indicates a fault region.
+  RGN_Finally, ///< Indicates a finally region.
+  RGN_Filter,  ///< Indicates a filter region.
+  RGN_MExcept, ///< Indicates a managed except region.
+  RGN_MCatch   ///< Indicates a managed catch region.
 } RegionKind;
-
 }
 
 /// \brief Used to map MSIL opcodes to function-specific opcode enumerations.

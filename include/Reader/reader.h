@@ -2345,7 +2345,7 @@ private:
                                      IRNode **ThisPtr);
 
 public:
-  void rdrCallFieldHelper(
+  IRNode *rdrCallFieldHelper(
       CORINFO_RESOLVED_TOKEN *ResolvedToken, CorInfoHelpFunc HelperId,
       bool IsLoad,
       IRNode *Dst, // dst node if this is a load, otherwise nullptr
