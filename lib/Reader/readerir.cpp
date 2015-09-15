@@ -22,11 +22,12 @@
 #include "llvm/IR/DebugLoc.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Intrinsics.h"
-#include "llvm/Support/Debug.h"          // for dbgs()
-#include "llvm/Support/Format.h"         // for format()
-#include "llvm/Support/raw_ostream.h"    // for errs()
-#include "llvm/Support/ConvertUTF.h"     // for ConvertUTF16toUTF8
-#include "llvm/Transforms/Utils/Local.h" // for removeUnreachableBlocks
+#include "llvm/Support/Debug.h"            // for dbgs()
+#include "llvm/Support/Format.h"           // for format()
+#include "llvm/Support/raw_ostream.h"      // for errs()
+#include "llvm/Support/ConvertUTF.h"       // for ConvertUTF16toUTF8
+#include "llvm/Transforms/Utils/Cloning.h" // for CloneBasicBlock/RemapInstr
+#include "llvm/Transforms/Utils/Local.h"   // for removeUnreachableBlocks
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/DebugInfoMetadata.h"
 #include <cstdlib>
@@ -554,9 +555,225 @@ void GenIR::readerPostVisit() {
     }
   }
 
-  // TODO: Clone cleanup bodies so that exceptional path has a separate copy
-  // and the cleanuppad def will dominate all its cleanupret/endcleanuppad
-  // uses.
+  // At this point the IR for finally handlers reflects the right semantics,
+  // but is ill-formed because the cleanuppad at the entry of a finally doesn't
+  // dominate its uses at the exits from that finally (because there is a
+  // side-entry for the non-exceptional paths through the finally).
+  // The cleanuppad has 'token' type, and tokens cannot be PHI'd, so we can't
+  // just insert PHIs with undef at the side entry.  Instead, we copy the body
+  // of the finally so that the exception path and the non-exception path
+  // don't shre IR.  The long-term plan is to add a 'cleanupcall' operator
+  // to LLVM which the non-exceptional entries can use to target the cleanuppad
+  // directly (and subsequently run an optimization that will usually clone
+  // out the non-exceptional paths so as to better-optimize them).
+  cloneFinallyBodies();
+}
+
+void GenIR::cloneFinallyBodies() {
+  if (EhRegionTree == nullptr) {
+    // No regions => no finallies
+    return;
+  }
+
+  // Find the finallies, pushing them onto a stack while walking down the
+  // region tree so that we'll pop inner finallies before outer ones
+  SmallVector<EHRegion *, 8> FinallyRegions;
+  SmallVector<EHRegion *, 8> Worklist;
+  Worklist.push_back(EhRegionTree);
+
+  while (!Worklist.empty()) {
+    EHRegion *Region = Worklist.pop_back_val();
+    if (Region->Kind == ReaderBaseNS::RegionKind::RGN_Finally) {
+      // Queue finally for cloning
+      FinallyRegions.push_back(Region);
+    }
+    // Queue all child regions to continue searching for finallies
+    for (EHRegionList *RegionList = rgnGetChildList(Region); RegionList;
+         RegionList = rgnListGetNext(RegionList)) {
+      EHRegion *ChildRegion = rgnListGetRgn(RegionList);
+      Worklist.push_back(ChildRegion);
+    }
+  }
+
+  while (!FinallyRegions.empty()) {
+    EHRegion *Finally = FinallyRegions.pop_back_val();
+    cloneFinallyBody(Finally);
+  }
+}
+
+void GenIR::cloneFinallyBody(EHRegion *FinallyRegion) {
+  CleanupPadInst *Cleanup = FinallyRegion->CleanupPad;
+  SwitchInst *ExitSwitch = FinallyRegion->EndFinallySwitch;
+
+  // Find the exceptional exits
+  BasicBlock *CleanupRetBlock = nullptr;
+  BasicBlock *CleanupEndBlock = nullptr;
+  BasicBlock *CleanupEndSucc = nullptr;
+
+  for (User *U : Cleanup->users()) {
+    if (auto *CleanupEndPad = dyn_cast<CleanupEndPadInst>(U)) {
+      assert(CleanupEndBlock == nullptr && "Expected just one cleanupendpad");
+      CleanupEndBlock = CleanupEndPad->getParent();
+      CleanupEndSucc = CleanupEndPad->getUnwindDest();
+    } else {
+      assert(isa<CleanupReturnInst>(U));
+      assert(CleanupRetBlock == nullptr && "Expected just one cleanupret");
+      CleanupRetBlock = cast<Instruction>(U)->getParent();
+      // Check that the switch is the only predecessor of the cleanupret, since
+      // this is assumed below when we rewrite edges targeting it.
+      assert(CleanupRetBlock->getSinglePredecessor() ==
+                 ExitSwitch->getParent() &&
+             "Expected cleanupret only reached via exit switch");
+    }
+  }
+  assert(CleanupRetBlock && "Could not find cleanupret");
+  assert(CleanupEndBlock && "Could not find cleanupendpad");
+
+  // Walk the flow graph to find the blocks that make up the finally.
+  // Don't include the cleanuppad itself or the cleanupret or cleanupendpad,
+  // since those only need to exist on the exception path.
+  SmallPtrSet<BasicBlock *, 8> FinallyBlocks;
+  SmallVector<BasicBlock *, 4> Worklist;
+
+  Worklist.push_back(Cleanup->getParent());
+  BasicBlock *ExitSwitchBlock = ExitSwitch->getParent();
+
+  while (!Worklist.empty()) {
+    BasicBlock *Block = Worklist.pop_back_val();
+    for (BasicBlock *Succ : successors(Block)) {
+      if (Succ == CleanupEndBlock) {
+        // Don't need to clone the cleanupendpad.
+        continue;
+      }
+      if (FinallyBlocks.insert(Succ).second) {
+        if (Succ == ExitSwitchBlock) {
+          // Don't need to clone past the switch.
+          continue;
+        }
+        Worklist.push_back(Succ);
+      }
+    }
+  }
+
+  // Clone the blocks using the CloneBasicBlock utility.  This makes straight
+  // copies of the blocks but builds up a map from original Values to cloned
+  // Values.
+  SmallVector<BasicBlock *, 16> CloneBlocks;
+  ValueToValueMapTy ValueMap;
+  for (BasicBlock *Original : FinallyBlocks) {
+    BasicBlock *Clone = CloneBasicBlock(Original, ValueMap, ".non-exn");
+    Clone->insertInto(RootFunction, Original);
+    ValueMap[Original] = Clone;
+    CloneBlocks.push_back(Clone);
+    // Tell the reader to treat the clone as visited if the original was.
+    if (fgNodeIsVisited((FlowGraphNode *)Original)) {
+      fgNodeSetVisited((FlowGraphNode *)Clone, true);
+    }
+  }
+
+  // Add entries to re-route exceptional exits in the non-exception clone.
+
+  // The cleanupret is targeted just by the switch in the case that handles
+  // the exceptional continuation, so on the non-exception path it can target
+  // the `unreachable` that is the switch default instead.
+  assert(isa<UnreachableInst>(ExitSwitch->getDefaultDest()->getFirstNonPHI()));
+  ValueMap[CleanupRetBlock] = ExitSwitch->getDefaultDest();
+
+  // The cleanupendpad is targeted by any exceptions that propagate out of the
+  // finally.  These need to be redirected to the next outer handler.  If the
+  // cleanupendpad unwinds to caller, we'll need to rewrite its preds to
+  // unwind to caller in a post-pass, so use the entry block as a sentinel
+  // during the initial mapping.
+  BasicBlock *CallerUnwindSentinel;
+  if (CleanupEndSucc == nullptr) {
+    CallerUnwindSentinel = &RootFunction->getEntryBlock();
+    ValueMap[CleanupEndBlock] = CallerUnwindSentinel;
+  } else {
+    CallerUnwindSentinel = nullptr;
+    ValueMap[CleanupEndBlock] = CleanupEndSucc;
+  }
+
+  // Now apply the value map fixups to the cloned instructions using the
+  // RemapInstruction utility.
+  for (BasicBlock *CloneBlock : CloneBlocks) {
+    for (Instruction &CloneInstr : *CloneBlock) {
+      RemapInstruction(&CloneInstr, ValueMap,
+                       RF_IgnoreMissingEntries | RF_NoModuleLevelChanges);
+    }
+  }
+
+  if (CallerUnwindSentinel != nullptr) {
+    // Remove the sentinel unwind edges.
+    for (Value::user_iterator UI = CallerUnwindSentinel->user_begin(),
+                              UE = CallerUnwindSentinel->user_end();
+         UI != UE;) {
+      // Advance the iterator before erasing the use.
+      TerminatorInst *Terminator = cast<TerminatorInst>(*UI++);
+      removeUnwindDest(Terminator);
+    }
+  }
+
+  // Now the clone should hold the right code for the non-exceptional path,
+  // so update all non-exceptional entries to target it.
+  BasicBlock *PadBlock = Cleanup->getParent();
+  BasicBlock *HeadBlock = PadBlock->getSingleSuccessor();
+  BasicBlock *NewHead =
+      static_cast<BasicBlock *>(static_cast<Value *>(ValueMap[HeadBlock]));
+  for (Value::use_iterator UI = HeadBlock->use_begin(),
+                           UE = HeadBlock->use_end();
+       UI != UE;) {
+    // Increment iterator here because we may delete the use
+    Use &U = *UI++;
+    BasicBlock *UseBlock = cast<Instruction>(U.getUser())->getParent();
+    if ((UseBlock != PadBlock) && !FinallyBlocks.count(UseBlock)) {
+      U.set(NewHead);
+    }
+  }
+
+  // The switch in the exceptional path is no longer necessary and can just
+  // branch to the cleanupret.
+  IRBuilder<> Builder(ExitSwitch);
+  Builder.CreateBr(CleanupRetBlock);
+  ExitSwitch->eraseFromParent();
+}
+
+void GenIR::removeUnwindDest(TerminatorInst *Terminator) {
+  if (auto *Invoke = dyn_cast<InvokeInst>(Terminator)) {
+    IRBuilder<> Builder(Invoke);
+    BranchInst *Goto = Builder.CreateBr(Invoke->getNormalDest());
+    Invoke->removeFromParent(); // Take out of symbol table
+
+    // Insert the call now...
+    SmallVector<Value *, 8> Args(Invoke->op_begin(), Invoke->op_end() - 3);
+    Builder.SetInsertPoint(Goto);
+    CallInst *Call =
+        Builder.CreateCall(Invoke->getCalledValue(), Args, Invoke->getName());
+    Call->setCallingConv(Invoke->getCallingConv());
+    Call->setAttributes(Invoke->getAttributes());
+    // If the invoke produced a value, the call does now instead.
+    Invoke->replaceAllUsesWith(Call);
+    delete Invoke;
+  } else if (auto *CatchEnd = dyn_cast<CatchEndPadInst>(Terminator)) {
+    auto *NewInstr =
+        CatchEndPadInst::Create(*JitContext->LLVMContext, nullptr, CatchEnd);
+    NewInstr->takeName(CatchEnd);
+    NewInstr->setDebugLoc(CatchEnd->getDebugLoc());
+    CatchEnd->eraseFromParent();
+  } else if (auto *CleanupEnd = dyn_cast<CleanupEndPadInst>(Terminator)) {
+    auto *NewInstr = CleanupEndPadInst::Create(CleanupEnd->getCleanupPad(),
+                                               nullptr, CleanupEnd);
+    NewInstr->takeName(CleanupEnd);
+    NewInstr->setDebugLoc(CleanupEnd->getDebugLoc());
+    CleanupEnd->eraseFromParent();
+  } else if (auto *CleanupRet = dyn_cast<CleanupReturnInst>(Terminator)) {
+    auto *NewInstr = CleanupReturnInst::Create(CleanupRet->getCleanupPad(),
+                                               nullptr, CleanupRet);
+    NewInstr->takeName(CleanupRet);
+    NewInstr->setDebugLoc(CleanupRet->getDebugLoc());
+    CleanupRet->eraseFromParent();
+  } else {
+    llvm_unreachable("Unexpected exceptional terminator");
+  }
 }
 
 void GenIR::readerPostPass(bool IsImportOnly) {
