@@ -605,53 +605,18 @@ public:
 
   void fgEnterRegion(EHRegion *Region) override;
 
-  /// Make a landing pad suitable as an unwind label for code in the given try
-  /// region.
+  /// Make an EH pad suitable as an unwind label for code in the try region
+  /// protected by the given handler, and any dispatch code needed after the
+  /// EH pad to transfer control to the handler code.
   ///
-  /// \param TryRegion         Protected region we need to build a landing pad
-  ///                          for.
-  /// \param OuterLandingPad   Outer region's LandingPad (where to branch to
-  ///                          when propagating an exception).
-  /// \returns A new \p LandingPadInst in a populated landing-pad block.
-  llvm::LandingPadInst *createLandingPad(EHRegion *TryRegion,
-                                         llvm::LandingPadInst *OuterLandingPad);
-
-  /// Generate a single catch clause for a protected region.
-  ///
-  /// \param CatchRegion   Handler that needs a clause and dispatch code
-  /// \param LandingPad    \p LandingPadInst under construction
-  /// \param FauxException \p Value representing the caught exception in the
-  ///                      dispatch code
-  /// \param Selector      \p Value representing the exception selector in the
-  ///                      dispatch code
-  void genCatchDispatch(EHRegion *CatchRegion, llvm::LandingPadInst *LandingPad,
-                        llvm::Value *FauxException, llvm::Value *Selector);
-
-  /// Generate landingpad code for a single filter.
-  ///
-  /// \param FilterRegion   Filter that needs a clause and dispatch code
-  /// \param LandingPad     \p LandingPadInst under construction
-  /// \param FauxException  \p Value representing the caught exception in the
-  ///                       dispatch code
-  /// \param Selector       \p Value representing the exception selector in the
-  ///                       dispatch code
-  void genFilterDispatch(EHRegion *FilterRegion,
-                         llvm::LandingPadInst *LandingPad,
-                         llvm::Value *FauxException, llvm::Value *Selector);
-
-  /// Helper for generating catch/filter dispatch.
-  ///
-  /// \param HandlerRegion  Handler that needs a clause and dispatch code
-  /// \param DoEnter        \p Value dictating whether to dispatch to the
-  ///                       handler
-  /// \param EnterBlockName Name for the BasicBlock that will enter the handler
-  /// \param ExceptionType  \p Type of the formal for the exception object
-  /// \param FauxException  \p Value representing the caught exception in the
-  ///                       dispatch code
-  void genHandlerDispatch(EHRegion *HandlerRegion, llvm::Value *DoEnter,
-                          const llvm::Twine &EnterBlockName,
-                          llvm::Type *ExceptionType,
-                          llvm::Value *FauxException);
+  /// \param Handler           Catch/Finally/Fault/Filter region we need to
+  ///                          build an EH pad for.
+  /// \param EndPad [in/out]   CatchEndPad/CleanupEndPad that should be the
+  ///                          unwind target of code in the handler body.
+  /// \param NextPad           Next outer (or successor catch) EH region.
+  /// \returns A new CatchPad/CleanupPad in a populated EH pad block.
+  llvm::Instruction *createEHPad(EHRegion *Handler, llvm::Instruction *&EndPad,
+                                 llvm::Instruction *NextPad);
 
   IRNode *fgNodeFindStartLabel(FlowGraphNode *Block) override;
 
