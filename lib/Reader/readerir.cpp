@@ -19,6 +19,7 @@
 #include "imeta.h"
 #include "newvstate.h"
 #include "llvm/ADT/Triple.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/IR/DebugLoc.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Intrinsics.h"
@@ -81,10 +82,8 @@ void GenStack::print() {
 #endif
 
 ReaderStack *GenStack::copy() {
-  GenStack *Copy;
-
   void *Buffer = Reader->getTempMemory(sizeof(GenStack));
-  Copy = new (Buffer) GenStack(Stack.capacity() + 1, Reader);
+  GenStack *Copy = new (Buffer) GenStack(Stack.capacity(), Reader);
   for (auto Value : *this) {
     Copy->push(Value);
   }
@@ -92,11 +91,8 @@ ReaderStack *GenStack::copy() {
 }
 
 ReaderStack *GenIR::createStack() {
-  uint32_t MaxStack =
-      std::min(MethodInfo->maxStack, std::min(100U, MethodInfo->ILCodeSize));
   void *Buffer = getTempMemory(sizeof(GenStack));
-  // extra 16 should reduce frequency of reallocation when inlining / jmp
-  return new (Buffer) GenStack(MaxStack + 16, this);
+  return new (Buffer) GenStack(4, this);
 }
 
 #pragma endregion
@@ -812,8 +808,22 @@ void GenIR::readerPostPass(bool IsImportOnly) {
     }
   }
 
+  // Crossgen in ReadyToRun mode records structs that method compilation
+  // depends on via getClassSize calls. Therefore, we shouldn't cache type info
+  // across methods.
+  if (JitContext->Flags & CORJIT_FLG_READYTORUN) {
+    // Clearing the cache is only safe if we're at the "top-level" context.
+    // We shouldn't have re-entrant jit requests in a prejit scenario.
+    assert(JitContext->Next == nullptr);
+    ClassTypeMap->clear();
+    ArrayTypeMap->clear();
+    ReverseClassTypeMap->clear();
+    BoxedTypeMap->clear();
+  }
+
   // Cleanup the memory we've been using.
   DBuilder->finalize();
+  delete DBuilder;
   delete LLVMBuilder;
 }
 
@@ -1216,8 +1226,9 @@ void GenIR::copyStructNoBarrier(Type *StructTy, Value *DestinationAddress,
 void GenIR::copyStruct(CORINFO_CLASS_HANDLE Class, IRNode *Dst, IRNode *Src,
                        ReaderAlignType Alignment, bool IsVolatile,
                        bool IsUnchecked) {
-  if (classHasGCPointers(Class)) {
-    GCLayout *RuntimeGCInfo = getClassGCLayout(Class);
+  // We should potentially cache this or leverage LLVM type info instead.
+  GCLayout *RuntimeGCInfo = getClassGCLayout(Class);
+  if (RuntimeGCInfo != nullptr) {
     const uint32_t PointerSize = getPointerByteSize();
     uint32_t OffsetAfterLastGCPointer = 0;
     StructType *StructTy =
@@ -1289,6 +1300,7 @@ void GenIR::copyStruct(CORINFO_CLASS_HANDLE Class, IRNode *Dst, IRNode *Src,
       IRNode *NonGCDstAddr = binaryOp(ReaderBaseNS::Add, Dst, Offset);
       cpBlk(Size, NonGCSrcAddr, NonGCDstAddr, Alignment, IsVolatile);
     }
+    free(RuntimeGCInfo);
   } else {
     // If the class doesn't have a gc layout then use a memcopy
     IRNode *Size = loadConstantI4(getClassSize(Class));
@@ -2440,6 +2452,7 @@ Type *GenIR::getClassTypeWorker(
       const bool IsGCPointer = isManagedPointerType(FieldTy);
       assert((ExpectGCPointer == IsGCPointer) &&
              "llvm type incorrectly describes location of gc references");
+      free(RuntimeGCInfo);
 #endif
     }
   }
@@ -3699,10 +3712,14 @@ void GenIR::replaceFlowGraphNodeUses(FlowGraphNode *OldNode,
   OldBlock->eraseFromParent();
 }
 
-bool fgEdgeListIsNominal(FlowGraphEdgeList *FgEdge) {
-  BasicBlock *Successor = fgEdgeListGetSink(FgEdge);
+bool fgEdgeIsNominal(FlowGraphEdgeIterator &FgEdgeIterator) {
+  BasicBlock *Successor = fgEdgeIteratorGetSink(FgEdgeIterator);
   Instruction *First = Successor->getFirstNonPHI();
   return (First != nullptr) && First->isEHPad();
+}
+
+bool fgEdgeIteratorIsEnd(FlowGraphEdgeIterator &FgEdgeIterator) {
+  return FgEdgeIterator.isEnd();
 }
 
 // Hook called from reader fg builder to identify potential inline candidates.
@@ -3738,50 +3755,45 @@ FlowGraphNode *GenIR::fgNodeGetIDom(FlowGraphNode *FgNode) {
   return Idom;
 }
 
-FlowGraphEdgeList *GenIR::fgNodeGetSuccessorList(FlowGraphNode *FgNode) {
+FlowGraphEdgeIterator GenIR::fgNodeGetSuccessors(FlowGraphNode *FgNode) {
   EHRegion *Region = fgNodeGetRegion(FgNode);
-  FlowGraphEdgeList *FgEdge = new FlowGraphSuccessorEdgeList(FgNode, Region);
-  if (fgEdgeListGetSink(FgEdge) == nullptr) {
-    return nullptr;
-  }
-  return FgEdge;
+  auto Impl =
+      llvm::make_unique<FlowGraphSuccessorEdgeIteratorImpl>(FgNode, Region);
+  FlowGraphEdgeIterator Iterator(std::move(Impl));
+  return Iterator;
 }
 
-FlowGraphEdgeList *fgEdgeListGetNextSuccessor(FlowGraphEdgeList *FgEdge) {
-  FgEdge->moveNext();
-  if (fgEdgeListGetSink(FgEdge) == nullptr) {
-    return nullptr;
-  }
-  return FgEdge;
+FlowGraphEdgeIterator GenIR::fgNodeGetPredecessors(FlowGraphNode *FgNode) {
+  auto Impl = llvm::make_unique<FlowGraphPredecessorEdgeIteratorImpl>(FgNode);
+  FlowGraphEdgeIterator Iterator(std::move(Impl));
+  return Iterator;
 }
 
-FlowGraphEdgeList *GenIR::fgNodeGetPredecessorList(FlowGraphNode *Fg) {
-  FlowGraphEdgeList *FgEdge = new FlowGraphPredecessorEdgeList(Fg);
-  if (fgEdgeListGetSource(FgEdge) == nullptr) {
-    return nullptr;
-  }
-  return FgEdge;
+bool fgEdgeIteratorMoveNextSuccessor(FlowGraphEdgeIterator &Iterator) {
+  assert(!Iterator.isEnd() && "iterating past end!");
+  Iterator.moveNext();
+  return !Iterator.isEnd();
 }
 
-FlowGraphEdgeList *fgEdgeListGetNextPredecessor(FlowGraphEdgeList *FgEdge) {
-  FgEdge->moveNext();
-  if (fgEdgeListGetSource(FgEdge) == nullptr) {
-    return nullptr;
-  }
-  return FgEdge;
+bool fgEdgeIteratorMoveNextPredecessor(FlowGraphEdgeIterator &Iterator) {
+  assert(!Iterator.isEnd() && "iterating past end!");
+  Iterator.moveNext();
+  return !Iterator.isEnd();
 }
 
-FlowGraphNode *fgEdgeListGetSink(FlowGraphEdgeList *FgEdge) {
-  return FgEdge->getSink();
+FlowGraphNode *fgEdgeIteratorGetSink(FlowGraphEdgeIterator &Iterator) {
+  assert(!Iterator.isEnd() && "iterator at end!");
+  return Iterator.getSink();
 }
 
-FlowGraphNode *fgEdgeListGetSource(FlowGraphEdgeList *FgEdge) {
-  return FgEdge->getSource();
+FlowGraphNode *fgEdgeIteratorGetSource(FlowGraphEdgeIterator &Iterator) {
+  assert(!Iterator.isEnd() && "iterator at end!");
+  return Iterator.getSource();
 }
 
-FlowGraphSuccessorEdgeList::FlowGraphSuccessorEdgeList(FlowGraphNode *Fg,
-                                                       EHRegion *Region)
-    : FlowGraphEdgeList(), SuccIterator(Fg->getTerminator()),
+FlowGraphSuccessorEdgeIteratorImpl::FlowGraphSuccessorEdgeIteratorImpl(
+    FlowGraphNode *Fg, EHRegion *Region)
+    : FlowGraphEdgeIteratorImpl(), SuccIterator(Fg->getTerminator()),
       SuccIteratorEnd(Fg->getTerminator(), true), NominalSucc(nullptr) {
   if (Region != nullptr) {
     Instruction *EHPad = Region->HandlerEHPad;
@@ -3791,7 +3803,15 @@ FlowGraphSuccessorEdgeList::FlowGraphSuccessorEdgeList(FlowGraphNode *Fg,
   }
 }
 
-void FlowGraphSuccessorEdgeList::moveNext() {
+bool FlowGraphSuccessorEdgeIteratorImpl::isEnd() {
+  if (NominalSucc != nullptr) {
+    // Haven't visited the nominal succ yet.
+    return false;
+  }
+  return (SuccIterator == SuccIteratorEnd);
+}
+
+void FlowGraphSuccessorEdgeIteratorImpl::moveNext() {
   CatchPadInst *CatchPad;
 
   if (NominalSucc == nullptr) {
@@ -3811,7 +3831,7 @@ void FlowGraphSuccessorEdgeList::moveNext() {
   }
 }
 
-FlowGraphNode *FlowGraphSuccessorEdgeList::getSink() {
+FlowGraphNode *FlowGraphSuccessorEdgeIteratorImpl::getSink() {
   if (NominalSucc != nullptr) {
     return (FlowGraphNode *)NominalSucc;
   }
@@ -3819,7 +3839,7 @@ FlowGraphNode *FlowGraphSuccessorEdgeList::getSink() {
                                            : (FlowGraphNode *)*SuccIterator;
 }
 
-FlowGraphNode *FlowGraphSuccessorEdgeList::getSource() {
+FlowGraphNode *FlowGraphSuccessorEdgeIteratorImpl::getSource() {
   return (FlowGraphNode *)SuccIterator.getSource();
 }
 
@@ -6730,8 +6750,23 @@ IRNode *GenIR::conv(ReaderBaseNS::ConvOpcode Opcode, IRNode *Source) {
     Conversion = SourceIsSigned ? LLVMBuilder->CreateSIToFP(Source, TargetTy)
                                 : LLVMBuilder->CreateUIToFP(Source, TargetTy);
   } else if (SourceTy->isFloatingPointTy() && TargetTy->isIntegerTy()) {
-    Conversion = DestIsSigned ? LLVMBuilder->CreateFPToSI(Source, TargetTy)
-                              : LLVMBuilder->CreateFPToUI(Source, TargetTy);
+    // The ECMA-335 spec says that for unchecked floating point to
+    // integer conversion, if there is overflow then the result
+    // is unspecified. However for compatibility with other jits
+    // we want to first convert to i64 and then truncate.
+    IntegerType *TargetIntegerType = cast<IntegerType>(TargetTy);
+    int TargetBitWidth = TargetIntegerType->getBitWidth();
+    if (TargetBitWidth < 64) {
+      IntegerType *Int64Ty = Type::getInt64Ty(*JitContext->LLVMContext);
+      Conversion = DestIsSigned ? LLVMBuilder->CreateFPToSI(Source, Int64Ty)
+                                : LLVMBuilder->CreateFPToUI(Source, Int64Ty);
+      // Now do the final conversion to the target type.
+      Conversion =
+          LLVMBuilder->CreateIntCast(Conversion, TargetTy, DestIsSigned);
+    } else {
+      Conversion = DestIsSigned ? LLVMBuilder->CreateFPToSI(Source, TargetTy)
+                                : LLVMBuilder->CreateFPToUI(Source, TargetTy);
+    }
   } else if (SourceTy->isFloatingPointTy() && TargetTy->isFloatingPointTy()) {
     Conversion = LLVMBuilder->CreateFPCast(Source, TargetTy);
   } else {
@@ -8646,15 +8681,17 @@ void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
     return;
   }
 
-  FlowGraphEdgeList *SuccessorList = fgNodeGetSuccessorListActual(CurrentBlock);
+  FlowGraphEdgeIterator SuccessorIterator =
+      fgNodeGetSuccessorsActual(CurrentBlock);
+  bool Done = SuccessorIterator.isEnd();
 
-  if (SuccessorList == nullptr) {
+  if (Done) {
     clearStack();
     return;
   }
 
-  while (SuccessorList != nullptr) {
-    FlowGraphNode *SuccessorBlock = fgEdgeListGetSink(SuccessorList);
+  while (!Done) {
+    FlowGraphNode *SuccessorBlock = fgEdgeIteratorGetSink(SuccessorIterator);
 
     if (!fgNodeHasMultiplePredsPropagatingStack(SuccessorBlock)) {
       // We need to create a stack for the Successor and copy the items from the
@@ -8707,13 +8744,12 @@ void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
 
           // Preemptively add all predecessors to the PHI node to ensure
           // that we don't forget any once we're done.
-          FlowGraphEdgeList *PredecessorList =
-              fgNodeGetPredecessorListActual(SuccessorBlock);
-          while (PredecessorList != nullptr) {
+          FlowGraphEdgeIterator PredecessorIterator =
+              fgNodeGetPredecessorsActual(SuccessorBlock);
+          while (!PredecessorIterator.isEnd()) {
             Phi->addIncoming(UndefValue::get(CurrentValue->getType()),
-                             fgEdgeListGetSource(PredecessorList));
-            PredecessorList =
-                fgEdgeListGetNextPredecessorActual(PredecessorList);
+                             fgEdgeIteratorGetSource(PredecessorIterator));
+            fgEdgeIteratorMoveNextPredecessorActual(PredecessorIterator);
           }
         } else {
           // PHI instructions should have been inserted already.
@@ -8736,7 +8772,9 @@ void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
       // valid, so we can't do this check.
       assert(CreatePHIs || SuccessorDegenerate || !isa<PHINode>(CurrentInst));
     }
-    SuccessorList = fgEdgeListGetNextSuccessorActual(SuccessorList);
+
+    fgEdgeIteratorMoveNextSuccessorActual(SuccessorIterator);
+    Done = fgEdgeIteratorIsEnd(SuccessorIterator);
   }
 
   clearStack();

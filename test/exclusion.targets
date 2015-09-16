@@ -46,22 +46,13 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\fieldExprUnchecked1.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\HugeArray.cmd" >
-             <Issue>794</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\HugeArray1.cmd" >
-             <Issue>794</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\hugeexpr1.cmd" >
              <Issue>794</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\HugeField1.cmd" >
              <Issue>794</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\HugeField2.cmd" >
-             <Issue>794</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\hugeSimpleExpr1.cmd" >
              <Issue>794</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\regress\vsw\471729\test.cmd" >
@@ -940,9 +931,6 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\casts\SEH\isinst_catch.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M10\b05617\b05617.cmd" >
-             <Issue>808</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b84909\b84909.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
@@ -1551,9 +1539,6 @@
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b32613\b32613.cmd" >
              <Issue>13</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M10\b08672\b08672.cmd" >
-             <Issue>638</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M09.5-PDC\b25813\b25813.cmd" >
              <Issue>13</Issue>
@@ -2290,7 +2275,10 @@
     </ItemGroup>
     <ItemGroup Condition="'$(XunitTestBinBase)' != '' and '$(COMPLUS_INSERTSTATEPOINTS)' != ''">	
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\regress\ddb\113574\113574.cmd" >
-             <Issue>737</Issue>
+             <Issue>CoreCLR\1541</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b68361\b68361.cmd" >
+             <Issue>CoreCLR\1541</Issue>
         </ExcludeList>
     </ItemGroup>
 </Project>

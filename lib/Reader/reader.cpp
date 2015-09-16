@@ -199,46 +199,39 @@ ReaderBase::ReaderBase(ICorJitInfo *JitInfo, CORINFO_METHOD_INFO *MethodInfo,
   IsVerifiableCode = true;
 }
 
-// Common FlowGraphEdgeList getters/setters
-FlowGraphEdgeList *fgEdgeListGetNextSuccessorActual(FlowGraphEdgeList *FgEdge) {
-  if (FgEdge) {
-    FgEdge = fgEdgeListGetNextSuccessor(FgEdge);
+bool fgEdgeIteratorMoveNextSuccessorActual(FlowGraphEdgeIterator &Iterator) {
+  bool HasEdge = fgEdgeIteratorMoveNextSuccessor(Iterator);
+  while (HasEdge && fgEdgeIsNominal(Iterator)) {
+    HasEdge = fgEdgeIteratorMoveNextSuccessor(Iterator);
   }
-  while (FgEdge && fgEdgeListIsNominal(FgEdge)) {
-    FgEdge = fgEdgeListGetNextSuccessor(FgEdge);
-  }
-  return FgEdge;
+  return HasEdge;
 }
 
-FlowGraphEdgeList *
-fgEdgeListGetNextPredecessorActual(FlowGraphEdgeList *FgEdge) {
-  if (FgEdge) {
-    FgEdge = fgEdgeListGetNextPredecessor(FgEdge);
+bool fgEdgeIteratorMoveNextPredecessorActual(FlowGraphEdgeIterator &Iterator) {
+  bool HasEdge = fgEdgeIteratorMoveNextPredecessor(Iterator);
+  while (HasEdge && fgEdgeIsNominal(Iterator)) {
+    HasEdge = fgEdgeIteratorMoveNextPredecessor(Iterator);
   }
-  while (FgEdge && fgEdgeListIsNominal(FgEdge)) {
-    FgEdge = fgEdgeListGetNextPredecessor(FgEdge);
-  }
-  return FgEdge;
+  return HasEdge;
 }
 
-FlowGraphEdgeList *ReaderBase::fgNodeGetSuccessorListActual(FlowGraphNode *Fg) {
-  FlowGraphEdgeList *FgEdge;
-
-  FgEdge = fgNodeGetSuccessorList(Fg);
-
-  if ((FgEdge != nullptr) && fgEdgeListIsNominal(FgEdge))
-    FgEdge = fgEdgeListGetNextSuccessorActual(FgEdge);
-  return FgEdge;
+FlowGraphEdgeIterator ReaderBase::fgNodeGetSuccessorsActual(FlowGraphNode *Fg) {
+  FlowGraphEdgeIterator Iterator = fgNodeGetSuccessors(Fg);
+  bool HasEdge = !fgEdgeIteratorIsEnd(Iterator);
+  while (HasEdge && fgEdgeIsNominal(Iterator)) {
+    HasEdge = fgEdgeIteratorMoveNextSuccessor(Iterator);
+  }
+  return Iterator;
 }
 
-FlowGraphEdgeList *
-ReaderBase::fgNodeGetPredecessorListActual(FlowGraphNode *Fg) {
-  FlowGraphEdgeList *FgEdge;
-
-  FgEdge = fgNodeGetPredecessorList(Fg);
-  if (FgEdge != nullptr && fgEdgeListIsNominal(FgEdge))
-    FgEdge = fgEdgeListGetNextPredecessorActual(FgEdge);
-  return FgEdge;
+FlowGraphEdgeIterator
+ReaderBase::fgNodeGetPredecessorsActual(FlowGraphNode *Fg) {
+  FlowGraphEdgeIterator Iterator = fgNodeGetPredecessors(Fg);
+  bool HasEdge = !fgEdgeIteratorIsEnd(Iterator);
+  while (HasEdge && fgEdgeIsNominal(Iterator)) {
+    HasEdge = fgEdgeIteratorMoveNextPredecessor(Iterator);
+  }
+  return Iterator;
 }
 
 // getMSILInstrLength
@@ -1596,30 +1589,18 @@ bool clauseLessThan(const CORINFO_EH_CLAUSE *Lhs,
 }
 
 void ReaderBase::rgnCreateRegionTree(void) {
-  CORINFO_EH_CLAUSE *EHClauses;
-  EHRegion *RegionTree, *RegionTreeRoot;
-  EHRegionList *AllRegionList;
 
-  // Initialize all region list to nullptr.
-  AllRegionList = nullptr;
-
-  RegionTreeRoot = nullptr;
-
-  EHClauses = nullptr;
-
-  if (MethodInfo->EHcount > 0) {
-    EHClauses = (CORINFO_EH_CLAUSE *)getProcMemory(sizeof(CORINFO_EH_CLAUSE) *
-                                                   MethodInfo->EHcount);
-    ASSERTNR(EHClauses);
-
-    for (uint32_t I = 0; I < MethodInfo->EHcount; I++) {
-      JitInfo->getEHinfo(getCurrentMethodHandle(), I, &(EHClauses[I]));
-    }
-  } else {
-    // No EH.
+  if (MethodInfo->EHcount == 0) {
+    // No EH in this method. Clear out the reader EH state.
     EhRegionTree = nullptr;
     AllRegionList = nullptr;
     return;
+  }
+
+  // Get the raw EH clause data
+  CORINFO_EH_CLAUSE *EHClauses = new CORINFO_EH_CLAUSE[MethodInfo->EHcount];
+  for (uint32_t I = 0; I < MethodInfo->EHcount; I++) {
+    JitInfo->getEHinfo(getCurrentMethodHandle(), I, &(EHClauses[I]));
   }
 
   CORINFO_EH_CLAUSE **ClauseList =
@@ -1653,12 +1634,12 @@ void ReaderBase::rgnCreateRegionTree(void) {
   // TODO: Find a way to enable the EIT dumper.
   // IMetaPrintCorInfoEHClause(EHClauses, MethodInfo->EHcount));
 
-  EhClauseInfo = EHClauses;
-
-  RegionTreeRoot = rgnMakeRegion(ReaderBaseNS::RGN_Root, nullptr,
-                                 RegionTreeRoot, &AllRegionList);
+  // Create root region.
+  EHRegionList *WorkingAllRegionList = nullptr;
+  EHRegion *RegionTreeRoot = rgnMakeRegion(ReaderBaseNS::RGN_Root, nullptr,
+                                           nullptr, &WorkingAllRegionList);
   rgnSetEndMSILOffset(RegionTreeRoot, MethodInfo->ILCodeSize);
-  RegionTree = RegionTreeRoot;
+  EHRegion *RegionTree = RegionTree = RegionTreeRoot;
 
   // Map the clause information into try regions for later processing
   // We need to map the EIT into the tryregion DAG as we need to
@@ -1700,7 +1681,7 @@ void ReaderBase::rgnCreateRegionTree(void) {
     } else {
       // create a new try region, make it a child of EnclosingRegion
       RegionTry = rgnMakeRegion(ReaderBaseNS::RGN_Try, EnclosingRegion,
-                                RegionTreeRoot, &AllRegionList);
+                                RegionTreeRoot, &WorkingAllRegionList);
 
       rgnSetStartMSILOffset(RegionTry, CurrentEHClause->TryOffset);
       rgnSetEndMSILOffset(RegionTry, CurrentEHClause->TryOffset +
@@ -1713,7 +1694,7 @@ void ReaderBase::rgnCreateRegionTree(void) {
     if (CurrentEHClause->Flags & CORINFO_EH_CLAUSE_FILTER) {
       EHRegion *RegionFilter;
       RegionHandler = rgnMakeRegion(ReaderBaseNS::RGN_MExcept, RegionTry,
-                                    RegionTreeRoot, &AllRegionList);
+                                    RegionTreeRoot, &WorkingAllRegionList);
 
       ReaderBaseNS::TryKind TryKind = rgnGetTryType(RegionTry);
       if (TryKind == ReaderBaseNS::TRY_MCatch) {
@@ -1728,7 +1709,7 @@ void ReaderBase::rgnCreateRegionTree(void) {
       }
 
       RegionFilter = rgnMakeRegion(ReaderBaseNS::RGN_Filter, RegionTry,
-                                   RegionTreeRoot, &AllRegionList);
+                                   RegionTreeRoot, &WorkingAllRegionList);
 
       rgnSetExceptFilterRegion(RegionHandler, RegionFilter);
       rgnSetExceptTryRegion(RegionHandler, RegionTry);
@@ -1744,7 +1725,7 @@ void ReaderBase::rgnCreateRegionTree(void) {
 
       if (CurrentEHClause->Flags & CORINFO_EH_CLAUSE_FINALLY) {
         RegionHandler = rgnMakeRegion(ReaderBaseNS::RGN_Finally, RegionTry,
-                                      RegionTreeRoot, &AllRegionList);
+                                      RegionTreeRoot, &WorkingAllRegionList);
 
         ASSERTNR(rgnGetTryType(RegionTry) == ReaderBaseNS::TRY_None);
         rgnSetTryType(RegionTry, ReaderBaseNS::TRY_Fin);
@@ -1755,7 +1736,7 @@ void ReaderBase::rgnCreateRegionTree(void) {
 
           ASSERTNR(rgnGetTryType(RegionTry) == ReaderBaseNS::TRY_None);
           RegionHandler = rgnMakeRegion(ReaderBaseNS::RGN_Fault, RegionTry,
-                                        RegionTreeRoot, &AllRegionList);
+                                        RegionTreeRoot, &WorkingAllRegionList);
           rgnSetTryType(RegionTry, ReaderBaseNS::TRY_Fault);
           rgnSetFaultTryRegion(RegionHandler, RegionTry);
         } else {
@@ -1773,7 +1754,7 @@ void ReaderBase::rgnCreateRegionTree(void) {
           // this will be a catch (EH_CLAUSE_NONE)
           // we need to keep the token somewhere
           RegionHandler = rgnMakeRegion(ReaderBaseNS::RGN_MCatch, RegionTry,
-                                        RegionTreeRoot, &AllRegionList);
+                                        RegionTreeRoot, &WorkingAllRegionList);
 
           ReaderBaseNS::TryKind TryKind;
 
@@ -1799,10 +1780,10 @@ void ReaderBase::rgnCreateRegionTree(void) {
                                            CurrentEHClause->HandlerLength);
   } while (I != 0);
 
-  // The memory allocated for EHClause will be freed when someone called
-  // THX_freemem(T_ALLOC)
-  // hopefully this happens in MSILReadProc somewhere
+  delete[] EHClauses;
 
+  // Propagate EH state to the reader.
+  AllRegionList = WorkingAllRegionList;
   EhRegionTree = RegionTreeRoot;
 }
 
@@ -1890,7 +1871,7 @@ FlowGraphNodeOffsetList *ReaderBase::fgAddNodeMSILOffset(
   }
   NewElement->setNode(*Node);
 
-  // Insert the new Elementent at the right spot
+  // Insert the new Element at the right spot
   if (PreviousElement) {
     NewElement->setNext(Element);
     PreviousElement->setNext(NewElement);
@@ -1903,20 +1884,22 @@ FlowGraphNodeOffsetList *ReaderBase::fgAddNodeMSILOffset(
 }
 
 void ReaderBase::fgDeleteBlockAndNodes(FlowGraphNode *Block) {
-  FlowGraphEdgeList *Arc, *ArcNext;
 
   // TODO: decide if we want to rewrite this code.  Our implementation
   // of DeleteNodesFromBlock also deletes the successors.
 
   fgDeleteNodesFromBlock(Block);
 
-  for (Arc = fgNodeGetSuccessorList(Block); Arc != nullptr; Arc = ArcNext) {
-    ArcNext = fgEdgeListGetNextSuccessor(Arc);
-    fgDeleteEdge(Arc);
+  for (FlowGraphEdgeIterator SuccessorIterator = fgNodeGetSuccessors(Block);
+       !fgEdgeIteratorIsEnd(SuccessorIterator);
+       fgEdgeIteratorMoveNextSuccessor(SuccessorIterator)) {
+    fgDeleteEdge(SuccessorIterator);
   }
-  for (Arc = fgNodeGetPredecessorList(Block); Arc != nullptr; Arc = ArcNext) {
-    ArcNext = fgEdgeListGetNextPredecessor(Arc);
-    fgDeleteEdge(Arc);
+
+  for (FlowGraphEdgeIterator PredecessorIterator = fgNodeGetPredecessors(Block);
+       !fgEdgeIteratorIsEnd(PredecessorIterator);
+       fgEdgeIteratorMoveNextPredecessor(PredecessorIterator)) {
+    fgDeleteEdge(PredecessorIterator);
   }
 
   fgDeleteBlock(Block);
@@ -5086,8 +5069,29 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
                      &ResolvedFtnToken);
 
         CORINFO_METHOD_HANDLE TargetMethod = ResolvedFtnToken.hMethod;
-
-        if (TargetMethod) {
+#ifdef FEATURE_CORECLR
+        {
+          // Do the CoreClr delegate transparency rule check before calling
+          // the delegate constructor
+          CORINFO_CLASS_HANDLE DelegateType = Data->getClassHandle();
+          CORINFO_METHOD_HANDLE CalleeMethod = TargetMethod;
+          mdToken TargetMethodToken = Data->getMethodToken();
+          rdrInsertCalloutForDelegate(DelegateType, CalleeMethod,
+                                      TargetMethodToken);
+        }
+#endif // FEATURE_CORECLR
+        if (Flags & CORJIT_FLG_READYTORUN) {
+          ReaderOperandStack->pop();
+          IRNode *TargetObject = ReaderOperandStack->pop();
+          assert((Data->getClassAttribs() & CORINFO_FLG_VALUECLASS) == 0);
+          IRNode *NewObjThisArg = rdrMakeNewObjThisArg(Data, CORINFO_TYPE_CLASS,
+                                                       Data->getClassHandle());
+          const bool MayThrow = false;
+          callReadyToRunHelper(CORINFO_HELP_READYTORUN_DELEGATE_CTOR, MayThrow,
+                               nullptr, &ResolvedFtnToken, NewObjThisArg,
+                               TargetObject);
+          return NewObjThisArg;
+        } else if (TargetMethod) {
           ASSERTNR(Data->hasThis());
           ASSERTNR(Data->isNewObj());
 
@@ -5095,59 +5099,41 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
           CORINFO_METHOD_HANDLE Method = Data->getMethodHandle();
           ASSERTNR(CallInfo);
 
-#ifdef FEATURE_CORECLR
-          {
-            // Do the CoreClr delegate transparency rule check before calling
-            // the delegate constructor
-            CORINFO_CLASS_HANDLE DelegateType = Data->getClassHandle();
-            CORINFO_METHOD_HANDLE CalleeMethod = TargetMethod;
+          CORINFO_METHOD_HANDLE AlternateCtor = nullptr;
+
+          DelegateCtorArgs *CtorData =
+              (DelegateCtorArgs *)getTempMemory(sizeof(DelegateCtorArgs));
+          memset(CtorData, 0, sizeof(DelegateCtorArgs));
+          CtorData->pMethod = getCurrentMethodHandle();
+
+          AlternateCtor =
+              JitInfo->GetDelegateCtor(Method, Class, TargetMethod, CtorData);
+
+          if (AlternateCtor != Method) {
+            // TODO: Ideally we would like the JIT to inline this alternate
+            // ctor method
+
+            Data->setOptimizedDelegateCtor(AlternateCtor);
+
+            IRNode *ArgIR;
             mdToken TargetMethodToken = Data->getMethodToken();
-            rdrInsertCalloutForDelegate(DelegateType, CalleeMethod,
-                                        TargetMethodToken);
-          }
-#endif // FEATURE_CORECLR
 
-          // TODO: In ReadyToRun mode this optimization is available for
-          // non-virtual function pointers only for now. It can be implemented
-          // via CORINFO_HELP_READYTORUN_DELEGATE_CTOR helper.
-
-          if (!(Flags & CORJIT_FLG_READYTORUN)) {
-            CORINFO_METHOD_HANDLE AlternateCtor = nullptr;
-
-            DelegateCtorArgs *CtorData =
-                (DelegateCtorArgs *)getTempMemory(sizeof(DelegateCtorArgs));
-            memset(CtorData, 0, sizeof(DelegateCtorArgs));
-            CtorData->pMethod = getCurrentMethodHandle();
-
-            AlternateCtor =
-                JitInfo->GetDelegateCtor(Method, Class, TargetMethod, CtorData);
-
-            if (AlternateCtor != Method) {
-              // TODO: Ideally we would like the JIT to inline this alternate
-              // ctor method
-
-              Data->setOptimizedDelegateCtor(AlternateCtor);
-
-              IRNode *ArgIR;
-              mdToken TargetMethodToken = Data->getMethodToken();
-
-              // Add the additional Args (if any)
-              if (CtorData->pArg3) {
+            // Add the additional Args (if any)
+            if (CtorData->pArg3) {
+              ArgIR =
+                  handleToIRNode(TargetMethodToken, CtorData->pArg3,
+                                 CtorData->pArg3, false, false, true, false);
+              ReaderOperandStack->push(ArgIR);
+              if (CtorData->pArg4) {
                 ArgIR =
-                    handleToIRNode(TargetMethodToken, CtorData->pArg3,
-                                   CtorData->pArg3, false, false, true, false);
+                    handleToIRNode(TargetMethodToken, CtorData->pArg4,
+                                   CtorData->pArg4, false, false, true, false);
                 ReaderOperandStack->push(ArgIR);
-                if (CtorData->pArg4) {
-                  ArgIR = handleToIRNode(TargetMethodToken, CtorData->pArg4,
-                                         CtorData->pArg4, false, false, true,
+                if (CtorData->pArg5) {
+                  ArgIR = handleToIRNode(TargetMethodToken, CtorData->pArg5,
+                                         CtorData->pArg5, false, false, true,
                                          false);
                   ReaderOperandStack->push(ArgIR);
-                  if (CtorData->pArg5) {
-                    ArgIR = handleToIRNode(TargetMethodToken, CtorData->pArg5,
-                                           CtorData->pArg5, false, false, true,
-                                           false);
-                    ReaderOperandStack->push(ArgIR);
-                  }
                 }
               }
             }
@@ -5213,6 +5199,13 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
 
   std::vector<CallArgType> &ArgumentTypes =
       Data->CallTargetSignature.ArgumentTypes;
+
+  // Initialize ArgumentTypes for the first time
+  //
+  // CallTargetSignature's constructor has not been called at this
+  // point. Therefore, a placement new is required to initialize
+  // ArgumentTypes.
+
   new (&ArgumentTypes) std::vector<CallArgType>(TotalArgs);
   std::vector<IRNode *> Arguments(TotalArgs);
 
@@ -5812,7 +5805,7 @@ void ReaderBase::initMethodInfo(bool HasSecretParameter,
 
   // Build up parameter info
   std::vector<CallArgType> &ArgumentTypes = Signature.ArgumentTypes;
-  new (&ArgumentTypes) std::vector<CallArgType>(NumArgs);
+  ArgumentTypes.resize(NumArgs);
 
   uint32_t ParamIndex = 0;
 
@@ -7168,6 +7161,12 @@ void ReaderBase::readBytesForFlowGraphNodeHelper(
       getCallInfo(&ResolvedToken, nullptr /*constraint*/,
                   CORINFO_CALLINFO_LDFTN, &CallInfo);
 
+      // Currently ReadyToRun has delegate constructor optimization only for
+      // non-virtual function pointers resolved at compile time.
+      if ((Flags & CORJIT_FLG_READYTORUN) && (CallInfo.kind != CORINFO_CALL)) {
+        LoadFtnToken = mdTokenNil;
+      }
+
       verifyLoadFtn(TheVerificationState, Opcode, &ResolvedToken,
                     ILInput + CurrentOffset, &CallInfo);
       BREAK_ON_VERIFY_ONLY;
@@ -7287,9 +7286,15 @@ void ReaderBase::readBytesForFlowGraphNodeHelper(
       resolveToken(LoadFtnToken, CORINFO_TOKENKIND_Method, &ResolvedToken);
 
       CORINFO_CALL_INFO CallInfo;
-      CORINFO_CALLINFO_FLAGS Flags = (CORINFO_CALLINFO_FLAGS)(
+      CORINFO_CALLINFO_FLAGS CallFlags = (CORINFO_CALLINFO_FLAGS)(
           CORINFO_CALLINFO_LDFTN | CORINFO_CALLINFO_CALLVIRT);
-      getCallInfo(&ResolvedToken, nullptr /*constraint*/, Flags, &CallInfo);
+      getCallInfo(&ResolvedToken, nullptr /*constraint*/, CallFlags, &CallInfo);
+
+      // Currently ReadyToRun has delegate constructor optimization only for
+      // non-virtual function pointers resolved at compile time.
+      if ((Flags & CORJIT_FLG_READYTORUN) && (CallInfo.kind != CORINFO_CALL)) {
+        LoadFtnToken = mdTokenNil;
+      }
 
       verifyLoadFtn(TheVerificationState, Opcode, &ResolvedToken,
                     ILInput + CurrentOffset, &CallInfo);
@@ -7819,9 +7824,22 @@ void ReaderBase::readBytesForFlowGraphNode(FlowGraphNode *Fg,
   // OPTIMIZATION: Continue using the existing stack in the common case
   // where it is left empty at the end of the block.
   if (!IsVerifyOnly) {
+    // Note we don't propagate empty stacks to successors, so if there is no
+    // stack for this block, verify that the current stack is empty.
     ReaderStack *Temp = fgNodeGetOperandStack(Fg);
-    if (Temp)
+    if (Temp) {
+      // If we are going to switch stacks make sure to clean up the active
+      // stack -- any important state was propagated to the successors
+      // already.
+      if (ReaderOperandStack != Temp) {
+        if (ReaderOperandStack != nullptr) {
+          delete ReaderOperandStack;
+        }
+      }
       ReaderOperandStack = Temp->copy();
+    } else {
+      ReaderOperandStack->assertEmpty();
+    }
   }
 
   // Find the offset at which to start reading the buffer
@@ -7867,12 +7885,7 @@ void ReaderBase::readBytesForFlowGraphNode(FlowGraphNode *Fg,
         false; // Blocks with errors can't have this verified
 
     // Delete all (non-EH reachability) flow edges that come from this block.
-    FlowGraphEdgeList *Arc, *ArcNext;
-    for (Arc = fgNodeGetSuccessorListActual(Fg); Arc != nullptr;
-         Arc = ArcNext) {
-      ArcNext = fgEdgeListGetNextSuccessorActual(Arc);
-      fgDeleteEdge(Arc);
-    }
+    fgRemoveAllActualSuccessorEdges(Fg);
 
     // Clear operand and verifier stack since block
     // successor edges are now cut and the operands
@@ -7908,15 +7921,24 @@ void ReaderBase::readBytesForFlowGraphNode(FlowGraphNode *Fg,
   }
 }
 
+void ReaderBase::fgRemoveAllActualSuccessorEdges(FlowGraphNode *Block) {
+  for (FlowGraphEdgeIterator SuccessorIterator =
+           fgNodeGetSuccessorsActual(Block);
+       !fgEdgeIteratorIsEnd(SuccessorIterator);
+       fgEdgeIteratorMoveNextSuccessorActual(SuccessorIterator)) {
+    fgDeleteEdge(SuccessorIterator);
+  }
+}
+
 FlowGraphNodeWorkList *
 ReaderBase::fgPrependUnvisitedSuccToWorklist(FlowGraphNodeWorkList *Worklist,
                                              FlowGraphNode *CurrBlock) {
-  FlowGraphNode *Successor;
 
-  for (FlowGraphEdgeList *FgEdge = fgNodeGetSuccessorList(CurrBlock);
-       FgEdge != nullptr; FgEdge = fgEdgeListGetNextSuccessor(FgEdge)) {
+  for (FlowGraphEdgeIterator SuccessorIterator = fgNodeGetSuccessors(CurrBlock);
+       !fgEdgeIteratorIsEnd(SuccessorIterator);
+       fgEdgeIteratorMoveNextSuccessor(SuccessorIterator)) {
 
-    Successor = fgEdgeListGetSink(FgEdge);
+    FlowGraphNode *Successor = fgEdgeIteratorGetSink(SuccessorIterator);
 
     if (!fgNodeIsVisited(Successor)) {
 #ifndef NODEBUG
@@ -8029,21 +8051,20 @@ void ReaderBase::msilToIR(void) {
 // fake up edges to unreachable code for peverify
 // (so we can report errors in unreachable code)
 #ifdef CC_PEVERIFY
-  FlowGraphNode *Block;
-  for (Block = FgHead; Block != FgTail;) {
-    FlowGraphNode *nextBlock;
-    nextBlock = fgNodeGetNext(Block);
+  for (FlowGraphNode *Block = FgHead; Block != FgTail;) {
+    FlowGraphNode *NextBlock = fgNodeGetNext(Block);
+    FlowGraphEdgeIterator SuccessorIterator = fgNodeGetSuccessors(Block);
 
-    if (!fgNodeGetPredecessorList(Block) && Block != FgHead &&
+    if (!fgEdgeIteratorIsDone(SuccessorIterator) && (Block != FgHead) &&
         (fgNodeGetStartMSILOffset(Block) != fgNodeGetEndMSILOffset(Block))) {
       fgAddArc(nullptr, FgHead, Block);
-      FlowGraphEdgeList *edgeList = fgNodeGetSuccessorList(FgHead);
-      while (edgeList) {
-        FlowGraphNode *succBlock = fgEdgeListGetSink(edgeList);
+      FlowGraphEdgeIterator HeadSuccessorIterator = fgNodeGetSuccessors(FgHead);
+      while (!fgEdgeIteratorIsDone(HeadSuccessorIterator)) {
+        FlowGraphNode *succBlock = fgEdgeIteratorGetSink(HeadSuccessorIterator);
         if (succBlock == Block) {
-          FgEdgeListMakeFake(edgeList);
+          fgEdgeIteratorMakeFake(HeadSuccessorIterator);
         }
-        edgeList = fgEdgeListGetNextSuccessor(edgeList);
+        fgEdgeIteratorMoveNextSuccessor(HeadSuccessorIterator);
       }
     }
     Block = nextBlock;
@@ -8059,14 +8080,12 @@ void ReaderBase::msilToIR(void) {
   // Walk the graph in depth-first order to discover reachable nodes but don't
   // process them yet. All reachable nodes are marked as visited.
   while (Worklist != nullptr) {
-    FlowGraphNode *Block;
-
     // Pop top block
-    Block = Worklist->Block;
-    Worklist = Worklist->Next;
-
+    FlowGraphNode *Block = Worklist->Block;
+    FlowGraphNodeWorkList *Next = Worklist->Next;
+    delete Worklist;
     // Prepend unvisited successors to worklist
-    Worklist = fgPrependUnvisitedSuccToWorklist(Worklist, Block);
+    Worklist = fgPrependUnvisitedSuccToWorklist(Next, Block);
   }
 
   // Process the blocks in the MSIL offset order. ECMA spec guarantees
@@ -8106,10 +8125,12 @@ void ReaderBase::msilToIR(void) {
 #endif // !CC_PEVERIFY
 
     // Check whether we created new FlowGraphNodes while processing CurrentNode.
-    for (FlowGraphEdgeList *FgEdge = fgNodeGetSuccessorList(CurrentNode);
-         FgEdge != nullptr; FgEdge = fgEdgeListGetNextSuccessor(FgEdge)) {
+    for (FlowGraphEdgeIterator SuccessorIterator =
+             fgNodeGetSuccessors(CurrentNode);
+         !fgEdgeIteratorIsEnd(SuccessorIterator);
+         fgEdgeIteratorMoveNextSuccessor(SuccessorIterator)) {
 
-      FlowGraphNode *Successor = fgEdgeListGetSink(FgEdge);
+      FlowGraphNode *Successor = fgEdgeIteratorGetSink(SuccessorIterator);
       if (!fgNodeIsVisited(Successor)) {
         // Check that CurrentNode is the only predecessor of Successor that
         // propagates stack.
@@ -8186,16 +8207,61 @@ void ReaderBase::msilToIR(void) {
   // Client post-pass
   //
   readerPostPass(IsImportOnly);
+
+  // Cleanup memory used
+  for (uint32_t Index = 0; Index < NodeOffsetListArraySize; Index++) {
+    FlowGraphNodeOffsetList *Element = NodeOffsetListArray[Index];
+    while (Element != nullptr) {
+      FlowGraphNodeOffsetList *NextElement = Element->getNext();
+      delete Element;
+      Element = NextElement;
+    }
+  }
+  delete NodeOffsetListArray;
+
+  for (FlowGraphNode *Block = FgHead; Block != nullptr;
+       Block = fgNodeGetNext(Block)) {
+    ReaderStack *Stack = fgNodeGetOperandStack(Block);
+    if (Stack != nullptr) {
+      delete Stack;
+      fgNodeSetOperandStack(Block, nullptr);
+    }
+  }
+
+  if (ReaderOperandStack != nullptr) {
+    delete ReaderOperandStack;
+    ReaderOperandStack = nullptr;
+  }
+
+  EHRegionList *RegionList = AllRegionList;
+  while (RegionList != nullptr) {
+    EHRegionList *Next = rgnListGetNext(RegionList);
+    EHRegion *Region = rgnListGetRgn(RegionList);
+    EHRegionList *Children = rgnGetChildList(Region);
+    while (Children != nullptr) {
+      EHRegionList *NextChild = rgnListGetNext(Children);
+      free(Children);
+      Children = NextChild;
+    }
+    free(RegionList);
+    free(Region);
+    RegionList = Next;
+  }
+
+  if (FgGetRegionCanonicalExitOffsetBuff != nullptr) {
+    free(FgGetRegionCanonicalExitOffsetBuff);
+    FgGetRegionCanonicalExitOffsetBuff = nullptr;
+  }
 }
 
 bool ReaderBase::fgNodeHasMultiplePredsPropagatingStack(FlowGraphNode *Node) {
   int NumberOfPredecessorsPropagatingStack = 0;
-  for (FlowGraphEdgeList *NodePredecessorList =
-           fgNodeGetPredecessorListActual(Node);
-       NodePredecessorList != nullptr;
-       NodePredecessorList =
-           fgEdgeListGetNextPredecessorActual(NodePredecessorList)) {
-    FlowGraphNode *PredecessorNode = fgEdgeListGetSource(NodePredecessorList);
+  for (FlowGraphEdgeIterator PredecessorIterator =
+           fgNodeGetPredecessorsActual(Node);
+       !fgEdgeIteratorIsEnd(PredecessorIterator);
+       fgEdgeIteratorMoveNextPredecessorActual(PredecessorIterator)) {
+    FlowGraphNode *PredecessorNode =
+        fgEdgeIteratorGetSource(PredecessorIterator);
     if (fgNodePropagatesOperandStack(PredecessorNode)) {
       ++NumberOfPredecessorsPropagatingStack;
       if (NumberOfPredecessorsPropagatingStack > 1) {
@@ -8207,12 +8273,12 @@ bool ReaderBase::fgNodeHasMultiplePredsPropagatingStack(FlowGraphNode *Node) {
 }
 
 bool ReaderBase::fgNodeHasNoPredsPropagatingStack(FlowGraphNode *Node) {
-  for (FlowGraphEdgeList *NodePredecessorList =
-           fgNodeGetPredecessorListActual(Node);
-       NodePredecessorList != nullptr;
-       NodePredecessorList =
-           fgEdgeListGetNextPredecessorActual(NodePredecessorList)) {
-    FlowGraphNode *PredecessorNode = fgEdgeListGetSource(NodePredecessorList);
+  for (FlowGraphEdgeIterator PredecessorIterator =
+           fgNodeGetPredecessorsActual(Node);
+       !fgEdgeIteratorIsEnd(PredecessorIterator);
+       fgEdgeIteratorMoveNextPredecessorActual(PredecessorIterator)) {
+    FlowGraphNode *PredecessorNode =
+        fgEdgeIteratorGetSource(PredecessorIterator);
     if (fgNodePropagatesOperandStack(PredecessorNode)) {
       return false;
     }
