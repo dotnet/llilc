@@ -256,9 +256,7 @@ public:
   IRNode *castOp(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *ObjRefNode,
                  CorInfoHelpFunc HelperId) override;
 
-  IRNode *ckFinite(IRNode *Arg1) override {
-    throw NotYetImplementedException("ckFinite");
-  };
+  IRNode *ckFinite(IRNode *Arg1) override;
 
   /// \brief Modify comparison arguments, if needed, to have equal types.
   ///

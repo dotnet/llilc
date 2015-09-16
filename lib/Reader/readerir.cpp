@@ -3457,6 +3457,29 @@ IRNode *GenIR::loadNull() {
   return (IRNode *)Constant::getNullValue(NullType);
 }
 
+IRNode *GenIR::ckFinite(IRNode *Arg) {
+  // Reinterpret the float as an integer, extract exponent, and compare to
+  // an exponent of all 1's.
+  Type *ArgTy = Arg->getType();
+  assert(ArgTy->isFloatingPointTy());
+  uint32_t ArgSize = ArgTy->getPrimitiveSizeInBits();
+  Type *IntTy = nullptr;
+  Value *ExponentMask = nullptr;
+  if (ArgSize == 32) {
+    IntTy = Type::getInt32Ty(*JitContext->LLVMContext);
+    ExponentMask = ConstantInt::get(IntTy, APInt(ArgSize, 0x7F800000));
+  } else {
+    IntTy = Type::getInt64Ty(*JitContext->LLVMContext);
+    ExponentMask = ConstantInt::get(IntTy, APInt(ArgSize, 0x7FF0000000000000));
+  }
+  Value *IntBits = LLVMBuilder->CreateBitCast(Arg, IntTy);
+  Value *ExponentBits = LLVMBuilder->CreateAnd(IntBits, ExponentMask);
+  Value *IsFinite = LLVMBuilder->CreateICmpEQ(ExponentBits, ExponentMask);
+  CorInfoHelpFunc HelperId = CORINFO_HELP_OVERFLOW;
+  genConditionalThrow(IsFinite, HelperId, "ThrowOverflow");
+  return Arg;
+}
+
 IRNode *GenIR::unaryOp(ReaderBaseNS::UnaryOpcode Opcode, IRNode *Arg1) {
 
   if (Opcode == ReaderBaseNS::Neg) {
