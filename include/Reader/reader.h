@@ -868,12 +868,6 @@ public:
   /// \returns    Token for the delegate constructor.
   mdToken getLoadFtnToken() { return LoadFtnToken; }
 
-  /// Set the token for the delegate constructor when the reader has detected
-  /// the ldftn/newobj delegate construction pattern.
-  ///
-  /// \param Token    Token for the delegate constructor.
-  void setLoadFtnToken(mdToken Token) { LoadFtnToken = Token; }
-
   /// \brief Check if this is a basic call to the target.
   ///
   /// If the client knows that this call is a direct call to the target

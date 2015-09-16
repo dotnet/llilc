@@ -5069,8 +5069,29 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
                      &ResolvedFtnToken);
 
         CORINFO_METHOD_HANDLE TargetMethod = ResolvedFtnToken.hMethod;
-
-        if (TargetMethod) {
+#ifdef FEATURE_CORECLR
+        {
+          // Do the CoreClr delegate transparency rule check before calling
+          // the delegate constructor
+          CORINFO_CLASS_HANDLE DelegateType = Data->getClassHandle();
+          CORINFO_METHOD_HANDLE CalleeMethod = TargetMethod;
+          mdToken TargetMethodToken = Data->getMethodToken();
+          rdrInsertCalloutForDelegate(DelegateType, CalleeMethod,
+                                      TargetMethodToken);
+        }
+#endif // FEATURE_CORECLR
+        if (Flags & CORJIT_FLG_READYTORUN) {
+          ReaderOperandStack->pop();
+          IRNode *TargetObject = ReaderOperandStack->pop();
+          assert((Data->getClassAttribs() & CORINFO_FLG_VALUECLASS) == 0);
+          IRNode *NewObjThisArg = rdrMakeNewObjThisArg(Data, CORINFO_TYPE_CLASS,
+                                                       Data->getClassHandle());
+          const bool MayThrow = false;
+          callReadyToRunHelper(CORINFO_HELP_READYTORUN_DELEGATE_CTOR, MayThrow,
+                               nullptr, &ResolvedFtnToken, NewObjThisArg,
+                               TargetObject);
+          return NewObjThisArg;
+        } else if (TargetMethod) {
           ASSERTNR(Data->hasThis());
           ASSERTNR(Data->isNewObj());
 
@@ -5078,59 +5099,41 @@ ReaderBase::rdrCall(ReaderCallTargetData *Data, ReaderBaseNS::CallOpcode Opcode,
           CORINFO_METHOD_HANDLE Method = Data->getMethodHandle();
           ASSERTNR(CallInfo);
 
-#ifdef FEATURE_CORECLR
-          {
-            // Do the CoreClr delegate transparency rule check before calling
-            // the delegate constructor
-            CORINFO_CLASS_HANDLE DelegateType = Data->getClassHandle();
-            CORINFO_METHOD_HANDLE CalleeMethod = TargetMethod;
+          CORINFO_METHOD_HANDLE AlternateCtor = nullptr;
+
+          DelegateCtorArgs *CtorData =
+              (DelegateCtorArgs *)getTempMemory(sizeof(DelegateCtorArgs));
+          memset(CtorData, 0, sizeof(DelegateCtorArgs));
+          CtorData->pMethod = getCurrentMethodHandle();
+
+          AlternateCtor =
+              JitInfo->GetDelegateCtor(Method, Class, TargetMethod, CtorData);
+
+          if (AlternateCtor != Method) {
+            // TODO: Ideally we would like the JIT to inline this alternate
+            // ctor method
+
+            Data->setOptimizedDelegateCtor(AlternateCtor);
+
+            IRNode *ArgIR;
             mdToken TargetMethodToken = Data->getMethodToken();
-            rdrInsertCalloutForDelegate(DelegateType, CalleeMethod,
-                                        TargetMethodToken);
-          }
-#endif // FEATURE_CORECLR
 
-          // TODO: In ReadyToRun mode this optimization is available for
-          // non-virtual function pointers only for now. It can be implemented
-          // via CORINFO_HELP_READYTORUN_DELEGATE_CTOR helper.
-
-          if (!(Flags & CORJIT_FLG_READYTORUN)) {
-            CORINFO_METHOD_HANDLE AlternateCtor = nullptr;
-
-            DelegateCtorArgs *CtorData =
-                (DelegateCtorArgs *)getTempMemory(sizeof(DelegateCtorArgs));
-            memset(CtorData, 0, sizeof(DelegateCtorArgs));
-            CtorData->pMethod = getCurrentMethodHandle();
-
-            AlternateCtor =
-                JitInfo->GetDelegateCtor(Method, Class, TargetMethod, CtorData);
-
-            if (AlternateCtor != Method) {
-              // TODO: Ideally we would like the JIT to inline this alternate
-              // ctor method
-
-              Data->setOptimizedDelegateCtor(AlternateCtor);
-
-              IRNode *ArgIR;
-              mdToken TargetMethodToken = Data->getMethodToken();
-
-              // Add the additional Args (if any)
-              if (CtorData->pArg3) {
+            // Add the additional Args (if any)
+            if (CtorData->pArg3) {
+              ArgIR =
+                  handleToIRNode(TargetMethodToken, CtorData->pArg3,
+                                 CtorData->pArg3, false, false, true, false);
+              ReaderOperandStack->push(ArgIR);
+              if (CtorData->pArg4) {
                 ArgIR =
-                    handleToIRNode(TargetMethodToken, CtorData->pArg3,
-                                   CtorData->pArg3, false, false, true, false);
+                    handleToIRNode(TargetMethodToken, CtorData->pArg4,
+                                   CtorData->pArg4, false, false, true, false);
                 ReaderOperandStack->push(ArgIR);
-                if (CtorData->pArg4) {
-                  ArgIR = handleToIRNode(TargetMethodToken, CtorData->pArg4,
-                                         CtorData->pArg4, false, false, true,
+                if (CtorData->pArg5) {
+                  ArgIR = handleToIRNode(TargetMethodToken, CtorData->pArg5,
+                                         CtorData->pArg5, false, false, true,
                                          false);
                   ReaderOperandStack->push(ArgIR);
-                  if (CtorData->pArg5) {
-                    ArgIR = handleToIRNode(TargetMethodToken, CtorData->pArg5,
-                                           CtorData->pArg5, false, false, true,
-                                           false);
-                    ReaderOperandStack->push(ArgIR);
-                  }
                 }
               }
             }
@@ -7158,6 +7161,12 @@ void ReaderBase::readBytesForFlowGraphNodeHelper(
       getCallInfo(&ResolvedToken, nullptr /*constraint*/,
                   CORINFO_CALLINFO_LDFTN, &CallInfo);
 
+      // Currently ReadyToRun has delegate constructor optimization only for
+      // non-virtual function pointers resolved at compile time.
+      if ((Flags & CORJIT_FLG_READYTORUN) && (CallInfo.kind != CORINFO_CALL)) {
+        LoadFtnToken = mdTokenNil;
+      }
+
       verifyLoadFtn(TheVerificationState, Opcode, &ResolvedToken,
                     ILInput + CurrentOffset, &CallInfo);
       BREAK_ON_VERIFY_ONLY;
@@ -7277,9 +7286,15 @@ void ReaderBase::readBytesForFlowGraphNodeHelper(
       resolveToken(LoadFtnToken, CORINFO_TOKENKIND_Method, &ResolvedToken);
 
       CORINFO_CALL_INFO CallInfo;
-      CORINFO_CALLINFO_FLAGS Flags = (CORINFO_CALLINFO_FLAGS)(
+      CORINFO_CALLINFO_FLAGS CallFlags = (CORINFO_CALLINFO_FLAGS)(
           CORINFO_CALLINFO_LDFTN | CORINFO_CALLINFO_CALLVIRT);
-      getCallInfo(&ResolvedToken, nullptr /*constraint*/, Flags, &CallInfo);
+      getCallInfo(&ResolvedToken, nullptr /*constraint*/, CallFlags, &CallInfo);
+
+      // Currently ReadyToRun has delegate constructor optimization only for
+      // non-virtual function pointers resolved at compile time.
+      if ((Flags & CORJIT_FLG_READYTORUN) && (CallInfo.kind != CORINFO_CALL)) {
+        LoadFtnToken = mdTokenNil;
+      }
 
       verifyLoadFtn(TheVerificationState, Opcode, &ResolvedToken,
                     ILInput + CurrentOffset, &CallInfo);
