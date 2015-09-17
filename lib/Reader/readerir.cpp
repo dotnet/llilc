@@ -5654,6 +5654,10 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo, bool MayThrow,
   }
 
   CorInfoCallConv CC = Signature.getCallingConvention();
+  if (CC == CORINFO_CALLCONV_VARARG) {
+    throw NotYetImplementedException("Vararg call");
+  }
+
   bool IsUnmanagedCall = CC != CORINFO_CALLCONV_DEFAULT;
   if (!CallTargetInfo->isIndirect() && IsUnmanagedCall) {
     throw NotYetImplementedException("Direct unmanaged call");
