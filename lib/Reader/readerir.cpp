@@ -543,11 +543,21 @@ void GenIR::readerPostVisit() {
     BasicBlock *NextFilterBlock = FilterEntry->getSingleSuccessor();
     assert(NextFilterBlock != nullptr);
     BasicBlock *PreviousBlock = FilterEntry;
-    while (fgNodeGetRegion((FlowGraphNode *)NextFilterBlock) == FilterRegion) {
-      BasicBlock *MovingBlock = NextFilterBlock;
-      NextFilterBlock = MovingBlock->getNextNode();
-      MovingBlock->moveAfter(PreviousBlock);
-      PreviousBlock = MovingBlock;
+    BasicBlock *End = RootFunction->back().getNextNode();
+    while (NextFilterBlock != End) {
+      if (fgNodeGetRegion((FlowGraphNode *)NextFilterBlock) == FilterRegion) {
+        BasicBlock *MovingBlock = NextFilterBlock;
+        NextFilterBlock = MovingBlock->getNextNode();
+        MovingBlock->moveAfter(PreviousBlock);
+        PreviousBlock = MovingBlock;
+      } else {
+        // TODO: the filter block should generally be adjacent, so we should be
+        // able to break out as soon as we see a block not in the filter.
+        // Currently, however, point blocks that are created in the 2nd pass
+        // are left at the end of the global block list, even if they're in the
+        // filter.
+        NextFilterBlock = NextFilterBlock->getNextNode();
+      }
     }
   }
 
