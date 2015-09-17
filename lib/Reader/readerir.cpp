@@ -7301,8 +7301,28 @@ IRNode *GenIR::loadPrimitiveType(IRNode *Addr, CorInfoType CorInfoType,
                                  ReaderAlignType Alignment, bool IsVolatile,
                                  bool IsInterfReadOnly, bool AddressMayBeNull) {
   uint32_t Align;
-  const CORINFO_CLASS_HANDLE ClassHandle = nullptr;
-  IRNode *TypedAddr =
+  CORINFO_CLASS_HANDLE ClassHandle = nullptr;
+  IRNode *TypedAddr = nullptr;
+  // For refany, ensure that Addr is ptr to managed ptr, and if not, arrange to
+  // coerce the type to ptr to ptr to object.
+  if (CorInfoType == CORINFO_TYPE_REFANY) {
+    bool NeedsCoercion = false;
+    Type *AddressTy = Addr->getType();
+    PointerType *PointerTy = dyn_cast<PointerType>(AddressTy);
+    if (PointerTy != nullptr) {
+      Type *ReferentTy = PointerTy->getPointerElementType();
+      NeedsCoercion = !isManagedPointerType(ReferentTy);
+    } else {
+      NeedsCoercion = true;
+    }
+    if (NeedsCoercion) {
+      // Prepare to coerce to proper type
+      ClassHandle = getBuiltinClass(CorInfoClassId::CLASSID_SYSTEM_OBJECT);
+      CorInfoType = CORINFO_TYPE_CLASS;
+    }
+  }
+  // Coerce address to expected type, if needed.
+  TypedAddr =
       getTypedAddress(Addr, CorInfoType, ClassHandle, Alignment, &Align);
   LoadInst *LoadInst = makeLoad(TypedAddr, IsVolatile, AddressMayBeNull);
   LoadInst->setAlignment(Align);
