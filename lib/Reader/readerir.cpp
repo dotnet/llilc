@@ -3625,6 +3625,7 @@ Instruction *GenIR::createEHPad(EHRegion *Handler, Instruction *&EndPad,
     ReaderStack *EnterFilterStack = createStack();
     EnterFilterStack->push((IRNode *)&*ArgIter);
     fgNodeSetOperandStack(FilterEntry, EnterFilterStack);
+    fgNodeSetPropagatesOperandStack(FilterEntry, true);
 
     // Record the FilterFunction on the EHRegion.
     assert(Handler->FilterFunction == nullptr);
@@ -3724,6 +3725,10 @@ void GenIR::replaceFlowGraphNodeUses(FlowGraphNode *OldNode,
 
 bool fgEdgeIsNominal(FlowGraphEdgeIterator &FgEdgeIterator) {
   BasicBlock *Successor = fgEdgeIteratorGetSink(FgEdgeIterator);
+  if (Successor == &Successor->getParent()->getEntryBlock()) {
+    // This is the nominal edge to a filter function entry.
+    return true;
+  }
   Instruction *First = Successor->getFirstNonPHI();
   return (First != nullptr) && First->isEHPad();
 }
