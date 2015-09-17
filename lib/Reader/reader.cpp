@@ -3019,8 +3019,16 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
       break;
 
     case ReaderBaseNS::CEE_ENDFILTER:
+      // Make a branch to the handler, which will correspond to the filter
+      // returning true.
+      GraphNode = nullptr;
+      fgAddNodeMSILOffset(&GraphNode, NextOffset);
+      BlockNode = fgNodeGetStartIRNode(Block);
+      BranchNode = fgMakeBranchHelper((IRNode *)GraphNode, BlockNode,
+                                      CurrentOffset, false, false);
+      // Split the block.
       fgNodeSetEndMSILOffset(Block, NextOffset);
-      Block = makeFlowGraphNode(NextOffset, Block);
+      Block = fgSplitBlock(Block, NextOffset, nullptr);
       break;
 
     case ReaderBaseNS::CEE_ENDFINALLY: {
@@ -6869,7 +6877,6 @@ void ReaderBase::readBytesForFlowGraphNodeHelper(
       //    EXCEPTION_CONTINUE_EXECUTION (-1, not supported in CLR currently)
       Arg1 = ReaderOperandStack->pop(); // Pop the object pointer
       endFilter(Arg1);
-      clearStack();
       break;
 
     case ReaderBaseNS::CEE_ENDFINALLY:

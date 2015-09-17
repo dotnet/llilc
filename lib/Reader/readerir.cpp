@@ -120,7 +120,7 @@ public:
     llvm::SwitchInst *EndFinallySwitch; // Only used for Finally regions
     mdToken CatchClassToken;            // Only used for Catch regions
     EHRegion *HandlerRegion;            // Only used for Filter regions
-    llvm::Function *FilterFunction;     // Only used for Filter-Handler regions
+    llvm::Value *Exception;             // Only used for Filter-Handler regions
   };
   ReaderBaseNS::RegionKind Kind;
 };
@@ -3456,7 +3456,8 @@ void GenIR::fgEnterRegion(EHRegion *Region) {
       // We'll create its handlers when we enter it.
       break;
     case ReaderBaseNS::RegionKind::RGN_MExcept:
-      // This will be handled when the corresponding filter is.
+      // This doesn't need an EH pad because the filter gets a catchpad and
+      // branches to the handler at the point of the endfilter.
       break;
     case ReaderBaseNS::RegionKind::RGN_MCatch:
     case ReaderBaseNS::RegionKind::RGN_Filter:
@@ -3485,16 +3486,6 @@ Instruction *GenIR::createEHPad(EHRegion *Handler, Instruction *&EndPad,
   BasicBlock *NextPadBlock =
       (NextPad == nullptr ? nullptr : NextPad->getParent());
 
-  EHRegion *FilterRegion = nullptr;
-  if (Handler->Kind == ReaderBaseNS::RegionKind::RGN_Filter) {
-    // Swap things around because the naming below is more consistent
-    // if 'Handler' refers to the filter's handler, rather than the filter
-    // itself.
-    FilterRegion = Handler;
-    Handler = FilterRegion->HandlerRegion;
-    assert(Handler != nullptr);
-  }
-
   if (PersonalityFunction == nullptr) {
     // The EE provides a CorInfoHelpFunc handle for the actual personality
     // routine (CORINFO_HELP_EE_PERSONALITY_ROUTINE), but
@@ -3519,7 +3510,11 @@ Instruction *GenIR::createEHPad(EHRegion *Handler, Instruction *&EndPad,
       (Handler->Kind == ReaderBaseNS::RegionKind::RGN_Fault)) {
     // Create a block to hold the endpad
     EndPadSuccessor = NextPadBlock;
-    NextPadBlock = createPointBlock(Handler->EndMsilOffset, "EndPad");
+    uint32_t EndPoint = Handler->EndMsilOffset;
+    if (Handler->Kind == ReaderBaseNS::RegionKind::RGN_Filter) {
+      EndPoint = Handler->HandlerRegion->EndMsilOffset;
+    }
+    NextPadBlock = createPointBlock(EndPoint, "EndPad");
   }
 
   FlowGraphNode *HandlerCodeBlock = nullptr;
@@ -3535,13 +3530,23 @@ Instruction *GenIR::createEHPad(EHRegion *Handler, Instruction *&EndPad,
   Instruction *Pad;
   Instruction *Exception;
   switch (Handler->Kind) {
+  case ReaderBaseNS::RegionKind::RGN_Filter:
   case ReaderBaseNS::RegionKind::RGN_MCatch: {
-    mdToken ClassToken = rgnGetCatchClassToken(Handler);
-    CORINFO_RESOLVED_TOKEN ResolvedToken;
-    resolveToken(ClassToken, CORINFO_TOKENKIND_Class, &ResolvedToken);
-    Type *CaughtType = getType(CORINFO_TYPE_CLASS, ResolvedToken.hClass);
+    mdToken ClassToken;
+    Type *CaughtType;
+    if (Handler->Kind == ReaderBaseNS::RegionKind::RGN_MCatch) {
+      ClassToken = rgnGetCatchClassToken(Handler);
+      CORINFO_RESOLVED_TOKEN ResolvedToken;
+      resolveToken(ClassToken, CORINFO_TOKENKIND_Class, &ResolvedToken);
+      CaughtType = getType(CORINFO_TYPE_CLASS, ResolvedToken.hClass);
+    } else {
+      ClassToken = mdTypeRefNil;
+      CaughtType =
+          getType(CORINFO_TYPE_CLASS,
+                  getBuiltinClass(CorInfoClassId::CLASSID_SYSTEM_OBJECT));
+    }
     static_assert(sizeof(mdToken) == sizeof(int32_t), "Unexpected token size");
-    IntegerType *TokenType = Type::getInt32Ty(LLVMContext);
+    IntegerType *TokenType = Type::getInt32Ty(*JitContext->LLVMContext);
     Constant *TokenConstant = ConstantInt::get(TokenType, ClassToken);
     BasicBlock *PadBlock = createPointBlock(Handler->StartMsilOffset, "Catch");
     BasicBlock *ThunkBlock =
@@ -3579,77 +3584,6 @@ Instruction *GenIR::createEHPad(EHRegion *Handler, Instruction *&EndPad,
     Exception = nullptr;
     break;
   }
-  case ReaderBaseNS::RegionKind::RGN_MExcept: {
-    Type *ExceptionType =
-        getType(CORINFO_TYPE_CLASS,
-                getBuiltinClass(CorInfoClassId::CLASSID_SYSTEM_OBJECT));
-    // The filter returns an i32 (though its value is always either 0 or 1)
-    Type *Int8PtrTy = Type::getInt8PtrTy(LLVMContext);
-    Type *Int32Ty = Type::getInt32Ty(LLVMContext);
-    FunctionType *FilterTy =
-        FunctionType::get(Int32Ty, {Int8PtrTy, ExceptionType}, false);
-
-    // Create the filter function.
-    uint32_t FilterOffset = FilterRegion->StartMsilOffset;
-    Twine FunctionName = Twine("Filter_") + Twine::utohexstr(FilterOffset);
-    Function *FilterFunction =
-        Function::Create(FilterTy, Function::ExternalLinkage, FunctionName,
-                         JitContext->CurrentModule);
-    FilterFunction->addFnAttr("wineh-parent", RootFunction->getName());
-    assert(PersonalityFunction != nullptr);
-    FilterFunction->setPersonalityFn(PersonalityFunction);
-    FilterFunction->setGC(RootFunction->getGC());
-
-    // Give the arguments names to make the IR easier to read.
-    auto ArgIter = FilterFunction->arg_begin();
-    ArgIter->setName("EstablisherFrame");
-    (++ArgIter)->setName("Exception");
-
-    // Construct an entry block in the filter function with a branch to a block
-    // that goes in the root function now (and will get moved to the filter
-    // function in a post-pass) that will receive the IR for the MSIL in the
-    // body of the filter.
-    FlowGraphNode *FilterEntry = (FlowGraphNode *)BasicBlock::Create(
-        LLVMContext, "filter_entry", FilterFunction);
-    fgNodeSetStartMSILOffset(FilterEntry, FilterOffset);
-    fgNodeSetEndMSILOffset(FilterEntry, FilterOffset);
-    fgNodeSetRegion(FilterEntry, FilterRegion);
-    FlowGraphNode *FilterTarget = nullptr;
-    fgAddNodeMSILOffset(&FilterTarget, FilterOffset);
-    LLVMBuilder->SetInsertPoint(FilterEntry);
-    LLVMBuilder->CreateBr(FilterTarget);
-
-    // MSIL reading will skip over the filter entry (it is a point block); set
-    // up its stack entry so we'll know it pushes the caught exception onto the
-    // evauation stack.
-    ReaderStack *EnterFilterStack = createStack();
-    EnterFilterStack->push((IRNode *)&*ArgIter);
-    fgNodeSetOperandStack(FilterEntry, EnterFilterStack);
-    fgNodeSetPropagatesOperandStack(FilterEntry, true);
-
-    // Record the FilterFunction on the EHRegion.
-    assert(Handler->FilterFunction == nullptr);
-    Handler->FilterFunction = FilterFunction;
-
-    BasicBlock *PadBlock =
-        createPointBlock(FilterRegion->StartMsilOffset, "Filter");
-    BasicBlock *ThunkBlock =
-        createPointBlock(Handler->StartMsilOffset, "Filter.Handler");
-    LLVMBuilder->SetInsertPoint(PadBlock);
-    Pad = Handler->CatchPad = LLVMBuilder->CreateCatchPad(
-        ThunkBlock, NextPadBlock, {FilterFunction}, "FilterPad");
-    LLVMBuilder->SetInsertPoint(ThunkBlock);
-    Function *GetException = Intrinsic::getDeclaration(
-        JitContext->CurrentModule, Intrinsic::eh_exceptionpointer,
-        {ExceptionType});
-    Exception = LLVMBuilder->CreateCall(GetException, {Pad}, "exn");
-    LLVMBuilder->CreateBr(HandlerCodeBlock);
-
-    // Any faulting instruction in the filter function should have no
-    // EH edge (it is outlined and so unwinds to its caller).
-    FilterRegion->HandlerEHPad = nullptr;
-    break;
-  }
   default:
     llvm_unreachable("Unexpected handler type");
   }
@@ -3676,6 +3610,13 @@ Instruction *GenIR::createEHPad(EHRegion *Handler, Instruction *&EndPad,
 
   // Any EH edge inside the handler itself should target the associated endpad.
   Handler->HandlerEHPad = EndPad;
+  if (Handler->Kind == ReaderBaseNS::RegionKind::RGN_Filter) {
+    // copy relevant attributes to the filter-handler.
+    EHRegion *FilterHandler = Handler->HandlerRegion;
+    FilterHandler->CatchPad = cast<CatchPadInst>(Pad);
+    FilterHandler->HandlerEHPad = EndPad;
+    FilterHandler->Exception = Exception;
+  }
 
   return Pad;
 }
@@ -4519,7 +4460,7 @@ IRNode *GenIR::genPointerSub(IRNode *Arg1, IRNode *Arg2) {
 Function *GenIR::getCurrentFilter() {
   if ((CurrentRegion != nullptr) &&
       (CurrentRegion->Kind == ReaderBaseNS::RegionKind::RGN_Filter)) {
-    return CurrentRegion->HandlerRegion->FilterFunction;
+    // deprecated: return CurrentRegion->HandlerRegion->FilterFunction;
   }
 
   // Filters never have child regions, so if the leaf region at this point
@@ -7239,8 +7180,9 @@ void GenIR::throwOpcode(IRNode *Arg1) {
 }
 
 void GenIR::endFilter(IRNode *Arg1) {
-  // endfilter simply becomes a return in the filter function being outlined.
-  LLVMBuilder->CreateRet(Arg1);
+  Value *ThrowCondition = LLVMBuilder->CreateIsNull(Arg1, "Rethrow");
+  genConditionalThrow(ThrowCondition, CORINFO_HELP_RETHROW, "FilterFalse");
+  ReaderOperandStack->push((IRNode *)CurrentRegion->HandlerRegion->Exception);
 };
 
 CallSite GenIR::genConditionalHelperCall(
