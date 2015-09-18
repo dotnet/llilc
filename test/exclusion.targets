@@ -313,9 +313,6 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\int64\unsigned\muldiv.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\refany\format.cmd" >
-             <Issue>592</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\refany\gcreport.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
