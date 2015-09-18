@@ -614,6 +614,7 @@ public:
 
   IRNode *fgMakeSwitch(IRNode *DefaultLabel, IRNode *Insert) override;
 
+  IRNode *fgMakeReturn(IRNode *Insert) override;
   IRNode *fgMakeThrow(IRNode *Insert) override;
   IRNode *fgAddCaseToCaseList(IRNode *SwitchNode, IRNode *LabelNode,
                               unsigned Element) override;
