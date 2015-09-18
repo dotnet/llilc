@@ -953,12 +953,6 @@ uint32_t rgnGetStartMSILOffset(EHRegion *EhRegion);
 void rgnSetStartMSILOffset(EHRegion *EhRegion, uint32_t Offset);
 uint32_t rgnGetEndMSILOffset(EHRegion *EhRegion);
 void rgnSetEndMSILOffset(EHRegion *EhRegion, uint32_t Offset);
-IRNode *rgnGetHead(EHRegion *EhRegion);
-void rgnSetHead(EHRegion *EhRegion, IRNode *Head);
-IRNode *rgnGetLast(EHRegion *EhRegion);
-void rgnSetLast(EHRegion *EhRegion, IRNode *Last);
-bool rgnGetIsLive(EHRegion *EhRegion);
-void rgnSetIsLive(EHRegion *EhRegion, bool Live);
 void rgnSetParent(EHRegion *EhRegion, EHRegion *Parent);
 EHRegion *rgnGetParent(EHRegion *EhRegion);
 /// \brief Determine if this region is lexically outside its parent in the tree
@@ -972,34 +966,9 @@ EHRegion *rgnGetParent(EHRegion *EhRegion);
 bool rgnIsOutsideParent(EHRegion *Region);
 void rgnSetChildList(EHRegion *EhRegion, EHRegionList *Children);
 EHRegionList *rgnGetChildList(EHRegion *EhRegion);
-bool rgnGetHasNonLocalFlow(EHRegion *EhRegion);
-void rgnSetHasNonLocalFlow(EHRegion *EhRegion, bool NonLocalFlow);
-IRNode *rgnGetEndOfClauses(EHRegion *EhRegion);
-void rgnSetEndOfClauses(EHRegion *EhRegion, IRNode *Node);
-IRNode *rgnGetTryBodyEnd(EHRegion *EhRegion);
-void rgnSetTryBodyEnd(EHRegion *EhRegion, IRNode *Node);
-ReaderBaseNS::TryKind rgnGetTryType(EHRegion *EhRegion);
-void rgnSetTryType(EHRegion *EhRegion, ReaderBaseNS::TryKind Type);
-int rgnGetTryCanonicalExitOffset(EHRegion *TryRegion);
-void rgnSetTryCanonicalExitOffset(EHRegion *TryRegion, int32_t Offset);
-EHRegion *rgnGetExceptFilterRegion(EHRegion *EhRegion);
-void rgnSetExceptFilterRegion(EHRegion *EhRegion, EHRegion *FilterRegion);
-EHRegion *rgnGetExceptTryRegion(EHRegion *EhRegion);
-void rgnSetExceptTryRegion(EHRegion *EhRegion, EHRegion *TryRegion);
-bool rgnGetExceptUsesExCode(EHRegion *EhRegion);
-void rgnSetExceptUsesExCode(EHRegion *EhRegion, bool UsesExceptionCode);
-EHRegion *rgnGetFilterTryRegion(EHRegion *EhRegion);
-void rgnSetFilterTryRegion(EHRegion *EhRegion, EHRegion *TryRegion);
 EHRegion *rgnGetFilterHandlerRegion(EHRegion *EhRegion);
 void rgnSetFilterHandlerRegion(EHRegion *EhRegion, EHRegion *Handler);
 EHRegion *rgnGetFinallyTryRegion(EHRegion *FinallyRegion);
-void rgnSetFinallyTryRegion(EHRegion *FinallyRegion, EHRegion *TryRegion);
-bool rgnGetFinallyEndIsReachable(EHRegion *FinallyRegion);
-void rgnSetFinallyEndIsReachable(EHRegion *FinallyRegion, bool IsReachable);
-EHRegion *rgnGetFaultTryRegion(EHRegion *FinallyRegion);
-void rgnSetFaultTryRegion(EHRegion *FinallyRegion, EHRegion *TryRegion);
-EHRegion *rgnGetCatchTryRegion(EHRegion *CatchRegion);
-void rgnSetCatchTryRegion(EHRegion *CatchRegion, EHRegion *TryRegion);
 mdToken rgnGetCatchClassToken(EHRegion *CatchRegion);
 void rgnSetCatchClassToken(EHRegion *CatchRegion, mdToken Token);
 
@@ -1842,16 +1811,6 @@ private:
   /// \param Block          The block to delete
   void fgDeleteBlockAndNodes(FlowGraphNode *Block);
 
-  /// \brief Ensure the start of the current region includes all labels
-  ///        found right at the start of the region.
-  ///
-  /// Make sure that any instruction that targets this region via a
-  /// label is targeting the inside of the region, by moving the region
-  /// entry up before the labels as necessary.
-  ///
-  /// \param HandlerStartNode      First instruction in the region.
-  void fgEnsureEnclosingRegionBeginsWithLabel(IRNode *HandlerStartNode);
-
   /// \brief Get the innermost region that contains this MSIL offset
   ///
   /// Scan the EH regions of the method looking for the smallest region
@@ -1882,29 +1841,6 @@ private:
   /// \p fgReplaceBranchTarget to update all branches with that target to
   /// refer to the proper blocks.
   void fgReplaceBranchTargets();
-
-  /// Process the end of a try region.
-  /// \param EhRegion   The region to process.
-  void fgInsertTryEnd(EHRegion *EhRegion);
-
-  /// Place client IR into the start of the EH region that begins at Offset.
-  ///
-  /// \param Offset        MSIL offset of the start of an EH region.
-  /// \param EHNode        Client IR to insert into the block that.
-  ///                      starts that region.
-  void fgInsertBeginRegionExceptionNode(uint32_t Offset, IRNode *EHNode);
-
-  /// Place client IR into the end of the EH region that ends at Offset.
-  ///
-  /// \param Offset        MSIL offset of the end of an EH region.
-  /// \param EHNode        Client IR to insert into the block that
-  ///                      ends that region.
-  void fgInsertEndRegionExceptionNode(uint32_t Offset, IRNode *EHNode);
-
-  /// Add client IR for an EH region and all contained regions.
-  ///
-  /// \param Region    Root region to process.
-  void fgInsertEHAnnotations(EHRegion *Region);
 
   /// \brief Create branch IR.
   ///
@@ -1938,28 +1874,6 @@ private:
   ///
   /// \param Block          The block in question.
   void fgRemoveAllActualSuccessorEdges(FlowGraphNode *Block);
-
-  /// Find the canonical landing point for leaves from an EH region.
-  ///
-  /// \param Region    The region in question.
-  /// \returns         The MSIL offset of the canonical landing point.
-  uint32_t fgGetRegionCanonicalExitOffset(EHRegion *Region);
-
-  /// Buffer used by \p fgGetRegionCanonicalExitOffset for cases where
-  /// there are large amounts of MSIL for the method.
-  int32_t *FgGetRegionCanonicalExitOffsetBuff;
-
-  /// Determine if a leave exits the enclosing EH region in a non-local manner.
-  ///
-  /// \param Fg                           flow graph node containing the leave.
-  /// \param LeaveOffset                  MSIL offset of the leave.
-  /// \param LeaveTarget                  MSIL offset of the leave's target.
-  /// \param EndsWithNonLocalGoto [out]   Target of the leave is not the
-  ///                                     canonical exit offset of the region.
-  ///
-  /// \returns True if this is a nonlocal leave.
-  bool fgLeaveIsNonLocal(FlowGraphNode *Fg, uint32_t LeaveOffset,
-                         uint32_t LeaveTarget, bool *EndsWithNonLocalGoto);
 
   ///@}
 
@@ -2822,8 +2736,7 @@ public:
   virtual uint32_t updateLeaveOffset(uint32_t LeaveOffset, uint32_t NextOffset,
                                      FlowGraphNode *LeaveBlock,
                                      uint32_t TargetOffset) = 0;
-  virtual void leave(uint32_t TargetOffset, bool IsNonLocal,
-                     bool EndsWithNonLocalGoto) = 0;
+  virtual void leave(uint32_t TargetOffset) = 0;
   virtual IRNode *loadArg(uint32_t ArgOrdinal, bool IsJmp) = 0;
   virtual IRNode *loadLocal(uint32_t ArgOrdinal) = 0;
   virtual IRNode *loadArgAddress(uint32_t ArgOrdinal) = 0;
@@ -3122,9 +3035,6 @@ public:
 
   virtual BranchList *fgGetLabelBranchList(IRNode *LabelNode) = 0;
 
-  virtual void insertHandlerAnnotation(EHRegion *HandlerRegion) = 0;
-  virtual void insertRegionAnnotation(IRNode *RegionStartNode,
-                                      IRNode *RegionEndNode) = 0;
   virtual void fgAddLabelToBranchList(IRNode *LabelNode,
                                       IRNode *BranchNode) = 0;
   virtual void fgAddArc(IRNode *BranchNode, FlowGraphNode *Source,
@@ -3143,14 +3053,7 @@ public:
   // loop back-edge rather than a forward edge to the exit label.
   virtual bool fgOptRecurse(ReaderCallTargetData *CallTargetData) = 0;
 
-  // Returns true if node (the start of a new eh region) cannot be the start of
-  // a block.
-  virtual bool fgEHRegionStartRequiresBlockSplit(IRNode *Node) = 0;
-
-  virtual bool fgIsExceptRegionStartNode(IRNode *Node) = 0;
   virtual FlowGraphNode *fgSplitBlock(FlowGraphNode *Block, IRNode *Node) = 0;
-  virtual void fgSetBlockToRegion(FlowGraphNode *Block, EHRegion *Region,
-                                  uint32_t LastOffset) = 0;
   virtual IRNode *fgMakeBranch(IRNode *LabelNode, IRNode *BlockNode,
                                uint32_t CurrentOffset, bool IsConditional,
                                bool IsNominal) = 0;
@@ -3187,8 +3090,6 @@ public:
   virtual IRNode *fgMakeReturn(IRNode *Node) = 0;
   virtual IRNode *fgAddCaseToCaseList(IRNode *SwitchNode, IRNode *LabelNode,
                                       uint32_t Element) = 0;
-  virtual void insertEHAnnotationNode(IRNode *InsertionPointNode,
-                                      IRNode *Node) = 0;
   /// Construct a new FlowGraphNode
   ///
   /// \param TargetOffset  The start MSIL offset for the new node
@@ -3198,11 +3099,6 @@ public:
   /// \returns The new FlowGraphNode
   virtual FlowGraphNode *makeFlowGraphNode(uint32_t TargetOffset,
                                            FlowGraphNode *PreviousNode) = 0;
-  virtual void markAsEHLabel(IRNode *LabelNode) = 0;
-  virtual IRNode *makeTryEndNode(void) = 0;
-  virtual IRNode *makeRegionStartNode(ReaderBaseNS::RegionKind RegionType) = 0;
-  virtual IRNode *makeRegionEndNode(ReaderBaseNS::RegionKind RegionType) = 0;
-  virtual void fgCleanupTryEnd(EHRegion *Region){};
 
   // Hook to permit client to record call information returns true if the call
   // is a recursive tail
@@ -3219,19 +3115,8 @@ public:
   virtual IRNode *exitLabel(void) = 0;
   virtual IRNode *entryLabel(void) = 0;
 
-  // Function is passed a try region, and is expected to return the first label
-  // or instruction
-  // after the region.
-  virtual IRNode *findTryRegionEndOfClauses(EHRegion *TryRegion) = 0;
-
   virtual bool isCall() = 0;
   virtual bool isRegionStartBlock(FlowGraphNode *Fg) = 0;
-  virtual bool isRegionEndBlock(FlowGraphNode *Fg) = 0;
-
-  // Create a symbol node that will be used to represent the stack-incoming
-  // exception object
-  // upon entry to funclets.
-  virtual IRNode *makeExceptionObject() = 0;
 
   // //////////////////////////////////////////////////////////////////////////
   // Client Supplied Helper Routines, required by VOS support
