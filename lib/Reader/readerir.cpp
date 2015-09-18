@@ -7881,14 +7881,17 @@ IRNode *GenIR::makeRefAny(CORINFO_RESOLVED_TOKEN *ResolvedToken,
   // jits have allowed arbitrary integers here too. So, tolerate this.
   Type *ExpectedObjectTy = RefAnyStructTy->getContainedType(ValueIndex);
   assert(isManagedPointerType(ExpectedObjectTy));
+  Type *ActualObjectTy = Object->getType();
   Value *CastObject;
-  if (!isManagedPointerType(Object->getType())) {
+  if (isManagedPointerType(ActualObjectTy)) {
+    CastObject = LLVMBuilder->CreatePointerCast(Object, ExpectedObjectTy);
+  } else if (isUnmanagedPointerType(ActualObjectTy)) {
+    CastObject = LLVMBuilder->CreateAddrSpaceCast(Object, ExpectedObjectTy);
+  } else {
     assert(Object->getType()->isIntegerTy());
     // Not clear what should happen on a size mismatch, so we'll just let
     // LLVM do what it thinks is reasonable.
     CastObject = LLVMBuilder->CreateIntToPtr(Object, ExpectedObjectTy);
-  } else {
-    CastObject = LLVMBuilder->CreatePointerCast(Object, ExpectedObjectTy);
   }
   Value *ValueFieldAddress =
       LLVMBuilder->CreateStructGEP(RefAnyTy, RefAny, ValueIndex);
