@@ -509,6 +509,8 @@ void GenIR::readerPostVisit() {
   if (NeedsSecurityObject) {
     insertIRForSecurityObject();
   }
+
+  DBuilder->finalize();
 }
 
 void GenIR::readerPostPass(bool IsImportOnly) {
@@ -559,7 +561,6 @@ void GenIR::readerPostPass(bool IsImportOnly) {
   }
 
   // Cleanup the memory we've been using.
-  DBuilder->finalize();
   delete DBuilder;
   delete LLVMBuilder;
 }
@@ -2971,6 +2972,10 @@ FlowGraphNode *GenIR::fgSplitBlock(FlowGraphNode *Block, IRNode *Node) {
 }
 
 void GenIR::fgRemoveUnusedBlocks(FlowGraphNode *FgHead) {
+#ifndef NDEBUG
+  bool IsOk = !verifyFunction(*Function, &dbgs());
+  assert(IsOk && "verification failed");
+#endif
   removeUnreachableBlocks(*this->Function);
 }
 
@@ -2994,7 +2999,10 @@ IRNode *GenIR::fgMakeSwitch(IRNode *DefaultLabel, IRNode *Insert) {
   // Create switch with null condition because it is invoked during
   // flow-graph build. The subsequent pass of Reader will set
   // this operanad properly.
-  return (IRNode *)LLVMBuilder->CreateSwitch(loadNull(),
+  Value *NullValue =
+      Constant::getNullValue(Type::getInt32Ty(*JitContext->LLVMContext));
+
+  return (IRNode *)LLVMBuilder->CreateSwitch(NullValue,
                                              (BasicBlock *)DefaultLabel);
 }
 
@@ -3015,6 +3023,15 @@ IRNode *GenIR::fgMakeThrow(IRNode *Insert) {
   LLVMBuilder->SetInsertPoint(ThrowBlock);
 
   // Create an unreachable that will follow the throw.
+
+  UnreachableInst *Unreachable = LLVMBuilder->CreateUnreachable();
+  return (IRNode *)Unreachable;
+}
+
+IRNode *GenIR::fgMakeReturn(IRNode *Insert) {
+  BasicBlock *ReturnBlock = (BasicBlock *)Insert;
+
+  LLVMBuilder->SetInsertPoint(ReturnBlock);
 
   UnreachableInst *Unreachable = LLVMBuilder->CreateUnreachable();
   return (IRNode *)Unreachable;
@@ -6222,6 +6239,12 @@ void GenIR::returnOpcode(IRNode *Opr, bool IsSynchronizedMethod) {
   CorInfoType ResultCorType = ResultArgType.CorType;
   Value *ResultValue = nullptr;
   bool IsVoidReturn = ResultCorType == CORINFO_TYPE_VOID;
+
+  BasicBlock *CurrentBlock = LLVMBuilder->GetInsertBlock();
+  TerminatorInst *Terminator = CurrentBlock->getTerminator();
+  assert(isa<UnreachableInst>(Terminator));
+  Terminator->removeFromParent();
+  LLVMBuilder->SetInsertPoint(CurrentBlock);
 
   if (IsVoidReturn) {
     assert(Opr == nullptr);

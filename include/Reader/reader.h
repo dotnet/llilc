@@ -3184,6 +3184,7 @@ public:
 
   virtual IRNode *fgMakeSwitch(IRNode *DefaultLabel, IRNode *Node) = 0;
   virtual IRNode *fgMakeThrow(IRNode *Node) = 0;
+  virtual IRNode *fgMakeReturn(IRNode *Node) = 0;
   virtual IRNode *fgAddCaseToCaseList(IRNode *SwitchNode, IRNode *LabelNode,
                                       uint32_t Element) = 0;
   virtual void insertEHAnnotationNode(IRNode *InsertionPointNode,

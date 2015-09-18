@@ -3061,6 +3061,8 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
 
     case ReaderBaseNS::CEE_RET:
       verifyReturnFlow(CurrentOffset);
+      BlockNode = fgNodeGetStartIRNode(Block);
+      fgMakeReturn(BlockNode);
       fgNodeSetEndMSILOffset(Block, NextOffset);
       if (NextOffset < ILInputSize) {
         Block = makeFlowGraphNode(NextOffset, Block);
