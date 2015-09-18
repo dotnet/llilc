@@ -174,18 +174,6 @@ void rgnSetEndMSILOffset(EHRegion *Region, uint32_t Offset) {
   Region->EndMsilOffset = Offset;
 }
 
-IRNode *rgnGetHead(EHRegion *Region) { return nullptr; }
-
-void rgnSetHead(EHRegion *Region, IRNode *Head) { return; }
-
-IRNode *rgnGetLast(EHRegion *Region) { return nullptr; }
-
-void rgnSetLast(EHRegion *Region, IRNode *Last) { return; }
-
-bool rgnGetIsLive(EHRegion *Region) { return false; }
-
-void rgnSetIsLive(EHRegion *Region, bool Live) { return; }
-
 void rgnSetParent(EHRegion *Region, EHRegion *Parent) {
   Region->Parent = Parent;
 }
@@ -210,53 +198,11 @@ void rgnSetChildList(EHRegion *Region, EHRegionList *Children) {
 }
 EHRegionList *rgnGetChildList(EHRegion *Region) { return Region->Children; }
 
-bool rgnGetHasNonLocalFlow(EHRegion *Region) { return false; }
-void rgnSetHasNonLocalFlow(EHRegion *Region, bool NonLocalFlow) { return; }
-IRNode *rgnGetEndOfClauses(EHRegion *Region) { return nullptr; }
-void rgnSetEndOfClauses(EHRegion *Region, IRNode *Node) { return; }
-IRNode *rgnGetTryBodyEnd(EHRegion *Region) { return nullptr; }
-void rgnSetTryBodyEnd(EHRegion *Region, IRNode *Node) { return; }
-ReaderBaseNS::TryKind rgnGetTryType(EHRegion *Region) {
-  return ReaderBaseNS::TryKind::TRY_None;
-}
-void rgnSetTryType(EHRegion *Region, ReaderBaseNS::TryKind Type) { return; }
-int rgnGetTryCanonicalExitOffset(EHRegion *TryRegion) { return 0; }
-void rgnSetTryCanonicalExitOffset(EHRegion *TryRegion, int32_t Offset) {
-  return;
-}
-EHRegion *rgnGetExceptFilterRegion(EHRegion *Region) { return nullptr; }
-void rgnSetExceptFilterRegion(EHRegion *Region, EHRegion *FilterRegion) {
-  return;
-}
-EHRegion *rgnGetExceptTryRegion(EHRegion *Region) { return nullptr; }
-void rgnSetExceptTryRegion(EHRegion *Region, EHRegion *TryRegion) { return; }
-bool rgnGetExceptUsesExCode(EHRegion *Region) { return false; }
-void rgnSetExceptUsesExCode(EHRegion *Region, bool UsesExceptionCode) {
-  return;
-}
-EHRegion *rgnGetFilterTryRegion(EHRegion *Region) { return nullptr; }
-void rgnSetFilterTryRegion(EHRegion *Region, EHRegion *TryRegion) { return; }
 EHRegion *rgnGetFilterHandlerRegion(EHRegion *Region) {
   return Region->HandlerRegion;
 }
 void rgnSetFilterHandlerRegion(EHRegion *Region, EHRegion *Handler) {
   Region->HandlerRegion = Handler;
-}
-EHRegion *rgnGetFinallyTryRegion(EHRegion *FinallyRegion) { return nullptr; }
-void rgnSetFinallyTryRegion(EHRegion *FinallyRegion, EHRegion *TryRegion) {
-  return;
-}
-bool rgnGetFinallyEndIsReachable(EHRegion *FinallyRegion) { return false; }
-void rgnSetFinallyEndIsReachable(EHRegion *FinallyRegion, bool IsReachable) {
-  return;
-}
-EHRegion *rgnGetFaultTryRegion(EHRegion *FaultRegion) { return nullptr; }
-void rgnSetFaultTryRegion(EHRegion *FaultRegion, EHRegion *TryRegion) {
-  return;
-}
-EHRegion *rgnGetCatchTryRegion(EHRegion *CatchRegion) { return nullptr; }
-void rgnSetCatchTryRegion(EHRegion *CatchRegion, EHRegion *TryRegion) {
-  return;
 }
 mdToken rgnGetCatchClassToken(EHRegion *CatchRegion) {
   return CatchRegion->CatchClassToken;
@@ -6751,8 +6697,7 @@ uint32_t GenIR::updateLeaveOffset(EHRegion *Region, uint32_t LeaveOffset,
   return InnermostTargetOffset;
 }
 
-void GenIR::leave(uint32_t TargetOffset, bool IsNonLocal,
-                  bool EndsWithNonLocalGoto) {
+void GenIR::leave(uint32_t TargetOffset) {
   // TODO: handle leaves from handler regions
   return;
 }
