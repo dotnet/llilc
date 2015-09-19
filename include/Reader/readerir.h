@@ -1342,7 +1342,7 @@ private:
   /// \param ElementTy Type of the element.
   /// \returns Node representing the address of the element.
   IRNode *genArrayElemAddress(IRNode *Array, IRNode *Index,
-                              llvm::Type *ElementTy);
+                              llvm::Type *ElementTy, bool DoBoundsCheck = true);
 
   /// Convert ReaderAlignType to byte alighnment to byte alignment.
   ///
@@ -1654,7 +1654,8 @@ private:
   IRNode *vectorMax(IRNode *Vector1, IRNode *Vector2, bool IsSigned) override;
   IRNode *vectorMin(IRNode *Vector1, IRNode *Vector2, bool IsSigned) override;
 
-  llvm::Type *getVectorIntType(unsigned VectorByteSize);
+  llvm::Type *getVectorIntType(unsigned VectorByteSize,
+                               unsigned ElementByteSize = 4);
 
   IRNode *vectorBitOr(IRNode *Vector1, IRNode *Vector2,
                       unsigned VectorByteSize) override;
@@ -1662,11 +1663,33 @@ private:
                        unsigned VectorByteSize) override;
   IRNode *vectorBitExOr(IRNode *Vector1, IRNode *Vector2,
                         unsigned VectorByteSize) override;
+  IRNode *vectorEquals(IRNode *Vector1, IRNode *Vector2,
+                       CORINFO_CLASS_HANDLE Class) override;
+  IRNode *vectorLessThan(IRNode *Vector1, IRNode *Vector2,
+                         CORINFO_CLASS_HANDLE Class) override;
+  IRNode *vectorLessThanOrEqual(IRNode *Vector1, IRNode *Vector2,
+                                CORINFO_CLASS_HANDLE Class) override;
+  IRNode *vectorGreaterThan(IRNode *Vector1, IRNode *Vector2,
+                            CORINFO_CLASS_HANDLE Class) override;
+  IRNode *vectorGreaterThanOrEqual(IRNode *Vector1, IRNode *Vector2,
+                                   CORINFO_CLASS_HANDLE Class) override;
+
   IRNode *vectorAbs(IRNode *Vector) override;
   IRNode *vectorSqrt(IRNode *Vector) override;
 
   bool isVectorType(IRNode *Arg) override;
 
+  /// Check does arg has System.Numerics.Register type by name.
+  ///
+  /// \param Arg       Checking type.
+  /// \returns         True if it has Register type.
+  bool isSIMDRegisterType(llvm::Type *Arg);
+
+  /// Check does Args have correct types.
+  ///
+  /// \param Args       Vector of IRNode to check type.
+  /// \param Types      Vector of Type to check with.
+  /// \returns          True if it types match.
   bool checkVectorSignature(std::vector<IRNode *> Args,
                             std::vector<llvm::Type *> Types);
 
@@ -1687,6 +1710,17 @@ private:
 
   IRNode *vectorGetItem(IRNode *VectorPointer, IRNode *Index,
                         CorInfoType ResType) override;
+
+  IRNode *vectorGetAllOnesValue(CORINFO_CLASS_HANDLE Class) override;
+  IRNode *vectorGetOneValue(CORINFO_CLASS_HANDLE Class) override;
+  IRNode *vectorGetAllZeroValue(CORINFO_CLASS_HANDLE Class) override;
+
+  IRNode *vectorGetAllOnesValue(llvm::Type *VectorElementType, unsigned Length);
+  IRNode *vectorGetOneValue(llvm::Type *VectorElementType, unsigned Length);
+  IRNode *vectorGetAllZeroValue(llvm::Type *VectorElementType, unsigned Length);
+
+  IRNode *vectorExplicitCast(CORINFO_CLASS_HANDLE ReturnClass,
+                             IRNode *Arg) override;
 
   /// Get information corresponding to the handle.
   ///
