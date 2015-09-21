@@ -328,7 +328,7 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   // Add storage for the indirect result, if any.
   const ABIArgInfo &ResultInfo = ABIMethodSig.getResultInfo();
   bool HasIndirectResult = ResultInfo.getKind() == ABIArgInfo::Indirect;
-  int32_t IndirectResultIndex = -1;
+  uint32_t IndirectResultIndex = (uint32_t)-1;
   if (HasIndirectResult) {
     IndirectResultIndex = ResultInfo.getIndex();
     IndirectResult = functionArgAt(Function, IndirectResultIndex);
@@ -348,7 +348,7 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   Function::arg_iterator ArgI = Function->arg_begin();
   Function::arg_iterator ArgE = Function->arg_end();
   for (uint32_t I = 0, J = 0; ArgI != ArgE; ++I, ++ArgI) {
-    if (IndirectResultIndex >= 0 && I == IndirectResultIndex) {
+    if (HasIndirectResult && I == IndirectResultIndex) {
       // Indirect results aren't homed.
       continue;
     }
@@ -8548,7 +8548,7 @@ IRNode *GenIR::vectorCtorFromOne(int VectorSize, IRNode *Vector,
 
 IRNode *GenIR::vectorCtorFromFloats(int VectorSize, IRNode *Vector,
                                     std::vector<IRNode *> Args) {
-  assert(Args.size() == VectorSize);
+  assert((int)Args.size() == VectorSize);
   std::vector<Type *> Types;
   llvm::LLVMContext &LLVMContext = *JitContext->LLVMContext;
   Type *FloatTy = Type::getFloatTy(LLVMContext);
@@ -8619,7 +8619,7 @@ IRNode *GenIR::vectorCtor(CORINFO_CLASS_HANDLE Class, IRNode *This,
       } else {
         return 0;
       }
-    } else if (Args.size() == VectorSize) {
+    } else if ((int)Args.size() == VectorSize) {
       Return = vectorCtorFromFloats(VectorSize, Vector, Args);
     } else {
       std::vector<Type *> Types;
@@ -8747,7 +8747,6 @@ llvm::Type *GenIR::getBaseTypeAndSizeOfSIMDType(CORINFO_CLASS_HANDLE Class,
   static CORINFO_CLASS_HANDLE SIMDVector2Handle = 0;
   static CORINFO_CLASS_HANDLE SIMDVector3Handle = 0;
   static CORINFO_CLASS_HANDLE SIMDVector4Handle = 0;
-  static CORINFO_CLASS_HANDLE SIMDVectorHandle = 0;
 
   LLVMContext &Context = *JitContext->LLVMContext;
 

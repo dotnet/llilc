@@ -504,7 +504,7 @@ typedef enum {
 /// \brief Used to map MSIL opcodes to function-specific opcode enumerations.
 ///
 /// Uses the same ordering as enum opcode_t from openum.h.
-SELECTANY const char
+SELECTANY const int8_t
     OpcodeRemap[ReaderBaseNS::CEE_MACRO_END - ReaderBaseNS::CEE_NOP] = {
         -1,                     // CEE_NOP,
         -1,                     // CEE_BREAK,
