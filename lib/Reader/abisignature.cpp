@@ -253,7 +253,7 @@ CallSite ABICallSignature::emitUnmanagedCall(GenIR &Reader, Value *Target,
   // 1) Address of the GC mode field
   // 2) Address of the thread trap global
   // 3) Address of CORINFO_HELP_STOP_FOR_GC
-  Module *M = Reader.RootFunction->getParent();
+  Module *M = Reader.Function->getParent();
   Type *CallTypeArgs[] = {Target->getType()};
   Function *CallIntrinsic = Intrinsic::getDeclaration(
       M, Intrinsic::experimental_gc_statepoint, CallTypeArgs);
