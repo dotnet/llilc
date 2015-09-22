@@ -19,15 +19,20 @@
 #include "global.h"
 #include "corinfo.h"
 
-#if (defined(_TARGET_X86_) || defined(_TARGET_X64_) || defined(_TARGET_AMD64_))
+#if (defined(_TARGET_X86_) || defined(_TARGET_X64_) ||                         \
+     defined(_TARGET_AMD64_) || defined(_TARGET_ARM64_))
 
 // Identify the frame-pointer register number
 
 #if defined(_TARGET_X86_)
 #define REGNUM_FPBASE ICorDebugInfo::RegNum::REGNUM_EBP
-#else
+#elif (defined(_TARGET_AMD64_) || defined(_TARGET_X64_))
 #define REGNUM_FPBASE ICorDebugInfo::RegNum::REGNUM_RBP
-#endif // defined(_TARGET_X86_)
+#elif defined(_TARGET_ARM64_)
+#define REGNUM_FPBASE ICorDebugInfo::RegNum::REGNUM_FP
+#endif
+
+#if (defined(_TARGET_X86_) || defined(_TARGET_X64_) || defined(_TARGET_AMD64_))
 
 // Define encodings for DWARF registers
 // Size variants (ex: AL,AH,AX,EAX,RAX) all get the same Dwarf register number
@@ -53,8 +58,16 @@
 #define DW_FRAME_POINTER DW_RBP
 #define DW_STACK_POINTER DW_RSP
 
+#elif defined(_TARGET_ARM64_)
+
+#define DW_FRAME_POINTER 29
+#define DW_STACK_POINTER 31
+
+#endif
+
 #else
 #error GCTables not implemented for this target
-#endif // defined(_TARGET_X86_ || _TARGET_X64_ || _TARGET_AMD64_)
+#endif // defined(_TARGET_X86_ || _TARGET_X64_ || _TARGET_AMD64_ ||
+       // _TARGET_ARM64_)
 
 #endif // GCINFO_TARGET_H

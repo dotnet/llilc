@@ -243,7 +243,7 @@ uint32_t getMSILInstrLength(ReaderBaseNS::OPCODE Opcode, uint8_t *Operand) {
   // -1 indicates either an undefined opcode, or an operand
   // with variable length, in both cases the table should
   // not be used.
-  static const uint8_t OperandSizeMap[] = {
+  static const int8_t OperandSizeMap[] = {
 #define OPDEF_HELPER OPDEF_OPERANDSIZE
 #include "ophelper.def"
 #undef OPDEF_HELPER
@@ -258,7 +258,7 @@ uint32_t getMSILInstrLength(ReaderBaseNS::OPCODE Opcode, uint8_t *Operand) {
     uint32_t NumCases = readNumberOfSwitchCases(&Operand);
     Length = sizeof(uint32_t) + (NumCases * sizeof(uint32_t));
   } else {
-    Length = OperandSizeMap[Opcode - ReaderBaseNS::CEE_NOP];
+    Length = (uint32_t)OperandSizeMap[Opcode - ReaderBaseNS::CEE_NOP];
   }
   return Length;
 }
@@ -2120,13 +2120,13 @@ EHRegion *ReaderBase::fgGetRegionFromMSILOffset(uint32_t Offset) {
 void ReaderBase::getMSILInstrStackDelta(ReaderBaseNS::OPCODE Opcode,
                                         uint8_t *Operand, uint16_t *Pop,
                                         uint16_t *Push) {
-  static const char StackPopMap[] = {
+  static const int8_t StackPopMap[] = {
 #define OPDEF_HELPER OPDEF_POPCOUNT
 #include "ophelper.def"
 #undef OPDEF_HELPER
   };
 
-  static const char StackPushMap[] = {
+  static const int8_t StackPushMap[] = {
 #define OPDEF_HELPER OPDEF_PUSHCOUNT
 #include "ophelper.def"
 #undef OPDEF_HELPER

@@ -59,7 +59,7 @@
 #define InlineSig             4
 #define ShortInlineBrTarget   1
 #define InlineBrTarget        4
-#define InlineSwitch          (BYTE)-1
+#define InlineSwitch          -1
 #define InlineType            4
 #define InlineString          4
 #define InlineField           4

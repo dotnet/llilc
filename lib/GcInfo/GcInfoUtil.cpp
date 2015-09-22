@@ -13,6 +13,7 @@
 ///
 //===----------------------------------------------------------------------===//
 
+#include <stdint.h>
 #include "GcInfoUtil.h"
 
 //*****************************************************************************
@@ -46,7 +47,7 @@ unsigned BitPosition(unsigned value) {
   _ASSERTE((value != 0) && ((value & (value - 1)) == 0));
   const unsigned PRIME = 37;
 
-  static const char hashTable[PRIME] = {
+  static const int8_t hashTable[PRIME] = {
       -1, 0,  1,  26, 2,  23, 27, -1, 3, 16, 24, 30, 28, 11, -1, 13, 4,  7, 17,
       -1, 25, 22, 31, 15, 29, 10, 12, 6, -1, 21, 14, 9,  5,  20, 8,  19, 18};
 
@@ -54,10 +55,10 @@ unsigned BitPosition(unsigned value) {
   _ASSERTE(sizeof(hashTable) == PRIME);
 
   unsigned hash = value % PRIME;
-  unsigned index = hashTable[hash];
-  _ASSERTE(index != (unsigned char)-1);
+  int8_t index = hashTable[hash];
+  _ASSERTE(index != -1);
 
-  return index;
+  return (unsigned)index;
 }
 
 //*****************************************************************************
