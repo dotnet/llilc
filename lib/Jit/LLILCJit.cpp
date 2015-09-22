@@ -198,7 +198,7 @@ extern "C" void __stdcall sxsJitStartup(void *CcCallbacks) {
 }
 
 LLILCJitContext::LLILCJitContext(LLILCJitPerThreadState *PerThreadState)
-    : State(PerThreadState), HasLoadedBitCode(false) {
+    : HasLoadedBitCode(false), State(PerThreadState) {
   this->Next = State->JitContext;
   State->JitContext = this;
 }
@@ -537,9 +537,6 @@ void ObjectLoadListener::getDebugInfoForObject(
       continue;
 
     // Function info
-    ErrorOr<StringRef> NameOrError = Symbol.getName();
-    assert(NameOrError);
-    StringRef Name = NameOrError.get();
     ErrorOr<uint64_t> AddrOrError = Symbol.getAddress();
     if (!AddrOrError) {
       continue; // Error.
@@ -547,8 +544,8 @@ void ObjectLoadListener::getDebugInfoForObject(
     uint64_t Addr = AddrOrError.get();
     uint64_t Size = Pair.second;
 
-    unsigned LastDebugOffset = -1;
-    unsigned NumDebugRanges = 0;
+    uint32_t LastDebugOffset = (uint32_t)-1;
+    uint32_t NumDebugRanges = 0;
     ICorDebugInfo::OffsetMapping *OM;
 
     DILineInfoTable Lines = DwarfContext.getLineInfoForAddressRange(Addr, Size);
@@ -559,7 +556,7 @@ void ObjectLoadListener::getDebugInfoForObject(
     // Count offset entries. Will skip an entry if the current IL offset
     // matches the previous offset.
     for (DILineInfoTable::iterator It = Begin; It != End; ++It) {
-      int LineNumber = (It->second).Line;
+      uint32_t LineNumber = (It->second).Line;
 
       if (LineNumber != LastDebugOffset) {
         NumDebugRanges++;
@@ -568,7 +565,7 @@ void ObjectLoadListener::getDebugInfoForObject(
     }
 
     // Reset offset
-    LastDebugOffset = -1;
+    LastDebugOffset = (uint32_t)-1;
 
     if (NumDebugRanges > 0) {
       // Allocate OffsetMapping array
@@ -583,7 +580,7 @@ void ObjectLoadListener::getDebugInfoForObject(
       // offset, and source reason
       for (DILineInfoTable::iterator It = Begin; It != End; ++It) {
         int Offset = It->first;
-        int LineNumber = (It->second).Line;
+        uint32_t LineNumber = (It->second).Line;
 
         // We store info about if the instruction is being recorded because
         // it is a call in the column field

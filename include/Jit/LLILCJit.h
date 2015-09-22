@@ -127,8 +127,9 @@ struct LLILCJitPerThreadState {
 public:
   /// Construct a new state.
   LLILCJitPerThreadState()
-      : LLVMContext(), ClassTypeMap(), ReverseClassTypeMap(), BoxedTypeMap(),
-        ArrayTypeMap(), FieldIndexMap(), JitContext(nullptr) {}
+      : LLVMContext(), JitContext(nullptr), ClassTypeMap(),
+        ReverseClassTypeMap(), BoxedTypeMap(), ArrayTypeMap(), FieldIndexMap() {
+  }
 
   /// Each thread maintains its own \p LLVMContext. This is where
   /// LLVM keeps definitions of types and similar constructs.

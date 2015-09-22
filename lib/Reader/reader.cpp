@@ -43,8 +43,6 @@ extern int _cdecl dbPrint(const char *Form, ...);
 // Max elements per entry in FlowGraphNodeListArray.
 #define FLOW_GRAPH_NODE_LIST_ARRAY_STRIDE 32
 
-#define CANONICAL_EXIT_INIT_VAL (-2)
-
 // OPCODE REMAP
 ReaderBaseNS::CallOpcode remapCallOpcode(ReaderBaseNS::OPCODE Op) {
   ReaderBaseNS::CallOpcode CallOp = (ReaderBaseNS::CallOpcode)OpcodeRemap[Op];
@@ -244,7 +242,7 @@ uint32_t getMSILInstrLength(ReaderBaseNS::OPCODE Opcode, uint8_t *Operand) {
   // -1 indicates either an undefined opcode, or an operand
   // with variable length, in both cases the table should
   // not be used.
-  static const uint8_t OperandSizeMap[] = {
+  static const int8_t OperandSizeMap[] = {
 #define OPDEF_HELPER OPDEF_OPERANDSIZE
 #include "ophelper.def"
 #undef OPDEF_HELPER
@@ -259,7 +257,7 @@ uint32_t getMSILInstrLength(ReaderBaseNS::OPCODE Opcode, uint8_t *Operand) {
     uint32_t NumCases = readNumberOfSwitchCases(&Operand);
     Length = sizeof(uint32_t) + (NumCases * sizeof(uint32_t));
   } else {
-    Length = OperandSizeMap[Opcode - ReaderBaseNS::CEE_NOP];
+    Length = (uint32_t)OperandSizeMap[Opcode - ReaderBaseNS::CEE_NOP];
   }
   return Length;
 }
@@ -1451,16 +1449,8 @@ EHRegion *ReaderBase::rgnMakeRegion(ReaderBaseNS::RegionKind Type,
 
   // Convert from ReaderBaseNS region kind to compiler region kind...
   rgnSetRegionType(Result, Type);
-  rgnSetHead(Result, nullptr);
-  rgnSetLast(Result, nullptr);
-  rgnSetIsLive(Result, false);
   rgnSetParent(Result, Parent);
   rgnSetChildList(Result, nullptr);
-  rgnSetHasNonLocalFlow(Result, false);
-
-  if (Type == ReaderBaseNS::RGN_Try) {
-    rgnSetTryCanonicalExitOffset(Result, CANONICAL_EXIT_INIT_VAL);
-  }
 
   if (Parent) {
     rgnPushRegionChild(Parent, Result);
@@ -1509,9 +1499,8 @@ yet
 #ifndef NDEBUG
 
 const char *const RegionTypeNames[] = {
-    "RGN_UNKNOWN", "RGN_NONE",  "RGN_ROOT",    "RGN_TRY",
-    "RGN_EXCEPT",  "RGN_FAULT", "RGN_FINALLY", "RGN_FILTER",
-    "RGN_DTOR",    "RGN_CATCH", "RGN_MEXCEPT", "RGN_MCATCH"};
+    "RGN_ROOT",    "RGN_TRY", "RGN_FAULT", "RGN_FINALLY",
+    "RGN_FILTER", "RGN_MEXCEPT", "RGN_MCATCH"};
 
 void dumpRegion(EHRegion *Region, int Indent = 0) {
   EHRegionList *RegionList;
@@ -1686,9 +1675,6 @@ void ReaderBase::rgnCreateRegionTree(void) {
       rgnSetStartMSILOffset(RegionTry, CurrentEHClause->TryOffset);
       rgnSetEndMSILOffset(RegionTry, CurrentEHClause->TryOffset +
                                          CurrentEHClause->TryLength);
-      rgnSetEndOfClauses(RegionTry, nullptr);
-      rgnSetTryBodyEnd(RegionTry, nullptr);
-      rgnSetTryType(RegionTry, ReaderBaseNS::TRY_None);
     }
 
     if (CurrentEHClause->Flags & CORINFO_EH_CLAUSE_FILTER) {
@@ -1696,26 +1682,9 @@ void ReaderBase::rgnCreateRegionTree(void) {
       RegionHandler = rgnMakeRegion(ReaderBaseNS::RGN_MExcept, RegionTry,
                                     RegionTreeRoot, &WorkingAllRegionList);
 
-      ReaderBaseNS::TryKind TryKind = rgnGetTryType(RegionTry);
-      if (TryKind == ReaderBaseNS::TRY_MCatch) {
-        rgnSetTryType(RegionTry, ReaderBaseNS::TRY_MCatchXcpt);
-      } else {
-        if (TryKind == ReaderBaseNS::TRY_None) {
-          rgnSetTryType(RegionTry, ReaderBaseNS::TRY_MXcpt);
-        } else {
-          ASSERTNR(TryKind == ReaderBaseNS::TRY_MXcpt ||
-                   TryKind == ReaderBaseNS::TRY_MCatchXcpt);
-        }
-      }
-
       RegionFilter = rgnMakeRegion(ReaderBaseNS::RGN_Filter, RegionTry,
                                    RegionTreeRoot, &WorkingAllRegionList);
 
-      rgnSetExceptFilterRegion(RegionHandler, RegionFilter);
-      rgnSetExceptTryRegion(RegionHandler, RegionTry);
-      rgnSetExceptUsesExCode(RegionHandler, false);
-
-      rgnSetFilterTryRegion(RegionFilter, RegionTry);
       rgnSetFilterHandlerRegion(RegionFilter, RegionHandler);
 
       rgnSetStartMSILOffset(RegionFilter, CurrentEHClause->FilterOffset);
@@ -1726,19 +1695,11 @@ void ReaderBase::rgnCreateRegionTree(void) {
       if (CurrentEHClause->Flags & CORINFO_EH_CLAUSE_FINALLY) {
         RegionHandler = rgnMakeRegion(ReaderBaseNS::RGN_Finally, RegionTry,
                                       RegionTreeRoot, &WorkingAllRegionList);
-
-        ASSERTNR(rgnGetTryType(RegionTry) == ReaderBaseNS::TRY_None);
-        rgnSetTryType(RegionTry, ReaderBaseNS::TRY_Fin);
-        rgnSetFinallyTryRegion(RegionHandler, RegionTry);
-
       } else {
         if (CurrentEHClause->Flags & CORINFO_EH_CLAUSE_FAULT) {
 
-          ASSERTNR(rgnGetTryType(RegionTry) == ReaderBaseNS::TRY_None);
           RegionHandler = rgnMakeRegion(ReaderBaseNS::RGN_Fault, RegionTry,
                                         RegionTreeRoot, &WorkingAllRegionList);
-          rgnSetTryType(RegionTry, ReaderBaseNS::TRY_Fault);
-          rgnSetFaultTryRegion(RegionHandler, RegionTry);
         } else {
           // we need to touch the class at JIT time
           // otherwise the classloader kicks in at exception time
@@ -1756,22 +1717,7 @@ void ReaderBase::rgnCreateRegionTree(void) {
           RegionHandler = rgnMakeRegion(ReaderBaseNS::RGN_MCatch, RegionTry,
                                         RegionTreeRoot, &WorkingAllRegionList);
 
-          ReaderBaseNS::TryKind TryKind;
-
-          TryKind = rgnGetTryType(RegionTry);
-          if (TryKind == ReaderBaseNS::TRY_MXcpt) {
-            rgnSetTryType(RegionTry, ReaderBaseNS::TRY_MCatchXcpt);
-          } else {
-            if (TryKind == ReaderBaseNS::TRY_None) {
-              rgnSetTryType(RegionTry, ReaderBaseNS::TRY_MCatch);
-            } else {
-              ASSERTNR(
-                  (rgnGetTryType(RegionTry) == ReaderBaseNS::TRY_MCatch) ||
-                  (rgnGetTryType(RegionTry) == ReaderBaseNS::TRY_MCatchXcpt));
-            }
-          }
           rgnSetCatchClassToken(RegionHandler, CurrentEHClause->ClassToken);
-          rgnSetCatchTryRegion(RegionHandler, RegionTry);
         }
       }
     }
@@ -1926,199 +1872,6 @@ void ReaderBase::fgRemoveUnusedBlocks(FlowGraphNode *FgHead) {
   }
 }
 
-// This code returns the MSIL offset of the "canonical" landing point
-// for leaves from a region.  If the last instruction of a region is a
-// leave that doesn't point to this point, then it is nonLocal!
-uint32_t ReaderBase::fgGetRegionCanonicalExitOffset(EHRegion *Region) {
-  uint32_t CanonicalOffset;
-  EHRegion *ChildRegion, *TryRegion = nullptr, *ParentRegion;
-  ReaderBaseNS::RegionKind RegionType;
-
-  RegionType = rgnGetRegionType(Region);
-
-  switch (RegionType) {
-  case ReaderBaseNS::RGN_Try:
-    TryRegion = Region;
-    break;
-  case ReaderBaseNS::RGN_MCatch:
-  case ReaderBaseNS::RGN_MExcept:
-    TryRegion = rgnGetParent(Region);
-    break;
-  default:
-    // Nonlocal gotos are not legal in other regions!
-    // ASSERTNR(UNREACHED);
-    return (uint32_t)-1;
-    ;
-  }
-
-  // Short circuit, use cached result if canonical offset
-  // has already been determined for this try region.
-  CanonicalOffset = (uint32_t)rgnGetTryCanonicalExitOffset(TryRegion);
-  if (CanonicalOffset != (uint32_t)CANONICAL_EXIT_INIT_VAL) {
-    return CanonicalOffset;
-  }
-
-  // A canonical offset is the last catch of a series of adjacent
-  // catch blocks, all belonging to a single try, the first of whom
-  // starts at the end offset of the try.
-  //
-  // To discover this, write each catch end offset in a Bufferer at its
-  // start offset.  Then iterate over the Bufferer from the try end
-  // offset to discover the last adjacent try. The last discovered
-  // offset will be the canonical one.
-  //
-  // TODO: We could cache the canonical offset on the try region, but
-  // even in extreme cases (2000 catches on a single try) this showed
-  // no significant overall speedup.
-  EHRegionList *RegionList;
-  int *Buffer;
-  int BufferSize;
-  int Index;
-
-  // Buff size must include an entry for 1 past the end of the
-  // Bufferer. This will be used if the try region ends at the end of
-  // the code Bufferer.
-  BufferSize = (MethodInfo->ILCodeSize + 1) * sizeof(uint32_t);
-
-  // If the user gave us an absurd amount of IL (say computer
-  // generated test cases), then an alloca here could stack overflow.
-  // Going to a pool allocator is overkill because we only need the
-  // memory for this short period of time, so go directly to malloc.
-  // We arbitrarily pick 100 * 1024 as a threshold for this.
-  if (FgGetRegionCanonicalExitOffsetBuff != nullptr) {
-    ASSERTNR(BufferSize >= 100 * 1024);
-    Buffer = FgGetRegionCanonicalExitOffsetBuff;
-  } else if (BufferSize < 100 * 1024) {
-    Buffer = (int *)_alloca(BufferSize);
-  } else {
-    Buffer = (int *)getTempMemory(BufferSize);
-
-    // Wups, out of memory!
-    if (Buffer == nullptr) {
-      fatal(CORJIT_OUTOFMEM);
-    }
-
-    FgGetRegionCanonicalExitOffsetBuff = Buffer;
-  }
-
-  memset(Buffer, -1, BufferSize);
-
-  // Place catch end offsets at the catch start offsets.
-  for (RegionList = rgnGetChildList(TryRegion); RegionList;
-       RegionList = rgnListGetNext(RegionList)) {
-    ChildRegion = rgnListGetRgn(RegionList);
-    Buffer[rgnGetStartMSILOffset(ChildRegion)] =
-        rgnGetEndMSILOffset(ChildRegion);
-  }
-
-  // From the end of the current try region, walk to the last adjacent catch.
-
-  Index = rgnGetEndMSILOffset(TryRegion);
-  while (Buffer[Index] != -1) {
-    Index = Buffer[Index];
-  }
-
-  CanonicalOffset = Index;
-
-  if (CanonicalOffset != (uint32_t)-1) {
-    // It is possible that we have multiple nested regions all ending
-    // on the same MSIL offset.  If this happens, then we really don't
-    // have a "canonical" landing point in our framework.  We detect
-    // this here, and return 0, so that the reader will consider this
-    // a nonlocal goto.
-    ParentRegion = rgnGetParent(TryRegion);
-
-    while (ParentRegion) {
-      if (rgnGetEndMSILOffset(ParentRegion) == CanonicalOffset) {
-        CanonicalOffset = (uint32_t)-1;
-        break;
-      }
-      ParentRegion = rgnGetParent(ParentRegion);
-    }
-  }
-
-  // We've determined the canonical exit for this try, cache it.
-  rgnSetTryCanonicalExitOffset(TryRegion, CanonicalOffset);
-
-  return CanonicalOffset;
-}
-
-// Determines if leave causes region exit. This is true if the target
-// of the leave lies in an EH region outside of the EH region that
-// contains the leave.
-bool ReaderBase::fgLeaveIsNonLocal(FlowGraphNode *Fg, uint32_t LeaveOffset,
-                                   uint32_t LeaveTarget,
-                                   bool *EndsWithNonLocalGoto) {
-  EHRegion *CurrentRegion;
-
-  *EndsWithNonLocalGoto = false;
-
-  // We want to find the non-local control flow out of any of
-  // the regions that is due to a leave.  If we are on a LEAVE
-  // and the next MSIL instruction is not a region delimiter in
-  // the little table used to buffer a sorted EIT then clearly this
-  // is a jmp out of the middle of some region.
-  // However (there's always one of these) This example indicates
-  // an additional special case we need to check for.
-  //
-  //   try {
-  //   }
-  //   catch {
-  //
-  //         leave
-  //         try {
-  //
-  //
-  // Here the next instruction after the leave is in the marker array
-  // but the leave is a non-local control flow. In these edge situations
-  // I need to check against the current region node.
-  //
-  // If the offsets of the current TRY_REGION node contain
-  // the next instruction then we may trivially deduce that
-  // the leave is out of the region if the currOffset is NOT
-  // pointing to the end of the current region.
-  //
-  // This has been refined to actually look at the destination of the
-  // jump.  We did this for a couple of reasons.
-  //
-  // (1) There can be a leave instruction in the middle of a region which
-  //     actually is staying within the region.  This is why the check below
-  //     include the checks with currOffset + nDelta... if we are staying within
-  //     our region, then this is not a nonLocalGoto!
-  // (2) It is possible that we do indeed have a leave as the last instruction
-  //     in a region, but this doesn't mean that the leave is actually going
-  //     to the canonical place that we expect!  This is why we say currOffset
-  //     <=
-  //     REGION_END_MSIL...   If we are in the case where currOffset ==
-  //     REGION_END
-  //     then we'll need to do additional work to see if this is actually not
-  //     going to the canonical place!
-
-  CurrentRegion = fgNodeGetRegion(Fg);
-  if ((CurrentRegion) &&
-      (rgnGetRegionType(CurrentRegion) != ReaderBaseNS::RGN_Root) &&
-      (rgnGetStartMSILOffset(CurrentRegion) < LeaveOffset) &&
-      (LeaveOffset <= rgnGetEndMSILOffset(CurrentRegion)) &&
-      ((LeaveTarget < rgnGetStartMSILOffset(CurrentRegion)) ||
-       (LeaveTarget >= rgnGetEndMSILOffset(CurrentRegion)))) {
-    if (LeaveOffset == rgnGetEndMSILOffset(CurrentRegion)) {
-      // We need to confirm whether this leave is going to the canonical place!
-      uint32_t CanonicalOffset = fgGetRegionCanonicalExitOffset(CurrentRegion);
-      if (LeaveTarget == CanonicalOffset) {
-        // Though this was an explicit goto which is to a nonlocal location,
-        // it is canonical and correct... therefore it doesn't need any
-        // tracking!
-        return false;
-      }
-      *EndsWithNonLocalGoto = true;
-    }
-    // Record that this region is the source of a non-local goto.
-    rgnSetHasNonLocalFlow(CurrentRegion, true);
-    return true;
-  }
-  return false;
-}
-
 // fgSplitBlock
 //
 // Common block split routine.  Splits a block in the flow graph and
@@ -2244,274 +1997,6 @@ void ReaderBase::fgReplaceBranchTargets() {
   }
 }
 
-// fgInsertBeginRegionExceptionNode
-//
-// Given an exception node (that begins a region (OPTRY,
-// OPFILTERBEGIN, etc...))  and its offset this function searches the
-// flow graph for the basic block that this node belongs in. It then
-// inserts the node at the appropriate location and modifies the flow
-// graph if necesary.
-//
-// This function serves the secondary purpose of fixing any errors
-// made by getRegionFromOffset(). The block that contains the node and
-// any other non-EH nodes in the block will have their region info
-// patched up to match the region info of the inserted node.
-void ReaderBase::fgInsertBeginRegionExceptionNode(
-    uint32_t Offset, // This is the offset where you want Node to be
-    IRNode *Node     // This is our actual EH end node (OPTRY, etc.)
-    ) {
-  FlowGraphNode *Block;
-
-  irNodeExceptSetMSILOffset(Node, Offset);
-  bool Found = false;
-
-  // Find the block that this exception node should be placed into
-  for (Block = fgGetHeadBlock(); Block != nullptr;
-       Block = fgNodeGetNext(Block)) {
-    uint32_t Start = fgNodeGetStartMSILOffset(Block);
-    uint32_t End = fgNodeGetEndMSILOffset(Block);
-
-    IRNode *InsertionPointNode;
-
-    // If the offset is in this range we've Found the correct block
-    if (Offset >= Start && Offset < End) {
-      EHRegion *StartNodeRegion;
-      uint32_t LastOffset;
-      bool PreceedingNodeIsExceptRegionStart;
-
-      // Start with the first node in the block
-      InsertionPointNode = irNodeGetInsertPointAfterMSILOffset(
-          fgNodeGetStartInsertIRNode(Block), Offset);
-      PreceedingNodeIsExceptRegionStart =
-          fgEHRegionStartRequiresBlockSplit(InsertionPointNode);
-
-      // Insert the EH node here
-      irNodeInsertBefore(InsertionPointNode, Node);
-
-      // We must split the block if the InsertionPointNode was already
-      // preceeded by an exception node because otherwise the block
-      // would contain two adjacent exception nodes. Also split if the
-      // offset is not the start of this block.
-      //
-      // The first node in a block that contains execption nodes can
-      //  be one of two things...
-      //     (1) An exception node
-      //     (2) A label
-      //
-      // If the exception node does NOT have the same offset as the
-      // start of the block then we need to split the block along the
-      // exception node. If the offset of the exception node is the
-      // same as the starting offset of the block then the block only
-      // needs to be split if the block already begins with a
-      // different exception node.
-      if ((Offset != Start) || PreceedingNodeIsExceptRegionStart) {
-        Block = fgSplitBlock(Block, Offset, Node);
-      }
-
-      // Now set the block to have the same region as EH node that was
-      // just inserted. This corrects the mistake from when two
-      // regions begin with the same offset.
-      StartNodeRegion = irNodeGetRegion(Node);
-      LastOffset = rgnGetEndMSILOffset(StartNodeRegion);
-      fgSetBlockToRegion(Block, StartNodeRegion, LastOffset);
-
-      Found = true;
-      break;
-    }
-  }
-  ASSERTNR(Found);
-}
-
-// fgInsertEndRegionExceptionNode
-//
-// Given an exception node that ends a region, and its offset this
-// function searches the flow graph for the basic block that this node
-// belongs in. It then inserts the node at the appropriate location
-// and modifies the flow graph if necesary.
-void ReaderBase::fgInsertEndRegionExceptionNode(
-    uint32_t Offset, // This is the offset where you want Node to be
-    IRNode *Node     // This is our actual EH End node
-    ) {
-  FlowGraphNode *Block;
-
-  irNodeExceptSetMSILOffset(Node, Offset);
-
-  for (Block = fgGetHeadBlock(); Block != nullptr;
-       Block = fgNodeGetNext(Block)) {
-    uint32_t Start = fgNodeGetStartMSILOffset(Block);
-    uint32_t End = fgNodeGetEndMSILOffset(Block);
-    IRNode *InsertionPointNode;
-
-    // Please note that we are checking for Start < Offset <= End !
-    // For the beginning marker we were checking for Start <= Offset < End.
-    if (Start < Offset && Offset <= End) {
-
-      // We're about to insert the terminallabel into the middle of a block.
-      // That means we need to get the correct place to insert it.
-      // We'll start with the last tuple in the block.
-      InsertionPointNode = irNodeGetInsertPointBeforeMSILOffset(
-          fgNodeGetEndInsertIRNode(Block), Offset);
-
-      // Insert the EH tuple
-      insertEHAnnotationNode(InsertionPointNode, Node);
-
-      // No need to keep processing blocks!
-      break;
-    }
-  }
-}
-
-void ReaderBase::fgEnsureEnclosingRegionBeginsWithLabel(
-    IRNode *HandlerStartNode) {
-  EHRegion *HandlerRegion, *TryRegion;
-  IRNode *HandlerLabelNode, *ExceptNode;
-
-  ASSERTNR(HandlerStartNode);
-
-  HandlerRegion = irNodeGetRegion(HandlerStartNode);
-
-  ASSERTNR(rgnGetRegionType(HandlerRegion) == ReaderBaseNS::RGN_Finally ||
-           rgnGetRegionType(HandlerRegion) == ReaderBaseNS::RGN_Filter ||
-           rgnGetRegionType(HandlerRegion) == ReaderBaseNS::RGN_Fault ||
-           rgnGetRegionType(HandlerRegion) == ReaderBaseNS::RGN_MCatch ||
-           rgnGetRegionType(HandlerRegion) == ReaderBaseNS::RGN_MExcept);
-
-  TryRegion = rgnGetParent(HandlerRegion);
-  ASSERTNR(rgnGetRegionType(TryRegion) == ReaderBaseNS::RGN_Try);
-
-  // Adjust region start to any labels that are located before the region
-  HandlerLabelNode =
-      irNodeGetFirstLabelOrInstrNodeInEnclosingBlock(HandlerStartNode);
-  ASSERTNR(HandlerLabelNode); // Assert that we found something
-
-  if (HandlerLabelNode == nullptr) {
-    return;
-  }
-
-  // If this handler doesn't begin with a label make it so.
-  if (!irNodeIsLabel(HandlerLabelNode)) {
-    ExceptNode = HandlerLabelNode;
-    /*HandlerLabelNode =
-        MakeLabel(irNodeGetMSILOffset(HandlerLabelNode), HandlerRegion);*/
-    throw NotYetImplementedException("handler doesn't begin with label");
-    irNodeInsertBefore(ExceptNode, HandlerLabelNode);
-  }
-  //  Mark the label as an EH label, otherwise the FG builder might remove it.
-  markAsEHLabel(HandlerLabelNode);
-
-  // Point the region head to the label that at the
-  //  start of the handler
-  rgnSetHead((EHRegion *)HandlerRegion, (IRNode *)HandlerLabelNode);
-}
-
-void ReaderBase::fgInsertTryEnd(EHRegion *Region) {
-  IRNode *TryEndNode, *EndOfClausesNode;
-
-  TryEndNode = makeTryEndNode();
-  irNodeExceptSetMSILOffset(TryEndNode,
-                            irNodeGetMSILOffset(rgnGetLast(Region)));
-  irNodeInsertAfter(rgnGetLast(Region), TryEndNode);
-  rgnSetLast(Region, TryEndNode);
-
-  EndOfClausesNode = findTryRegionEndOfClauses(Region);
-  rgnSetEndOfClauses(Region, EndOfClausesNode);
-  insertRegionAnnotation(rgnGetHead(Region), rgnGetLast(Region));
-}
-
-// fgInsertEHAnnotations
-//
-// - Create region start and end nodes
-// - Insert EH-flow nodes which indicate eh flow arcs.
-//
-// This function works recursively to insert all of the EH IR.  Start
-// at the root of the region tree and moves down. Along its path it
-// first inserts the start-of-region node, then the end-of-region node
-// for its given region. It then inserts EH-Flow nodes to indicate
-// reachibility for eh funclets and handlers.  On the way back up the
-// recursive path the algorithm inserts try end nodes and an EH-Flow
-// edge from the try region start to the try region end. This
-// additional flow from try to tryend is necessary for placekeeping,
-// to prevent the reader from deleting the region end node.
-void ReaderBase::fgInsertEHAnnotations(EHRegion *Region) {
-  uint32_t OffsetStart, OffsetEnd;
-  IRNode *RegionStartNode, *RegionEndNode;
-  ReaderBaseNS::RegionKind RegionType;
-
-  RegionType = rgnGetRegionType(Region);
-  if (RegionType != ReaderBaseNS::RGN_Root) {
-
-    OffsetStart = rgnGetStartMSILOffset(Region);
-    OffsetEnd = rgnGetEndMSILOffset(Region);
-
-    // If verification is turned on, make sure that all the
-    //  EIT offsets are acutally instructions
-    if (VerificationNeeded) {
-      if (!isOffsetInstrStart(OffsetStart))
-        BADCODE(RegionType == ReaderBaseNS::RGN_Try ? MVER_E_TRY_START
-                                                    : MVER_E_HND_START);
-      if (OffsetEnd != MethodInfo->ILCodeSize &&
-          (!isOffsetInstrStart(OffsetEnd)))
-        BADCODE(RegionType == ReaderBaseNS::RGN_Try ? MVER_E_TRY_START
-                                                    : MVER_E_HND_START);
-    }
-
-    // Add the region starting marker
-    RegionStartNode = makeRegionStartNode(RegionType);
-    rgnSetHead(Region, RegionStartNode);
-
-    fgInsertBeginRegionExceptionNode(OffsetStart, RegionStartNode);
-
-    // Add the region ending marker.
-    RegionEndNode = makeRegionEndNode(rgnGetRegionType(Region));
-    rgnSetLast(Region, RegionEndNode);
-    fgInsertEndRegionExceptionNode(OffsetEnd, RegionEndNode);
-
-    // Patch the REGION_TRYBODY_END field and REGION_LAST field
-    if (RegionType == ReaderBaseNS::RGN_Try) {
-      rgnSetTryBodyEnd(Region, RegionEndNode);
-    } else if ((rgnGetRegionType(rgnGetParent(Region)) ==
-                ReaderBaseNS::RGN_Try) &&
-               (irNodeGetMSILOffset(RegionEndNode) >
-                irNodeGetMSILOffset(rgnGetLast(rgnGetParent(Region))))) {
-      rgnSetLast(rgnGetParent(Region), RegionEndNode);
-    }
-
-    // Notify GenIR that we've encountered a handler region (so that
-    // it might insert flow annotations.)
-    switch (RegionType) {
-    case ReaderBaseNS::RGN_Finally:
-    case ReaderBaseNS::RGN_Filter:
-    case ReaderBaseNS::RGN_Fault:
-    case ReaderBaseNS::RGN_MCatch:
-    case ReaderBaseNS::RGN_MExcept:
-      fgEnsureEnclosingRegionBeginsWithLabel(RegionStartNode);
-
-      insertHandlerAnnotation(Region);
-    default:
-      // reached
-      break;
-    }
-
-    // GenIR annotation of all EH regions
-    insertRegionAnnotation(RegionStartNode, RegionEndNode);
-  }
-
-  EHRegionList *ChildList;
-  for (ChildList = rgnGetChildList(Region); ChildList != nullptr;
-       ChildList = rgnListGetNext(ChildList)) {
-    fgInsertEHAnnotations(rgnListGetRgn(ChildList));
-  }
-
-  if (RegionType == ReaderBaseNS::RGN_Try) {
-    // Insert the try end IR based on information gathered above
-    fgInsertTryEnd(Region);
-
-    // Move any blocks that that are not from a handler (these should
-    // all be from the parent Region)
-    fgCleanupTryEnd(Region);
-  }
-}
-
 EHRegion *ReaderBase::getInnermostFaultOrFinallyRegion(uint32_t Offset) {
   EHRegion *HandlerRegion = nullptr;
   // Walk from outer to inner regions
@@ -2634,13 +2119,13 @@ EHRegion *ReaderBase::fgGetRegionFromMSILOffset(uint32_t Offset) {
 void ReaderBase::getMSILInstrStackDelta(ReaderBaseNS::OPCODE Opcode,
                                         uint8_t *Operand, uint16_t *Pop,
                                         uint16_t *Push) {
-  static const char StackPopMap[] = {
+  static const int8_t StackPopMap[] = {
 #define OPDEF_HELPER OPDEF_POPCOUNT
 #include "ophelper.def"
 #undef OPDEF_HELPER
   };
 
-  static const char StackPushMap[] = {
+  static const int8_t StackPushMap[] = {
 #define OPDEF_HELPER OPDEF_PUSHCOUNT
 #include "ophelper.def"
 #undef OPDEF_HELPER
@@ -3069,6 +2554,8 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
 
     case ReaderBaseNS::CEE_RET:
       verifyReturnFlow(CurrentOffset);
+      BlockNode = fgNodeGetStartIRNode(Block);
+      fgMakeReturn(BlockNode);
       fgNodeSetEndMSILOffset(Block, NextOffset);
       if (NextOffset < ILInputSize) {
         Block = makeFlowGraphNode(NextOffset, Block);
@@ -3409,18 +2896,6 @@ FlowGraphNode *ReaderBase::fgBuildBasicBlocksFromBytes(uint8_t *Buffer,
                          BranchInfo->TargetOffset, BranchInfo->IsLeave);
       BranchInfo = BranchInfo->Next;
     }
-  }
-
-  // PHASE 4:
-  // GenIR calls to annotate IR stream with EH information
-  if (EhRegionTree) {
-    // The common reader must insert reachibility edges to indicate
-    // that filter and handler blocks are reachable.
-    //
-    // The client is also free to insert his own edges/code annotations.
-    //
-    // TODO: figure out how much of this we need in LLILC:
-    // fgInsertEHAnnotations(EhRegionTree);
   }
 
   // POST-PHASE - Compiler dependent flow graph cleanup
@@ -6884,11 +6359,6 @@ void ReaderBase::readBytesForFlowGraphNodeHelper(
       Param->HasFallThrough = false;
       BREAK_ON_VERIFY_ONLY;
 
-      // It is useful to know that the ENDFINALLY was actually reachable
-      // in this finally.  (Some clients, may for example, make cloning
-      // decisions based on this.)
-      rgnSetFinallyEndIsReachable(CurrentRegion, true);
-
       // Doesn't turn into anything,
       // but it's a block marker, so it needs to consume some bytes
       // However, this information should also been conveyed by
@@ -7329,14 +6799,8 @@ void ReaderBase::readBytesForFlowGraphNodeHelper(
       BREAK_ON_VERIFY_ONLY;
 
       {
-        bool NonLocal, EndsWithNonLocalGoto;
-
         clearStack();
-        NonLocal = fgLeaveIsNonLocal(Fg, NextOffset, TargetOffset,
-                                     &EndsWithNonLocalGoto);
-
-        // Note here we record the nonlocal flow
-        leave(TargetOffset, NonLocal, EndsWithNonLocalGoto);
+        leave(TargetOffset);
       }
       break;
 
@@ -8253,11 +7717,6 @@ void ReaderBase::msilToIR(void) {
     free(RegionList);
     free(Region);
     RegionList = Next;
-  }
-
-  if (FgGetRegionCanonicalExitOffsetBuff != nullptr) {
-    free(FgGetRegionCanonicalExitOffsetBuff);
-    FgGetRegionCanonicalExitOffsetBuff = nullptr;
   }
 }
 

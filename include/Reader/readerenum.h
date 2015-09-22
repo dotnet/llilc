@@ -490,54 +490,21 @@ enum StIndirOpcode {
 
 /// \brief Describes the set of region kinds.
 typedef enum {
-  RGN_Unknown = 0, ///< Indicates that the region is of unknown kind.
-  RGN_None,        ///< Indicates that the region has no kind.
   RGN_Root,        ///< Indicates the root of a region tree.
   RGN_Try,         ///< Indicates a try region.
-  RGN_Except,      ///< Indicates an SEH except region.
   RGN_Fault,       ///< Indicates a fault region.
   RGN_Finally,     ///< Indicates a finally region.
   RGN_Filter,      ///< Indicates a filter region.
-  RGN_Dtor,        ///< Indicates a destructor region.
-  RGN_Catch,       ///< Indicates a C++ catch region.
   RGN_MExcept,     ///< Indicates a managed except region.
-  RGN_MCatch,      ///< Indicates a managed catch region.
-
-  // New region types used in common reader
-  RGN_ClauseNone,    ///< Indicates that the region has no clauses.
-  RGN_ClauseFilter,  ///< Indicates a filter clause region.
-  RGN_ClauseFinally, ///< Indicates a finally clause region.
-  RGN_ClauseError,   ///< Indicates an error clause region.
-  RGN_ClauseFault,   ///< Indicates a fault clause region.
+  RGN_MCatch       ///< Indicates a managed catch region.
 } RegionKind;
 
-/// \brief Describes the set of try region kinds.
-typedef enum {
-  TRY_None = 0, ///< Indicates that the try region has no handlers.
-
-  TRY_Fin, ///< Indicates that the try region is a finally clause.
-
-  TRY_Fault, ///< Indicates that the try region is a fault handler.
-
-  TRY_MCatch, ///< Indicates that the try region has only catch handlers.
-
-  TRY_MCatchXcpt, ///< Indicates that the try region has both catch and except.
-                  ///< handlers
-
-  TRY_MXcpt, ///< Indicates that the try region has only except handlers.
-
-  TRY_Xcpt, ///< Indicates that the try region has native SEH exception
-            ///< handlers. Not used in the current JIT.
-
-  TRY_CCatch ///< Indicates that the try region has native C++ catch
-             ///< handlers. Not used in the current JIT.
-} TryKind;
 }
 
 /// \brief Used to map MSIL opcodes to function-specific opcode enumerations.
 ///
 /// Uses the same ordering as enum opcode_t from openum.h.
-SELECTANY const char
+SELECTANY const int8_t
     OpcodeRemap[ReaderBaseNS::CEE_MACRO_END - ReaderBaseNS::CEE_NOP] = {
         -1,                     // CEE_NOP,
         -1,                     // CEE_BREAK,

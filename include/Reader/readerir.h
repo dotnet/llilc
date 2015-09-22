@@ -251,9 +251,7 @@ public:
   IRNode *castOp(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *ObjRefNode,
                  CorInfoHelpFunc HelperId) override;
 
-  IRNode *ckFinite(IRNode *Arg1) override {
-    throw NotYetImplementedException("ckFinite");
-  };
+  IRNode *ckFinite(IRNode *Arg1) override;
 
   /// \brief Modify comparison arguments, if needed, to have equal types.
   ///
@@ -304,8 +302,7 @@ public:
   uint32_t updateLeaveOffset(EHRegion *Region, uint32_t LeaveOffset,
                              uint32_t NextOffset, FlowGraphNode *LeaveBlock,
                              uint32_t TargetOffset, bool &IsInHandler);
-  void leave(uint32_t TargetOffset, bool IsNonLocal,
-             bool EndsWithNonLocalGoto) override;
+  void leave(uint32_t TargetOffset) override;
   IRNode *loadArg(uint32_t ArgOrdinal, bool IsJmp) override;
   IRNode *loadLocal(uint32_t ArgOrdinal) override;
   IRNode *loadArgAddress(uint32_t ArgOrdinal) override;
@@ -496,7 +493,6 @@ public:
   // Used to maintain operand stack.
   void maintainOperandStack(FlowGraphNode *CurrentBlock) override;
   void assignToSuccessorStackNode(FlowGraphNode *, IRNode *Dst, IRNode *Src,
-
                                   bool *IsMultiByteAssign) override {
     throw NotYetImplementedException("assignToSuccessorStackNode");
   };
@@ -560,13 +556,6 @@ public:
     throw NotYetImplementedException("fgGetLabelBranchList");
   };
 
-  void insertHandlerAnnotation(EHRegion *HandlerRegion) override {
-    throw NotYetImplementedException("insertHandlerAnnotation");
-  };
-  void insertRegionAnnotation(IRNode *RegionStartNode,
-                              IRNode *RegionEndNode) override {
-    throw NotYetImplementedException("insertRegionAnnotation");
-  };
   void fgAddLabelToBranchList(IRNode *LabelNode, IRNode *BranchNode) override;
   void fgAddArc(IRNode *BranchNode, FlowGraphNode *Source,
                 FlowGraphNode *Sink) override {
@@ -594,20 +583,7 @@ public:
   // loop back-edge rather than a forward edge to the exit label.
   bool fgOptRecurse(ReaderCallTargetData *Data) override;
 
-  // Returns true if node (the start of a new eh Region) cannot be the start of
-  // a block.
-  bool fgEHRegionStartRequiresBlockSplit(IRNode *Node) override {
-    throw NotYetImplementedException("fgEHRegionStartRequiresBlockSplit");
-  };
-
-  bool fgIsExceptRegionStartNode(IRNode *Node) override {
-    throw NotYetImplementedException("fgIsExceptRegionStartNode");
-  };
   FlowGraphNode *fgSplitBlock(FlowGraphNode *Block, IRNode *Node) override;
-  void fgSetBlockToRegion(FlowGraphNode *Block, EHRegion *Region,
-                          uint32_t LastOffset) override {
-    throw NotYetImplementedException("fgSetBlockToRegion");
-  };
   IRNode *fgMakeBranch(IRNode *LabelNode, IRNode *InsertNode,
                        uint32_t CurrentOffset, bool IsConditional,
                        bool IsNominal) override;
@@ -625,29 +601,13 @@ public:
 
   IRNode *fgMakeSwitch(IRNode *DefaultLabel, IRNode *Insert) override;
 
+  IRNode *fgMakeReturn(IRNode *Insert) override;
   IRNode *fgMakeThrow(IRNode *Insert) override;
   IRNode *fgAddCaseToCaseList(IRNode *SwitchNode, IRNode *LabelNode,
                               unsigned Element) override;
 
-  void insertEHAnnotationNode(IRNode *InsertionPointNode,
-                              IRNode *InsertNode) override {
-    throw NotYetImplementedException("insertEHAnnotationNode");
-  };
   FlowGraphNode *makeFlowGraphNode(uint32_t TargetOffset,
                                    FlowGraphNode *PreviousNode) override;
-  void markAsEHLabel(IRNode *LabelNode) override {
-    throw NotYetImplementedException("markAsEHLabel");
-  };
-  IRNode *makeTryEndNode(void) override {
-    throw NotYetImplementedException("makeTryEndNode");
-  };
-  IRNode *makeRegionStartNode(ReaderBaseNS::RegionKind RegionType) override {
-    throw NotYetImplementedException("makeRegionStartNode");
-  };
-  IRNode *makeRegionEndNode(ReaderBaseNS::RegionKind RegionType) override {
-    throw NotYetImplementedException("makeRegionEndNode");
-  };
-
   // Allow client to override reader's decision to optimize castclass/isinst
   bool disableCastClassOptimization();
 
@@ -671,26 +631,9 @@ public:
     throw NotYetImplementedException("entryLabel");
   };
 
-  // Function is passed a try region, and is expected to return the first label
-  // or instruction
-  // after the region.
-  IRNode *findTryRegionEndOfClauses(EHRegion *TryRegion) override {
-    throw NotYetImplementedException("findTryRegionEndOfClauses");
-  };
-
   bool isCall() override { throw NotYetImplementedException("isCall"); };
   bool isRegionStartBlock(FlowGraphNode *Fg) override {
     throw NotYetImplementedException("isRegionStartBlock");
-  };
-  bool isRegionEndBlock(FlowGraphNode *Fg) override {
-    throw NotYetImplementedException("isRegionEndBlock");
-  };
-
-  // Create a symbol node that will be used to represent the stack-incoming
-  // exception object
-  // upon entry to funclets.
-  IRNode *makeExceptionObject() override {
-    throw NotYetImplementedException("makeExceptionObject");
   };
 
   // //////////////////////////////////////////////////////////////////////////

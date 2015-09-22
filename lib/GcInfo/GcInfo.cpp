@@ -26,8 +26,8 @@ using namespace llvm;
 GCInfo::GCInfo(LLILCJitContext *JitCtx, uint8_t *StackMapData,
                GcInfoAllocator *Allocator, size_t OffsetCor)
     : JitContext(JitCtx), LLVMStackMapData(StackMapData),
-      OffsetCorrection(OffsetCor),
-      Encoder(JitContext->JitInfo, JitContext->MethodInfo, Allocator) {
+      Encoder(JitContext->JitInfo, JitContext->MethodInfo, Allocator),
+      OffsetCorrection(OffsetCor) {
 #if !defined(NDEBUG)
   this->EmitLogs = JitContext->Options->LogGcInfo;
 #endif // !NDEBUG

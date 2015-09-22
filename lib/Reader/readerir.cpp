@@ -179,18 +179,6 @@ void rgnSetEndMSILOffset(EHRegion *Region, uint32_t Offset) {
   Region->EndMsilOffset = Offset;
 }
 
-IRNode *rgnGetHead(EHRegion *Region) { return nullptr; }
-
-void rgnSetHead(EHRegion *Region, IRNode *Head) { return; }
-
-IRNode *rgnGetLast(EHRegion *Region) { return nullptr; }
-
-void rgnSetLast(EHRegion *Region, IRNode *Last) { return; }
-
-bool rgnGetIsLive(EHRegion *Region) { return false; }
-
-void rgnSetIsLive(EHRegion *Region, bool Live) { return; }
-
 void rgnSetParent(EHRegion *Region, EHRegion *Parent) {
   Region->Parent = Parent;
 }
@@ -215,53 +203,11 @@ void rgnSetChildList(EHRegion *Region, EHRegionList *Children) {
 }
 EHRegionList *rgnGetChildList(EHRegion *Region) { return Region->Children; }
 
-bool rgnGetHasNonLocalFlow(EHRegion *Region) { return false; }
-void rgnSetHasNonLocalFlow(EHRegion *Region, bool NonLocalFlow) { return; }
-IRNode *rgnGetEndOfClauses(EHRegion *Region) { return nullptr; }
-void rgnSetEndOfClauses(EHRegion *Region, IRNode *Node) { return; }
-IRNode *rgnGetTryBodyEnd(EHRegion *Region) { return nullptr; }
-void rgnSetTryBodyEnd(EHRegion *Region, IRNode *Node) { return; }
-ReaderBaseNS::TryKind rgnGetTryType(EHRegion *Region) {
-  return ReaderBaseNS::TryKind::TRY_None;
-}
-void rgnSetTryType(EHRegion *Region, ReaderBaseNS::TryKind Type) { return; }
-int rgnGetTryCanonicalExitOffset(EHRegion *TryRegion) { return 0; }
-void rgnSetTryCanonicalExitOffset(EHRegion *TryRegion, int32_t Offset) {
-  return;
-}
-EHRegion *rgnGetExceptFilterRegion(EHRegion *Region) { return nullptr; }
-void rgnSetExceptFilterRegion(EHRegion *Region, EHRegion *FilterRegion) {
-  return;
-}
-EHRegion *rgnGetExceptTryRegion(EHRegion *Region) { return nullptr; }
-void rgnSetExceptTryRegion(EHRegion *Region, EHRegion *TryRegion) { return; }
-bool rgnGetExceptUsesExCode(EHRegion *Region) { return false; }
-void rgnSetExceptUsesExCode(EHRegion *Region, bool UsesExceptionCode) {
-  return;
-}
-EHRegion *rgnGetFilterTryRegion(EHRegion *Region) { return nullptr; }
-void rgnSetFilterTryRegion(EHRegion *Region, EHRegion *TryRegion) { return; }
 EHRegion *rgnGetFilterHandlerRegion(EHRegion *Region) {
   return Region->HandlerRegion;
 }
 void rgnSetFilterHandlerRegion(EHRegion *Region, EHRegion *Handler) {
   Region->HandlerRegion = Handler;
-}
-EHRegion *rgnGetFinallyTryRegion(EHRegion *FinallyRegion) { return nullptr; }
-void rgnSetFinallyTryRegion(EHRegion *FinallyRegion, EHRegion *TryRegion) {
-  return;
-}
-bool rgnGetFinallyEndIsReachable(EHRegion *FinallyRegion) { return false; }
-void rgnSetFinallyEndIsReachable(EHRegion *FinallyRegion, bool IsReachable) {
-  return;
-}
-EHRegion *rgnGetFaultTryRegion(EHRegion *FaultRegion) { return nullptr; }
-void rgnSetFaultTryRegion(EHRegion *FaultRegion, EHRegion *TryRegion) {
-  return;
-}
-EHRegion *rgnGetCatchTryRegion(EHRegion *CatchRegion) { return nullptr; }
-void rgnSetCatchTryRegion(EHRegion *CatchRegion, EHRegion *TryRegion) {
-  return;
 }
 mdToken rgnGetCatchClassToken(EHRegion *CatchRegion) {
   return CatchRegion->CatchClassToken;
@@ -389,7 +335,7 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   // Add storage for the indirect result, if any.
   const ABIArgInfo &ResultInfo = ABIMethodSig.getResultInfo();
   bool HasIndirectResult = ResultInfo.getKind() == ABIArgInfo::Indirect;
-  int32_t IndirectResultIndex = -1;
+  uint32_t IndirectResultIndex = (uint32_t)-1;
   if (HasIndirectResult) {
     IndirectResultIndex = ResultInfo.getIndex();
     IndirectResult = functionArgAt(Function, IndirectResultIndex);
@@ -409,7 +355,7 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   Function::arg_iterator ArgI = Function->arg_begin();
   Function::arg_iterator ArgE = Function->arg_end();
   for (uint32_t I = 0, J = 0; ArgI != ArgE; ++I, ++ArgI) {
-    if (IndirectResultIndex >= 0 && I == IndirectResultIndex) {
+    if (HasIndirectResult && I == IndirectResultIndex) {
       // Indirect results aren't homed.
       continue;
     }
@@ -529,6 +475,8 @@ void GenIR::readerPostVisit() {
   // directly (and subsequently run an optimization that will usually clone
   // out the non-exceptional paths so as to better-optimize them).
   cloneFinallyBodies();
+  
+  DBuilder->finalize();
 }
 
 void GenIR::cloneFinallyBodies() {
@@ -786,7 +734,6 @@ void GenIR::readerPostPass(bool IsImportOnly) {
   }
 
   // Cleanup the memory we've been using.
-  DBuilder->finalize();
   delete DBuilder;
   delete LLVMBuilder;
 }
@@ -3198,6 +3145,10 @@ FlowGraphNode *GenIR::fgSplitBlock(FlowGraphNode *Block, IRNode *Node) {
 }
 
 void GenIR::fgRemoveUnusedBlocks(FlowGraphNode *FgHead) {
+#ifndef NDEBUG
+  bool IsOk = !verifyFunction(*Function, &dbgs());
+  assert(IsOk && "verification failed");
+#endif
   removeUnreachableBlocks(*this->Function);
 }
 
@@ -3221,7 +3172,10 @@ IRNode *GenIR::fgMakeSwitch(IRNode *DefaultLabel, IRNode *Insert) {
   // Create switch with null condition because it is invoked during
   // flow-graph build. The subsequent pass of Reader will set
   // this operanad properly.
-  return (IRNode *)LLVMBuilder->CreateSwitch(loadNull(),
+  Value *NullValue =
+      Constant::getNullValue(Type::getInt32Ty(*JitContext->LLVMContext));
+
+  return (IRNode *)LLVMBuilder->CreateSwitch(NullValue,
                                              (BasicBlock *)DefaultLabel);
 }
 
@@ -3242,6 +3196,15 @@ IRNode *GenIR::fgMakeThrow(IRNode *Insert) {
   LLVMBuilder->SetInsertPoint(ThrowBlock);
 
   // Create an unreachable that will follow the throw.
+
+  UnreachableInst *Unreachable = LLVMBuilder->CreateUnreachable();
+  return (IRNode *)Unreachable;
+}
+
+IRNode *GenIR::fgMakeReturn(IRNode *Insert) {
+  BasicBlock *ReturnBlock = (BasicBlock *)Insert;
+
+  LLVMBuilder->SetInsertPoint(ReturnBlock);
 
   UnreachableInst *Unreachable = LLVMBuilder->CreateUnreachable();
   return (IRNode *)Unreachable;
@@ -3886,6 +3849,29 @@ IRNode *GenIR::loadNull() {
   Type *NullType =
       getManagedPointerType(Type::getInt8Ty(*JitContext->LLVMContext));
   return (IRNode *)Constant::getNullValue(NullType);
+}
+
+IRNode *GenIR::ckFinite(IRNode *Arg) {
+  // Reinterpret the float as an integer, extract exponent, and compare to
+  // an exponent of all 1's.
+  Type *ArgTy = Arg->getType();
+  assert(ArgTy->isFloatingPointTy());
+  uint32_t ArgSize = ArgTy->getPrimitiveSizeInBits();
+  Type *IntTy = nullptr;
+  Value *ExponentMask = nullptr;
+  if (ArgSize == 32) {
+    IntTy = Type::getInt32Ty(*JitContext->LLVMContext);
+    ExponentMask = ConstantInt::get(IntTy, APInt(ArgSize, 0x7F800000));
+  } else {
+    IntTy = Type::getInt64Ty(*JitContext->LLVMContext);
+    ExponentMask = ConstantInt::get(IntTy, APInt(ArgSize, 0x7FF0000000000000));
+  }
+  Value *IntBits = LLVMBuilder->CreateBitCast(Arg, IntTy);
+  Value *ExponentBits = LLVMBuilder->CreateAnd(IntBits, ExponentMask);
+  Value *IsFinite = LLVMBuilder->CreateICmpEQ(ExponentBits, ExponentMask);
+  CorInfoHelpFunc HelperId = CORINFO_HELP_OVERFLOW;
+  genConditionalThrow(IsFinite, HelperId, "ThrowOverflow");
+  return Arg;
 }
 
 IRNode *GenIR::unaryOp(ReaderBaseNS::UnaryOpcode Opcode, IRNode *Arg1) {
@@ -6062,6 +6048,10 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo, bool MayThrow,
   }
 
   CorInfoCallConv CC = Signature.getCallingConvention();
+  if (CC == CORINFO_CALLCONV_VARARG) {
+    throw NotYetImplementedException("Vararg call");
+  }
+
   bool IsUnmanagedCall = CC != CORINFO_CALLCONV_DEFAULT;
   if (!CallTargetInfo->isIndirect() && IsUnmanagedCall) {
     throw NotYetImplementedException("Direct unmanaged call");
@@ -6654,6 +6644,12 @@ void GenIR::returnOpcode(IRNode *Opr, bool IsSynchronizedMethod) {
   Value *ResultValue = nullptr;
   bool IsVoidReturn = ResultCorType == CORINFO_TYPE_VOID;
 
+  BasicBlock *CurrentBlock = LLVMBuilder->GetInsertBlock();
+  TerminatorInst *Terminator = CurrentBlock->getTerminator();
+  assert(isa<UnreachableInst>(Terminator));
+  Terminator->removeFromParent();
+  LLVMBuilder->SetInsertPoint(CurrentBlock);
+
   if (IsVoidReturn) {
     assert(Opr == nullptr);
     assert(ResultInfo.getType()->isVoidTy());
@@ -7167,8 +7163,7 @@ static EHRegion *getCommonAncestor(EHRegion *Region1, EHRegion *Region2) {
   return Region1;
 }
 
-void GenIR::leave(uint32_t TargetOffset, bool IsNonLocal,
-                  bool EndsWithNonLocalGoto) {
+void GenIR::leave(uint32_t TargetOffset) {
   // Check if this leave exits any catchpads (catches or filter handlers)
   BasicBlock *CurrentBlock = LLVMBuilder->GetInsertBlock();
   BasicBlock *TargetBlock = CurrentBlock->getUniqueSuccessor();
@@ -7774,8 +7769,28 @@ IRNode *GenIR::loadPrimitiveType(IRNode *Addr, CorInfoType CorInfoType,
                                  ReaderAlignType Alignment, bool IsVolatile,
                                  bool IsInterfReadOnly, bool AddressMayBeNull) {
   uint32_t Align;
-  const CORINFO_CLASS_HANDLE ClassHandle = nullptr;
-  IRNode *TypedAddr =
+  CORINFO_CLASS_HANDLE ClassHandle = nullptr;
+  IRNode *TypedAddr = nullptr;
+  // For refany, ensure that Addr is ptr to managed ptr, and if not, arrange to
+  // coerce the type to ptr to ptr to object.
+  if (CorInfoType == CORINFO_TYPE_REFANY) {
+    bool NeedsCoercion = false;
+    Type *AddressTy = Addr->getType();
+    PointerType *PointerTy = dyn_cast<PointerType>(AddressTy);
+    if (PointerTy != nullptr) {
+      Type *ReferentTy = PointerTy->getPointerElementType();
+      NeedsCoercion = !isManagedPointerType(ReferentTy);
+    } else {
+      NeedsCoercion = true;
+    }
+    if (NeedsCoercion) {
+      // Prepare to coerce to proper type
+      ClassHandle = getBuiltinClass(CorInfoClassId::CLASSID_SYSTEM_OBJECT);
+      CorInfoType = CORINFO_TYPE_CLASS;
+    }
+  }
+  // Coerce address to expected type, if needed.
+  TypedAddr =
       getTypedAddress(Addr, CorInfoType, ClassHandle, Alignment, &Align);
   LoadInst *LoadInst = makeLoad(TypedAddr, IsVolatile, AddressMayBeNull);
   LoadInst->setAlignment(Align);
@@ -8307,14 +8322,17 @@ IRNode *GenIR::makeRefAny(CORINFO_RESOLVED_TOKEN *ResolvedToken,
   // jits have allowed arbitrary integers here too. So, tolerate this.
   Type *ExpectedObjectTy = RefAnyStructTy->getContainedType(ValueIndex);
   assert(isManagedPointerType(ExpectedObjectTy));
+  Type *ActualObjectTy = Object->getType();
   Value *CastObject;
-  if (!isManagedPointerType(Object->getType())) {
+  if (isManagedPointerType(ActualObjectTy)) {
+    CastObject = LLVMBuilder->CreatePointerCast(Object, ExpectedObjectTy);
+  } else if (isUnmanagedPointerType(ActualObjectTy)) {
+    CastObject = LLVMBuilder->CreateAddrSpaceCast(Object, ExpectedObjectTy);
+  } else {
     assert(Object->getType()->isIntegerTy());
     // Not clear what should happen on a size mismatch, so we'll just let
     // LLVM do what it thinks is reasonable.
     CastObject = LLVMBuilder->CreateIntToPtr(Object, ExpectedObjectTy);
-  } else {
-    CastObject = LLVMBuilder->CreatePointerCast(Object, ExpectedObjectTy);
   }
   Value *ValueFieldAddress =
       LLVMBuilder->CreateStructGEP(RefAnyTy, RefAny, ValueIndex);
@@ -9026,7 +9044,7 @@ IRNode *GenIR::vectorCtorFromOne(int VectorSize, IRNode *Vector,
 
 IRNode *GenIR::vectorCtorFromFloats(int VectorSize, IRNode *Vector,
                                     std::vector<IRNode *> Args) {
-  assert(Args.size() == VectorSize);
+  assert((int)Args.size() == VectorSize);
   std::vector<Type *> Types;
   llvm::LLVMContext &LLVMContext = *JitContext->LLVMContext;
   Type *FloatTy = Type::getFloatTy(LLVMContext);
@@ -9097,7 +9115,7 @@ IRNode *GenIR::vectorCtor(CORINFO_CLASS_HANDLE Class, IRNode *This,
       } else {
         return 0;
       }
-    } else if (Args.size() == VectorSize) {
+    } else if ((int)Args.size() == VectorSize) {
       Return = vectorCtorFromFloats(VectorSize, Vector, Args);
     } else {
       std::vector<Type *> Types;
@@ -9225,7 +9243,6 @@ llvm::Type *GenIR::getBaseTypeAndSizeOfSIMDType(CORINFO_CLASS_HANDLE Class,
   static CORINFO_CLASS_HANDLE SIMDVector2Handle = 0;
   static CORINFO_CLASS_HANDLE SIMDVector3Handle = 0;
   static CORINFO_CLASS_HANDLE SIMDVector4Handle = 0;
-  static CORINFO_CLASS_HANDLE SIMDVectorHandle = 0;
 
   LLVMContext &Context = *JitContext->LLVMContext;
 
