@@ -2356,6 +2356,10 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\explicit\basic\_il_relrefarg_i1.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)
+        \Interop\NativeCallable\NativeCallableTest.cmd" >
+             <Issue>860</Issue>
+        </ExcludeList>
     </ItemGroup>
     <ItemGroup Condition="'$(XunitTestBinBase)' != '' and '$(COMPLUS_INSERTSTATEPOINTS)' != ''">	
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\regress\ddb\113574\113574.cmd" >
