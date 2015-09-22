@@ -764,6 +764,10 @@ void GenIR::createSym(uint32_t Num, bool IsAuto, CorInfoType CorType,
     break;
   }
 
+  if (IsPinned && JitContext->Options->DoInsertStatepoints) {
+    throw NotYetImplementedException("NYI: Pinning with Precise GC");
+  }
+
   Type *LLVMType = this->getType(CorType, Class);
   if (!IsAuto) {
     const ABIArgInfo &Info = ABIMethodSig.getArgumentInfo(Num);
