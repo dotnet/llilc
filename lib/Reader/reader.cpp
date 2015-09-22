@@ -1500,7 +1500,7 @@ yet
 #ifndef NDEBUG
 
 const char *const RegionTypeNames[] = {
-    "RGN_ROOT",    "RGN_TRY", "RGN_FAULT", "RGN_FINALLY",
+    "RGN_ROOT",   "RGN_TRY",     "RGN_FAULT", "RGN_FINALLY",
     "RGN_FILTER", "RGN_MEXCEPT", "RGN_MCATCH"};
 
 void dumpRegion(EHRegion *Region, int Indent = 0) {
@@ -3521,7 +3521,7 @@ IRNode *ReaderBase::rdrGetCritSect() {
 //
 // For loads, the prototype is 'type ldfld(object, fieldHandle)'.
 // For stores, the prototype is 'void stfld(object, fieldHandle, value)'.
-void ReaderBase::rdrCallFieldHelper(
+IRNode *ReaderBase::rdrCallFieldHelper(
     CORINFO_RESOLVED_TOKEN *ResolvedToken, CorInfoHelpFunc HelperId,
     bool IsLoad,
     IRNode *Dst, // Dst node if this is a load, otherwise nullptr
@@ -3562,6 +3562,7 @@ void ReaderBase::rdrCallFieldHelper(
       const bool MayThrow = true;
       callHelper(HelperId, MayThrow, nullptr, Arg1, Arg2, Arg3, Arg4, Alignment,
                  IsVolatile);
+      return Dst;
     } else {
       // OTHER LOAD
 
@@ -3573,8 +3574,8 @@ void ReaderBase::rdrCallFieldHelper(
 
       // Make the helper call
       const bool MayThrow = true;
-      callHelper(HelperId, MayThrow, Dst, Arg1, Arg2, nullptr, nullptr,
-                 Alignment, IsVolatile);
+      return callHelper(HelperId, MayThrow, Dst, Arg1, Arg2, nullptr, nullptr,
+                        Alignment, IsVolatile);
     }
   } else {
     // STORE
@@ -3608,8 +3609,8 @@ void ReaderBase::rdrCallFieldHelper(
 
       // Make the helper call
       const bool MayThrow = true;
-      callHelper(HelperId, MayThrow, nullptr, Arg1, Arg2, Arg3, Arg4, Alignment,
-                 IsVolatile);
+      return callHelper(HelperId, MayThrow, nullptr, Arg1, Arg2, Arg3, Arg4,
+                        Alignment, IsVolatile);
     } else {
       // assert that the helper id is expected
       ASSERTNR(HelperId == CORINFO_HELP_SETFIELD8 ||
@@ -3630,8 +3631,8 @@ void ReaderBase::rdrCallFieldHelper(
 
       // Make the helper call
       const bool MayThrow = true;
-      callHelper(HelperId, MayThrow, nullptr, Arg1, Arg2, Arg3, nullptr,
-                 Alignment, IsVolatile);
+      return callHelper(HelperId, MayThrow, nullptr, Arg1, Arg2, Arg3, nullptr,
+                        Alignment, IsVolatile);
     }
   }
 }

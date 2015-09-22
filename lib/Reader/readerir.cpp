@@ -4094,7 +4094,21 @@ IRNode *GenIR::loadField(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Obj,
   // call the helper routine; we can't just load the address
   // and do a load-indirect off it.
   if (FieldInfo.fieldAccessor == CORINFO_FIELD_INSTANCE_HELPER) {
-    throw NotYetImplementedException("LoadField via helper");
+    handleMemberAccess(FieldInfo.accessAllowed, FieldInfo.accessCalloutHelper);
+    Value *Result;
+    IRNode *Destination;
+    if (FieldInfo.helper == CORINFO_HELP_GETFIELDSTRUCT) {
+      Destination = (IRNode *)createTemporary(FieldTy);
+      setValueRepresentsStruct(Destination);
+    } else {
+      Destination = (IRNode *)Constant::getNullValue(FieldTy);
+    }
+
+    Result =
+        rdrCallFieldHelper(ResolvedToken, FieldInfo.helper, true, Destination,
+                           Obj, nullptr, AlignmentPrefix, IsVolatile);
+
+    return convertToStackType((IRNode *)Result, CorInfoType);
   }
 
   // The operand on top of the stack may be the address of the
@@ -4239,7 +4253,8 @@ void GenIR::storeField(CORINFO_RESOLVED_TOKEN *FieldToken, IRNode *ValueToStore,
   if (FieldInfo.fieldAccessor == CORINFO_FIELD_INSTANCE_HELPER) {
     handleMemberAccess(FieldInfo.accessAllowed, FieldInfo.accessCalloutHelper);
 
-    throw NotYetImplementedException("store field via helper");
+    rdrCallFieldHelper(FieldToken, FieldInfo.helper, false, nullptr, Object,
+                       ValueToStore, Alignment, IsVolatile);
     return;
   }
 
