@@ -270,8 +270,8 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   CORINFO_SIG_INFO Sig;
   getMethodSig(MethodHandle, &Sig);
 
-  if (Sig.retType == CORINFO_TYPE_REFANY) {
-    throw NotYetImplementedException("Return refany");
+  if (this->MethodSignature.isVarArg()) {
+    throw NotYetImplementedException("Vararg method");
   }
 
   bool HasSecretParameter = (JitFlags & CORJIT_FLG_PUBLISH_SECRET_PARAM) != 0;
@@ -5631,10 +5631,6 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo, bool MayThrow,
   }
 
   CallArgType ResultType = Signature.getResultType();
-  if (ResultType.CorType == CORINFO_TYPE_REFANY) {
-    throw NotYetImplementedException("Return refany");
-  }
-
   const std::vector<CallArgType> &ArgumentTypes = Signature.getArgumentTypes();
   const uint32_t NumArgs = Args.size();
   assert(NumArgs == ArgumentTypes.size());
