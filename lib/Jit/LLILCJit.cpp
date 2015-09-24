@@ -315,6 +315,21 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
     }
     bool HasMethod = this->readMethod(&Context);
 
+#ifndef FEATURE_VERIFICATION
+  bool IsImportOnly = (Context.Flags & CORJIT_FLG_IMPORT_ONLY) != 0;
+  // If asked to verify, report that it is verifiable.
+  if (IsImportOnly) {
+    Result = CORJIT_OK;
+
+    CorInfoMethodRuntimeFlags verFlag;
+    verFlag = CORINFO_FLG_VERIFIABLE;
+
+    JitInfo->setMethodAttribs(MethodInfo->ftn, verFlag);
+
+    return Result;
+  }
+#endif
+
     if (HasMethod) {
       if (JitOptions.IsLLVMDumpMethod) {
         dbgs() << "INFO:  Dumping LLVM for method " << Context.MethodName
