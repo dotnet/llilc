@@ -1500,7 +1500,7 @@ yet
 #ifndef NDEBUG
 
 const char *const RegionTypeNames[] = {
-    "RGN_ROOT",    "RGN_TRY", "RGN_FAULT", "RGN_FINALLY",
+    "RGN_ROOT",   "RGN_TRY",     "RGN_FAULT", "RGN_FINALLY",
     "RGN_FILTER", "RGN_MEXCEPT", "RGN_MCATCH"};
 
 void dumpRegion(EHRegion *Region, int Indent = 0) {
