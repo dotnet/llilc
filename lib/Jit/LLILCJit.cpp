@@ -155,7 +155,7 @@ ICorJitCompiler *__stdcall getJit() {
     sys::AddSignalHandler(&LLILCJit::signalHandler, LLILCJit::TheJit);
 
     // Allow LLVM to pick up options via the environment
-    cl::ParseEnvironmentOptions("LLILCJit", "COMplus_altjitOptions");
+    cl::ParseEnvironmentOptions("LLILCJit", "COMPlus_AltJitOptions");
 
     // Statepoint GC does not support Fast ISel yet.
     auto &Opts = cl::getRegisteredOptions();
