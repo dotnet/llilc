@@ -96,15 +96,19 @@ private:
   void recordRelocations(const ObjectFile &Obj,
                          const RuntimeDyld::LoadedObjectInfo &L);
 
-  /// \brief Compute EE relocation type and addend from LLVM relocation.
+  /// \brief Compute EE relocation type from LLVM relocation.
   ///
-  /// \param FixupAddress            Address where the reloc will be applied.
   /// \param LLVMRelocationType      LLVM relocation type to translate from.
-  /// \param EERelocationType [out]  Corresponding EE relocation type.
-  /// \param Addend [out]            Value in image to add to symbol's address.
-  void getRelocationTypeAndAddend(uint8_t *FixupAddress,
-                                  uint64_t LLVMRelocationType,
-                                  uint64_t *EERelocationType, size_t *Addend);
+  /// \returns                       EE relocation type.
+  uint64_t getRelocationType(uint64_t LLVMRelocationType);
+
+  /// \brief Compute relocation addend from LLVM relocation.
+  ///
+  /// \param LLVMRelocationType      LLVM relocation type to translate from.
+  /// \param FixupAddress            Address where the reloc will be applied.
+  /// \returns                       Value in image to add to symbol's address.
+  uint64_t getRelocationAddend(uint64_t LLVMRelocationType,
+                               uint8_t *FixupAddress);
 
   /// \brief Extract stack offsets for locals
   ///
@@ -316,18 +320,18 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
     bool HasMethod = this->readMethod(&Context);
 
 #ifndef FEATURE_VERIFICATION
-  bool IsImportOnly = (Context.Flags & CORJIT_FLG_IMPORT_ONLY) != 0;
-  // If asked to verify, report that it is verifiable.
-  if (IsImportOnly) {
-    Result = CORJIT_OK;
+    bool IsImportOnly = (Context.Flags & CORJIT_FLG_IMPORT_ONLY) != 0;
+    // If asked to verify, report that it is verifiable.
+    if (IsImportOnly) {
+      Result = CORJIT_OK;
 
-    CorInfoMethodRuntimeFlags verFlag;
-    verFlag = CORINFO_FLG_VERIFIABLE;
+      CorInfoMethodRuntimeFlags verFlag;
+      verFlag = CORINFO_FLG_VERIFIABLE;
 
-    JitInfo->setMethodAttribs(MethodInfo->ftn, verFlag);
+      JitInfo->setMethodAttribs(MethodInfo->ftn, verFlag);
 
-    return Result;
-  }
+      return Result;
+    }
 #endif
 
     if (HasMethod) {
@@ -634,7 +638,7 @@ void ObjectLoadListener::recordRelocations(
 
     if (SectionName.startswith(".debug") ||
         SectionName.startswith(".rela.debug") ||
-        !SectionName.compare(".pdata") ||
+        !SectionName.compare(".pdata") || SectionName.startswith(".eh_frame") ||
         SectionName.startswith(".rela.eh_frame")) {
       // Skip sections whose contents are not directly reported to the EE
       continue;
@@ -666,13 +670,22 @@ void ObjectLoadListener::recordRelocations(
                                        Symbol->getValue());
       }
 
+      uint64_t Addend = 0;
+      uint64_t EERelType = getRelocationType(RelType);
       uint64_t SectionAddress = L.getSectionLoadAddress(*Section);
       assert(SectionAddress != 0);
       uint8_t *FixupAddress = (uint8_t *)(SectionAddress + Offset);
-      size_t Addend;
-      uint64_t EERelType;
 
-      getRelocationTypeAndAddend(FixupAddress, RelType, &EERelType, &Addend);
+      if (Obj.isELF()) {
+        // Addend is part of the relocation
+        ELFRelocationRef ElfReloc(*I);
+        ErrorOr<uint64_t> ElfAddend = ElfReloc.getAddend();
+        assert(!ElfAddend.getError());
+        Addend = ElfAddend.get();
+      } else {
+        // Addend is read from the location to be fixed up
+        Addend = getRelocationAddend(RelType, FixupAddress);
+      }
 
       Context->JitInfo->recordRelocation(FixupAddress,
                                          RelocationTarget + Addend, EERelType);
@@ -680,24 +693,33 @@ void ObjectLoadListener::recordRelocations(
   }
 }
 
-void ObjectLoadListener::getRelocationTypeAndAddend(uint8_t *FixupAddress,
-                                                    uint64_t LLVMRelocationType,
-                                                    uint64_t *EERelocationType,
-                                                    size_t *Addend) {
+uint64_t ObjectLoadListener::getRelocationAddend(uint64_t LLVMRelocationType,
+                                                 uint8_t *FixupAddress) {
+  uint64_t Addend = 0;
   switch (LLVMRelocationType) {
   case IMAGE_REL_AMD64_ABSOLUTE:
-    *EERelocationType = IMAGE_REL_BASED_ABSOLUTE;
-    *Addend = *(uint32_t *)FixupAddress;
+    Addend = *(uint32_t *)FixupAddress;
     break;
   case IMAGE_REL_AMD64_ADDR64:
-    *EERelocationType = IMAGE_REL_BASED_DIR64;
-    *Addend = *(uint64_t *)FixupAddress;
+    Addend = *(uint64_t *)FixupAddress;
     break;
   case IMAGE_REL_AMD64_REL32:
-    *EERelocationType = IMAGE_REL_BASED_REL32;
-    *Addend = *(uint32_t *)FixupAddress;
+    Addend = *(uint32_t *)FixupAddress;
     break;
+  default:
+    llvm_unreachable("Unknown reloc type.");
+  }
+  return Addend;
+}
 
+uint64_t ObjectLoadListener::getRelocationType(uint64_t LLVMRelocationType) {
+  switch (LLVMRelocationType) {
+  case IMAGE_REL_AMD64_ABSOLUTE:
+    return IMAGE_REL_BASED_ABSOLUTE;
+  case IMAGE_REL_AMD64_ADDR64:
+    return IMAGE_REL_BASED_DIR64;
+  case IMAGE_REL_AMD64_REL32:
+    return IMAGE_REL_BASED_REL32;
   default:
     llvm_unreachable("Unknown reloc type.");
   }
