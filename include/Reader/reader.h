@@ -2345,7 +2345,20 @@ private:
                                      IRNode **ThisPtr);
 
 public:
-  void rdrCallFieldHelper(
+  /// \brief Generate IR for getting a helper for a field and calling it.
+  ///
+  /// \param ResolvedToken     Resolved token.
+  /// \param HelperId          Helper ID.
+  /// \param IsLoad            True iff the call is for a load.
+  /// \param Dst               Destination \p IRNode.
+  /// \param Obj               Object \p IRNode.
+  /// \param Value             Value \p IRNode.
+  /// \param Alignment         Alignment.
+  /// \param IsVolatile        True iff it is volatile.
+  ///
+  /// \returns An \p IRNode that represents the target of the call helper, or
+  //           the destination if the field is a struct.
+  IRNode *rdrCallFieldHelper(
       CORINFO_RESOLVED_TOKEN *ResolvedToken, CorInfoHelpFunc HelperId,
       bool IsLoad,
       IRNode *Dst, // dst node if this is a load, otherwise nullptr
