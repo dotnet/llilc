@@ -614,12 +614,12 @@ void GenIR::cloneFinallyBody(EHRegion *FinallyRegion) {
 
   if (CallerUnwindSentinel != nullptr) {
     // Remove the sentinel unwind edges.
-    for (Value::user_iterator UI = CallerUnwindSentinel->user_begin(),
-                              UE = CallerUnwindSentinel->user_end();
-         UI != UE;) {
-      // Advance the iterator before erasing the use.
-      TerminatorInst *Terminator = cast<TerminatorInst>(*UI++);
-      removeUnwindDest(Terminator);
+    for (pred_iterator PI = pred_begin(CallerUnwindSentinel),
+                       PE = pred_end(CallerUnwindSentinel);
+         PI != PE;) {
+      // Advance the iterator before erasing the edge.
+      BasicBlock *Predecessor = *PI++;
+      llvm::removeUnwindEdge(Predecessor);
     }
   }
 
@@ -645,45 +645,6 @@ void GenIR::cloneFinallyBody(EHRegion *FinallyRegion) {
   IRBuilder<> Builder(ExitSwitch);
   Builder.CreateBr(CleanupRetBlock);
   ExitSwitch->eraseFromParent();
-}
-
-void GenIR::removeUnwindDest(TerminatorInst *Terminator) {
-  if (auto *Invoke = dyn_cast<InvokeInst>(Terminator)) {
-    IRBuilder<> Builder(Invoke);
-    BranchInst *Goto = Builder.CreateBr(Invoke->getNormalDest());
-    Invoke->removeFromParent(); // Take out of symbol table
-
-    // Insert the call now...
-    SmallVector<Value *, 8> Args(Invoke->op_begin(), Invoke->op_end() - 3);
-    Builder.SetInsertPoint(Goto);
-    CallInst *Call =
-        Builder.CreateCall(Invoke->getCalledValue(), Args, Invoke->getName());
-    Call->setCallingConv(Invoke->getCallingConv());
-    Call->setAttributes(Invoke->getAttributes());
-    // If the invoke produced a value, the call does now instead.
-    Invoke->replaceAllUsesWith(Call);
-    delete Invoke;
-  } else if (auto *CatchEnd = dyn_cast<CatchEndPadInst>(Terminator)) {
-    auto *NewInstr =
-        CatchEndPadInst::Create(*JitContext->LLVMContext, nullptr, CatchEnd);
-    NewInstr->takeName(CatchEnd);
-    NewInstr->setDebugLoc(CatchEnd->getDebugLoc());
-    CatchEnd->eraseFromParent();
-  } else if (auto *CleanupEnd = dyn_cast<CleanupEndPadInst>(Terminator)) {
-    auto *NewInstr = CleanupEndPadInst::Create(CleanupEnd->getCleanupPad(),
-                                               nullptr, CleanupEnd);
-    NewInstr->takeName(CleanupEnd);
-    NewInstr->setDebugLoc(CleanupEnd->getDebugLoc());
-    CleanupEnd->eraseFromParent();
-  } else if (auto *CleanupRet = dyn_cast<CleanupReturnInst>(Terminator)) {
-    auto *NewInstr = CleanupReturnInst::Create(CleanupRet->getCleanupPad(),
-                                               nullptr, CleanupRet);
-    NewInstr->takeName(CleanupRet);
-    NewInstr->setDebugLoc(CleanupRet->getDebugLoc());
-    CleanupRet->eraseFromParent();
-  } else {
-    llvm_unreachable("Unexpected exceptional terminator");
-  }
 }
 
 void GenIR::readerPostPass(bool IsImportOnly) {
