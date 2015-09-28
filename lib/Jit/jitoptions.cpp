@@ -239,7 +239,7 @@ bool JitOptions::queryNonNullNonEmpty(LLILCJitContext &JitContext,
 // Get the GC-Scheme used by the runtime -- conservative/precise
 bool JitOptions::queryUseConservativeGC(LLILCJitContext &Context) {
   return queryNonNullNonEmpty(Context,
-                              (const char16_t *)UTF16("GCCONSERVATIVE"));
+                              (const char16_t *)UTF16("gcConservative"));
 }
 
 // Determine if GC statepoints should be inserted.

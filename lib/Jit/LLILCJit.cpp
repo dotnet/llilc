@@ -156,7 +156,7 @@ ICorJitCompiler *__stdcall getJit() {
     sys::AddSignalHandler(&LLILCJit::signalHandler, LLILCJit::TheJit);
 
     // Allow LLVM to pick up options via the environment
-    cl::ParseEnvironmentOptions("LLILCJit", "COMplus_altjitOptions");
+    cl::ParseEnvironmentOptions("LLILCJit", "COMPlus_AltJitOptions");
 
     // Statepoint GC does not support Fast ISel yet.
     auto &Opts = cl::getRegisteredOptions();
@@ -321,6 +321,21 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
              << " using LLILCJit\n";
     }
     bool HasMethod = this->readMethod(&Context);
+
+#ifndef FEATURE_VERIFICATION
+  bool IsImportOnly = (Context.Flags & CORJIT_FLG_IMPORT_ONLY) != 0;
+  // If asked to verify, report that it is verifiable.
+  if (IsImportOnly) {
+    Result = CORJIT_OK;
+
+    CorInfoMethodRuntimeFlags verFlag;
+    verFlag = CORINFO_FLG_VERIFIABLE;
+
+    JitInfo->setMethodAttribs(MethodInfo->ftn, verFlag);
+
+    return Result;
+  }
+#endif
 
     if (HasMethod) {
       if (JitOptions.IsLLVMDumpMethod) {
@@ -612,9 +627,23 @@ void ObjectLoadListener::recordRelocations(
     const ObjectFile &Obj, const RuntimeDyld::LoadedObjectInfo &L) {
   for (section_iterator SI = Obj.section_begin(), SE = Obj.section_end();
        SI != SE; ++SI) {
-    section_iterator RelocatedSection = SI->getRelocatedSection();
+    section_iterator Section = SI->getRelocatedSection();
 
-    if (RelocatedSection == SE) {
+    if (Section == SE) {
+      continue;
+    }
+
+    StringRef SectionName;
+    std::error_code ErrorCode = Section->getName(SectionName);
+    if (ErrorCode) {
+      assert(false && ErrorCode.message().c_str());
+    }
+
+    if (SectionName.startswith(".debug") ||
+        SectionName.startswith(".rela.debug") ||
+        !SectionName.compare(".pdata") ||
+        SectionName.startswith(".rela.eh_frame")) {
+      // Skip sections whose contents are not directly reported to the EE
       continue;
     }
 
@@ -622,22 +651,8 @@ void ObjectLoadListener::recordRelocations(
     relocation_iterator E = SI->relocation_end();
 
     for (; I != E; ++I) {
-
-      StringRef SectionName;
-      std::error_code ErrorCode = SI->getName(SectionName);
-      if (ErrorCode) {
-        assert(false && ErrorCode.message().c_str());
-      }
-
       symbol_iterator Symbol = I->getSymbol();
       assert(Symbol != Obj.symbol_end());
-
-      if (SectionName.startswith(".debug") || !SectionName.compare(".pdata")) {
-        // These sections use unsupported relocation types, but it's safe to
-        // skip them because we don't use their relocated contents.
-        continue;
-      }
-
       ErrorOr<section_iterator> SymbolSectionOrErr = Symbol->getSection();
       assert(!SymbolSectionOrErr.getError());
       object::section_iterator SymbolSection = *SymbolSectionOrErr;
@@ -658,7 +673,9 @@ void ObjectLoadListener::recordRelocations(
                                        Symbol->getValue());
       }
 
-      uint8_t *FixupAddress = (uint8_t *)L.getSectionLoadAddress(*SI) + Offset;
+      uint64_t SectionAddress = L.getSectionLoadAddress(*Section);
+      assert(SectionAddress != 0);
+      uint8_t *FixupAddress = (uint8_t *)(SectionAddress + Offset);
       size_t Addend;
       uint64_t EERelType;
 

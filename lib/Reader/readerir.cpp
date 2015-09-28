@@ -991,6 +991,10 @@ void GenIR::createSym(uint32_t Num, bool IsAuto, CorInfoType CorType,
     break;
   }
 
+  if (IsPinned && JitContext->Options->DoInsertStatepoints) {
+    throw NotYetImplementedException("NYI: Pinning with Precise GC");
+  }
+
   Type *LLVMType = this->getType(CorType, Class);
   if (!IsAuto) {
     const ABIArgInfo &Info = ABIMethodSig.getArgumentInfo(Num);
@@ -4525,7 +4529,24 @@ IRNode *GenIR::loadField(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Obj,
   // call the helper routine; we can't just load the address
   // and do a load-indirect off it.
   if (FieldInfo.fieldAccessor == CORINFO_FIELD_INSTANCE_HELPER) {
-    throw NotYetImplementedException("LoadField via helper");
+    handleMemberAccess(FieldInfo.accessAllowed, FieldInfo.accessCalloutHelper);
+    
+    IRNode *Destination;
+    const bool IsLoad = true;
+    IRNode *ValueToStore = nullptr;
+    
+    if (FieldInfo.helper == CORINFO_HELP_GETFIELDSTRUCT) {
+      Destination = (IRNode *)createTemporary(FieldTy);
+      setValueRepresentsStruct(Destination);
+    } else {
+      Destination = (IRNode *)Constant::getNullValue(FieldTy);
+    }
+
+    IRNode *Result =
+        rdrCallFieldHelper(ResolvedToken, FieldInfo.helper, IsLoad, Destination,
+                           Obj, ValueToStore, AlignmentPrefix, IsVolatile);
+
+    return convertToStackType(Result, CorInfoType);
   }
 
   // The operand on top of the stack may be the address of the
@@ -4670,7 +4691,11 @@ void GenIR::storeField(CORINFO_RESOLVED_TOKEN *FieldToken, IRNode *ValueToStore,
   if (FieldInfo.fieldAccessor == CORINFO_FIELD_INSTANCE_HELPER) {
     handleMemberAccess(FieldInfo.accessAllowed, FieldInfo.accessCalloutHelper);
 
-    throw NotYetImplementedException("store field via helper");
+    const bool IsLoad = false;
+    IRNode *Destination = nullptr;
+
+    rdrCallFieldHelper(FieldToken, FieldInfo.helper, IsLoad, Destination, Object,
+                       ValueToStore, Alignment, IsVolatile);
     return;
   }
 
