@@ -351,7 +351,7 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
         PMBuilder.SizeLevel = 0; // so that no additional phases are run.
         PMBuilder.populateModulePassManager(Passes);
 
-        Passes.add(createRewriteStatepointsForGCPass(false));
+        Passes.add(createRewriteStatepointsForGCPass());
         Passes.run(*M);
       }
 
