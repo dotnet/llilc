@@ -270,14 +270,14 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   CORINFO_SIG_INFO Sig;
   getMethodSig(MethodHandle, &Sig);
 
-  if (this->MethodSignature.isVarArg()) {
-    throw NotYetImplementedException("Vararg method");
-  }
-
   bool HasSecretParameter = (JitFlags & CORJIT_FLG_PUBLISH_SECRET_PARAM) != 0;
 
   uint32_t NumLocals = 0;
   initMethodInfo(HasSecretParameter, MethodSignature, NumLocals);
+
+  if (this->MethodSignature.isVarArg()) {
+    throw NotYetImplementedException("Vararg method");
+  }
 
   new (&ABIMethodSig)
       ABIMethodSignature(MethodSignature, *this, *JitContext->TheABIInfo);
