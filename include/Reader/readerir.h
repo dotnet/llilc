@@ -1736,14 +1736,6 @@ private:
   /// \param FinallyRegion  The region whose IR is to be cloned.
   void cloneFinallyBody(EHRegion *FinallyRegion);
 
-  /// Remove the unwind edge from the given terminator, indicating that if it
-  /// faults it will unwind to this function's caller rather than a handler in
-  /// this function.  The terminator will be replaced with a new terminator
-  /// that doesn't have the edge.
-  ///
-  /// \param Terminator  The terminator that is to be replaced.
-  void removeUnwindDest(llvm::TerminatorInst *Terminator);
-
 private:
   LLILCJitContext *JitContext;
   ABIInfo *TheABIInfo;
