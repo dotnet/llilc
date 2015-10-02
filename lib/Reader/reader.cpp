@@ -7458,11 +7458,10 @@ void ReaderBase::msilToIR(void) {
 // If verification is a necessary feature, then we can throw an NYI,
 // else we will assume the code is verifiable.
 #ifdef FEATURE_VERIFICATION
-  throw NotYetImplementedException("verification");
+    throw NotYetImplementedException("verification");
 #else
-  return;
+    return;
 #endif
-
   }
 
   // Initialize the NodeOffsetListArray so it can be used even in the

@@ -149,6 +149,7 @@
 
 // SAL
 #define _In_
+#define __in_z
 #define _Out_opt_
 #define _Out_writes_to_opt_(size, count)
 #define __out_ecount(count)
