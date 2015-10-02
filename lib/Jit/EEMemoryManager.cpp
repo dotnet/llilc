@@ -164,6 +164,12 @@ void EEMemoryManager::reserveUnwindSpace(const object::ObjectFile &Obj) {
           size_t ReportedByteCount;
           size_t TotalByteCount;
           getXdataSize(DataPtr, &ReportedByteCount, &TotalByteCount);
+          // Bit 5 indicates whether this is chained unwind info.  If we saw
+          // that here, we'd have wanted to include it with the previous
+          // reservation (or we'd be separating cold code).  Since it's not
+          // currently emitted, just verify that we don't see it.
+          assert((*DataPtr & 0x20) != 0x10 &&
+                 "chained unwind info not supported");
           this->Context->JitInfo->reserveUnwindInfo(IsHandler, FALSE,
                                                     ReportedByteCount);
           IsHandler = TRUE;
@@ -172,24 +178,14 @@ void EEMemoryManager::reserveUnwindSpace(const object::ObjectFile &Obj) {
             break;
           }
 
-          // We don't support chained unwind infos, so we expect the next data
-          // in the xdata to be one of the two sentinels we insert to indicate
-          // funclet positions (0xffffffff or 0x00000000). If the compiler did
-          // emit chained unwind info, we'd expect the next unwind info to
-          // start immediately; bits 0-2 would be 001 to indicate version 1 of
-          // the xdata format, and bit 5 would be set to indicate that it is a
-          // chained unwind info.  Check for this pattern to distinguish the
-          // unsupported chained case from malformed xdata.
-          assert(((*DataPtr == 0) || (*DataPtr == 0xff) ||
-                  ((*DataPtr & 0x27) == 0x21)) &&
-                 "Malformed .xdata");
-          assert(((*DataPtr == 0) || (*DataPtr == 0xff)) &&
-                 "Chained unwind infos not supported");
-
-          // Advance DataPtr past the sentinel and the two offsets indicating
-          // funclet position/size.  Loop depending which sentinel is seen.
-          DataPtr += 12;
-        } while (!*(DataPtr - 12));
+          // The next thing should either be the next xdata entry or the
+          // sentinel we insert between that and the clause descriptors.
+          // If it is the next xdata entry, bits 0-2 will be the version
+          // number (currently only version 1 exists).
+        } while ((*DataPtr & 0x7) == 1);
+        // If we didn't reach the end of the xdata, the next thing should be
+        // our sentinel.
+        assert(DataPtr == DataEnd || *DataPtr == 0xff && "Malformed .xdata");
       }
     }
   }
@@ -250,41 +246,89 @@ void EEMemoryManager::registerEHFrames(uint8_t *Addr, uint64_t LoadAddr,
   // ColdCodeBlock, i.e. separated code is not supported.
   assert(this->ColdCodeBlock == 0 && "ColdCodeBlock must be zero");
 
-  uint32_t *DataPtr = reinterpret_cast<uint32_t *>(Addr);
+  // The xdata section always starts with the standard xdata entry for the main
+  // function.  If there are no funclets, that's the entire section.  If
+  // there are funclets, it is followed by the standard xdata entries for each
+  // funclet, then:
+  // - a sentinel (four bytes, all bits set)
+  // - the number of funclets
+  // - the offset to the start of each funclet (in lexical order)
+  // - the offset to the end of the last funclet
+  // - the number of EH clauses
+  // - the EH clauses themselves, laid out the same way that the
+  //   CORINFO_EH_CLAUSE structure is laid out in memory.
+
+  // The first thing we need to do is report for each function/funclet the
+  // size and location of the function/funclet as well as the size and
+  // location of its xdata entry.
+  // First, walk the standard xdata entries, collecting their locations and
+  // sizes into the UnwindBlocks vector.
+  SmallVector<std::pair<BYTE *, ULONG>, 4> UnwindBlocks;
+  uint8_t *XdataPtr = reinterpret_cast<uint8_t *>(Addr);
+  uint8_t *PtrEnd = XdataPtr + Size;
   CorJitFuncKind FuncKind = CorJitFuncKind::CORJIT_FUNC_ROOT;
-  uint32_t IsLast;
   do {
-    uint8_t *XdataPtr = reinterpret_cast<uint8_t *>(DataPtr);
     size_t ReportedXdataSize;
     size_t TotalXdataSize;
     getXdataSize(XdataPtr, &ReportedXdataSize, &TotalXdataSize);
-    DataPtr += (TotalXdataSize / 4);
-    bool IsNoEhLeaf = (Size == TotalXdataSize);
-    assert(!(IsNoEhLeaf && (FuncKind != CorJitFuncKind::CORJIT_FUNC_ROOT)));
-    // Read token to see if this is the last function
-    IsLast = IsNoEhLeaf || *(DataPtr++);
-    uint32_t StartOffset = (IsNoEhLeaf ? 0 : *(DataPtr++));
-    uint32_t EndOffset = (IsNoEhLeaf ? Context->HotCodeSize : *(DataPtr++));
-    this->Context->JitInfo->allocUnwindInfo(
-        this->HotCodeBlock, nullptr, StartOffset, EndOffset, ReportedXdataSize,
-        (BYTE *)XdataPtr, FuncKind);
+    UnwindBlocks.emplace_back(reinterpret_cast<BYTE *>(XdataPtr),
+                              ReportedXdataSize);
+    XdataPtr += TotalXdataSize;
+    if (XdataPtr == PtrEnd) {
+      // No trailing funclet info
+      assert(FuncKind == CorJitFuncKind::CORJIT_FUNC_ROOT);
+      break;
+    }
     // Any subsequent funclet will be a handler.
     FuncKind = CorJitFuncKind::CORJIT_FUNC_HANDLER;
-    // Decrement size remaining.
-    Size -= TotalXdataSize;
-    if (!IsNoEhLeaf) {
-      // also read IsLast, StartOffset, and EndOffset
-      Size -= 12;
-    }
-  } while (!IsLast);
-  if (Size > 0) {
-    // We have EH Clauses to report.
-    uint32_t NumClauses = *(DataPtr++);
-    CORINFO_EH_CLAUSE *Clauses = reinterpret_cast<CORINFO_EH_CLAUSE *>(DataPtr);
-    this->Context->JitInfo->setEHcount(NumClauses);
-    for (unsigned i = 0; i < NumClauses; ++i) {
-      this->Context->JitInfo->setEHinfo(i, &Clauses[i]);
-    }
+    // The next thing should either be the next xdata entry or the
+    // sentinel we insert between that and the clause descriptors.
+    // If it is the next xdata entry, bits 0-2 will be the version
+    // number (currently only version 1 exists).
+  } while ((*XdataPtr & 0x7) == 1);
+
+  if (FuncKind == CorJitFuncKind::CORJIT_FUNC_ROOT) {
+    // There are no funclets, so the xdata describes the whole function.
+    BYTE *UnwindBlock;
+    ULONG UnwindSize;
+    std::tie(UnwindBlock, UnwindSize) = UnwindBlocks.pop_back_val();
+    assert(UnwindBlocks.empty());
+    this->Context->JitInfo->allocUnwindInfo(
+        this->HotCodeBlock, nullptr, 0, this->Context->HotCodeSize, UnwindSize,
+        UnwindBlock, CorJitFuncKind::CORJIT_FUNC_ROOT);
+    return;
+  }
+
+  uint32_t *DataPtr = reinterpret_cast<uint32_t *>(XdataPtr);
+  // Eat the sentinel that separates the xdata proper from the CLR additional
+  // info.
+  assert(*DataPtr == 0xffffffff);
+  ++DataPtr;
+  // Read the number of funclets.
+  uint32_t NumFunclets = *DataPtr++;
+  // Allocate unwind info space for the function and each funclet
+  uint32_t StartOffset = 0;
+  FuncKind = CorJitFuncKind::CORJIT_FUNC_ROOT;
+  for (uint32_t I = 0; I <= NumFunclets; ++I) {
+    // Read the function/funclet end offset
+    uint32_t EndOffset = *DataPtr++;
+    BYTE *UnwindBlock;
+    ULONG UnwindSize;
+    std::tie(UnwindBlock, UnwindSize) = UnwindBlocks[I];
+    this->Context->JitInfo->allocUnwindInfo(this->HotCodeBlock, nullptr,
+                                            StartOffset, EndOffset, UnwindSize,
+                                            UnwindBlock, FuncKind);
+    FuncKind = CorJitFuncKind::CORJIT_FUNC_HANDLER;
+    StartOffset = EndOffset;
+  }
+  // Read the number of clauses
+  uint32_t NumClauses = *DataPtr++;
+  // Report that we have clauses
+  this->Context->JitInfo->setEHcount(NumClauses);
+  // Report the individual clauses
+  CORINFO_EH_CLAUSE *Clauses = reinterpret_cast<CORINFO_EH_CLAUSE *>(DataPtr);
+  for (uint32_t I = 0; I < NumClauses; ++I) {
+    this->Context->JitInfo->setEHinfo(I, &Clauses[I]);
   }
 }
 
