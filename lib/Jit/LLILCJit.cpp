@@ -663,15 +663,26 @@ void ObjectLoadListener::recordRelocations(
       const bool IsExtern = SymbolSection == Obj.section_end();
       uint64_t RelType = I->getType();
       uint64_t Offset = I->getOffset();
-      uint8_t *RelocationTarget = nullptr;
+      uint8_t *RelocationTarget;
       if (IsExtern) {
         // This is an external symbol. Verify that it's one we created for
         // a global variable and report the relocation via Jit interface.
         ErrorOr<StringRef> NameOrError = Symbol->getName();
         assert(NameOrError);
         StringRef TargetName = NameOrError.get();
-        assert(Context->NameToHandleMap.count(TargetName) == 1);
-        RelocationTarget = (uint8_t *)Context->NameToHandleMap[TargetName];
+        auto MapIter = Context->NameToHandleMap.find(TargetName);
+        if (MapIter == Context->NameToHandleMap.end()) {
+          // The xdata gets a pointer to our personality routine, which we
+          // dummied up.  We can safely skip it since the EE isn't actually
+          // going to use the value (it inserts the correct one before handing
+          // the xdata off to the OS).
+          assert(!TargetName.compare("ProcessCLRException"));
+          assert(SectionName.startswith(".xdata"));
+          continue;
+        } else {
+          assert(MapIter->second == Context->NameToHandleMap[TargetName]);
+          RelocationTarget = (uint8_t *)MapIter->second;
+        }
       } else {
         RelocationTarget = (uint8_t *)(L.getSectionLoadAddress(*SymbolSection) +
                                        Symbol->getValue());
