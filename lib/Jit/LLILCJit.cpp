@@ -543,8 +543,13 @@ void ObjectLoadListener::getDebugInfoForObject(
   // want to also be able to eventually extract WinCodeView information as well
   DWARFContextInMemory DwarfContext(DebugObj);
 
-  // Use symbol info to iterate functions in the object.
-  // TODO: This may have to change when we have funclets
+  // Use symbol info to find the function size.
+  // If there are funclets, they will each have separate symbols, so we need
+  // to sum the sizes, since the EE wants a single report for the entire
+  // function+funclets.
+
+  uint64_t Addr = UINT64_MAX;
+  uint64_t Size = 0;
 
   std::vector<std::pair<SymbolRef, uint64_t>> SymbolSizes =
       object::computeSymbolSizes(DebugObj);
@@ -560,68 +565,73 @@ void ObjectLoadListener::getDebugInfoForObject(
     if (!AddrOrError) {
       continue; // Error.
     }
-    uint64_t Addr = AddrOrError.get();
-    uint64_t Size = Pair.second;
+    uint64_t SingleAddr = AddrOrError.get();
+    uint64_t SingleSize = Pair.second;
+    if (SingleAddr < Addr) {
+      // The main function is always laid out first
+      Addr = SingleAddr;
+    }
+    Size += SingleSize;
+  }
 
-    uint32_t LastDebugOffset = (uint32_t)-1;
-    uint32_t NumDebugRanges = 0;
-    ICorDebugInfo::OffsetMapping *OM;
+  uint32_t LastDebugOffset = (uint32_t)-1;
+  uint32_t NumDebugRanges = 0;
+  ICorDebugInfo::OffsetMapping *OM;
 
-    DILineInfoTable Lines = DwarfContext.getLineInfoForAddressRange(Addr, Size);
+  DILineInfoTable Lines = DwarfContext.getLineInfoForAddressRange(Addr, Size);
 
-    DILineInfoTable::iterator Begin = Lines.begin();
-    DILineInfoTable::iterator End = Lines.end();
+  DILineInfoTable::iterator Begin = Lines.begin();
+  DILineInfoTable::iterator End = Lines.end();
 
-    // Count offset entries. Will skip an entry if the current IL offset
-    // matches the previous offset.
+  // Count offset entries. Will skip an entry if the current IL offset
+  // matches the previous offset.
+  for (DILineInfoTable::iterator It = Begin; It != End; ++It) {
+    uint32_t LineNumber = (It->second).Line;
+
+    if (LineNumber != LastDebugOffset) {
+      NumDebugRanges++;
+      LastDebugOffset = LineNumber;
+    }
+  }
+
+  // Reset offset
+  LastDebugOffset = (uint32_t)-1;
+
+  if (NumDebugRanges > 0) {
+    // Allocate OffsetMapping array
+    unsigned SizeOfArray =
+        (NumDebugRanges) * sizeof(ICorDebugInfo::OffsetMapping);
+    OM = (ICorDebugInfo::OffsetMapping *)Context->JitInfo->allocateArray(
+        SizeOfArray);
+
+    unsigned CurrentDebugEntry = 0;
+
+    // Iterate through the debug entries and save IL offset, native
+    // offset, and source reason
     for (DILineInfoTable::iterator It = Begin; It != End; ++It) {
+      int Offset = It->first;
       uint32_t LineNumber = (It->second).Line;
 
+      // We store info about if the instruction is being recorded because
+      // it is a call in the column field
+      bool IsCall = (It->second).Column == 1;
+
       if (LineNumber != LastDebugOffset) {
-        NumDebugRanges++;
         LastDebugOffset = LineNumber;
+        OM[CurrentDebugEntry].nativeOffset = Offset;
+        OM[CurrentDebugEntry].ilOffset = LineNumber;
+        OM[CurrentDebugEntry].source = IsCall
+                                            ? ICorDebugInfo::CALL_INSTRUCTION
+                                            : ICorDebugInfo::STACK_EMPTY;
+        CurrentDebugEntry++;
       }
     }
 
-    // Reset offset
-    LastDebugOffset = (uint32_t)-1;
+    // Send array of OffsetMappings to CLR EE
+    CORINFO_METHOD_INFO *MethodInfo = Context->MethodInfo;
+    CORINFO_METHOD_HANDLE MethodHandle = MethodInfo->ftn;
 
-    if (NumDebugRanges > 0) {
-      // Allocate OffsetMapping array
-      unsigned SizeOfArray =
-          (NumDebugRanges) * sizeof(ICorDebugInfo::OffsetMapping);
-      OM = (ICorDebugInfo::OffsetMapping *)Context->JitInfo->allocateArray(
-          SizeOfArray);
-
-      unsigned CurrentDebugEntry = 0;
-
-      // Iterate through the debug entries and save IL offset, native
-      // offset, and source reason
-      for (DILineInfoTable::iterator It = Begin; It != End; ++It) {
-        int Offset = It->first;
-        uint32_t LineNumber = (It->second).Line;
-
-        // We store info about if the instruction is being recorded because
-        // it is a call in the column field
-        bool IsCall = (It->second).Column == 1;
-
-        if (LineNumber != LastDebugOffset) {
-          LastDebugOffset = LineNumber;
-          OM[CurrentDebugEntry].nativeOffset = Offset;
-          OM[CurrentDebugEntry].ilOffset = LineNumber;
-          OM[CurrentDebugEntry].source = IsCall
-                                             ? ICorDebugInfo::CALL_INSTRUCTION
-                                             : ICorDebugInfo::STACK_EMPTY;
-          CurrentDebugEntry++;
-        }
-      }
-
-      // Send array of OffsetMappings to CLR EE
-      CORINFO_METHOD_INFO *MethodInfo = Context->MethodInfo;
-      CORINFO_METHOD_HANDLE MethodHandle = MethodInfo->ftn;
-
-      Context->JitInfo->setBoundaries(MethodHandle, NumDebugRanges, OM);
-    }
+    Context->JitInfo->setBoundaries(MethodHandle, NumDebugRanges, OM);
 
     getDebugInfoForLocals(DwarfContext, Addr, Size);
   }
