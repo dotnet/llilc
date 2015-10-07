@@ -249,6 +249,8 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
   std::unique_ptr<Module> M = Context.getModuleForMethod(MethodInfo);
   Context.CurrentModule = M.get();
   Context.CurrentModule->setTargetTriple(LLILC_TARGET_TRIPLE);
+  Context.CurrentModule->addModuleFlag(Module::Warning, "Debug Info Version",
+                                       DEBUG_METADATA_VERSION);
   Context.MethodName = Context.CurrentModule->getModuleIdentifier();
   Context.TheABIInfo = ABIInfo::get(*Context.CurrentModule);
 
