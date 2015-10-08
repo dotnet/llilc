@@ -6774,6 +6774,10 @@ void GenIR::dup(IRNode *Opr, IRNode **Result1, IRNode **Result2) {
 bool GenIR::interlockedCmpXchg(IRNode *Destination, IRNode *Exchange,
                                IRNode *Comparand, IRNode **Result,
                                CorInfoIntrinsics IntrinsicID) {
+  if (Exchange->getType()->isPointerTy()) {
+    Exchange = (IRNode *)LLVMBuilder->CreatePtrToInt(Exchange, Comparand->getType());
+  }
+
   ASSERT(Exchange->getType() == Comparand->getType());
   switch (IntrinsicID) {
   case CORINFO_INTRINSIC_InterlockedCmpXchg32:
@@ -6829,6 +6833,12 @@ bool GenIR::interlockedIntrinsicBinOp(IRNode *Arg1, IRNode *Arg2,
   }
 
   if (Op != AtomicRMWInst::BinOp::BAD_BINOP) {
+    assert(Arg1->getType()->isPointerTy());
+    Type *CastTy = isManagedPointerType(Arg1->getType())
+                     ? getManagedPointerType(Arg2->getType())
+                     : getUnmanagedPointerType(Arg2->getType());
+    Arg1 = (IRNode *)LLVMBuilder->CreatePointerCast(Arg1, CastTy);
+
     Value *Result = LLVMBuilder->CreateAtomicRMW(
         Op, Arg1, Arg2, AtomicOrdering::SequentiallyConsistent);
     *RetVal = (IRNode *)Result;
