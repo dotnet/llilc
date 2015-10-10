@@ -28,6 +28,7 @@
 #include "llvm/Config/config.h"
 
 class ABIInfo;
+class GcInfo;
 struct LLILCJitPerThreadState;
 
 /// \brief This struct holds per-jit request state.
@@ -110,6 +111,9 @@ public:
   uintptr_t ReadOnlyDataSize = 0; ///< Size of readonly data ref'd from code.
   uintptr_t StackMapSize = 0;     ///< Size of readonly Stackmap section.
   //@}
+
+  /// \name GC Information
+  GcInfo *GcInfo; ///< GcInfo for functions in CurrentModule
 };
 
 /// \brief This struct holds per-thread Jit state.
