@@ -308,6 +308,10 @@ protected:
   std::vector<IRNode *> Stack;
 
 public:
+
+  /// \brief Destructor
+  virtual ~ReaderStack() {}
+
   /// \brief Mutable iterator to elements of the stack from bottom to top.
   ///
   /// This is the same as the underlying vector iterator.

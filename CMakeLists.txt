@@ -291,9 +291,31 @@ if ( NOT LLVM_TARGET_IS_CROSSCOMPILE_HOST )
     endif ()
 
     check_cxx_compiler_flag("-Werror -Wnested-anon-types" CXX_SUPPORTS_NO_NESTED_ANON_TYPES_FLAG)
-    if( CXX_SUPPORTS_NO_NESTED_ANON_TYPES_FLAG )
+    if (CXX_SUPPORTS_NO_NESTED_ANON_TYPES_FLAG)
       set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-nested-anon-types" )
     endif()
+
+    # remove -Wnon-virtual-dtor for now, since CLR headers are not clean
+    string(REGEX REPLACE "-Wnon-virtual-dtor" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+
+    # if supported, add -Wno-unknown-pragmas, since we use pragma region in LLILC
+    check_cxx_compiler_flag("-Werror -Wno-unknown-pragmas" CXX_SUPPORTS_NO_UNKNOWN_PRAGMAS_FLAG)
+    if (CXX_SUPPORTS_NO_UNKNOWN_PRAGMAS_FLAG)
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unknown-pragmas")
+    endif()
+
+    # if supported, add -Wno-covered-switch-default, since we use default NYI's 
+    # to catch upstream contract changes for enums used in switches
+    check_cxx_compiler_flag("-Werror -Wno-covered-switch-default" CXX_SUPPORTS_NO_COVERED_SWITCH_DEFAULT)
+    if (CXX_SUPPORTS_NO_COVERED_SWITCH_DEFAULT)
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-covered-switch-default")
+    endif()
+
+    # force on -Werror to catch any newly introduced warnings
+    if (NOT LLVM_ENABLE_WERROR)
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
+    endif()
+
   endif ()
 
   if (APPLE)
