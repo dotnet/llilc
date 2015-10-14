@@ -7516,7 +7516,7 @@ BasicBlock *GenIR::insertConditionalPointBlock(Value *Condition,
     // Allow that the point block may have been split to insert invoke
     // instructions.
     TerminatorInst *Terminator;
-    while ((Terminator = PointBlock->getTerminator()) != nullptr) {
+    while ((Terminator = RejoinFromBlock->getTerminator()) != nullptr) {
       assert(isa<InvokeInst>(Terminator));
       RejoinFromBlock = cast<InvokeInst>(Terminator)->getNormalDest();
     }
