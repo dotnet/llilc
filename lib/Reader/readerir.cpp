@@ -453,6 +453,11 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
 void GenIR::readerMiddlePass() { return; }
 
 void GenIR::readerPostVisit() {
+  // Insert IR for some deferred prolog actions.  These logically have offset
+  // zero and are outside any try regions.
+  CurrInstrOffset = 0;
+  CurrentRegion = EhRegionTree;
+
   // If the generic context must be kept live, make it so.
   if (KeepGenericContextAlive) {
     insertIRToKeepGenericContextAlive();
@@ -5704,9 +5709,19 @@ IRNode *GenIR::callRuntimeHandleHelper(CorInfoHelpFunc Helper, IRNode *Arg1,
   // }
   // return x;
   BasicBlock *CurrentBlock = LLVMBuilder->GetInsertBlock();
-  BasicBlock *CallBlock = HelperCall->getParent();
+  // Find the join predecessor that corresponds to the call.  It may not be
+  // the block containing the call itself because the call may be an invoke
+  // and so that block may have been split.  It will always be the predecessor
+  // of the join which is not SavBlock.
+  BasicBlock *RejoinBlock = nullptr;
+  for (BasicBlock *JoinPred : predecessors(CurrentBlock)) {
+    if (JoinPred != SaveBlock) {
+      RejoinBlock = JoinPred;
+      break;
+    }
+  }
   PHINode *Phi = mergeConditionalResults(CurrentBlock, NullCheckArg, SaveBlock,
-                                         HelperCall.getInstruction(), CallBlock,
+                                         HelperCall.getInstruction(), RejoinBlock,
                                          "RuntimeHandle");
   return (IRNode *)Phi;
 }
@@ -7516,7 +7531,7 @@ BasicBlock *GenIR::insertConditionalPointBlock(Value *Condition,
     // Allow that the point block may have been split to insert invoke
     // instructions.
     TerminatorInst *Terminator;
-    while ((Terminator = PointBlock->getTerminator()) != nullptr) {
+    while ((Terminator = RejoinFromBlock->getTerminator()) != nullptr) {
       assert(isa<InvokeInst>(Terminator));
       RejoinFromBlock = cast<InvokeInst>(Terminator)->getNormalDest();
     }
