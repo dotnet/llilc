@@ -453,6 +453,11 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
 void GenIR::readerMiddlePass() { return; }
 
 void GenIR::readerPostVisit() {
+  // Insert IR for some deferred prolog actions.  These logically have offset
+  // zero and are outside any try regions.
+  CurrInstrOffset = 0;
+  CurrentRegion = EhRegionTree;
+
   // If the generic context must be kept live, make it so.
   if (KeepGenericContextAlive) {
     insertIRToKeepGenericContextAlive();
