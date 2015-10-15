@@ -112,6 +112,7 @@ public:
   uint32_t EndMsilOffset;
   llvm::Instruction *HandlerEHPad;
   union {
+    EHRegion *EntryRegion;              // Only used for Try regions
     llvm::SwitchInst *EndFinallySwitch; // Only used for Finally regions
     mdToken CatchClassToken;            // Only used for Catch regions
     EHRegion *HandlerRegion;            // Only used for Filter regions
@@ -209,6 +210,15 @@ mdToken rgnGetCatchClassToken(EHRegion *CatchRegion) {
 }
 void rgnSetCatchClassToken(EHRegion *CatchRegion, mdToken Token) {
   CatchRegion->CatchClassToken = Token;
+}
+
+void rgnSetEntryRegion(EHRegion *TryRegion, EHRegion *EntryRegion) {
+  assert(TryRegion->Kind == ReaderBaseNS::RegionKind::RGN_Try);
+  TryRegion->EntryRegion = EntryRegion;
+}
+EHRegion *rgnGetEntryRegion(EHRegion *TryRegion) {
+  assert(TryRegion->Kind == ReaderBaseNS::RegionKind::RGN_Try);
+  return TryRegion->EntryRegion;
 }
 
 #pragma endregion
