@@ -1137,8 +1137,7 @@ llvm::DISubroutineType *GenIR::createFunctionType(llvm::Function *F,
 
     EltTys.push_back(ParamTy);
   }
-  return DBuilder->createSubroutineType(Unit,
-                                        DBuilder->getOrCreateTypeArray(EltTys));
+  return DBuilder->createSubroutineType(DBuilder->getOrCreateTypeArray(EltTys));
 }
 
 llvm::DIType *GenIR::convertType(Type *Ty) {
