@@ -168,11 +168,10 @@ def main(argv):
         RunCommand('set complus_')
         RunCommand('set CORE_ROOT')
         RunCommand('set CORE_LIBRARIES')
-    command = ''
+    command = []
     if args.windbg_and_args:
         for arg in args.windbg_and_args:
-            arg = QuoteArg(arg)
-            command += ' ' + arg
+            command.append(arg)
     if args.corerun_and_args:
         first_corerun = True
         for arg in args.corerun_and_args:
@@ -181,15 +180,11 @@ def main(argv):
                 # the path.
                 arg = os.path.join(args.coreclr_runtime_path, arg)
                 first_corerun = False
-            arg = QuoteArg(arg)
-            command += ' ' + arg
+            command.append(arg)
         
-    if command != '':
-        command += ' '
-    command += QuoteArg(args.app_path)
+    command.append(args.app_path)
     for arg in unknown:
-        arg = QuoteArg(arg)
-        command += ' ' + arg
+        command.append(arg)
     error_level = RunCommand(command)
     if llilcverbose:
         log ('Exiting llilc_run.py with exit code ', error_level)

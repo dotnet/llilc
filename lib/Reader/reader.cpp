@@ -1675,8 +1675,10 @@ void ReaderBase::rgnCreateRegionTree(void) {
       rgnSetStartMSILOffset(RegionTry, CurrentEHClause->TryOffset);
       rgnSetEndMSILOffset(RegionTry, CurrentEHClause->TryOffset +
                                          CurrentEHClause->TryLength);
+      rgnSetEntryRegion(RegionTry, RegionTry);
     }
 
+    EHRegion *CheckEntryRegion;
     if (CurrentEHClause->Flags & CORINFO_EH_CLAUSE_FILTER) {
       EHRegion *RegionFilter;
       RegionHandler = rgnMakeRegion(ReaderBaseNS::RGN_MExcept, RegionTry,
@@ -1690,40 +1692,48 @@ void ReaderBase::rgnCreateRegionTree(void) {
       rgnSetStartMSILOffset(RegionFilter, CurrentEHClause->FilterOffset);
       // The end of the filter, is the start of its handler
       rgnSetEndMSILOffset(RegionFilter, CurrentEHClause->HandlerOffset);
+      // The filter might precede the try and its other children; the handler
+      // will never precede the try.
+      CheckEntryRegion = RegionFilter;
     } else {
-
       if (CurrentEHClause->Flags & CORINFO_EH_CLAUSE_FINALLY) {
         RegionHandler = rgnMakeRegion(ReaderBaseNS::RGN_Finally, RegionTry,
                                       RegionTreeRoot, &WorkingAllRegionList);
+      } else if (CurrentEHClause->Flags & CORINFO_EH_CLAUSE_FAULT) {
+
+        RegionHandler = rgnMakeRegion(ReaderBaseNS::RGN_Fault, RegionTry,
+                                      RegionTreeRoot, &WorkingAllRegionList);
       } else {
-        if (CurrentEHClause->Flags & CORINFO_EH_CLAUSE_FAULT) {
+        // we need to touch the class at JIT time
+        // otherwise the classloader kicks in at exception time
+        // (possibly stack overflow exception) in which case
+        // we are in danger of going past the stack guard
 
-          RegionHandler = rgnMakeRegion(ReaderBaseNS::RGN_Fault, RegionTry,
-                                        RegionTreeRoot, &WorkingAllRegionList);
-        } else {
-          // we need to touch the class at JIT time
-          // otherwise the classloader kicks in at exception time
-          // (possibly stack overflow exception) in which case
-          // we are in danger of going past the stack guard
-
-          if (CurrentEHClause->ClassToken) {
-            CORINFO_RESOLVED_TOKEN ResolvedToken;
-            resolveToken(CurrentEHClause->ClassToken, CORINFO_TOKENKIND_Class,
-                         &ResolvedToken);
-          }
-
-          // this will be a catch (EH_CLAUSE_NONE)
-          // we need to keep the token somewhere
-          RegionHandler = rgnMakeRegion(ReaderBaseNS::RGN_MCatch, RegionTry,
-                                        RegionTreeRoot, &WorkingAllRegionList);
-
-          rgnSetCatchClassToken(RegionHandler, CurrentEHClause->ClassToken);
+        if (CurrentEHClause->ClassToken) {
+          CORINFO_RESOLVED_TOKEN ResolvedToken;
+          resolveToken(CurrentEHClause->ClassToken, CORINFO_TOKENKIND_Class,
+                        &ResolvedToken);
         }
+
+        // this will be a catch (EH_CLAUSE_NONE)
+        // we need to keep the token somewhere
+        RegionHandler = rgnMakeRegion(ReaderBaseNS::RGN_MCatch, RegionTry,
+                                      RegionTreeRoot, &WorkingAllRegionList);
+
+        rgnSetCatchClassToken(RegionHandler, CurrentEHClause->ClassToken);
       }
+      // The handler might precede the try and its other children
+      CheckEntryRegion = RegionHandler;
     }
     rgnSetStartMSILOffset(RegionHandler, CurrentEHClause->HandlerOffset);
     rgnSetEndMSILOffset(RegionHandler, CurrentEHClause->HandlerOffset +
                                            CurrentEHClause->HandlerLength);
+    // See if this handler precedes the try and its other handlers
+    EHRegion *EntryRegion = rgnGetEntryRegion(RegionTry);
+    if (rgnGetStartMSILOffset(CheckEntryRegion) <
+        rgnGetStartMSILOffset(EntryRegion)) {
+      rgnSetEntryRegion(RegionTry, CheckEntryRegion);
+    }
   } while (I != 0);
 
   delete[] EHClauses;
@@ -2231,23 +2241,23 @@ EHRegion *ReaderBase::fgSwitchRegion(EHRegion *OldRegion, uint32_t Offset,
       if (ChildStartOffset < TransitionOffset) {
         TransitionOffset = ChildStartOffset;
       }
-
-      continue;
-    }
-
-    uint32_t ChildEndOffset = rgnGetEndMSILOffset(ChildRegion);
-
-    if (Offset < ChildEndOffset) {
-      // Enter this region; recursively check it (may need to enter descendant)
-      fgEnterRegion(ChildRegion);
+    } else if (Offset < rgnGetEndMSILOffset(ChildRegion)) {
+      if (ChildRegion == rgnGetEntryRegion(ChildRegion)) {
+        // This try region lexically precedes all its handlers (which is the
+        // common case).  Let the client do any processing necessary for its
+        // entry.
+        fgEnterRegion(ChildRegion);
+      }
+      // Switch to the child and recursively check (we may need to enter some
+      // descendant(s) of it as well).
       return fgSwitchRegion(ChildRegion, Offset, NextOffset);
     }
 
     if (rgnGetRegionType(ChildRegion) == ReaderBaseNS::RegionKind::RGN_Try) {
       // A handler region for the try is a child of it in the tree but follows
-      // it in the IR, so we explicitly have to check for grandchildren in this
-      // case (the current offset falls in the grandchild's range but not the
-      // child's range).
+      // (or, in some hand-crafted IL cases, precedes) it in the IR, so we
+      // explicitly have to check for grandchildren in this case (the current
+      // offset falls in the grandchild's range but not the child's range).
       for (EHRegionList *GrandchildNode = rgnGetChildList(ChildRegion);
            GrandchildNode; GrandchildNode = rgnListGetNext(GrandchildNode)) {
 
@@ -2268,9 +2278,14 @@ EHRegion *ReaderBase::fgSwitchRegion(EHRegion *OldRegion, uint32_t Offset,
         uint32_t GrandchildEndOffset = rgnGetEndMSILOffset(Grandchild);
 
         if (Offset < GrandchildEndOffset) {
-          // Recursively check this region (it may need to enter a descendant).
-          // Don't call fgEnterRegion here, since we already processed the
-          // region entry for this try when we visited it the first time.
+          if (Grandchild == rgnGetEntryRegion(ChildRegion)) {
+            // This handler lexically precedes its try.  Give the client a
+            // chance to set up any necessary state for the try before
+            // switching to the handler.
+            fgEnterRegion(ChildRegion);
+          }
+          // Switch to this region and recursively check -- we may need to
+          // enter a some descendant(s) of it as well.
           return fgSwitchRegion(Grandchild, Offset, NextOffset);
         }
       }

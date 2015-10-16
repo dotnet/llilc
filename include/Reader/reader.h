@@ -975,6 +975,10 @@ void rgnSetFilterHandlerRegion(EHRegion *EhRegion, EHRegion *Handler);
 EHRegion *rgnGetFinallyTryRegion(EHRegion *FinallyRegion);
 mdToken rgnGetCatchClassToken(EHRegion *CatchRegion);
 void rgnSetCatchClassToken(EHRegion *CatchRegion, mdToken Token);
+/// A try region's "entry region" is either the try region itself or one of
+/// its handlers; whichever from that set comes lexically first.
+void rgnSetEntryRegion(EHRegion *TryRegion, EHRegion *EntryRegion);
+EHRegion *rgnGetEntryRegion(EHRegion *TryRegion);
 
 /// Get the finally region attached to the given \p TryRegion, if any.
 ///
