@@ -600,6 +600,7 @@ int ReaderBase::appendClassName(char16_t **Buffer, int32_t *BufferLen,
   return Return;
 }
 
+// Construct The GC Layout from CoreCLR Type
 GCLayout *ReaderBase::getClassGCLayout(CORINFO_CLASS_HANDLE Class) {
   // The actual size of the byte array the runtime is expecting (gcLayoutSize)
   // is one byte for every sizeof(void*) slot in the valueclass.

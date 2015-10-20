@@ -15,7 +15,6 @@
 
 #include "earlyincludes.h"
 #include "readerir.h"
-#include "GcInfo.h"
 #include "imeta.h"
 #include "newvstate.h"
 #include "llvm/ADT/Triple.h"
@@ -292,6 +291,7 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   new (&ABIMethodSig)
       ABIMethodSignature(MethodSignature, *this, *JitContext->TheABIInfo);
   Function = ABIMethodSig.createFunction(*this, *JitContext->CurrentModule);
+  GcFuncInfo = JitContext->GcInfo->newGcInfo(Function);
 
   llvm::LLVMContext &LLVMContext = *JitContext->LLVMContext;
   EntryBlock = BasicBlock::Create(LLVMContext, "entry", Function);
@@ -470,37 +470,20 @@ void GenIR::readerPostVisit() {
 }
 
 void GenIR::readerPostPass(bool IsImportOnly) {
-  if (JitContext->Options->DoInsertStatepoints) {
 
-    // Precise GC using statepoints cannot handle aggregates that contain
-    // managed pointers yet. So, check if this function deals with such values
-    // and fail early. (Issue #33)
+  SmallVector<Value *, 4> EscapingLocs;
+  GcFuncInfo->getEscapingLocations(EscapingLocs);
 
-    for (const Argument &Arg : Function->args()) {
-      if (isManagedAggregateType(Arg.getType())) {
-        throw NotYetImplementedException(
-            "NYI: Precice GC for Managed-Aggregate values");
-      }
-    }
+  if (EscapingLocs.size() > 0) {
+    Value *FrameEscape = Intrinsic::getDeclaration(JitContext->CurrentModule,
+                                                   Intrinsic::localescape);
 
-    for (const BasicBlock &BB : *Function) {
-      for (const Instruction &Instr : BB) {
-        if (isManagedAggregateType(Instr.getType())) {
-          throw NotYetImplementedException(
-              "NYI: Precice GC for Managed-Aggregate values");
-        }
-
-        if (isa<AllocaInst>(Instr)) {
-          AllocaInst *Alloca = (AllocaInst *)(&Instr);
-          Type *AllocatedType = Alloca->getAllocatedType();
-
-          if (isManagedAggregateType(AllocatedType)) {
-            throw NotYetImplementedException(
-                "NYI: Precice GC for Managed-Aggregate values");
-          }
-        }
-      }
-    }
+    // Insert the LocalEscape Intrinsic at the end of the
+    // Prolog block, after all local allocations,
+    // before the basic-block Terminator
+    Instruction *InsertionPoint = Function->begin()->getTerminator();
+    LLVMBuilder->SetInsertPoint(InsertionPoint);
+    LLVMBuilder->CreateCall(FrameEscape, EscapingLocs);
   }
 
   // Crossgen in ReadyToRun mode records structs that method compilation
@@ -539,38 +522,31 @@ void GenIR::insertIRToKeepGenericContextAlive() {
     InsertPoint = makeStoreNonNull(This, ScratchLocalAlloca, false);
     // The scratch local's address is the saved context address.
     ContextLocalAddress = ScratchLocalAlloca;
+    GcFuncInfo->GenericsContextParamType = GENERIC_CONTEXTPARAM_THIS;
   } else {
     // We know the type arg is unmodified so we can use its initial
     // spilled value location for reporting.
-    ASSERT(Options & (CORINFO_GENERICS_CTXT_FROM_METHODDESC |
-                      CORINFO_GENERICS_CTXT_FROM_METHODTABLE));
+    if (Options & CORINFO_GENERICS_CTXT_FROM_METHODDESC) {
+      GcFuncInfo->GenericsContextParamType = GENERIC_CONTEXTPARAM_MD;
+    } else if (Options & CORINFO_GENERICS_CTXT_FROM_METHODTABLE) {
+      GcFuncInfo->GenericsContextParamType = GENERIC_CONTEXTPARAM_MT;
+    } else {
+      assert(false && "Unexpected Option");
+    }
+
     ASSERT(MethodSignature.hasTypeArg());
     ContextLocalAddress = Arguments[MethodSignature.getTypeArgIndex()];
   }
 
-  // Indicate that the context location's address escapes by inserting a call
-  // to llvm.frameescape. Put that call just after the last alloca or the
-  // store to the scratch local.
-  LLVMBuilder->SetInsertPoint(InsertPoint->getNextNode());
-  Value *FrameEscape = Intrinsic::getDeclaration(JitContext->CurrentModule,
-                                                 Intrinsic::localescape);
-  Value *Args[] = {ContextLocalAddress};
-  const bool MayThrow = false;
-  makeCall(FrameEscape, MayThrow, Args);
-  // Don't move TempInsertionPoint up since what we added was not an alloca
-  LLVMBuilder->restoreIP(SavedInsertPoint);
+  assert(isa<AllocaInst>(ContextLocalAddress) && "Stack Allocation expected");
+  GcFuncInfo->GenericsContext = cast<AllocaInst>(ContextLocalAddress);
 
   // This method now requires a frame pointer.
   // TargetMachine *TM = JitContext->TM;
   // TM->Options.NoFramePointerElim = true;
 
-  // TODO: we must convey the offset of this local to the runtime
-  // via the GC encoding.
-  // https://github.com/dotnet/llilc/issues/766
-
-  if (JitContext->Options->DoInsertStatepoints) {
-    throw NotYetImplementedException("NYI: Generic Context reporting");
-  }
+  // Don't move TempInsertionPoint up since what we added was not an alloca
+  LLVMBuilder->restoreIP(SavedInsertPoint);
 }
 
 void GenIR::insertIRForSecurityObject() {
@@ -602,16 +578,7 @@ void GenIR::insertIRForSecurityObject() {
 
   LLVMBuilder->restoreIP(SavedInsertPoint);
 
-  // TODO: if passing the security object's address to the helper is not enough
-  // to keep it live throughout the method, find another way to ensure this.
-
-  // TODO: we must convey the offset of the security object to the runtime
-  // via the GC encoding.
-  // https://github.com/dotnet/llilc/issues/767
-
-  if (JitContext->Options->DoInsertStatepoints) {
-    throw NotYetImplementedException("NYI: Security Object Reporting");
-  }
+  GcFuncInfo->SecurityObject = cast<AllocaInst>(SecurityObjectAddress);
 }
 
 void GenIR::callMonitorHelper(bool IsEnter) {
@@ -646,7 +613,7 @@ void GenIR::insertIRForUnmanagedCallFrame() {
   // Mark this function as requiring a frame pointer and as using GC.
   Function->addFnAttr("no-frame-pointer-elim", "true");
 
-  assert(GCInfo::isGCFunction(*Function));
+  assert(GcInfo::isGcFunction(Function));
 
   // The call frame data structure is modeled as an opaque blob of bytes.
   Type *CallFrameTy = ArrayType::get(Int8Ty, CallFrameInfo.size);
@@ -733,6 +700,16 @@ void GenIR::insertIRForUnmanagedCallFrame() {
 //
 //===----------------------------------------------------------------------===//
 
+AllocaInst *GenIR::createAlloca(Type *T, Value *ArraySize, const Twine &Name) {
+  AllocaInst *AllocaInst = LLVMBuilder->CreateAlloca(T, ArraySize, Name);
+
+  if (GcInfo::isGcAggregate(T)) {
+    GcFuncInfo->recordGcAggregate(AllocaInst);
+  }
+
+  return AllocaInst;
+}
+
 void GenIR::createSym(uint32_t Num, bool IsAuto, CorInfoType CorType,
                       CORINFO_CLASS_HANDLE Class, bool IsPinned,
                       ReaderSpecialSymbolType SymType) {
@@ -774,10 +751,6 @@ void GenIR::createSym(uint32_t Num, bool IsAuto, CorInfoType CorType,
     break;
   }
 
-  if (IsPinned && JitContext->Options->DoInsertStatepoints) {
-    throw NotYetImplementedException("NYI: Pinning with Precise GC");
-  }
-
   Type *LLVMType = this->getType(CorType, Class);
   if (!IsAuto) {
     const ABIArgInfo &Info = ABIMethodSig.getArgumentInfo(Num);
@@ -787,9 +760,13 @@ void GenIR::createSym(uint32_t Num, bool IsAuto, CorInfoType CorType,
     }
   }
 
-  AllocaInst *AllocaInst = LLVMBuilder->CreateAlloca(
-      LLVMType, nullptr,
-      UseNumber ? Twine(SymName) + Twine(Number) : Twine(SymName));
+  AllocaInst *AllocaInst =
+      createAlloca(LLVMType, nullptr,
+                   UseNumber ? Twine(SymName) + Twine(Number) : Twine(SymName));
+
+  if (IsPinned) {
+    GcFuncInfo->recordPinnedSlot(AllocaInst);
+  }
 
   DIFile *Unit = DBuilder->createFile(LLILCDebugInfo.TheCU->getFilename(),
                                       LLILCDebugInfo.TheCU->getDirectory());
@@ -828,7 +805,7 @@ void GenIR::zeroInitLocals() {
   bool InitAllLocals = isZeroInitLocals();
   for (const auto &LocalVar : LocalVars) {
     Type *LocalTy = LocalVar->getType()->getPointerElementType();
-    if (InitAllLocals || isManagedType(LocalTy)) {
+    if (InitAllLocals || GcInfo::isGcType(LocalTy)) {
       // TODO: if InitAllLocals is false we only have to zero initialize
       // GC pointers and GC pointer fields on structs. For now we are zero
       // initalizing all fields in structs that have gc fields.
@@ -934,7 +911,7 @@ void GenIR::copyStruct(CORINFO_CLASS_HANDLE Class, IRNode *Dst, IRNode *Src,
               ElementStructLayout->getElementOffset(ElementIndex);
           ElementType = ElementStructTy->getElementType(ElementIndex);
           OffsetInElementType = OffsetInElementType - ElementOffset;
-        } while (!isManagedPointerType(ElementType));
+        } while (!GcInfo::isGcPointer(ElementType));
 
         Type *ElementTypePointer = PointerType::get(
             ElementType, GCSrcAddr->getType()->getPointerAddressSpace());
@@ -1010,7 +987,7 @@ Instruction *GenIR::createTemporary(Type *Ty, const Twine &Name) {
     LLVMBuilder->SetInsertPoint(InsertBefore);
   }
 
-  AllocaInst *AllocaInst = LLVMBuilder->CreateAlloca(Ty, nullptr, Name);
+  AllocaInst *AllocaInst = createAlloca(Ty, nullptr, Name);
   // Update the end of the alloca range.
   TempInsertionPoint = AllocaInst;
   LLVMBuilder->restoreIP(IP);
@@ -2048,75 +2025,38 @@ Type *GenIR::getClassTypeWorker(
   // Since padding is explicit, this is an LLVM packed struct.
   StructTy->setBody(Fields, true /* isPacked */);
 
-  // For value classes we can do further checking and validate
-  // against the runtime's view of the class.
-  //
-  // Note the runtime only gives us size and gc info for value classes so
-  // we can't do this more generally.
-
-  // Verify overall size matches up.
-  if (HaveClassSize) {
-    ASSERT(EEClassSize == DataLayout->getTypeSizeInBits(StructTy) / 8);
-
-    // Verify that the LLVM type contains the same information
-    // as the GC field info from the runtime.
-    const StructLayout *MainStructLayout =
-        DataLayout->getStructLayout(StructTy);
-    const uint32_t PointerSize = DataLayout->getPointerSize();
-
-    // Walk through the type in pointer-sized jumps.
-    for (uint32_t GCOffset = 0; GCOffset < EEClassSize;
-         GCOffset += PointerSize) {
-      const uint32_t FieldIndex =
-          MainStructLayout->getElementContainingOffset(GCOffset);
-      Type *FieldTy = StructTy->getStructElementType(FieldIndex);
-
-      // If the field is a value class we need to dive in
-      // to its fields and so on, until we reach a primitive type.
-      if (FieldTy->isStructTy()) {
-
-        // Prepare to loop through the nesting.
-        const StructLayout *OuterStructLayout = MainStructLayout;
-        uint32_t OuterOffset = GCOffset;
-        uint32_t OuterIndex = FieldIndex;
-
-        while (FieldTy->isStructTy()) {
-          // Offset of the Inner class within the outer class
-          const uint32_t InnerBaseOffset =
-              OuterStructLayout->getElementOffset(OuterIndex);
-          // Inner class should start at or before the outer offset
-          ASSERT(InnerBaseOffset <= OuterOffset);
-          // Determine target offset relative to this inner class.
-          const uint32_t InnerOffset = OuterOffset - InnerBaseOffset;
-          // Get the inner class layout
-          StructType *InnerStructTy = cast<StructType>(FieldTy);
-          const StructLayout *InnerStructLayout =
-              DataLayout->getStructLayout(InnerStructTy);
-          // Find the field at that target offset.
-          const uint32_t InnerIndex =
-              InnerStructLayout->getElementContainingOffset(InnerOffset);
-          // Update for next iteration.
-          FieldTy = InnerStructTy->getStructElementType(InnerIndex);
-          OuterStructLayout = InnerStructLayout;
-          OuterOffset = InnerOffset;
-          OuterIndex = InnerIndex;
-        }
-      }
+// For value classes we can do further checking and validate
+// against the runtime's view of the class.
+//
+// Note the runtime only gives us size and gc info for value classes so
+// we can't do this more generally.
 
 #ifndef NDEBUG
-      // LLVM's type and the runtime must agree here.
-      GCLayout *RuntimeGCInfo = getClassGCLayout(ClassHandle);
-      const bool ExpectGCPointer =
-          (RuntimeGCInfo != nullptr) &&
-          (RuntimeGCInfo->GCPointers[GCOffset / PointerSize] !=
-           CorInfoGCType::TYPE_GC_NONE);
-      const bool IsGCPointer = isManagedPointerType(FieldTy);
-      assert((ExpectGCPointer == IsGCPointer) &&
-             "llvm type incorrectly describes location of gc references");
+  if (HaveClassSize) {
+    const uint32_t PointerSize = DataLayout->getPointerSize();
+    llvm::SmallVector<uint32_t, 4> GcPtrOffsets;
+
+    GCLayout *RuntimeGCInfo = getClassGCLayout(ClassHandle);
+    GcInfo::getGcPointers(StructTy, *DataLayout, GcPtrOffsets);
+
+    if (RuntimeGCInfo != nullptr) {
+      assert(RuntimeGCInfo->NumGCPointers == GcPtrOffsets.size() &&
+             "Runtime and LLVM Types differ in #GC-pointers");
+
+      for (uint32_t GcOffset : GcPtrOffsets) {
+        assert((RuntimeGCInfo->GCPointers[GcOffset / PointerSize] !=
+                CorInfoGCType::TYPE_GC_NONE) &&
+               "Runtime and LLVM Types differ in GC-pointer Locations");
+      }
+
       free(RuntimeGCInfo);
-#endif
+
+    } else {
+      assert(GcPtrOffsets.size() == 0 &&
+             "Runtime and LLVM Types differ in GC-ness");
     }
   }
+#endif
 
   // Return the struct or a pointer to it as requested.
   return ResultTy;
@@ -2156,7 +2096,7 @@ void GenIR::createOverlapFields(
     uint32_t Offset = OverlapField.first;
     uint32_t Size = DataLayout->getTypeSizeInBits(OverlapField.second) / 8;
     OverlapEndOffset = std::max(OverlapEndOffset, Offset + Size);
-    if (isManagedPointerType(OverlapField.second)) {
+    if (GcInfo::isGcPointer(OverlapField.second)) {
       assert(((Offset % getPointerByteSize()) == 0) &&
              "expect aligned gc pointers");
       if (GcOffsets.empty()) {
@@ -2616,51 +2556,11 @@ IRNode *GenIR::convertFromStackType(IRNode *Node, CorInfoType CorType,
 }
 
 PointerType *GenIR::getManagedPointerType(Type *ElementType) {
-  return PointerType::get(ElementType, ManagedAddressSpace);
+  return PointerType::get(ElementType, GcInfo::ManagedAddressSpace);
 }
 
 PointerType *GenIR::getUnmanagedPointerType(Type *ElementType) {
-  return PointerType::get(ElementType, UnmanagedAddressSpace);
-}
-
-bool GenIR::isManagedPointerType(Type *Type) {
-  const PointerType *PtrType = dyn_cast<llvm::PointerType>(Type);
-  if (PtrType != nullptr) {
-    return PtrType->getAddressSpace() == ManagedAddressSpace;
-  }
-
-  return false;
-}
-
-bool GenIR::isManagedAggregateType(Type *AggType) {
-  VectorType *VecType = dyn_cast<VectorType>(AggType);
-  if (VecType != nullptr) {
-    return isManagedPointerType(VecType->getScalarType());
-  }
-
-  ArrayType *ArrType = dyn_cast<ArrayType>(AggType);
-  if (ArrType != nullptr) {
-    return isManagedType(ArrType->getElementType());
-  }
-
-  StructType *StType = dyn_cast<StructType>(AggType);
-  if (StType != nullptr) {
-    for (Type *SubType : StType->subtypes()) {
-      if (isManagedType(SubType)) {
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
-
-bool GenIR::isManagedType(Type *Type) {
-  return isManagedPointerType(Type) || isManagedAggregateType(Type);
-}
-
-bool GenIR::isUnmanagedPointerType(llvm::Type *Type) {
-  return Type->isPointerTy() && !isManagedPointerType(Type);
+  return PointerType::get(ElementType, GcInfo::UnmanagedAddressSpace);
 }
 
 uint32_t GenIR::addArrayFields(std::vector<llvm::Type *> &Fields, bool IsVector,
@@ -2703,7 +2603,7 @@ bool GenIR::isArrayType(llvm::Type *ArrayTy, llvm::Type *ElementTy) {
   // Do some basic sanity checks that this type is one we created to model
   // a CLR array. Note we can't be 100% sure without keeping a whitelist
   // when we create these types.
-  assert(isManagedPointerType(ArrayTy) && "expected managed pointer");
+  assert(GcInfo::isGcPointer(ArrayTy) && "expected managed pointer");
   Type *Type = cast<PointerType>(ArrayTy)->getPointerElementType();
   if (!Type->isStructTy()) {
     return false;
@@ -3360,7 +3260,7 @@ IRNode *GenIR::loadLen(IRNode *Array, bool ArrayMayBeNull) {
 IRNode *GenIR::loadStringLen(IRNode *Address) {
   // Address should be a managed pointer type.
   Type *AddressTy = Address->getType();
-  ASSERT(isManagedPointerType(AddressTy));
+  ASSERT(GcInfo::isGcPointer(AddressTy));
 
   // Optionally do an explicit null check.
   bool NullCheckBeforeLoad = UseExplicitNullChecks;
@@ -3391,7 +3291,7 @@ IRNode *GenIR::loadStringLen(IRNode *Address) {
 IRNode *GenIR::stringGetChar(IRNode *Address, IRNode *Index) {
   // Address should be a managed pointer type.
   Type *AddressTy = Address->getType();
-  ASSERT(isManagedPointerType(AddressTy));
+  ASSERT(GcInfo::isGcPointer(AddressTy));
 
   // Optionally do an explicit null check.
   bool NullCheckBeforeLoad = UseExplicitNullChecks;
@@ -3702,8 +3602,8 @@ Type *GenIR::binaryOpType(ReaderBaseNS::BinaryOpcode Opcode, Type *Type1,
       return Type2;
     }
   } else {
-    const bool Type1IsUnmanagedPointer = isUnmanagedPointerType(Type1);
-    const bool Type2IsUnmanagedPointer = isUnmanagedPointerType(Type2);
+    const bool Type1IsUnmanagedPointer = GcInfo::isUnmanagedPointer(Type1);
+    const bool Type2IsUnmanagedPointer = GcInfo::isUnmanagedPointer(Type2);
     const bool IsStrictlyAdd = (Opcode == ReaderBaseNS::Add);
     const bool IsAdd = IsStrictlyAdd || (Opcode == ReaderBaseNS::AddOvf) ||
                        (Opcode == ReaderBaseNS::AddOvfUn);
@@ -3733,8 +3633,8 @@ Type *GenIR::binaryOpType(ReaderBaseNS::BinaryOpcode Opcode, Type *Type1,
         return Type::getIntNTy(*JitContext->LLVMContext,
                                TargetPointerSizeInBits);
       }
-    } else if (isManagedPointerType(Type1)) {
-      if (IsSub && isManagedPointerType(Type2)) {
+    } else if (GcInfo::isGcPointer(Type1)) {
+      if (IsSub && GcInfo::isGcPointer(Type2)) {
         // The difference of two managed pointers is a native int.
         return Type::getIntNTy(*JitContext->LLVMContext,
                                TargetPointerSizeInBits);
@@ -4002,7 +3902,7 @@ IRNode *GenIR::getFieldAddress(CORINFO_RESOLVED_TOKEN *ResolvedToken,
   }
 
   ASSERT(AddressTy->isPointerTy());
-  const bool IsGcPointer = isManagedPointerType(AddressTy);
+  const bool IsGcPointer = GcInfo::isGcPointer(AddressTy);
   Value *RawAddress = rdrGetFieldAddress(ResolvedToken, FieldInfo, Obj,
                                          IsGcPointer, MustNullCheck);
 
@@ -4053,8 +3953,7 @@ IRNode *GenIR::loadField(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Obj,
           // We haven't information abouth this field. Try to return struct
           // type.
           assert(VectorTypeToStructType.count(ObjType));
-          IRNode *Pointer =
-              (IRNode *)LLVMBuilder->CreateAlloca(Obj->getType(), nullptr);
+          IRNode *Pointer = (IRNode *)createAlloca(Obj->getType(), nullptr);
           LLVMBuilder->CreateStore(Obj, Pointer);
           Obj = (IRNode *)LLVMBuilder->CreateBitCast(
               Pointer,
@@ -4099,7 +3998,7 @@ IRNode *GenIR::loadField(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Obj,
   // Fields typed as GC pointers are always aligned,
   // so ignore any smaller alignment prefix
   if (FieldTy->isPointerTy() &&
-      isManagedPointerType(cast<PointerType>(FieldTy))) {
+      GcInfo::isGcPointer(cast<PointerType>(FieldTy))) {
     AlignmentPrefix = Reader_AlignNatural;
   }
 
@@ -4108,11 +4007,11 @@ IRNode *GenIR::loadField(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Obj,
   // and do a load-indirect off it.
   if (FieldInfo.fieldAccessor == CORINFO_FIELD_INSTANCE_HELPER) {
     handleMemberAccess(FieldInfo.accessAllowed, FieldInfo.accessCalloutHelper);
-    
+
     IRNode *Destination;
     const bool IsLoad = true;
     IRNode *ValueToStore = nullptr;
-    
+
     if (FieldInfo.helper == CORINFO_HELP_GETFIELDSTRUCT) {
       Destination = (IRNode *)createTemporary(FieldTy);
       setValueRepresentsStruct(Destination);
@@ -4272,8 +4171,8 @@ void GenIR::storeField(CORINFO_RESOLVED_TOKEN *FieldToken, IRNode *ValueToStore,
     const bool IsLoad = false;
     IRNode *Destination = nullptr;
 
-    rdrCallFieldHelper(FieldToken, FieldInfo.helper, IsLoad, Destination, Object,
-                       ValueToStore, Alignment, IsVolatile);
+    rdrCallFieldHelper(FieldToken, FieldInfo.helper, IsLoad, Destination,
+                       Object, ValueToStore, Alignment, IsVolatile);
     return;
   }
 
@@ -4338,7 +4237,7 @@ void GenIR::storeNonPrimitiveType(IRNode *Value, IRNode *Addr,
 void GenIR::storeIndirectArg(const CallArgType &ValueArgType,
                              llvm::Value *ValueToStore, llvm::Value *Address,
                              bool IsVolatile) {
-  assert(isManagedPointerType(cast<PointerType>(Address->getType())));
+  assert(GcInfo::isGcPointer(cast<PointerType>(Address->getType())));
 
   Type *ValueToStoreType = ValueToStore->getType();
   if (ValueToStoreType->isVectorTy()) {
@@ -4797,7 +4696,7 @@ bool GenIR::arraySet(CORINFO_SIG_INFO *Sig) {
 
   const bool IsVolatile = false;
   // Store the value
-  if (isManagedPointerType(ElementTy)) {
+  if (GcInfo::isGcPointer(ElementTy)) {
     // Since arrays are always on the heap, writing a GC pointer into an array
     // always requires a write barrier.
     CORINFO_RESOLVED_TOKEN *const ResolvedToken = nullptr;
@@ -6392,7 +6291,8 @@ bool GenIR::interlockedCmpXchg(IRNode *Destination, IRNode *Exchange,
                                IRNode *Comparand, IRNode **Result,
                                CorInfoIntrinsics IntrinsicID) {
   if (Exchange->getType()->isPointerTy()) {
-    Exchange = (IRNode *)LLVMBuilder->CreatePtrToInt(Exchange, Comparand->getType());
+    Exchange =
+        (IRNode *)LLVMBuilder->CreatePtrToInt(Exchange, Comparand->getType());
   }
 
   ASSERT(Exchange->getType() == Comparand->getType());
@@ -6415,7 +6315,7 @@ bool GenIR::interlockedCmpXchg(IRNode *Destination, IRNode *Exchange,
     Destination = (IRNode *)LLVMBuilder->CreateIntToPtr(Destination, CastTy);
   } else {
     ASSERT(DestinationTy->isPointerTy());
-    Type *CastTy = isManagedPointerType(DestinationTy)
+    Type *CastTy = GcInfo::isGcPointer(DestinationTy)
                        ? getManagedPointerType(ComparandTy)
                        : getUnmanagedPointerType(ComparandTy);
     Destination = (IRNode *)LLVMBuilder->CreatePointerCast(Destination, CastTy);
@@ -6451,9 +6351,9 @@ bool GenIR::interlockedIntrinsicBinOp(IRNode *Arg1, IRNode *Arg2,
 
   if (Op != AtomicRMWInst::BinOp::BAD_BINOP) {
     assert(Arg1->getType()->isPointerTy());
-    Type *CastTy = isManagedPointerType(Arg1->getType())
-                     ? getManagedPointerType(Arg2->getType())
-                     : getUnmanagedPointerType(Arg2->getType());
+    Type *CastTy = GcInfo::isGcPointer(Arg1->getType())
+                       ? getManagedPointerType(Arg2->getType())
+                       : getUnmanagedPointerType(Arg2->getType());
     Arg1 = (IRNode *)LLVMBuilder->CreatePointerCast(Arg1, CastTy);
 
     Value *Result = LLVMBuilder->CreateAtomicRMW(
@@ -6991,7 +6891,7 @@ IRNode *GenIR::derefAddress(IRNode *Address, bool DstIsGCPtr, bool IsConst,
     Address = (IRNode *)LLVMBuilder->CreateIntToPtr(Address, CastTy);
   } else if (AddressPointerTy->getElementType() != ReferentTy) {
     // Cast to the appropriate referent type
-    Type *CastTy = isManagedPointerType(AddressPointerTy)
+    Type *CastTy = GcInfo::isGcPointer(AddressPointerTy)
                        ? getManagedPointerType(ReferentTy)
                        : getUnmanagedPointerType(ReferentTy);
     Address = (IRNode *)LLVMBuilder->CreatePointerCast(Address, CastTy);
@@ -7268,7 +7168,7 @@ IRNode *GenIR::getTypedAddress(IRNode *Addr, CorInfoType CorInfoType,
           throw NotYetImplementedException(
               "unexpected type in load/store primitive");
         }
-        assert(isManagedPointerType(ReferentTy));
+        assert(GcInfo::isGcPointer(ReferentTy));
         assert(cast<PointerType>(ReferentTy)
                    ->getPointerElementType()
                    ->isStructTy());
@@ -7292,7 +7192,7 @@ IRNode *GenIR::getTypedAddress(IRNode *Addr, CorInfoType CorInfoType,
     if (PointerTy != nullptr) {
       Type *ReferentTy = PointerTy->getPointerElementType();
       if (ReferentTy != ExpectedTy) {
-        Type *PtrToExpectedTy = isManagedPointerType(PointerTy)
+        Type *PtrToExpectedTy = GcInfo::isGcPointer(PointerTy)
                                     ? getManagedPointerType(ExpectedTy)
                                     : getUnmanagedPointerType(ExpectedTy);
         TypedAddr =
@@ -7323,7 +7223,7 @@ IRNode *GenIR::loadPrimitiveType(IRNode *Addr, CorInfoType CorInfoType,
     PointerType *PointerTy = dyn_cast<PointerType>(AddressTy);
     if (PointerTy != nullptr) {
       Type *ReferentTy = PointerTy->getPointerElementType();
-      NeedsCoercion = !isManagedPointerType(ReferentTy);
+      NeedsCoercion = !GcInfo::isGcPointer(ReferentTy);
     } else {
       NeedsCoercion = true;
     }
@@ -7806,7 +7706,7 @@ IRNode *GenIR::localAlloc(IRNode *Arg, bool ZeroInit) {
   const unsigned int Alignment = TargetPointerSizeInBits / 8;
   LLVMContext &Context = *JitContext->LLVMContext;
   Type *Ty = Type::getInt8Ty(Context);
-  AllocaInst *LocAlloc = LLVMBuilder->CreateAlloca(Ty, Arg, "LocAlloc");
+  AllocaInst *LocAlloc = createAlloca(Ty, Arg, "LocAlloc");
   LocAlloc->setAlignment(Alignment);
 
   // Zero the allocated region if so requested.
@@ -7865,12 +7765,12 @@ IRNode *GenIR::makeRefAny(CORINFO_RESOLVED_TOKEN *ResolvedToken,
   // pointer type (or native int in unverifiable code). But traditionally .Net
   // jits have allowed arbitrary integers here too. So, tolerate this.
   Type *ExpectedObjectTy = RefAnyStructTy->getContainedType(ValueIndex);
-  assert(isManagedPointerType(ExpectedObjectTy));
+  assert(GcInfo::isGcPointer(ExpectedObjectTy));
   Type *ActualObjectTy = Object->getType();
   Value *CastObject;
-  if (isManagedPointerType(ActualObjectTy)) {
+  if (GcInfo::isGcPointer(ActualObjectTy)) {
     CastObject = LLVMBuilder->CreatePointerCast(Object, ExpectedObjectTy);
-  } else if (isUnmanagedPointerType(ActualObjectTy)) {
+  } else if (GcInfo::isUnmanagedPointer(ActualObjectTy)) {
     CastObject = LLVMBuilder->CreateAddrSpaceCast(Object, ExpectedObjectTy);
   } else {
     assert(Object->getType()->isIntegerTy());
@@ -8101,7 +8001,7 @@ Value *GenIR::changePHIOperandType(Value *Operand, BasicBlock *OperandBlock,
       bool IsSigned = true;
       return LLVMBuilder->CreateIntCast(Operand, NewTy, IsSigned);
     } else {
-      assert(isUnmanagedPointerType(OperandTy));
+      assert(GcInfo::isUnmanagedPointer(OperandTy));
       return LLVMBuilder->CreatePtrToInt(Operand, NewTy);
     }
   } else if (NewTy->isFloatingPointTy()) {
@@ -8138,8 +8038,8 @@ Type *GenIR::getStackMergeType(Type *Ty1, Type *Ty2, bool IsStruct1,
   }
 
   // If we have unmanaged pointer and nativeint the result is nativeint.
-  if ((isUnmanagedPointerType(Ty1) && (Ty2 == NativeIntTy)) ||
-      (isUnmanagedPointerType(Ty2) && (Ty1 == NativeIntTy))) {
+  if ((GcInfo::isUnmanagedPointer(Ty1) && (Ty2 == NativeIntTy)) ||
+      (GcInfo::isUnmanagedPointer(Ty2) && (Ty1 == NativeIntTy))) {
     return NativeIntTy;
   }
 
@@ -8147,8 +8047,7 @@ Type *GenIR::getStackMergeType(Type *Ty1, Type *Ty2, bool IsStruct1,
   PointerType *PointerTy1 = dyn_cast<PointerType>(Ty1);
   PointerType *PointerTy2 = dyn_cast<PointerType>(Ty2);
   if ((PointerTy1 != nullptr) && (PointerTy2 != nullptr) &&
-      (isManagedPointerType(PointerTy1)) &&
-      (isManagedPointerType(PointerTy2))) {
+      (GcInfo::isGcPointer(PointerTy1)) && (GcInfo::isGcPointer(PointerTy2))) {
 
     CORINFO_CLASS_HANDLE Class1 = nullptr;
     auto MapElement1 = ReverseClassTypeMap->find(PointerTy1);
