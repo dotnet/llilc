@@ -17,6 +17,8 @@
 #ifndef COMPILER_H
 #define COMPILER_H
 
+#include "GcInfo.h"
+#include "LLILCJit.h"
 #include "llvm/ExecutionEngine/ObjectMemoryBuffer.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/MC/MCContext.h"
@@ -42,6 +44,9 @@ public:
     MCContext *Ctx;
     if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
       llvm_unreachable("Target does not support MC emission.");
+    bool TrackGcAggrs =
+        LLILCJit::TheJit->getLLILCJitContext()->Options->DoInsertStatepoints;
+    PM.add(new GcInfoRecorder(TrackGcAggrs));
     PM.run(M);
     std::unique_ptr<MemoryBuffer> ObjBuffer(
         new ObjectMemoryBuffer(std::move(ObjBufferSV)));

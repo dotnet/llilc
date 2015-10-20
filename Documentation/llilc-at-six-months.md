@@ -109,7 +109,7 @@ fields, so we split them out separately.
 On a 64 bit system, `native int` and `long` are identical, yet get treated 
 differently in places. We haven’t found a good way to maintain this distinction.
 * We have natural names for types, which we use liberally, but ran into cases
-where we wanted named types to use structural equivalence. For instance a
+where we wanted named types to use structural equivalence. For instance, a
 generic value class (struct) with a GC-pointer field might be described in some
 places using the actual field type, and in others a reference to the generic
 sharing placeholder type `System.__Canon`. These disparate descriptions of
@@ -224,7 +224,7 @@ information is crucial to preserve, since it allows users to diagnose
 which null check actually failed. To be fair, many of these checks can
 be optimized away, but that puts us in a bit of a pickle - if we
 generate naive IR, throughput may be poor (and code size large)
-because of the high IR volume, and if we run optmization phases to try
+because of the high IR volume, and if we run optimization phases to try
 and reduce the volume of IR (and reduce code size), throughput may be
 poor because of time needed to run the optimizations.
 
@@ -263,7 +263,7 @@ On Windows, the OS requires that a thread’s stack segment grow in a controlled
 fashion. This is accomplished by having the compiler carefully probe the stack
 page by page whenever a large enough stack adjustment is needed (either at
 function entry or via some alloca). There’s a function called `__chkstk` in the
-CRT that is used for this purpose. Unfortunately the CRT routine is not
+CRT that is used for this purpose. Unfortunately, the CRT routine is not
 generally available in the CoreCLR runtime environment, so traditionally the
 JITs have implemented the stack probing via inline expansions.
 
@@ -350,7 +350,7 @@ locations via LLVM-created per-safepoint stackmaps.
 
 We've extended the statepoint work to handle a couple of specific cases
 introduced by CoreCLR's *managed pointers*: the liveness algorithm must see
-through integer-pointer conversions, and the reporting can screent out
+through integer-pointer conversions, and the reporting can screen out
 pointers known not to point into the GC heap (like addresses of locals).
 
 LLILC parses the LLVM stackmaps to produce the GC Info format that the
@@ -368,10 +368,11 @@ fashion.
 
 However, there are a number of key problems left to tackle:
 
-* We are bailing out when methods have GC references that aren’t SSA values
-(for instance GC references from structs on the stack frame). The plan here is
-to report the alloc at the statepoint and use the LLVM type to uncover the
-locations of the GC references within.
+* We are bailing out when methods have GC references that aren’t SSA
+values (for instance GC references from structs on the stack
+frame). The plan here is to report the GC references in the struct as
+an untracked lifetimes, using the LLVM type to uncover the locations
+of the GC references within the struct.
 * We have been looking at how to handle exterior pointers (pointers that
 logically refer to some heap object, but point either before or after the
 object). It seems possible we can devise new GC Info encodings and a bit of GC
@@ -412,7 +413,7 @@ stack and process exceptions properly as each stack frame is unwound.
 
 As of this writing we’re currently collaborating on enhancing the LLVM IR along
 with LLVM developers working on implementing support for MSVC-compatible C++ EH
-and Structured Exceptiona Handling (SEH) in Clang and LLVM. SEH and CoreCLR EH
+and Structured Exception Handling (SEH) in Clang and LLVM. SEH and CoreCLR EH
 are similar and both somewhat more involved than C++ EH.  This work is going
 well and should provide us the flexibility we need to recover the EH region
 structure from the IR - a necessary step in creating the proper tables. 
@@ -443,8 +444,8 @@ or tiered JIT scenarios.
 ## Future Challenge: Code Quality and Code Size
 
 The flip side of throughput is that the code the jit produces must be of
-reasonable quality. For a first-tier JIT optimizations must be carefully
-considered since time is of the essence. We currently haven’t tried enabling
+reasonable quality. For a first-tier JIT, optimizations must be carefully
+considered, since time is of the essence. We currently haven’t tried enabling
 much of LLVM’s optimization capabilities and don’t yet know what the time vs
 size and quality tradeoffs will look like. As an initial data point, LLILC
 code is about 2x larger than RyuJit’s code. We should be able to be much more

@@ -254,6 +254,7 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
                                        DEBUG_METADATA_VERSION);
   Context.MethodName = Context.CurrentModule->getModuleIdentifier();
   Context.TheABIInfo = ABIInfo::get(*Context.CurrentModule);
+  Context.GcInfo = new GcInfo();
 
   // Initialize per invocation JIT options. This should be done after the
   // rest of the Context is filled out as it has dependencies on JitInfo,
@@ -354,12 +355,6 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
         // and lowering passes before generating code.
         legacy::PassManager Passes;
         Passes.add(createPlaceSafepointsPass());
-
-        PassManagerBuilder PMBuilder;
-        PMBuilder.OptLevel = 0;  // Set optimization level to -O0
-        PMBuilder.SizeLevel = 0; // so that no additional phases are run.
-        PMBuilder.populateModulePassManager(Passes);
-
         Passes.add(createRewriteStatepointsForGCPass());
         Passes.run(*M);
       }
@@ -387,9 +382,10 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
 
       assert(*NativeEntry >= MM.getHotCodeBlock());
       GcInfoAllocator GcInfoAllocator;
-      GCInfo GcInfo(&Context, MM.getStackMapSection(), &GcInfoAllocator,
-                    *NativeEntry - MM.getHotCodeBlock());
-      GcInfo.emitGCInfo();
+      GcInfoEmitter GcInfoEmitter(&Context, MM.getStackMapSection(),
+                                  &GcInfoAllocator,
+                                  *NativeEntry - MM.getHotCodeBlock());
+      GcInfoEmitter.emitGCInfo();
 
       // Dump out any enabled timing info.
       TimerGroup::printAll(errs());
@@ -414,7 +410,9 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
 
   // Clean up a bit more
   delete Context.TheABIInfo;
+  delete Context.GcInfo;
   Context.TheABIInfo = nullptr;
+  Context.GcInfo = nullptr;
 
   return Result;
 }

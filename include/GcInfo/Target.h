@@ -26,7 +26,7 @@
 
 #if defined(_TARGET_X86_)
 #define REGNUM_FPBASE ICorDebugInfo::RegNum::REGNUM_EBP
-#elif (defined(_TARGET_AMD64_) || defined(_TARGET_X64_))
+#elif(defined(_TARGET_AMD64_) || defined(_TARGET_X64_))
 #define REGNUM_FPBASE ICorDebugInfo::RegNum::REGNUM_RBP
 #elif defined(_TARGET_ARM64_)
 #define REGNUM_FPBASE ICorDebugInfo::RegNum::REGNUM_FP
@@ -55,7 +55,6 @@
 #define DW_R14 14
 #define DW_R15 15
 
-#define DW_FRAME_POINTER DW_RBP
 #define DW_STACK_POINTER DW_RSP
 
 #elif defined(_TARGET_ARM64_)
