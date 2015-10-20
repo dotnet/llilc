@@ -1487,6 +1487,9 @@ private:
   /// otherwise, zero initialize all gc pointers and structs with gc pointers.
   void zeroInitLocals();
 
+  /// Zero initialize a stack allocation
+  void zeroInit(llvm::Value *Var);
+
   /// Zero initialize the block.
   ///
   /// \param Address Address of the block.
@@ -1796,7 +1799,10 @@ private:
   bool NeedsSecurityObject;
   bool DoneBuildingFlowGraph;
   llvm::BasicBlock *EntryBlock;
-  llvm::Instruction *TempInsertionPoint;
+  llvm::Instruction *AllocaInsertionPoint; ///< Position in the Prolog where
+                                           ///< Alloca instructions should be
+                                           ///< inserted after the
+                                           ///< reader-pre-pass
   IRNode *MethodSyncHandle; ///< If the method is synchronized, this is
                             ///< the handle used for entering and exiting
                             ///< the monitor.

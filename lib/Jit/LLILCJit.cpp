@@ -620,9 +620,8 @@ void ObjectLoadListener::getDebugInfoForObject(
         LastDebugOffset = LineNumber;
         OM[CurrentDebugEntry].nativeOffset = Offset;
         OM[CurrentDebugEntry].ilOffset = LineNumber;
-        OM[CurrentDebugEntry].source = IsCall
-                                            ? ICorDebugInfo::CALL_INSTRUCTION
-                                            : ICorDebugInfo::STACK_EMPTY;
+        OM[CurrentDebugEntry].source = IsCall ? ICorDebugInfo::CALL_INSTRUCTION
+                                              : ICorDebugInfo::STACK_EMPTY;
         CurrentDebugEntry++;
       }
     }

@@ -1713,7 +1713,7 @@ void ReaderBase::rgnCreateRegionTree(void) {
         if (CurrentEHClause->ClassToken) {
           CORINFO_RESOLVED_TOKEN ResolvedToken;
           resolveToken(CurrentEHClause->ClassToken, CORINFO_TOKENKIND_Class,
-                        &ResolvedToken);
+                       &ResolvedToken);
         }
 
         // this will be a catch (EH_CLAUSE_NONE)

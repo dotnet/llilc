@@ -44,9 +44,7 @@ public:
     MCContext *Ctx;
     if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
       llvm_unreachable("Target does not support MC emission.");
-    bool TrackGcAggrs =
-        LLILCJit::TheJit->getLLILCJitContext()->Options->DoInsertStatepoints;
-    PM.add(new GcInfoRecorder(TrackGcAggrs));
+    PM.add(new GcInfoRecorder());
     PM.run(M);
     std::unique_ptr<MemoryBuffer> ObjBuffer(
         new ObjectMemoryBuffer(std::move(ObjBufferSV)));

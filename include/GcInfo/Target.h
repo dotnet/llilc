@@ -26,7 +26,7 @@
 
 #if defined(_TARGET_X86_)
 #define REGNUM_FPBASE ICorDebugInfo::RegNum::REGNUM_EBP
-#elif(defined(_TARGET_AMD64_) || defined(_TARGET_X64_))
+#elif (defined(_TARGET_AMD64_) || defined(_TARGET_X64_))
 #define REGNUM_FPBASE ICorDebugInfo::RegNum::REGNUM_RBP
 #elif defined(_TARGET_ARM64_)
 #define REGNUM_FPBASE ICorDebugInfo::RegNum::REGNUM_FP
