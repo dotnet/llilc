@@ -77,6 +77,11 @@ private:
   /// \returns true if COMPLUS_JitGCInfoLogging is set in the environment.
   static bool queryLogGcInfo(LLILCJitContext &JitContext);
 
+  /// \brief Set ExecuteHandlers based on envirionment variable.
+  ///
+  /// \returns true if COMPlus_ExecuteHandlers is set in the environment.
+  static bool queryExecuteHandlers(LLILCJitContext &JitContext);
+
   /// \brief Define set of methods to exclude from LLILC compilation
   ///
   /// \returns true if current method is in that set.

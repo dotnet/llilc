@@ -524,6 +524,34 @@ void GenIR::cloneFinallyBodies() {
     EHRegion *Finally = FinallyRegions.pop_back_val();
     cloneFinallyBody(Finally);
   }
+
+  // As a temporary measure during EH bring-up, insert a FAIL_FAST at the start
+  // of each unsupported exception handler; this makes it easier to diagnose
+  // whether a failing test might be failing because it was supposed to catch
+  // an exception.
+  for (BasicBlock &BB : *Function) {
+    if (BB.empty()) {
+      continue;
+    }
+    Instruction *First = BB.getFirstNonPHI();
+    if (!isa<CatchPadInst>(First) && !isa<CleanupPadInst>(First)) {
+      continue;
+    }
+    if (canExecuteHandler(BB)) {
+      continue;
+    }
+
+    Instruction *InsertBefore;
+    if (auto *Catchpad = dyn_cast<CatchPadInst>(First)) {
+      InsertBefore = Catchpad->getNormalDest()->getFirstInsertionPt();
+    } else {
+      InsertBefore = First->getNextNode();
+    }
+    LLVMBuilder->SetInsertPoint(InsertBefore);
+    Type *VoidType = Type::getVoidTy(*JitContext->LLVMContext);
+    const bool MayThrow = false;
+    callHelperImpl(CORINFO_HELP_FAIL_FAST, MayThrow, VoidType);
+  }
 }
 
 void GenIR::cloneFinallyBody(EHRegion *FinallyRegion) {
@@ -660,6 +688,20 @@ void GenIR::cloneFinallyBody(EHRegion *FinallyRegion) {
   IRBuilder<> Builder(ExitSwitch);
   Builder.CreateBr(CleanupRetBlock);
   ExitSwitch->eraseFromParent();
+}
+
+bool GenIR::canExecuteHandler(BasicBlock &Handler) {
+  if (JitContext->Options->ExecuteHandlers) {
+    // Flags indicate that all handlers should be executed.
+
+    return true;
+  }
+
+  // Funclet prologs currently don't correctly set up the frame pointer, and
+  // we have no way to guarantee that a handler won't reference something on
+  // the stack (like an RA) spill, so currently we can't execute any handler.
+
+  return false;
 }
 
 void GenIR::readerPostPass(bool IsImportOnly) {

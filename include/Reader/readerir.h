@@ -1731,6 +1731,13 @@ private:
   /// \param FinallyRegion  The region whose IR is to be cloned.
   void cloneFinallyBody(EHRegion *FinallyRegion);
 
+  /// Determine whether the IR generated for the given handler should be
+  /// allowed to execute (as opposed to inserting a failfast at handler entry).
+  /// Does not affect non-exceptional executions of finally handlers.
+  ///
+  /// \param Handler  The catchpad/cleanuppad for the handler.
+  bool canExecuteHandler(llvm::BasicBlock &Handler);
+
 private:
   LLILCJitContext *JitContext;
   ABIInfo *TheABIInfo;
