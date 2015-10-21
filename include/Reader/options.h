@@ -54,6 +54,7 @@ struct Options {
   bool DoInsertStatepoints; ///< True if the environment calls for statepoints.
   bool DoTailCallOpt;       ///< Tail call optimization.
   bool LogGcInfo;           ///< Generate GCInfo Translation logs
+  bool ExecuteHandlers;     ///< Squelch handler suppression.
   bool DoSIMDIntrinsic;     ///< True if SIMD intrinsic is on.
   unsigned PreferredIntrinsicSIMDVectorLength; ///< Prefer Intrinsic SIMD Vector
   /// Length in bytes.
