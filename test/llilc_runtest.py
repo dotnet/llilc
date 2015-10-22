@@ -30,6 +30,7 @@
 #   -p, --precise-gc      Test with Precise GC (default: Test with Conservative GC)
 #   -s,  --insert-statepoints 
 #                         Test with Statepoints inserted, regardless of GC settings.
+#   -e, --eh              enable exception handlers to run (as opposed to failfast)
 #   -r RESULT_PATH, --result-path RESULT_PATH
 #                         the path to runtest result output directory
 # 
@@ -129,6 +130,7 @@ def main(argv):
     parser.add_argument('-s', '--insert-statepoints', help='Insert GC Statepoints',
                          default=False, action="store_true")
     parser.add_argument('-p', '--precise-gc', help='test with precise gc', default=False, action="store_true")
+    parser.add_argument('-e', '--eh', help='enable exception handlers to run (as opposed to failfast)', default=False, action="store_true")
     required = parser.add_argument_group('required arguments')
     required.add_argument('-j', '--jit-path', required=True, 
                         help='full path to jit .dll')
@@ -202,6 +204,8 @@ def main(argv):
             test_env.write('chcp 65001\n')
             if args.dump_level is not None:
                 test_env.write('set COMPlus_DumpLLVMIR=' + args.dump_level + '\n')
+            if args.eh:
+                os.environ["COMPlus_ExecuteHandlers"]="1"
 
         # Exclude undesired tests from running
         ExcludeTopLevelTestDirectories()
