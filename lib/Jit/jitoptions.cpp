@@ -77,6 +77,9 @@ JitOptions::JitOptions(LLILCJitContext &Context) {
 
   LogGcInfo = queryLogGcInfo(Context);
 
+  // Set whether to insert failfast in exception handlers.
+  ExecuteHandlers = queryExecuteHandlers(Context);
+
   IsExcludeMethod = queryIsExcludeMethod(Context);
   IsBreakMethod = queryIsBreakMethod(Context);
   IsMSILDumpMethod = queryIsMSILDumpMethod(Context);
@@ -252,6 +255,12 @@ bool JitOptions::queryDoInsertStatepoints(LLILCJitContext &Context) {
 bool JitOptions::queryLogGcInfo(LLILCJitContext &Context) {
   return queryNonNullNonEmpty(Context,
                               (const char16_t *)UTF16("JitGCInfoLogging"));
+}
+
+// Determine if exception handlers should be executed.
+bool JitOptions::queryExecuteHandlers(LLILCJitContext &Context) {
+  return queryNonNullNonEmpty(Context,
+                              (const char16_t *)UTF16("ExecuteHandlers"));
 }
 
 // Determine if SIMD intrinsics should be used.

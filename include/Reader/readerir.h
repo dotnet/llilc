@@ -117,22 +117,17 @@ public:
   /// Construct a flow graph edge list for iterating over the successors
   /// of the \p Fg node.
   /// \param Fg The node whose successors are desired.
-  FlowGraphSuccessorEdgeIteratorImpl(FlowGraphNode *Fg)
-      : FlowGraphEdgeIteratorImpl(), SuccIterator(Fg->getTerminator()),
-        SuccIteratorEnd(Fg->getTerminator(), true) {}
+  FlowGraphSuccessorEdgeIteratorImpl(FlowGraphNode *Fg, EHRegion *Region);
 
-  bool isEnd() override { return SuccIterator == SuccIteratorEnd; }
-  void moveNext() override { SuccIterator++; }
-  FlowGraphNode *getSink() override {
-    return (isEnd()) ? nullptr : (FlowGraphNode *)*SuccIterator;
-  }
-  FlowGraphNode *getSource() override {
-    return (FlowGraphNode *)SuccIterator.getSource();
-  }
+  bool isEnd() override;
+  void moveNext() override;
+  FlowGraphNode *getSink() override;
+  FlowGraphNode *getSource() override;
 
 private:
   llvm::succ_iterator SuccIterator;
   llvm::succ_iterator SuccIteratorEnd;
+  llvm::BasicBlock *NominalSucc;
 };
 
 /// \brief A stack of IRNode pointers representing the MSIL operand stack.
@@ -280,10 +275,10 @@ public:
   IRNode *conv(ReaderBaseNS::ConvOpcode Opcode, IRNode *Source) override;
 
   void dup(IRNode *Opr, IRNode **Result1, IRNode **Result2) override;
-  void endFilter(IRNode *Arg1) override {
-    throw NotYetImplementedException("endFilter");
-  };
+  void endFilter(IRNode *Arg1) override;
 
+  FlowGraphEdgeIterator fgNodeGetSuccessors(FlowGraphNode *FgNode) override;
+  FlowGraphEdgeIterator fgNodeGetPredecessors(FlowGraphNode *FgNode) override;
   FlowGraphNode *fgNodeGetNext(FlowGraphNode *FgNode) override;
   uint32_t fgNodeGetStartMSILOffset(FlowGraphNode *Fg) override;
   void fgNodeSetStartMSILOffset(FlowGraphNode *Fg, uint32_t Offset) override;
@@ -542,6 +537,20 @@ public:
   FlowGraphNode *fgNodeGetIDom(FlowGraphNode *Fg) override;
 
   void fgEnterRegion(EHRegion *Region) override;
+
+  /// Make an EH pad suitable as an unwind label for code in the try region
+  /// protected by the given handler, and any dispatch code needed after the
+  /// EH pad to transfer control to the handler code.
+  ///
+  /// \param Handler           Catch/Finally/Fault/Filter region we need to
+  ///                          build an EH pad for.
+  /// \param EndPad [in/out]   CatchEndPad/CleanupEndPad that should be the
+  ///                          unwind target of code in the handler body.
+  /// \param NextPad           Next outer (or successor catch) EH region.
+  /// \returns A new CatchPad/CleanupPad in a populated EH pad block.
+  llvm::Instruction *createEHPad(EHRegion *Handler, llvm::Instruction *&EndPad,
+                                 llvm::Instruction *NextPad);
+
   IRNode *fgNodeFindStartLabel(FlowGraphNode *Block) override;
 
   BranchList *fgGetLabelBranchList(IRNode *LabelNode) override {
@@ -1712,6 +1721,23 @@ private:
   /// \returns                     Dispatch switch instruction.
   llvm::SwitchInst *createFinallyDispatch(EHRegion *FinallyRegion);
 
+  /// Copy the IR in each finally so that the exceptional path does not share
+  /// code with the non-exceptional path.
+  void cloneFinallyBodies();
+
+  /// Copy the IR in the given finally so that the exceptional path does not
+  /// share code with the non-exceptional path.
+  ///
+  /// \param FinallyRegion  The region whose IR is to be cloned.
+  void cloneFinallyBody(EHRegion *FinallyRegion);
+
+  /// Determine whether the IR generated for the given handler should be
+  /// allowed to execute (as opposed to inserting a failfast at handler entry).
+  /// Does not affect non-exceptional executions of finally handlers.
+  ///
+  /// \param Handler  The catchpad/cleanuppad for the handler.
+  bool canExecuteHandler(llvm::BasicBlock &Handler);
+
 private:
   LLILCJitContext *JitContext;
   ABIInfo *TheABIInfo;
@@ -1763,6 +1789,9 @@ private:
                                                       ///< we are generating.
   FlowGraphNode *FirstMSILBlock;
   llvm::BasicBlock *UnreachableContinuationBlock;
+  llvm::Function *PersonalityFunction; ///< Personality routine reported on
+                                       ///< LandingPads in this function.
+                                       ///< Lazily created/cached.
   bool KeepGenericContextAlive;
   bool NeedsSecurityObject;
   bool DoneBuildingFlowGraph;

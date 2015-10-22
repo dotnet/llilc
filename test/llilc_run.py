@@ -25,6 +25,7 @@
 #   -n, --ngen            use ngened mscorlib
 #   -p, --precise-gc      test with precise gc
 #   -v, --verbose         echo commands
+#   -e, --eh              enable exception handlers to run (as opposed to failfast)
 #   -r [CORERUN_AND_ARGS [CORERUN_AND_ARGS ...]], --corerun-and-args [CORERUN_AND_ARGS [CORERUN_AND_ARGS ...]]
 #                         If explicit CoreRun is needed (app is not
 #                         CoreConsole), the CoreRun command and args to pass to
@@ -103,6 +104,7 @@ def main(argv):
     parser.add_argument('-n', '--ngen', help='use ngened mscorlib', default=False, action="store_true")
     parser.add_argument('-p', '--precise-gc', help='test with precise gc', default=False, action="store_true")
     parser.add_argument('-v', '--verbose', help='echo commands', default=False, action="store_true")
+    parser.add_argument('-e', '--eh', help='enable exception handlers to run (as opposed to failfast)', default=False, action="store_true")
     parser.add_argument('-r', '--corerun-and-args', type=str, nargs='*', default=[],
                         help='''If explicit CoreRun is needed (app is not CoreConsole),
                                 the CoreRun command and args to pass to CoreRun, e.g. /v for verbose.
@@ -157,6 +159,8 @@ def main(argv):
         os.environ["COMPlus_ZapDisable"]="1"
     if args.dump_level:
         os.environ["COMPlus_DumpLLVMIR"]=args.dump_level
+    if args.eh:
+        os.environ["COMPlus_ExecuteHandlers"]="1"
     for arg in args.extra:
         pair = UnquoteArg(arg).split('=', 1)
         name = 'COMPLUS_AltJit' + pair[0]

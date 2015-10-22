@@ -1019,13 +1019,11 @@ public:
 /// iterator can traverse the successor or predecessor edges of a block.
 class FlowGraphEdgeIterator {
 public:
-  /// \brief Construct an iterator.
+  /// \brief Construct an iterator, given an impl.
   ///
-  /// This method must be implemented by the client.
-  ///
-  /// \param Block         The basic block to use as edge source or sink.
-  /// \param IsSuccessor   If true, iterate the successor edges of the block.
-  FlowGraphEdgeIterator(FlowGraphNode *Block, bool IsSuccessor);
+  /// \param Impl  FlowGraphEdgeIteratorImpl that will implement the interface.
+  FlowGraphEdgeIterator(std::unique_ptr<FlowGraphEdgeIteratorImpl> Impl)
+      : Impl(std::move(Impl)) {}
 
   /// \brief Move-Construct an iterator from an rvalue reference.
   /// \param Other   Temporary iterator to copy state from.
@@ -1054,18 +1052,6 @@ public:
 private:
   std::unique_ptr<FlowGraphEdgeIteratorImpl> Impl;
 };
-
-/// \brief Obtain an iterator for the successor edges of a FlowGraphNode
-///
-/// \param FgNode   The FlowGraphNode of interest.
-/// \returns        An iterator for the successor edges.
-FlowGraphEdgeIterator fgNodeGetSuccessors(FlowGraphNode *FgNode);
-
-/// \brief Obtain an iterator for the predecessor edges of a FlowGraphNode
-///
-/// \param FgNode   The FlowGraphNode of interest.
-/// \returns        An itetrator for the predecessor edges.
-FlowGraphEdgeIterator fgNodeGetPredecessors(FlowGraphNode *FgNode);
 
 /// \brief Get the IRNode that is the label for a flow graph node.
 ///
@@ -1156,20 +1142,6 @@ bool fgEdgeIteratorMoveNextSuccessorActual(FlowGraphEdgeIterator &Iterator);
 /// \returns         False if there are no more non-exceptional edges.
 bool fgEdgeIteratorMoveNextPredecessorActual(
     FlowGraphEdgeIterator &FgEdgeIterator);
-
-/// \brief Obtain an iterator for the actual (non-exceptional) successor edges
-/// of a FlowGraphNode
-///
-/// \param FgNode   The FlowGraphNode of interest.
-/// \returns        An iterator for the actual successor edges.
-FlowGraphEdgeIterator fgNodeGetSuccessorsActual(FlowGraphNode *Fg);
-
-/// \brief Obtain an iterator for the actual (non-exceptional) predecessor edges
-/// of a FlowGraphNode
-///
-/// \param FgNode   The FlowGraphNode of interest.
-/// \returns        An iterator for the actual predecessor edges.
-FlowGraphEdgeIterator fgNodeGetPredecessorsActual(FlowGraphNode *Fg);
 
 ///@}
 
@@ -1433,6 +1405,14 @@ protected:
   // configuration flag to facilitate experimenting with what the IR/codegen
   // could look like with divide-by-zero checks folded onto divides.
   static const bool UseExplicitZeroDivideChecks = true;
+
+  /// \brief Suppresses generation of code to handle exceptions
+  ///
+  /// This flag can be used when bringing up a new runtime target that doesn't
+  /// yet have exception handling support implemented.  If this flag is set,
+  /// no EH clauses will be reported to the runtime, but any code that doesn't
+  /// dynamically throw exceptions will be handled correctly.
+  static const bool SuppressExceptionHandlers = false;
 
   // Verification Info
 public:
@@ -2694,6 +2674,33 @@ public:
                      IRNode *Arg2, ReaderAlignType Alignment, bool IsVolatile);
   virtual void dup(IRNode *Opr, IRNode **Result1, IRNode **Result2) = 0;
   virtual void endFilter(IRNode *Arg1) = 0;
+
+  /// \brief Obtain an iterator for the successor edges of a FlowGraphNode
+  ///
+  /// \param FgNode   The FlowGraphNode of interest.
+  /// \returns        An iterator for the successor edges.
+  virtual FlowGraphEdgeIterator fgNodeGetSuccessors(FlowGraphNode *FgNode) = 0;
+
+  /// \brief Obtain an iterator for the predecessor edges of a FlowGraphNode
+  ///
+  /// \param FgNode   The FlowGraphNode of interest.
+  /// \returns        An itetrator for the predecessor edges.
+  virtual FlowGraphEdgeIterator
+  fgNodeGetPredecessors(FlowGraphNode *FgNode) = 0;
+
+  /// \brief Obtain an iterator for the actual (non-exceptional) successor edges
+  /// of a FlowGraphNode
+  ///
+  /// \param FgNode   The FlowGraphNode of interest.
+  /// \returns        An iterator for the actual successor edges.
+  FlowGraphEdgeIterator fgNodeGetSuccessorsActual(FlowGraphNode *Fg);
+
+  /// \brief Obtain an iterator for the actual (non-exceptional) predecessor
+  /// edges of a FlowGraphNode
+  ///
+  /// \param FgNode   The FlowGraphNode of interest.
+  /// \returns        An iterator for the actual predecessor edges.
+  FlowGraphEdgeIterator fgNodeGetPredecessorsActual(FlowGraphNode *Fg);
 
   virtual FlowGraphNode *fgNodeGetNext(FlowGraphNode *FgNode) = 0;
   virtual uint32_t fgNodeGetStartMSILOffset(FlowGraphNode *Fg) = 0;

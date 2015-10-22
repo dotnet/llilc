@@ -101,6 +101,12 @@ public:
   void reserveAllocationSpace(uintptr_t CodeSize, uintptr_t DataSizeRO,
                               uintptr_t DataSizeRW) override;
 
+  /// Inform the memory manager about the amount of memory required to hold
+  /// unwind codes for the function and funclets being loaded.
+  ///
+  /// \param Obj - the Object being loaded
+  void reserveUnwindSpace(const object::ObjectFile &Obj);
+
   /// \brief Override to enable the reserveAllocationSpace callback.
   ///
   /// The CoreCLR's EE requires an up-front resevation of the total allocation

@@ -29,6 +29,7 @@
 #include "llvm/DebugInfo/DWARF/DWARFContext.h"
 #include "llvm/DebugInfo/DWARF/DWARFFormValue.h"
 #include "llvm/ExecutionEngine/Orc/CompileUtils.h"
+#include "llvm/ExecutionEngine/Orc/ObjectTransformLayer.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/Support/DataTypes.h"
 #include "llvm/IR/DebugInfo.h"
@@ -312,8 +313,14 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
     EEMemoryManager MM(&Context);
     ObjectLoadListener Listener(&Context);
     orc::EEObjectLinkingLayer<decltype(Listener)> Loader(Listener);
-    orc::IRCompileLayer<decltype(Loader)> Compiler(Loader,
-                                                   orc::LLILCCompiler(*TM));
+    auto ReserveUnwindSpace = [&MM](std::unique_ptr<object::ObjectFile> Obj) {
+      MM.reserveUnwindSpace(*Obj);
+      return std::move(Obj);
+    };
+    orc::ObjectTransformLayer<decltype(Loader), decltype(ReserveUnwindSpace)>
+        UnwindReserver(Loader, ReserveUnwindSpace);
+    orc::IRCompileLayer<decltype(UnwindReserver)> Compiler(
+        UnwindReserver, orc::LLILCCompiler(*TM));
 
     // Now jit the method.
     if (Context.Options->DumpLevel == DumpLevel::VERBOSE) {
@@ -536,8 +543,13 @@ void ObjectLoadListener::getDebugInfoForObject(
   // want to also be able to eventually extract WinCodeView information as well
   DWARFContextInMemory DwarfContext(DebugObj);
 
-  // Use symbol info to iterate functions in the object.
-  // TODO: This may have to change when we have funclets
+  // Use symbol info to find the function size.
+  // If there are funclets, they will each have separate symbols, so we need
+  // to sum the sizes, since the EE wants a single report for the entire
+  // function+funclets.
+
+  uint64_t Addr = UINT64_MAX;
+  uint64_t Size = 0;
 
   std::vector<std::pair<SymbolRef, uint64_t>> SymbolSizes =
       object::computeSymbolSizes(DebugObj);
@@ -553,68 +565,73 @@ void ObjectLoadListener::getDebugInfoForObject(
     if (!AddrOrError) {
       continue; // Error.
     }
-    uint64_t Addr = AddrOrError.get();
-    uint64_t Size = Pair.second;
+    uint64_t SingleAddr = AddrOrError.get();
+    uint64_t SingleSize = Pair.second;
+    if (SingleAddr < Addr) {
+      // The main function is always laid out first
+      Addr = SingleAddr;
+    }
+    Size += SingleSize;
+  }
 
-    uint32_t LastDebugOffset = (uint32_t)-1;
-    uint32_t NumDebugRanges = 0;
-    ICorDebugInfo::OffsetMapping *OM;
+  uint32_t LastDebugOffset = (uint32_t)-1;
+  uint32_t NumDebugRanges = 0;
+  ICorDebugInfo::OffsetMapping *OM;
 
-    DILineInfoTable Lines = DwarfContext.getLineInfoForAddressRange(Addr, Size);
+  DILineInfoTable Lines = DwarfContext.getLineInfoForAddressRange(Addr, Size);
 
-    DILineInfoTable::iterator Begin = Lines.begin();
-    DILineInfoTable::iterator End = Lines.end();
+  DILineInfoTable::iterator Begin = Lines.begin();
+  DILineInfoTable::iterator End = Lines.end();
 
-    // Count offset entries. Will skip an entry if the current IL offset
-    // matches the previous offset.
+  // Count offset entries. Will skip an entry if the current IL offset
+  // matches the previous offset.
+  for (DILineInfoTable::iterator It = Begin; It != End; ++It) {
+    uint32_t LineNumber = (It->second).Line;
+
+    if (LineNumber != LastDebugOffset) {
+      NumDebugRanges++;
+      LastDebugOffset = LineNumber;
+    }
+  }
+
+  // Reset offset
+  LastDebugOffset = (uint32_t)-1;
+
+  if (NumDebugRanges > 0) {
+    // Allocate OffsetMapping array
+    unsigned SizeOfArray =
+        (NumDebugRanges) * sizeof(ICorDebugInfo::OffsetMapping);
+    OM = (ICorDebugInfo::OffsetMapping *)Context->JitInfo->allocateArray(
+        SizeOfArray);
+
+    unsigned CurrentDebugEntry = 0;
+
+    // Iterate through the debug entries and save IL offset, native
+    // offset, and source reason
     for (DILineInfoTable::iterator It = Begin; It != End; ++It) {
+      int Offset = It->first;
       uint32_t LineNumber = (It->second).Line;
 
+      // We store info about if the instruction is being recorded because
+      // it is a call in the column field
+      bool IsCall = (It->second).Column == 1;
+
       if (LineNumber != LastDebugOffset) {
-        NumDebugRanges++;
         LastDebugOffset = LineNumber;
+        OM[CurrentDebugEntry].nativeOffset = Offset;
+        OM[CurrentDebugEntry].ilOffset = LineNumber;
+        OM[CurrentDebugEntry].source = IsCall
+                                            ? ICorDebugInfo::CALL_INSTRUCTION
+                                            : ICorDebugInfo::STACK_EMPTY;
+        CurrentDebugEntry++;
       }
     }
 
-    // Reset offset
-    LastDebugOffset = (uint32_t)-1;
+    // Send array of OffsetMappings to CLR EE
+    CORINFO_METHOD_INFO *MethodInfo = Context->MethodInfo;
+    CORINFO_METHOD_HANDLE MethodHandle = MethodInfo->ftn;
 
-    if (NumDebugRanges > 0) {
-      // Allocate OffsetMapping array
-      unsigned SizeOfArray =
-          (NumDebugRanges) * sizeof(ICorDebugInfo::OffsetMapping);
-      OM = (ICorDebugInfo::OffsetMapping *)Context->JitInfo->allocateArray(
-          SizeOfArray);
-
-      unsigned CurrentDebugEntry = 0;
-
-      // Iterate through the debug entries and save IL offset, native
-      // offset, and source reason
-      for (DILineInfoTable::iterator It = Begin; It != End; ++It) {
-        int Offset = It->first;
-        uint32_t LineNumber = (It->second).Line;
-
-        // We store info about if the instruction is being recorded because
-        // it is a call in the column field
-        bool IsCall = (It->second).Column == 1;
-
-        if (LineNumber != LastDebugOffset) {
-          LastDebugOffset = LineNumber;
-          OM[CurrentDebugEntry].nativeOffset = Offset;
-          OM[CurrentDebugEntry].ilOffset = LineNumber;
-          OM[CurrentDebugEntry].source = IsCall
-                                             ? ICorDebugInfo::CALL_INSTRUCTION
-                                             : ICorDebugInfo::STACK_EMPTY;
-          CurrentDebugEntry++;
-        }
-      }
-
-      // Send array of OffsetMappings to CLR EE
-      CORINFO_METHOD_INFO *MethodInfo = Context->MethodInfo;
-      CORINFO_METHOD_HANDLE MethodHandle = MethodInfo->ftn;
-
-      Context->JitInfo->setBoundaries(MethodHandle, NumDebugRanges, OM);
-    }
+    Context->JitInfo->setBoundaries(MethodHandle, NumDebugRanges, OM);
 
     getDebugInfoForLocals(DwarfContext, Addr, Size);
   }
@@ -656,15 +673,26 @@ void ObjectLoadListener::recordRelocations(
       const bool IsExtern = SymbolSection == Obj.section_end();
       uint64_t RelType = I->getType();
       uint64_t Offset = I->getOffset();
-      uint8_t *RelocationTarget = nullptr;
+      uint8_t *RelocationTarget;
       if (IsExtern) {
         // This is an external symbol. Verify that it's one we created for
         // a global variable and report the relocation via Jit interface.
         ErrorOr<StringRef> NameOrError = Symbol->getName();
         assert(NameOrError);
         StringRef TargetName = NameOrError.get();
-        assert(Context->NameToHandleMap.count(TargetName) == 1);
-        RelocationTarget = (uint8_t *)Context->NameToHandleMap[TargetName];
+        auto MapIter = Context->NameToHandleMap.find(TargetName);
+        if (MapIter == Context->NameToHandleMap.end()) {
+          // The xdata gets a pointer to our personality routine, which we
+          // dummied up.  We can safely skip it since the EE isn't actually
+          // going to use the value (it inserts the correct one before handing
+          // the xdata off to the OS).
+          assert(!TargetName.compare("ProcessCLRException"));
+          assert(SectionName.startswith(".xdata"));
+          continue;
+        } else {
+          assert(MapIter->second == Context->NameToHandleMap[TargetName]);
+          RelocationTarget = (uint8_t *)MapIter->second;
+        }
       } else {
         RelocationTarget = (uint8_t *)(L.getSectionLoadAddress(*SymbolSection) +
                                        Symbol->getValue());

@@ -213,9 +213,8 @@ bool fgEdgeIteratorMoveNextPredecessorActual(FlowGraphEdgeIterator &Iterator) {
   return HasEdge;
 }
 
-FlowGraphEdgeIterator fgNodeGetSuccessorsActual(FlowGraphNode *Fg) {
-  const bool IsSuccessor = true;
-  FlowGraphEdgeIterator Iterator(Fg, IsSuccessor);
+FlowGraphEdgeIterator ReaderBase::fgNodeGetSuccessorsActual(FlowGraphNode *Fg) {
+  FlowGraphEdgeIterator Iterator = fgNodeGetSuccessors(Fg);
   bool HasEdge = !fgEdgeIteratorIsEnd(Iterator);
   while (HasEdge && fgEdgeIsNominal(Iterator)) {
     HasEdge = fgEdgeIteratorMoveNextSuccessor(Iterator);
@@ -223,9 +222,9 @@ FlowGraphEdgeIterator fgNodeGetSuccessorsActual(FlowGraphNode *Fg) {
   return Iterator;
 }
 
-FlowGraphEdgeIterator fgNodeGetPredecessorsActual(FlowGraphNode *Fg) {
-  const bool IsSuccessor = false;
-  FlowGraphEdgeIterator Iterator(Fg, IsSuccessor);
+FlowGraphEdgeIterator
+ReaderBase::fgNodeGetPredecessorsActual(FlowGraphNode *Fg) {
+  FlowGraphEdgeIterator Iterator = fgNodeGetPredecessors(Fg);
   bool HasEdge = !fgEdgeIteratorIsEnd(Iterator);
   while (HasEdge && fgEdgeIsNominal(Iterator)) {
     HasEdge = fgEdgeIteratorMoveNextPredecessor(Iterator);
@@ -2521,7 +2520,16 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
       break;
 
     case ReaderBaseNS::CEE_ENDFILTER:
-      // Do nothing...
+      // Make a branch to the handler, which will correspond to the filter
+      // returning true.
+      GraphNode = nullptr;
+      fgAddNodeMSILOffset(&GraphNode, NextOffset);
+      BlockNode = fgNodeGetStartIRNode(Block);
+      BranchNode = fgMakeBranchHelper((IRNode *)GraphNode, BlockNode,
+                                      CurrentOffset, false, false);
+      // Split the block.
+      fgNodeSetEndMSILOffset(Block, NextOffset);
+      Block = fgSplitBlock(Block, NextOffset, nullptr);
       break;
 
     case ReaderBaseNS::CEE_ENDFINALLY: {
@@ -6361,7 +6369,6 @@ void ReaderBase::readBytesForFlowGraphNodeHelper(
       //    EXCEPTION_CONTINUE_EXECUTION (-1, not supported in CLR currently)
       Arg1 = ReaderOperandStack->pop(); // Pop the object pointer
       endFilter(Arg1);
-      clearStack();
       break;
 
     case ReaderBaseNS::CEE_ENDFINALLY:

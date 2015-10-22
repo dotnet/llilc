@@ -25,6 +25,7 @@
 #include "llvm/IR/Verifier.h"
 #include "llvm/IRReader/IRReader.h"
 #include "llvm/IR/PassManager.h"
+#include "llvm/Object/ObjectFile.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/Timer.h"
@@ -96,15 +97,103 @@ bool EEMemoryManager::finalizeMemory(std::string *ErrMsg) {
   return true;
 }
 
+/// Compute the number of bytes of the unwind info at \p XdataPtr.
+///
+/// \param XdataPtr             Pointer to the (first byte of) the unwind info.
+/// \param ReportedSize [out]   The size of the unwind info as it should be
+///                             reported to the EE (excludes padding and
+///                             runtime function pointer), in bytes.
+/// \param TotalSize [out]      The size of the entire unwind info, in bytes.
+static void getXdataSize(const uint8_t *XdataPtr, size_t *ReportedSize,
+                         size_t *TotalSize) {
+  // XdataPtr points to an UNWIND_INFO structure:
+  // typedef struct _UNWIND_INFO {
+  //  UCHAR Version : 3;
+  //  UCHAR Flags : 5;
+  //  UCHAR SizeOfProlog;
+  //  UCHAR CountOfUnwindCodes;
+  //  UCHAR FrameRegister : 4;
+  //  UCHAR FrameOffset : 4;
+  //  UNWIND_CODE UnwindCode[1];
+  //} UNWIND_INFO, *PUNWIND_INFO;
+
+  size_t UnreportedBytes = 0;
+  uint8_t NumCodes = XdataPtr[2];
+  // There's always a 4-byte header
+  size_t ReportedBytes = 4;
+  // Each unwind code is 2 bytes
+  ReportedBytes += (2 * NumCodes);
+  if (ReportedBytes & 2) {
+    // The unwind code array is padded to a multiple of 4 bytes
+    UnreportedBytes += 2;
+  }
+  if (XdataPtr[0] != 1) {
+    // 4-byte runtime function pointer
+    UnreportedBytes += 4;
+  }
+
+  size_t TotalBytes = ReportedBytes + UnreportedBytes;
+  if (TotalBytes < 8) {
+    // Minimum size is 8
+    TotalBytes = 8;
+  }
+
+  if (ReportedSize != nullptr) {
+    *ReportedSize = ReportedBytes;
+  }
+  if (TotalSize != nullptr) {
+    *TotalSize = TotalBytes;
+  }
+}
+
+void EEMemoryManager::reserveUnwindSpace(const object::ObjectFile &Obj) {
+  // The EE needs to be informed for each funclet (and the main function)
+  // what the size of its unwind codes will be.  Parse the header info in
+  // the xdata section to determine this.
+  BOOL IsHandler = FALSE;
+  for (const object::SectionRef &Section : Obj.sections()) {
+    StringRef SectionName;
+    if (!Section.getName(SectionName) && (SectionName == ".xdata")) {
+      StringRef Contents;
+      if (!Section.getContents(Contents)) {
+        const uint8_t *DataPtr =
+            reinterpret_cast<const uint8_t *>(Contents.data());
+        const uint8_t *DataEnd =
+            reinterpret_cast<const uint8_t *>(Contents.end());
+        do {
+          size_t ReportedByteCount;
+          size_t TotalByteCount;
+          getXdataSize(DataPtr, &ReportedByteCount, &TotalByteCount);
+          // Bit 5 indicates whether this is chained unwind info.  If we saw
+          // that here, we'd have wanted to include it with the previous
+          // reservation (or we'd be separating cold code).  Since it's not
+          // currently emitted, just verify that we don't see it.
+          assert((*DataPtr & 0x20) != 0x10 &&
+                 "chained unwind info not supported");
+          this->Context->JitInfo->reserveUnwindInfo(IsHandler, FALSE,
+                                                    ReportedByteCount);
+          IsHandler = TRUE;
+          DataPtr += TotalByteCount;
+          if (DataPtr == DataEnd) {
+            break;
+          }
+
+          // The next thing should either be the next xdata entry or the
+          // sentinel we insert between that and the clause descriptors.
+          // If it is the next xdata entry, bits 0-2 will be the version
+          // number (currently only version 1 exists).
+        } while ((*DataPtr & 0x7) == 1);
+        // If we didn't reach the end of the xdata, the next thing should be
+        // our sentinel.
+        assert(DataPtr == DataEnd || *DataPtr == 0xff && "Malformed .xdata");
+      }
+    }
+  }
+}
+
 void EEMemoryManager::reserveAllocationSpace(uintptr_t CodeSize,
                                              uintptr_t DataSizeRO,
                                              uintptr_t DataSizeRW) {
-  // Assume for now all RO data is unwind related. We really only
-  // need to reserve space for .xdata here but without altering
-  // the pattern of callbacks we can't easily separate .xdata out from
-  // other read-only things like .rdata and .pdata.
-  this->Context->JitInfo->reserveUnwindInfo(FALSE, FALSE, DataSizeRO);
-
   // Treat all code for now as "hot section"
   uintptr_t HotCodeSize = CodeSize;
   uintptr_t ColdCodeSize = 0;
@@ -157,52 +246,90 @@ void EEMemoryManager::registerEHFrames(uint8_t *Addr, uint64_t LoadAddr,
   // ColdCodeBlock, i.e. separated code is not supported.
   assert(this->ColdCodeBlock == 0 && "ColdCodeBlock must be zero");
 
-  // Addr points to an UNWIND_INFO structure:
-  // typedef struct _UNWIND_INFO {
-  //  UCHAR Version : 3;
-  //  UCHAR Flags : 5;
-  //  UCHAR SizeOfProlog;
-  //  UCHAR CountOfUnwindCodes;
-  //  UCHAR FrameRegister : 4;
-  //  UCHAR FrameOffset : 4;
-  //  UNWIND_CODE UnwindCode[1];
-  //} UNWIND_INFO, *PUNWIND_INFO;
+  // The xdata section always starts with the standard xdata entry for the main
+  // function.  If there are no funclets, that's the entire section.  If
+  // there are funclets, it is followed by the standard xdata entries for each
+  // funclet, then:
+  // - a sentinel (four bytes, all bits set)
+  // - the number of funclets
+  // - the offset to the start of each funclet (in lexical order)
+  // - the offset to the end of the last funclet
+  // - the number of EH clauses
+  // - the EH clauses themselves, laid out the same way that the
+  //   CORINFO_EH_CLAUSE structure is laid out in memory.
 
-  // Size passed to this method includes the size of a padding UNWIND_CODE entry
-  // so that the number of elements of the UnwindCode array is even. Also, if
-  // CountOfUnwindCodes is 0, Size includes a 4 byte padding.
-  // Jit interface expects the size reported to it not to include the padding
-  // entries. Calculate the unpadded size.
-  const uint32_t OffsetOfCountOfUnwindCodesField = 2;
-  UCHAR CountOfUnwindCodes = Addr[OffsetOfCountOfUnwindCodesField];
-  const size_t SizeOfUnwindCode = 2;
-  size_t SizeWithoutPadding =
-      CountOfUnwindCodes == 0
-          ? Size - 4
-          : Size - (CountOfUnwindCodes & 1) * SizeOfUnwindCode;
-
-#if !defined(NDEBUG)
-  // Check that we actually have only one function with unwind info
-  // within the module.
-  const Module &M = *LLILCJit::TheJit->getLLILCJitContext()->CurrentModule;
-  size_t NumFunctionsWithUnwindInfo = 0;
-  for (const Function &F : M) {
-    if (!F.isDeclaration() && !F.hasFnAttribute(Attribute::NoUnwind)) {
-      NumFunctionsWithUnwindInfo++;
+  // The first thing we need to do is report for each function/funclet the
+  // size and location of the function/funclet as well as the size and
+  // location of its xdata entry.
+  // First, walk the standard xdata entries, collecting their locations and
+  // sizes into the UnwindBlocks vector.
+  SmallVector<std::pair<BYTE *, ULONG>, 4> UnwindBlocks;
+  uint8_t *XdataPtr = reinterpret_cast<uint8_t *>(Addr);
+  uint8_t *PtrEnd = XdataPtr + Size;
+  CorJitFuncKind FuncKind = CorJitFuncKind::CORJIT_FUNC_ROOT;
+  do {
+    size_t ReportedXdataSize;
+    size_t TotalXdataSize;
+    getXdataSize(XdataPtr, &ReportedXdataSize, &TotalXdataSize);
+    UnwindBlocks.emplace_back(reinterpret_cast<BYTE *>(XdataPtr),
+                              ReportedXdataSize);
+    XdataPtr += TotalXdataSize;
+    if (XdataPtr == PtrEnd) {
+      // No trailing funclet info
+      assert(FuncKind == CorJitFuncKind::CORJIT_FUNC_ROOT);
+      break;
     }
+    // Any subsequent funclet will be a handler.
+    FuncKind = CorJitFuncKind::CORJIT_FUNC_HANDLER;
+    // The next thing should either be the next xdata entry or the
+    // sentinel we insert between that and the clause descriptors.
+    // If it is the next xdata entry, bits 0-2 will be the version
+    // number (currently only version 1 exists).
+  } while ((*XdataPtr & 0x7) == 1);
+
+  if (FuncKind == CorJitFuncKind::CORJIT_FUNC_ROOT) {
+    // There are no funclets, so the xdata describes the whole function.
+    BYTE *UnwindBlock;
+    ULONG UnwindSize;
+    std::tie(UnwindBlock, UnwindSize) = UnwindBlocks.pop_back_val();
+    assert(UnwindBlocks.empty());
+    this->Context->JitInfo->allocUnwindInfo(
+        this->HotCodeBlock, nullptr, 0, this->Context->HotCodeSize, UnwindSize,
+        UnwindBlock, CorJitFuncKind::CORJIT_FUNC_ROOT);
+    return;
   }
 
-  assert(NumFunctionsWithUnwindInfo == 1);
-#endif
-
-  // Assume this unwind covers the entire method. Later when
-  // we have multiple unwind regions we'll need something more clever.
-
+  uint32_t *DataPtr = reinterpret_cast<uint32_t *>(XdataPtr);
+  // Eat the sentinel that separates the xdata proper from the CLR additional
+  // info.
+  assert(*DataPtr == 0xffffffff);
+  ++DataPtr;
+  // Read the number of funclets.
+  uint32_t NumFunclets = *DataPtr++;
+  // Allocate unwind info space for the function and each funclet
   uint32_t StartOffset = 0;
-  uint32_t EndOffset = this->Context->HotCodeSize;
-  this->Context->JitInfo->allocUnwindInfo(
-      this->HotCodeBlock, nullptr, StartOffset, EndOffset, SizeWithoutPadding,
-      (BYTE *)LoadAddr, CorJitFuncKind::CORJIT_FUNC_ROOT);
+  FuncKind = CorJitFuncKind::CORJIT_FUNC_ROOT;
+  for (uint32_t I = 0; I <= NumFunclets; ++I) {
+    // Read the function/funclet end offset
+    uint32_t EndOffset = *DataPtr++;
+    BYTE *UnwindBlock;
+    ULONG UnwindSize;
+    std::tie(UnwindBlock, UnwindSize) = UnwindBlocks[I];
+    this->Context->JitInfo->allocUnwindInfo(this->HotCodeBlock, nullptr,
+                                            StartOffset, EndOffset, UnwindSize,
+                                            UnwindBlock, FuncKind);
+    FuncKind = CorJitFuncKind::CORJIT_FUNC_HANDLER;
+    StartOffset = EndOffset;
+  }
+  // Read the number of clauses
+  uint32_t NumClauses = *DataPtr++;
+  // Report that we have clauses
+  this->Context->JitInfo->setEHcount(NumClauses);
+  // Report the individual clauses
+  CORINFO_EH_CLAUSE *Clauses = reinterpret_cast<CORINFO_EH_CLAUSE *>(DataPtr);
+  for (uint32_t I = 0; I < NumClauses; ++I) {
+    this->Context->JitInfo->setEHinfo(I, &Clauses[I]);
+  }
 }
 
 void EEMemoryManager::deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr,
