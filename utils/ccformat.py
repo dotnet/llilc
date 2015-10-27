@@ -72,6 +72,7 @@ def runTidy(args):
     includes = [
         os.path.join(llilcLib, "Jit"),
         os.path.join(llilcLib, "Reader"),
+        os.path.join(llilcLib, "ObjWriter"),
         llilcInc,
         os.path.join(expandPath(args.llvm_source), "include"),
         os.path.join(llilcInc, "clr"),
