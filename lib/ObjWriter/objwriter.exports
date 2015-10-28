@@ -1,0 +1,8 @@
+InitObjWriter
+FinishObjWriter
+SwitchSection
+EmitAlignment
+EmitBlob
+EmitIntValue
+EmitSymbolDef
+EmitSymbolRef
