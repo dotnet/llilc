@@ -1744,7 +1744,7 @@ private:
   ReaderMethodSignature MethodSignature;
   ABIMethodSignature ABIMethodSig;
   llvm::Function *Function; // The current function being read
-  GcFuncInfo *GcFuncInfo;   // GcInfo for the above function
+  ::GcFuncInfo *GcFuncInfo; // GcInfo for the above function
   // The LLVMBuilder has a notion of a current insertion point.  During the
   // first-pass flow-graph construction, each method sets the insertion point
   // explicitly before inserting IR (the fg- methods typically take an

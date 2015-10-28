@@ -116,7 +116,7 @@ public:
   //@}
 
   /// \name GC Information
-  GcInfo *GcInfo; ///< GcInfo for functions in CurrentModule
+  ::GcInfo *GcInfo; ///< GcInfo for functions in CurrentModule
 };
 
 /// \brief This struct holds per-thread Jit state.

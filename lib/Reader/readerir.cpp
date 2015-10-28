@@ -6883,7 +6883,7 @@ void GenIR::endFilter(IRNode *Arg1) {
   Value *ThrowCondition = LLVMBuilder->CreateIsNull(Arg1, "Rethrow");
   genConditionalThrow(ThrowCondition, CORINFO_HELP_RETHROW, "FilterFalse");
   ReaderOperandStack->push((IRNode *)CurrentRegion->HandlerRegion->Exception);
-};
+}
 
 CallSite GenIR::genConditionalHelperCall(
     Value *Condition, CorInfoHelpFunc HelperId, bool MayThrow, Type *ReturnType,
