@@ -18,6 +18,7 @@
 #include "LLILCJit.h"
 #include "Target.h"
 #include "llvm/ADT/SmallBitVector.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/Object/StackMapParser.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 
@@ -55,6 +56,11 @@ bool GcInfo::isGcAggregate(const Type *AggType) {
   }
 
   return false;
+}
+
+bool GcInfo::isGcAllocation(const llvm::Value *Value) {
+  const AllocaInst *Alloca = dyn_cast<const AllocaInst>(Value);
+  return ((Alloca != nullptr) && GcInfo::isGcType(Alloca->getAllocatedType()));
 }
 
 bool GcInfo::isGcFunction(const llvm::Function *F) {
@@ -145,47 +151,130 @@ GcFuncInfo *GcInfo::getGcInfo(const llvm::Function *F) {
 
 //-------------------------------GcFuncInfo------------------------------------------
 
-GcFuncInfo::GcFuncInfo(const llvm::Function *F)
-    : GsCookie(nullptr), SecurityObject(nullptr), GenericsContext(nullptr) {
+GcFuncInfo::GcFuncInfo(const llvm::Function *F) {
   Function = F;
-  GsCookieOffset = GcInfo::InvalidPointerOffset;
-  SecurityObjectOffset = GcInfo::InvalidPointerOffset;
-  GenericsContextOffset = GcInfo::InvalidPointerOffset;
   GsCkValidRangeStart = 0;
   GsCkValidRangeEnd = 0;
   GenericsContextParamType = GENERIC_CONTEXTPARAM_NONE;
 }
 
-void GcFuncInfo::recordPinnedSlot(AllocaInst *Alloca) {
-  assert(PinnedSlots.find(Alloca) == PinnedSlots.end());
-  PinnedSlots[Alloca] = GcInfo::InvalidPointerOffset;
+void GcFuncInfo::recordAlloca(const AllocaInst *Alloca) {
+  assert(!hasRecord(Alloca) && "Duplicate Allocation");
+  Type *Type = Alloca->getAllocatedType();
+  AllocaFlags Flags = AllocaFlags::None;
+
+  if (GcInfo::isGcPointer(Type)) {
+    Flags = AllocaFlags::GcPointer;
+  } else if (GcInfo::isGcAggregate(Type)) {
+    Flags = AllocaFlags::GcAggregate;
+  }
+
+  AllocaMap[Alloca] = {GcInfo::InvalidPointerOffset, Flags};
 }
 
-void GcFuncInfo::recordGcAggregate(AllocaInst *Alloca) {
-  assert(GcAggregates.find(Alloca) == GcAggregates.end());
-  GcAggregates[Alloca] = GcInfo::InvalidPointerOffset;
+void GcFuncInfo::recordGcAlloca(const AllocaInst *Alloca) {
+  recordAlloca(Alloca);
+  assert(AllocaMap[Alloca].isGcValue() && "Expected GcValue");
+}
+
+void GcFuncInfo::markGcAlloca(const AllocaInst *Alloca,
+                              const AllocaFlags Flags) {
+  assert(GcInfo::isGcAllocation(Alloca) && "GcValue expected");
+  assert(hasRecord(Alloca) && "Missing Alloca recorded");
+
+  AllocaInfo &AllocaInfo = AllocaMap[Alloca];
+  assert(AllocaInfo.isGcValue() && "GcValue is recorded incorrectly");
+  assert(AllocaInfo.Offset == GcInfo::InvalidPointerOffset &&
+         "Changing annotation after GcInfoRecorder");
+
+  AllocaInfo.Flags = (AllocaFlags)(AllocaInfo.Flags | Flags);
+}
+
+void GcFuncInfo::markNonGcAlloca(const AllocaInst *Alloca,
+                                 const AllocaFlags Flags) {
+  assert(!GcInfo::isGcAllocation(Alloca) && "GcPointer not expected");
+  assert(hasRecord(Alloca) && "Missing Alloca Record");
+
+  AllocaInfo &AllocaInfo = AllocaMap[Alloca];
+  assert(!AllocaInfo.isGcValue() && "Integer is recorded incorrectly");
+  assert(AllocaInfo.Offset == GcInfo::InvalidPointerOffset &&
+         "Changing annotation after GcInfoRecorder");
+
+  AllocaInfo.Flags = (AllocaFlags)(AllocaInfo.Flags | Flags);
+}
+
+void GcFuncInfo::recordPinned(const AllocaInst *Alloca) {
+  markGcAlloca(Alloca, AllocaFlags::Pinned);
+}
+
+void GcFuncInfo::recordSecurityObject(const AllocaInst *Alloca) {
+  markGcAlloca(Alloca, AllocaFlags::SecurityObject);
+}
+
+void GcFuncInfo::recordGenericsContext(
+    const AllocaInst *Alloca, const GENERIC_CONTEXTPARAM_TYPE ParamType) {
+  const AllocaFlags Flags = AllocaFlags::GenericsContext;
+  if (ParamType == GENERIC_CONTEXTPARAM_TYPE::GENERIC_CONTEXTPARAM_THIS) {
+    markGcAlloca(Alloca, Flags);
+  } else {
+    // Integer allocations are not recorded at the time of IR creation.
+    // So, record the alloca and then mark.
+    recordAlloca(Alloca);
+    markNonGcAlloca(Alloca, Flags);
+  }
+
+  GenericsContextParamType = ParamType;
+}
+
+void GcFuncInfo::recordGsCookie(const AllocaInst *Alloca,
+                                const uint32_t ValidRangeStart,
+                                const uint32_t ValidRangeEnd) {
+  // TODO: This feature is untested.
+  // Reader doesn't implement GS Cookie guard yet.
+  // Implement stack protection checks
+  // https://github.com/dotnet/llilc/issues/353
+  assert(false && "UnTested");
+
+  recordAlloca(Alloca);
+  markNonGcAlloca(Alloca, AllocaFlags::SecurityObject);
+  GsCkValidRangeStart = ValidRangeStart;
+  GsCkValidRangeEnd = ValidRangeEnd;
 }
 
 void GcFuncInfo::getEscapingLocations(SmallVector<Value *, 4> &EscapingLocs) {
-  if (GsCookie != nullptr) {
-    EscapingLocs.push_back(GsCookie);
+  for (auto AllocaIterator : AllocaMap) {
+    EscapingLocs.push_back((Value *)AllocaIterator.first);
+  }
+}
+
+//-------------------------------GcAllocaInfo-----------------------------------
+
+const char *AllocaInfo::getAllocTypeString() const {
+  if (Flags & AllocaFlags::GsCookie) {
+    return "GS Cookie";
   }
 
-  if (SecurityObject != nullptr) {
-    EscapingLocs.push_back(SecurityObject);
+  if (Flags & AllocaFlags::GenericsContext) {
+    if (Flags & AllocaFlags::GcPointer) {
+      return "GenericsContextThis";
+    } else {
+      return "GenericsContextTypeArg";
+    }
   }
 
-  if (GenericsContext != nullptr) {
-    EscapingLocs.push_back(GenericsContext);
+  if (Flags & AllocaFlags::SecurityObject) {
+    return "SecurityObject";
   }
 
-  for (auto Pin : PinnedSlots) {
-    EscapingLocs.push_back((Value *)Pin.first);
+  if (Flags & AllocaFlags::GcPointer) {
+    return "GcPointer";
   }
 
-  for (auto GcAggregate : GcAggregates) {
-    EscapingLocs.push_back((Value *)GcAggregate.first);
+  if (Flags & AllocaFlags::GcAggregate) {
+    return "GcAggregate";
   }
+
+  llvm_unreachable("Unexpected Flags Combination");
 }
 
 //-------------------------------GcInfoRecorder-----------------------------------
@@ -200,9 +289,7 @@ bool GcInfoRecorder::runOnMachineFunction(MachineFunction &MF) {
 
   LLILCJitContext *Context = LLILCJit::TheJit->getLLILCJitContext();
   GcFuncInfo *GcFuncInfo = Context->GcInfo->getGcInfo(F);
-  ValueMap<const AllocaInst *, int32_t> &GcAggregates =
-      GcFuncInfo->GcAggregates;
-  ValueMap<const AllocaInst *, int32_t> &PinnedSlots = GcFuncInfo->PinnedSlots;
+  ValueMap<const AllocaInst *, AllocaInfo> &AllocaMap = GcFuncInfo->AllocaMap;
 
 #if !defined(NDEBUG)
   bool EmitLogs = Context->Options->LogGcInfo;
@@ -228,70 +315,65 @@ bool GcInfoRecorder::runOnMachineFunction(MachineFunction &MF) {
       continue;
     }
 
-    int32_t SlotOffset = SpOffset + FrameInfo->getObjectOffset(Idx);
+    if (GcFuncInfo->hasRecord(Alloca)) {
+      int32_t SlotOffset = SpOffset + FrameInfo->getObjectOffset(Idx);
+      AllocaInfo &AllocaInfo = AllocaMap[Alloca];
 
-    if (GcFuncInfo->GsCookie == Alloca) {
-      GcFuncInfo->GsCookieOffset = SlotOffset;
+      assert(SlotOffset >= 0);
+      assert(AllocaInfo.Offset == GcInfo::InvalidPointerOffset &&
+             "Two slots for the same alloca!");
+
+      AllocaInfo.Offset = SlotOffset;
 
 #if !defined(NDEBUG)
+      if (AllocaInfo.isGcAggregate()) {
+        assert(isa<StructType>(Alloca->getAllocatedType()) &&
+               "Unhandled Type of GcAggregate");
+      } else if (AllocaInfo.isGcPointer()) {
+        assert(GcInfo::isGcPointer(Alloca->getAllocatedType()));
+      } else {
+        assert(!GcInfo::isGcAllocation(Alloca));
+      }
+
       if (EmitLogs) {
-        dbgs() << "GSCookie: @" << SlotOffset << "\n";
+        dbgs() << AllocaInfo.getAllocTypeString() << " @ sp+" << SlotOffset
+               << " [";
+        Alloca->printAsOperand(dbgs(), false);
+        dbgs() << "]\n";
       }
 #endif // !NDEBUG
-
-    } else if (GcFuncInfo->SecurityObject == Alloca) {
-      GcFuncInfo->SecurityObjectOffset = SlotOffset;
-
-#if !defined(NDEBUG)
-      if (EmitLogs) {
-        dbgs() << "SecurityObjectOffset: @" << SlotOffset << "\n";
-      }
-#endif // !NDEBUG
-    } else if (GcFuncInfo->GenericsContext == Alloca) {
-      GcFuncInfo->GenericsContextOffset = SlotOffset;
+    } else {
+// All GC-aggregate Allocas must be registered before this phase.
+// This ensures that the allocations are properly initialized,
+// and marked as frame-escaped if necessary.
+//
+// TODO: The following check should be:
+// assert(!GcInfo::isGcAllocation(Alloca) &&
+//        "Gc Allocation Record missing");
 
 #if !defined(NDEBUG)
-      if (EmitLogs) {
-        dbgs() << "GenericsContext: @" << SlotOffset << "\n";
-      }
-#endif // !NDEBUG
-    } else if (PinnedSlots.find(Alloca) != PinnedSlots.end()) {
-      assert(PinnedSlots[Alloca] == GcInfo::InvalidPointerOffset &&
-             "Two allocations for the same pointer!");
+      if (GcInfo::isGcAllocation(Alloca)) {
+        // However, some Gc-pointer slots created by WinEHPrepare phase
+        // go unrecorded currently because the AllocaInfos are recorded
+        // by the Reader post-pass.
+        // TODO: Report the Spill slots created by WinEHPrepare
+        // https://github.com/dotnet/llilc/issues/901
 
-      PinnedSlots[Alloca] = SlotOffset;
+        assert(Alloca->hasName());
+        assert(Alloca->getName().find(".wineh.spillslot") != StringRef::npos);
+        // WinEH shouldn't spill GC-aggregates
+        assert(!GcInfo::isGcAggregate(Alloca->getAllocatedType()));
 
-#if !defined(NDEBUG)
-      if (EmitLogs) {
-        dbgs() << "Pinned Pointer: @" << SlotOffset << "\n";
+        // The unreported slots are live across safepoints in the
+        // EH path, so the execution is correct unless we take the
+        // exception path.
+        assert(!(Context->Options->ExecuteHandlers &&
+                 Context->Options->DoInsertStatepoints) &&
+               "Untested: Use at your own risk");
       }
 #endif // !NDEBUG
     }
-
-    if (TrackGcAggregates) {
-      Type *AllocatedType = Alloca->getAllocatedType();
-      if (GcInfo::isGcAggregate(AllocatedType)) {
-        assert(isa<StructType>(AllocatedType) && "Unexpected GcAggregate");
-        assert(GcAggregates.find(Alloca) != GcAggregates.end());
-        assert(GcAggregates[Alloca] == GcInfo::InvalidPointerOffset &&
-               "Two allocations for the same aggregate!");
-
-        GcAggregates[Alloca] = SlotOffset;
-
-#if !defined(NDEBUG)
-        if (EmitLogs) {
-          dbgs() << "GC Aggregate: @" << SlotOffset << "\n";
-        }
-#endif // !NDEBUG
-      }
-    }
   }
-
-#if !defined(NDEBUG)
-  if (EmitLogs) {
-    dbgs() << "\n";
-  }
-#endif // !NDEBUG
 
   return false; // success
 }
@@ -423,11 +505,8 @@ void GcInfoEmitter::encodeTrackedPointers(const GcFuncInfo *GcFuncInfo) {
   // So, we do the translation using old/new live-pointer-sets
   // using bit-sets for recording the liveness -- one bit per slot.
   //
-  // Pinned locations must be allocated before tracked ones, so
-  // that the slots are correctly marked as Pinned and Untracked.
-  // Since Pinned pointers are rare, we let go of the first few
-  // bits in the LiveSet, instead of complicating the logic in
-  // this method with offset calculations.
+  // If Untracked slots are allocated before tracked ones, the
+  // bits corresponding to the untracked SlotIds will go unused.
 
   size_t LiveBitSetSize = 25;
   SmallBitVector OldLiveSet(LiveBitSetSize);
@@ -499,12 +578,9 @@ void GcInfoEmitter::encodeTrackedPointers(const GcFuncInfo *GcFuncInfo) {
           SlotID = ExistingSlot->second;
         }
 
-        // No need to report liveness if a slot is untracked.
-        // This may be true of pinned pointers, since statepoint's
-        // liveness tracking includes all managed pointers.
-        if (isTrackedSlot(SlotID)) {
-          NewLiveSet[SlotID] = true;
-        }
+        assert(isTrackedSlot(SlotID) &&
+               "Tracked and Untracked slots must be disjoint");
+        NewLiveSet[SlotID] = true;
         break;
       }
 
@@ -545,85 +621,72 @@ void GcInfoEmitter::encodeTrackedPointers(const GcFuncInfo *GcFuncInfo) {
   }
 }
 
-void GcInfoEmitter::encodePinnedPointers(const GcFuncInfo *GcFuncInfo) {
-  assert(SlotMap.size() == 0 && "Expect to allocate Pinned Slots first");
+void GcInfoEmitter::encodeUntrackedPointers(const GcFuncInfo *GcFuncInfo) {
+  for (auto AllocaIterator : GcFuncInfo->AllocaMap) {
+    const AllocaInfo &AllocaInfo = AllocaIterator.second;
+    const AllocaInst *Alloca = AllocaIterator.first;
 
-  for (auto Pin : GcFuncInfo->PinnedSlots) {
-    int32_t Offset = Pin.second;
-    assert(Offset != GcInfo::InvalidPointerOffset && "Pinned Slot Not Found!");
+    assert(AllocaInfo.Offset != GcInfo::InvalidPointerOffset &&
+           "Invalid Offset for Alloca Record");
 
-    assert(SlotMap.find(Offset) == SlotMap.end() &&
-           "Pinned slot already allocated");
+    if (AllocaInfo.isGcAggregate()) {
+      encodeGcAggregate(Alloca, AllocaInfo);
+    } else if (AllocaInfo.isGcPointer()) {
+      getUntrackedSlot(AllocaInfo.Offset, AllocaInfo.isPinned());
+    }
 
-    getPinnedSlot(Offset);
+    // The Followig information is not yet reported to the Runtime
+    // for the want of additional information.
+    //  -> Prolog Size
+    //  -> GS Cookie validity range
+    //
+    // TODO: The SlotOffset may need to be modified wrt Caller's SP
+    // for the following interfaces.
+
+    if (AllocaInfo.Flags & AllocaFlags::GsCookie) {
+      // TODO: GC: Report GS Cookie
+      // https://github.com/dotnet/llilc/issues/768
+
+      // Encoder.SetGSCookieStackSlot(AllocaInfo.Offset,
+      //                              GcFuncInfo->GsCkValidRangeStart,
+      //                              GcFuncInfo->GsCkValidRangeEnd);
+    }
+
+    if (AllocaInfo.Flags & AllocaFlags::GenericsContext) {
+      // TODO: GC: Report GenericsInstContextStackSlot
+      // https://github.com/dotnet/llilc/issues/766
+
+      // Encoder.SetGenericsInstContextStackSlot(
+      //  AllocaInfo.Offset,
+      //  GcFuncInfo->GenericsContextParamType);
+    }
+
+    if (AllocaInfo.Flags & AllocaFlags::SecurityObject) {
+      // TODO: GC: Report SecurityObjectStackSlot
+      // https://github.com/dotnet/llilc/issues/767
+
+      // Encoder.SetSecurityObjectStackSlot(AllocaInfo.Offset);
+    }
   }
 }
 
-void GcInfoEmitter::encodeSpecialSlots(const GcFuncInfo *GcFuncInfo) {
-  // The Followig information is not yet reported to the Runtime
-  // for the want of additional information.
-  //  -> Prolog Size
-  //  -> GS Cookie validity range
+void GcInfoEmitter::encodeGcAggregate(const AllocaInst *Alloca,
+                                      const AllocaInfo &AllocaInfo) {
+  int32_t AggregateOffset = AllocaInfo.Offset;
+  Type *Type = Alloca->getAllocatedType();
+  StructType *StructTy = cast<StructType>(Type);
+  SmallVector<uint32_t, 4> GcPtrOffsets;
+  const DataLayout &DataLayout = JitContext->CurrentModule->getDataLayout();
+  GcInfo::getGcPointers(StructTy, DataLayout, GcPtrOffsets);
+  bool IsPinned = AllocaInfo.isPinned();
+  bool IsObjectReference = true; // Only ObjectReferences can be stored in
+                                 // GC Aggregates.
 
-  if (GcFuncInfo->SecurityObject != nullptr) {
-// TODO: GC: Report SecurityObjectStackSlot #767
-// Encoder.SetSecurityObjectStackSlot(GcFuncInfo->SecurityObjectOffset);
-#if !defined(NDEBUG)
-    if (EmitLogs) {
-      dbgs() << "  SecurityObjectStackSlot @"
-             << GcFuncInfo->SecurityObjectOffset << " Not Reported\n";
-    }
-#endif // !NDEBUG
-  }
+  assert(GcPtrOffsets.size() > 0 && "GC Aggregate without GC pointers!");
 
-  if (GcFuncInfo->GsCookie != nullptr) {
-// TODO: GC: Report GS Cookie #768
-// Encoder.SetGSCookieStackSlot(GcFuncInfo->GsCookieOffset,
-//                             GcFuncInfo->GsCkValidRangeStart,
-//                             GcFuncInfo->GsCkValidRangeEnd);
-#if !defined(NDEBUG)
-    if (EmitLogs) {
-      dbgs() << "  GSCookieStackSlot @" << GcFuncInfo->GsCookieOffset << " ["
-             << GcFuncInfo->GsCkValidRangeStart << " - "
-             << GcFuncInfo->GsCkValidRangeEnd << "]  Not Reported\n";
-    }
-#endif // !NDEBUG
-  }
-
-  if (GcFuncInfo->GenericsContext != nullptr) {
-// TODO: GC: Report GenericsInstContextStackSlot #766
-// Encoder.SetGenericsInstContextStackSlot(
-//    GcFuncInfo->GenericsContextOffset,
-//    GcFuncInfo->GenericsContextParamType);
-#if !defined(NDEBUG)
-    if (EmitLogs) {
-      dbgs() << "  GenericsInstContextStackSlot @"
-             << GcFuncInfo->GenericsContextOffset << " ["
-             << GcFuncInfo->GenericsContextParamType << "] Not Reported\n";
-    }
-#endif // !NDEBUG
-  }
-}
-
-void GcInfoEmitter::encodeGcAggregates(const GcFuncInfo *GcFuncInfo) {
-  for (auto Aggregate : GcFuncInfo->GcAggregates) {
-    const AllocaInst *Alloca = Aggregate.first;
-    Type *Type = Alloca->getAllocatedType();
-    assert(isa<StructType>(Type) && "GcAggregate is not a struct");
-    StructType *StructTy = cast<StructType>(Type);
-
-    int32_t AggregateOffset = Aggregate.second;
-    assert(AggregateOffset != GcInfo::InvalidPointerOffset &&
-           "GcAggregate Not Found!");
-
-    SmallVector<uint32_t, 4> GcPtrOffsets;
-    const DataLayout &DataLayout = JitContext->CurrentModule->getDataLayout();
-    GcInfo::getGcPointers(StructTy, DataLayout, GcPtrOffsets);
-    assert(GcPtrOffsets.size() > 0 && "GC Aggregate without GC pointers!");
-
-    for (uint32_t GcPtrOffset : GcPtrOffsets) {
-      getAggregateSlot(AggregateOffset + GcPtrOffset);
-    }
+  for (uint32_t GcPtrOffset : GcPtrOffsets) {
+    getUntrackedSlot(AggregateOffset + GcPtrOffset, IsPinned,
+                     IsObjectReference);
   }
 }
 
@@ -663,26 +726,12 @@ void GcInfoEmitter::emitGCInfo(const GcFuncInfo *GcFuncInfo) {
   assert((GcFuncInfo != nullptr) && "Function missing GcInfo");
 
   encodeHeader(GcFuncInfo);
-  encodeSpecialSlots(GcFuncInfo);
 
   if (needsPointerReporting(GcFuncInfo->Function)) {
-    // Pinned slots must be allocated before Tracked Slots.
-    // Pinned pointers are included in the set of pointers tracked
-    // within statepoints. Untracked reporting is prefered for
-    // Pinned pointers. So, allocate them first before allocating
-    // Tracked pointer slots.
-    encodePinnedPointers(GcFuncInfo);
-
     // Assign Slots for Tracked pointers and report their liveness
     encodeTrackedPointers(GcFuncInfo);
-
-    // Aggregate slots should be allocated after Live Slots
-    // There is no overlap between slots created by encodeGcAggregates()
-    // and encodeTrackedPointers(). encoding GcAggregates last
-    // helps save some bits in the data-structures used by
-    // encodeTrackedPointers()
-    encodeGcAggregates(GcFuncInfo);
-
+    // Assign Slots for untracked pointers
+    encodeUntrackedPointers(GcFuncInfo);
     // Finalization must be done after all encodings
     finalizeEncoding();
   }
@@ -709,18 +758,15 @@ bool GcInfoEmitter::needsPointerReporting(const Function *F) {
   return TargetPreciseGcRuntime && HasGcSafePoints;
 }
 
-bool GcInfoEmitter::isTrackedSlot(GcSlotId SlotID) {
-  // This function requires that all tracked slots be allocated
-  // contiguously. If this property doesn't hold, SlotMap should
-  // be changed:
-  //   from Offset -> SlotID map
-  //   to Offset -> {SlotId, SlotFlags, SpBase} map
-
+bool GcInfoEmitter::isTrackedSlot(const GcSlotId SlotID) {
   return (NumTrackedSlots > 0) && (SlotID >= FirstTrackedSlot) &&
          (SlotID < FirstTrackedSlot + NumTrackedSlots);
 }
 
-GcSlotId GcInfoEmitter::getSlot(int32_t Offset, GcSlotFlags Flags) {
+GcSlotId GcInfoEmitter::getSlot(const int32_t Offset, const GcSlotFlags Flags) {
+  assert(Offset != GcInfo::InvalidPointerOffset && "Invalid Slot Offset");
+  assert(!hasSlot(Offset) && "Slot already allocated");
+
   GcSlotId SlotID = Encoder.GetStackSlotId(Offset, Flags, GC_SP_REL);
   SlotMap[Offset] = SlotID;
 
@@ -729,8 +775,8 @@ GcSlotId GcInfoEmitter::getSlot(int32_t Offset, GcSlotFlags Flags) {
 #if !defined(NDEBUG)
   if (EmitLogs) {
     SlotStream << "    [" << SlotID << "]: "
-               << "sp+" << Offset << " (" << ((Flags & GC_SLOT_BASE) ? "O" : "")
-               << ((Flags & GC_SLOT_INTERIOR) ? "M" : "")
+               << "sp+" << Offset << " ("
+               << ((Flags & GC_SLOT_INTERIOR) ? "M" : "O")
                << ((Flags & GC_SLOT_UNTRACKED) ? "U" : "")
                << ((Flags & GC_SLOT_PINNED) ? "P" : "") << ")\n";
   }
@@ -739,7 +785,7 @@ GcSlotId GcInfoEmitter::getSlot(int32_t Offset, GcSlotFlags Flags) {
   return SlotID;
 }
 
-GcSlotId GcInfoEmitter::getTrackedSlot(int32_t Offset) {
+GcSlotId GcInfoEmitter::getTrackedSlot(const int32_t Offset) {
   // TODO: Identify Object and Managed pointers differently
   // https://github.com/dotnet/llilc/issues/28
   // We currently conservatively describe all slots as containing
@@ -755,23 +801,18 @@ GcSlotId GcInfoEmitter::getTrackedSlot(int32_t Offset) {
   return SlotID;
 }
 
-GcSlotId GcInfoEmitter::getAggregateSlot(int32_t Offset) {
-  assert(SlotMap.find(Offset) == SlotMap.end() &&
-         "GC Aggregate slot already allocated");
+GcSlotId GcInfoEmitter::getUntrackedSlot(const int32_t Offset, bool IsPinned,
+                                         bool IsObjectRef) {
+  GcSlotFlags UntrackedFlags = (GcSlotFlags)GC_SLOT_UNTRACKED;
 
-  const GcSlotFlags UntrackedFlags =
-      (GcSlotFlags)(GC_SLOT_BASE | GC_SLOT_UNTRACKED);
+  if (IsPinned) {
+    // Pinned pointers are always ObjectReferences
+    UntrackedFlags = (GcSlotFlags)(GC_SLOT_UNTRACKED | GC_SLOT_PINNED);
+  } else if (!IsObjectRef) {
+    UntrackedFlags = (GcSlotFlags)(GC_SLOT_UNTRACKED | GC_SLOT_INTERIOR);
+  }
+
   GcSlotId SlotID = getSlot(Offset, UntrackedFlags);
 
   return SlotID;
-}
-
-GcSlotId GcInfoEmitter::getPinnedSlot(int32_t Offset) {
-  // Only Object pointers can be pinned/
-  // Pinned slots are reported untracked, since they are frame-escaped
-  // and live throughout the function.
-  const GcSlotFlags PinnedFlags =
-      (GcSlotFlags)(GC_SLOT_BASE | GC_SLOT_PINNED | GC_SLOT_UNTRACKED);
-
-  return getSlot(Offset, PinnedFlags);
 }

@@ -356,9 +356,9 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   // Take note of the current insertion point in case we need
   // to add more allocas later.
   if (EntryBlock->empty()) {
-    TempInsertionPoint = nullptr;
+    AllocaInsertionPoint = nullptr;
   } else {
-    TempInsertionPoint = &EntryBlock->back();
+    AllocaInsertionPoint = &EntryBlock->back();
   }
 
   // Home the method arguments.
@@ -713,6 +713,16 @@ void GenIR::readerPostPass(bool IsImportOnly) {
     Value *FrameEscape = Intrinsic::getDeclaration(JitContext->CurrentModule,
                                                    Intrinsic::localescape);
 
+    // Zero Initialize all the GC-Objects recorded in GcFuncInfo
+    assert(AllocaInsertionPoint != nullptr);
+    LLVMBuilder->SetInsertPoint(AllocaInsertionPoint->getNextNode());
+
+    for (Value *EscapingValue : EscapingLocs) {
+      if (GcInfo::isGcAllocation(EscapingValue)) {
+        zeroInit(EscapingValue);
+      }
+    }
+
     // Insert the LocalEscape Intrinsic at the end of the
     // Prolog block, after all local allocations,
     // before the basic-block Terminator
@@ -743,8 +753,9 @@ void GenIR::insertIRToKeepGenericContextAlive() {
   IRBuilder<>::InsertPoint SavedInsertPoint = LLVMBuilder->saveIP();
   Value *ContextLocalAddress = nullptr;
   CorInfoOptions Options = JitContext->MethodInfo->options;
-  Instruction *InsertPoint = TempInsertionPoint;
+  Instruction *InsertPoint = AllocaInsertionPoint;
   ASSERT(InsertPoint != nullptr);
+  GENERIC_CONTEXTPARAM_TYPE ParamType = GENERIC_CONTEXTPARAM_NONE;
 
   if (Options & CORINFO_GENERICS_CTXT_FROM_THIS) {
     // The this argument might be modified in the method body, so
@@ -757,14 +768,14 @@ void GenIR::insertIRToKeepGenericContextAlive() {
     InsertPoint = makeStoreNonNull(This, ScratchLocalAlloca, false);
     // The scratch local's address is the saved context address.
     ContextLocalAddress = ScratchLocalAlloca;
-    GcFuncInfo->GenericsContextParamType = GENERIC_CONTEXTPARAM_THIS;
+    ParamType = GENERIC_CONTEXTPARAM_THIS;
   } else {
     // We know the type arg is unmodified so we can use its initial
     // spilled value location for reporting.
     if (Options & CORINFO_GENERICS_CTXT_FROM_METHODDESC) {
-      GcFuncInfo->GenericsContextParamType = GENERIC_CONTEXTPARAM_MD;
+      ParamType = GENERIC_CONTEXTPARAM_MD;
     } else if (Options & CORINFO_GENERICS_CTXT_FROM_METHODTABLE) {
-      GcFuncInfo->GenericsContextParamType = GENERIC_CONTEXTPARAM_MT;
+      ParamType = GENERIC_CONTEXTPARAM_MT;
     } else {
       assert(false && "Unexpected Option");
     }
@@ -773,14 +784,14 @@ void GenIR::insertIRToKeepGenericContextAlive() {
     ContextLocalAddress = Arguments[MethodSignature.getTypeArgIndex()];
   }
 
-  assert(isa<AllocaInst>(ContextLocalAddress) && "Stack Allocation expected");
-  GcFuncInfo->GenericsContext = cast<AllocaInst>(ContextLocalAddress);
+  GcFuncInfo->recordGenericsContext(cast<AllocaInst>(ContextLocalAddress),
+                                    ParamType);
 
   // This method now requires a frame pointer.
   // TargetMachine *TM = JitContext->TM;
   // TM->Options.NoFramePointerElim = true;
 
-  // Don't move TempInsertionPoint up since what we added was not an alloca
+  // Don't move AllocaInsertionPoint up since what we added was not an alloca
   LLVMBuilder->restoreIP(SavedInsertPoint);
 }
 
@@ -812,8 +823,7 @@ void GenIR::insertIRForSecurityObject() {
              (IRNode *)SecurityObjectAddress);
 
   LLVMBuilder->restoreIP(SavedInsertPoint);
-
-  GcFuncInfo->SecurityObject = cast<AllocaInst>(SecurityObjectAddress);
+  GcFuncInfo->recordSecurityObject(cast<AllocaInst>(SecurityObjectAddress));
 }
 
 void GenIR::callMonitorHelper(bool IsEnter) {
@@ -938,8 +948,8 @@ void GenIR::insertIRForUnmanagedCallFrame() {
 AllocaInst *GenIR::createAlloca(Type *T, Value *ArraySize, const Twine &Name) {
   AllocaInst *AllocaInst = LLVMBuilder->CreateAlloca(T, ArraySize, Name);
 
-  if (GcInfo::isGcAggregate(T)) {
-    GcFuncInfo->recordGcAggregate(AllocaInst);
+  if (GcInfo::isGcType(T)) {
+    GcFuncInfo->recordGcAlloca(AllocaInst);
   }
 
   return AllocaInst;
@@ -1000,7 +1010,14 @@ void GenIR::createSym(uint32_t Num, bool IsAuto, CorInfoType CorType,
                    UseNumber ? Twine(SymName) + Twine(Number) : Twine(SymName));
 
   if (IsPinned) {
-    GcFuncInfo->recordPinnedSlot(AllocaInst);
+    // If the allocated value is an aggregate, all GC pointers within that
+    // aggregate is considered pinned.
+    //
+    // Such a case exists in the test
+    // JIT\Methodical\ELEMENT_TYPE_IU\_il_relu_vfld.exe
+    //  .locals (valuetype Test.AA pinned V_0)
+    // where Test.AA is a struct containing a GC pointer.
+    GcFuncInfo->recordPinned(AllocaInst);
   }
 
   DIFile *Unit = DBuilder->createFile(LLILCDebugInfo.TheCU->getFilename(),
@@ -1036,32 +1053,51 @@ void GenIR::createSym(uint32_t Num, bool IsAuto, CorInfoType CorType,
   }
 }
 
+void GenIR::zeroInit(Value *Var) {
+  // TODO: If not isZeroInitLocals(), we only have to zero initialize
+  // GC pointers and GC pointer fields on structs. For now we are zero
+  // initalizing all fields in structs that have gc fields.
+  //
+  // TODO: We should try to lay out GC pointers contiguously on the stack
+  // frame and use memset to initialize them.
+  //
+  // TODO: We can avoid zero-initializing some gc pointers if we can
+  // ensure that we are not reporting uninitialized GC pointers at gc-safe
+  // points.
+
+  Type *VarType = Var->getType()->getPointerElementType();
+  StructType *StructTy = dyn_cast<StructType>(VarType);
+  if (StructTy != nullptr) {
+    const DataLayout *DataLayout = &JitContext->CurrentModule->getDataLayout();
+    const StructLayout *TheStructLayout = DataLayout->getStructLayout(StructTy);
+    zeroInitBlock(Var, TheStructLayout->getSizeInBytes());
+  } else {
+    Constant *ZeroConst = Constant::getNullValue(VarType);
+    LLVMBuilder->CreateStore(ZeroConst, Var);
+  }
+}
+
 void GenIR::zeroInitLocals() {
-  bool InitAllLocals = isZeroInitLocals();
-  for (const auto &LocalVar : LocalVars) {
-    Type *LocalTy = LocalVar->getType()->getPointerElementType();
-    if (InitAllLocals || GcInfo::isGcType(LocalTy)) {
-      // TODO: if InitAllLocals is false we only have to zero initialize
-      // GC pointers and GC pointer fields on structs. For now we are zero
-      // initalizing all fields in structs that have gc fields.
-      // TODO: We should try to lay out GC pointers contiguously on the stack
-      // frame and use memset to initialize them.
-      // TODO: We can avoid zero-initializing some gc pointers if we can
-      // ensure that we are not reporting uninitialized GC pointers at gc-safe
-      // points.
-      StructType *StructTy = dyn_cast<StructType>(LocalTy);
-      if (StructTy != nullptr) {
-        const DataLayout *DataLayout =
-            &JitContext->CurrentModule->getDataLayout();
-        const StructLayout *TheStructLayout =
-            DataLayout->getStructLayout(StructTy);
-        zeroInitBlock(LocalVar, TheStructLayout->getSizeInBytes());
-      } else {
-        Constant *ZeroConst = Constant::getNullValue(LocalTy);
-        LLVMBuilder->CreateStore(ZeroConst, LocalVar);
+  if (isZeroInitLocals()) {
+    for (const auto &LocalVar : LocalVars) {
+      if (!GcInfo::isGcAllocation(LocalVar)) {
+        // All GC values are zero-initizlied in the post-pass.
+        // So, only initialize the remaining ones if necessary.
+        zeroInit(LocalVar);
       }
     }
   }
+
+#ifndef NDEBUG
+  // Ensure all GC-Locals are recorded to be initialized
+  // Regardless of isZeroInitLocals()
+  for (const auto &LocalVar : LocalVars) {
+    if (GcInfo::isGcAllocation(LocalVar)) {
+      assert(GcFuncInfo->hasRecord(cast<AllocaInst>(LocalVar)) &&
+             "Missing GcAlloc Record");
+    }
+  }
+#endif // !NDEBUG
 }
 
 void GenIR::zeroInitBlock(Value *Address, uint64_t Size) {
@@ -1203,7 +1239,7 @@ Instruction *GenIR::createTemporary(Type *Ty, const Twine &Name) {
 
   Instruction *InsertBefore = nullptr;
   BasicBlock *Block = nullptr;
-  if (TempInsertionPoint == nullptr) {
+  if (AllocaInsertionPoint == nullptr) {
     // There are no local, param or temp allocas in the entry block, so set
     // the insertion point to the first point in the block.
     InsertBefore = EntryBlock->getFirstInsertionPt();
@@ -1212,8 +1248,8 @@ Instruction *GenIR::createTemporary(Type *Ty, const Twine &Name) {
     // There are local, param or temp allocas. TempInsertionPoint refers to
     // the last of them. Set the insertion point to the next instruction since
     // the builder will insert new instructions before the insertion point.
-    InsertBefore = TempInsertionPoint->getNextNode();
-    Block = TempInsertionPoint->getParent();
+    InsertBefore = AllocaInsertionPoint->getNextNode();
+    Block = AllocaInsertionPoint->getParent();
   }
 
   if (InsertBefore == Block->end()) {
@@ -1224,7 +1260,7 @@ Instruction *GenIR::createTemporary(Type *Ty, const Twine &Name) {
 
   AllocaInst *AllocaInst = createAlloca(Ty, nullptr, Name);
   // Update the end of the alloca range.
-  TempInsertionPoint = AllocaInst;
+  AllocaInsertionPoint = AllocaInst;
   LLVMBuilder->restoreIP(IP);
 
   return AllocaInst;
