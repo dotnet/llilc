@@ -490,7 +490,7 @@ void GenIR::readerPostVisit() {
   // directly (and subsequently run an optimization that will usually clone
   // out the non-exceptional paths so as to better-optimize them).
   cloneFinallyBodies();
-  
+
   DBuilder->finalize();
 }
 
@@ -5671,8 +5671,8 @@ IRNode *GenIR::callRuntimeHandleHelper(CorInfoHelpFunc Helper, IRNode *Arg1,
     }
   }
   PHINode *Phi = mergeConditionalResults(CurrentBlock, NullCheckArg, SaveBlock,
-                                         HelperCall.getInstruction(), RejoinBlock,
-                                         "RuntimeHandle");
+                                         HelperCall.getInstruction(),
+                                         RejoinBlock, "RuntimeHandle");
   return (IRNode *)Phi;
 }
 
