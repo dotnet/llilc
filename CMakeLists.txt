@@ -260,12 +260,12 @@ if ( NOT LLVM_TARGET_IS_CROSSCOMPILE_HOST )
     set(LLILC_HAS_VERSION_PATCHLEVEL 0)
   endif()
 
-  if (CMAKE_BUILD_TYPE STREQUAL "DEBUG")
-    set(DEBUG)
+  if ((CMAKE_BUILD_TYPE STREQUAL "DEBUG") OR (CMAKE_BUILD_TYPE STREQUAL ""))
+    set(DEBUG 1)
   endif()
 
   if (DEBUG)
-    add_definitions( -DDEBUG -D_DEBUG )
+    add_definitions( -D_DEBUG )
   endif()
 
   # Add appropriate flags for MSVC

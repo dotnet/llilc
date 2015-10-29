@@ -243,7 +243,8 @@ void GcFuncInfo::recordGsCookie(const AllocaInst *Alloca,
 
 void GcFuncInfo::getEscapingLocations(SmallVector<Value *, 4> &EscapingLocs) {
   for (auto AllocaIterator : AllocaMap) {
-    EscapingLocs.push_back((Value *)AllocaIterator.first);
+    EscapingLocs.push_back(
+        const_cast<Value *>(static_cast<const Value *>(AllocaIterator.first)));
   }
 }
 
