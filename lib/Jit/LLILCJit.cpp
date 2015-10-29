@@ -380,11 +380,16 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
                << " method = " << Context.MethodName << '\n';
       }
 
-      assert(*NativeEntry >= MM.getHotCodeBlock());
+      // The Method Jitted must begin at the start of the allocated
+      // Code block. The EE's DebugInfoManager relies on this.
+      // It allocates a CoreHeader block immediately before the
+      // code block address returned, and expects to find it
+      // at a fixed offset from *NativeEntry.
+      assert(*NativeEntry == MM.getHotCodeBlock() &&
+             "Expect the JITted method at the beginning of the code block");
       GcInfoAllocator GcInfoAllocator;
       GcInfoEmitter GcInfoEmitter(&Context, MM.getStackMapSection(),
-                                  &GcInfoAllocator,
-                                  *NativeEntry - MM.getHotCodeBlock());
+                                  &GcInfoAllocator);
       GcInfoEmitter.emitGCInfo();
 
       // Dump out any enabled timing info.

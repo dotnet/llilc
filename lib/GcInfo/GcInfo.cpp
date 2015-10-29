@@ -381,12 +381,11 @@ bool GcInfoRecorder::runOnMachineFunction(MachineFunction &MF) {
 //-------------------------------GcInfoEmitter-----------------------------------
 
 GcInfoEmitter::GcInfoEmitter(LLILCJitContext *JitCtx, uint8_t *StackMapData,
-                             GcInfoAllocator *Allocator, size_t OffsetCor)
+                             GcInfoAllocator *Allocator)
 
     : JitContext(JitCtx), LLVMStackMapData(StackMapData),
       Encoder(JitContext->JitInfo, JitContext->MethodInfo, Allocator),
-      OffsetCorrection(OffsetCor), SlotMap(), FirstTrackedSlot(0),
-      NumTrackedSlots(0) {
+      SlotMap(), FirstTrackedSlot(0), NumTrackedSlots(0) {
 #if !defined(NDEBUG)
   this->EmitLogs = JitContext->Options->LogGcInfo;
 #endif // !NDEBUG
@@ -515,17 +514,14 @@ void GcInfoEmitter::encodeTrackedPointers(const GcFuncInfo *GcFuncInfo) {
   size_t RecordIndex = 0;
   for (const auto &R : StackMapParser.records()) {
 
-    // InstructionOffset:
-    // + OffsetCorrection: to account for any bytes before the start
-    //                     of the function.
-    // - CallSiteSize: to report the start of the Instruction
+    // InstructionOffset - CallSiteSize:
+    //   to report the start of the Instruction
     //
     // LLVM's Safepoint reports the offset at the end of the Call
     // instruction, whereas the CoreCLR API expects that we report
     // the start of the Call instruction.
 
-    unsigned InstructionOffset =
-        R.getInstructionOffset() + OffsetCorrection - CallSiteSize;
+    unsigned InstructionOffset = R.getInstructionOffset() - CallSiteSize;
 
 #if defined(PARTIALLY_INTERRUPTIBLE_GC_SUPPORTED)
     CallSites[RecordIndex] = InstructionOffset;
