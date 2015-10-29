@@ -274,10 +274,6 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
 
   const uint32_t JitFlags = JitContext->Flags;
 
-  if (JitContext->Options->DoInsertStatepoints) {
-    createSafepointPoll();
-  }
-
   CORINFO_METHOD_HANDLE MethodHandle = JitContext->MethodInfo->ftn;
 
   // Capture low-level info about the return type for use in Return.
@@ -747,6 +743,13 @@ void GenIR::readerPostPass(bool IsImportOnly) {
   // Cleanup the memory we've been using.
   delete DBuilder;
   delete LLVMBuilder;
+
+  // While Jitting a method, SafepointPoll must appear after the function
+  // actually being Jitted. EE's DebugInfoManager depends on the fact that
+  // the Jitted function starts at the allocated code block.
+  if (JitContext->Options->DoInsertStatepoints) {
+    createSafepointPoll();
+  }
 }
 
 void GenIR::insertIRToKeepGenericContextAlive() {
