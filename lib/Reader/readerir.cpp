@@ -260,6 +260,19 @@ static Argument *functionArgAt(Function *F, uint32_t I) {
   return &*Args;
 }
 
+static bool doesArgumentHaveHome(const ABIArgInfo &Info) {
+  switch (Info.getKind()) {
+  case ABIArgInfo::Indirect:
+    return false;
+
+  case ABIArgInfo::Direct:
+    return !Info.getType()->isStructTy() && !Info.getType()->isVectorTy();
+
+  default:
+    return true;
+  }
+}
+
 void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   Triple PT(Triple::normalize(LLVM_DEFAULT_TARGET_TRIPLE));
   if (PT.isArch16Bit()) {
@@ -366,17 +379,47 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
       continue;
     }
 
-    const ABIArgInfo ArgInfo = ABIMethodSig.getArgumentInfo(J);
-    if (ArgInfo.getKind() == ABIArgInfo::Indirect) {
+    const ABIArgInfo &ArgInfo = ABIMethodSig.getArgumentInfo(J);
+    switch (ArgInfo.getKind()) {
+    case ABIArgInfo::Indirect:
       // Indirect arguments aren't homed.
-    } else {
-      Value *Arg = &*ArgI;
-      Value *Home = Arguments[J];
-      Type *HomeType = Home->getType()->getPointerElementType();
-      Arg = ABISignature::coerce(*this, HomeType, Arg);
-      const bool IsVolatile = false;
-      storeAtAddressNoBarrierNonNull((IRNode *)Home, (IRNode *)Arg, HomeType,
-                                     IsVolatile);
+      assert(!doesArgumentHaveHome(ArgInfo));
+      break;
+
+    case ABIArgInfo::Expand: {
+      Type *BytePtrType = Type::getInt8PtrTy(LLVMContext, 0);
+      Value *Home = LLVMBuilder->CreatePointerCast(Arguments[J], BytePtrType);
+
+      ArrayRef<ABIArgInfo::Expansion> Expansions = ArgInfo.getExpansions();
+      uint32_t ExpansionCount = Expansions.size();
+      for (uint32_t E = 0; E < ExpansionCount - 1; ++E, ++I, ++ArgI) {
+        ABISignature::collapse(*this, Expansions[E], &*ArgI, Home);
+      }
+      ABISignature::collapse(*this, Expansions[ExpansionCount - 1], &*ArgI,
+                             Home);
+      break;
+    }
+
+    default: {
+      if (ArgInfo.getType()->isStructTy() || ArgInfo.getType()->isVectorTy()) {
+        // LLVM byvalue struct arguments aren't homed.
+        assert(!doesArgumentHaveHome(ArgInfo));
+        assert(ArgInfo.getKind() == ABIArgInfo::Direct);
+        assert(ArgI->getType()->isPointerTy());
+        assert(ArgI->getType()->getPointerElementType() == ArgInfo.getType());
+        assert(ArgI->hasByValAttr());
+      } else {
+        Value *Arg = &*ArgI;
+        Value *Home = Arguments[J];
+        Type *HomeType = Home->getType()->getPointerElementType();
+
+        Arg = ABISignature::coerce(*this, HomeType, Arg);
+        const bool IsVolatile = false;
+        storeAtAddressNoBarrierNonNull((IRNode *)Home, (IRNode *)Arg, HomeType,
+                                       IsVolatile);
+      }
+      break;
+    }
     }
 
     J++;
@@ -1002,7 +1045,7 @@ void GenIR::createSym(uint32_t Num, bool IsAuto, CorInfoType CorType,
   Type *LLVMType = this->getType(CorType, Class);
   if (!IsAuto) {
     const ABIArgInfo &Info = ABIMethodSig.getArgumentInfo(Num);
-    if (Info.getKind() == ABIArgInfo::Indirect) {
+    if (!doesArgumentHaveHome(Info)) {
       Arguments[Num] = functionArgAt(Function, Info.getIndex());
       return;
     }
@@ -6164,7 +6207,7 @@ void GenIR::jmp(ReaderBaseNS::CallOpcode Opcode, mdToken Token) {
   for (uint32_t I = MethodSignature.getNormalParamStart();
        I < MethodSignature.getNormalParamEnd(); ++I) {
     IRNode *NormalArg = nullptr;
-    const ABIArgInfo ArgInfo = ABIMethodSig.getArgumentInfo(I);
+    const ABIArgInfo &ArgInfo = ABIMethodSig.getArgumentInfo(I);
     if (ArgInfo.getKind() == ABIArgInfo::Indirect) {
       // We pass indirect arguments without copying them to the current frame.
       NormalArg = (IRNode *)Arguments[I];
@@ -6551,6 +6594,14 @@ void GenIR::returnOpcode(IRNode *Opr, bool IsSynchronizedMethod) {
       }
 
       ResultValue = IndirectResult;
+    } else if (ResultInfo.getKind() == ABIArgInfo::Expand) {
+      assert(doesValueRepresentStruct((Value *)Opr) ||
+             (((Value *)Opr)->getType()->isVectorTy()));
+
+      const bool IsResult = true;
+      ABISignature::expand(*this, ResultInfo.getExpansions(), (Value *)Opr,
+                           MutableArrayRef<Value *>(&ResultValue, 1),
+                           MutableArrayRef<Type *>(), IsResult);
     } else {
       Type *ResultTy = getType(ResultCorType, ResultArgType.Class);
       ResultValue = convertFromStackType(Opr, ResultCorType, ResultTy);
