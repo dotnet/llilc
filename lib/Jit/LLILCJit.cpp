@@ -162,10 +162,20 @@ ICorJitCompiler *__stdcall getJit() {
     // Allow LLVM to pick up options via the environment
     cl::ParseEnvironmentOptions("LLILCJit", "COMPlus_AltJitOptions");
 
-    // Statepoint GC does not support Fast ISel yet.
     auto &Opts = cl::getRegisteredOptions();
     if (Opts["fast-isel"]->getNumOccurrences() == 0) {
+      // Statepoint GC does not support Fast ISel yet.
+      // TODO: Enable Statepoints with fast-isel
+      // https://github.com/dotnet/llilc/issues/512
       Opts["fast-isel"]->addOccurrence(0, "fast-isel", "false");
+    }
+    if (Opts["disable-cgp-gc-opts"]->getNumOccurrences() == 0) {
+      // There is a bug in the CGP gc-opts, so this optimization
+      // is disabled until that issue is fixed.
+      // https://github.com/dotnet/llilc/issues/914
+
+      Opts["disable-cgp-gc-opts"]->addOccurrence(0, "disable-cgp-gc-opts",
+                                                 "true");
     }
   }
 
