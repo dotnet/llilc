@@ -32,7 +32,7 @@ class GcInfo;
 struct LLILCJitPerThreadState;
 namespace llvm {
 class EEMemoryManager;
-}
+} // namespace llvm
 
 /// \brief This struct holds per-jit request state.
 ///
