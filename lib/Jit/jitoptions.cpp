@@ -214,7 +214,7 @@ bool JitOptions::queryMethodSet(LLILCJitContext &JitContext, MethodSet &TheSet,
     char16_t *ConfigStr = getStringConfigValue(JitContext.JitInfo, Name);
     bool NeedFree = true;
     if (ConfigStr == nullptr) {
-      ConfigStr = const_cast<char16_t*>((const char16_t *)UTF16(""));
+      ConfigStr = const_cast<char16_t *>((const char16_t *)UTF16(""));
       NeedFree = false;
     }
     std::unique_ptr<std::string> ConfigUtf8 = Convert::utf16ToUtf8(ConfigStr);
