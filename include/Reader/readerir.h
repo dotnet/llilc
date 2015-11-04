@@ -401,7 +401,7 @@ public:
 
   IRNode *refAnyType(IRNode *Arg1) override;
 
-  void rethrow() override { throw NotYetImplementedException("rethrow"); };
+  void rethrow() override;
   void returnOpcode(IRNode *Opr, bool IsSynchronizedMethod) override;
   IRNode *shift(ReaderBaseNS::ShiftOpcode Opcode, IRNode *ShiftAmount,
                 IRNode *ShiftOperand) override;

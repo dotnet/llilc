@@ -6908,11 +6908,18 @@ void GenIR::switchOpcode(IRNode *Opr) {
 }
 
 void GenIR::throwOpcode(IRNode *Arg1) {
-  // Using a call for now; this will need to be invoke
-  // when we get EH flow properly modeled.
   Type *Void = Type::getVoidTy(*JitContext->LLVMContext);
   const bool MayThrow = true;
   CallSite ThrowCall = callHelperImpl(CORINFO_HELP_THROW, MayThrow, Void, Arg1);
+
+  // Annotate the helper
+  ThrowCall.setDoesNotReturn();
+}
+
+void GenIR::rethrow() {
+  Type *Void = Type::getVoidTy(*JitContext->LLVMContext);
+  const bool MayThrow = true;
+  CallSite ThrowCall = callHelperImpl(CORINFO_HELP_RETHROW, MayThrow, Void);
 
   // Annotate the helper
   ThrowCall.setDoesNotReturn();
