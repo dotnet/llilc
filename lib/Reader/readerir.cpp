@@ -4799,6 +4799,9 @@ CallSite GenIR::makeCall(Value *Callee, bool MayThrow, ArrayRef<Value *> Args) {
       // throw it will unwind all the way to this function's caller.  LLVM
       // models this behavior with the `call` operator, not `invoke`.  Fall
       // down to the code that generates a call.
+    } else if (SuppressExceptionHandlers) {
+      // Per configuration setting, suppress all exception edges so that
+      // handlers will be removed as unreachable code.
     } else {
       BasicBlock *ExceptionSuccessor = EHPad->getParent();
       TerminatorInst *Goto;
@@ -7050,12 +7053,14 @@ uint32_t GenIR::updateLeaveOffset(EHRegion *Region, uint32_t LeaveOffset,
                                   uint32_t TargetOffset, bool &IsInHandler) {
   ReaderBaseNS::RegionKind RegionKind = rgnGetRegionType(Region);
 
-  if ((RegionKind == ReaderBaseNS::RegionKind::RGN_MCatch) ||
-      (RegionKind == ReaderBaseNS::RegionKind::RGN_Fault) ||
-      (RegionKind == ReaderBaseNS::RegionKind::RGN_Filter) ||
-      (RegionKind == ReaderBaseNS::RegionKind::RGN_MExcept)) {
-    // This leave is in an exception handler.  Dynamic exceptions are not
-    // currently supported, so skip the update for this leave.
+  if (SuppressExceptionHandlers &&
+      ((RegionKind == ReaderBaseNS::RegionKind::RGN_MCatch) ||
+       (RegionKind == ReaderBaseNS::RegionKind::RGN_Fault) ||
+       (RegionKind == ReaderBaseNS::RegionKind::RGN_Filter) ||
+       (RegionKind == ReaderBaseNS::RegionKind::RGN_MExcept))) {
+    // This leave is in an exception handler, but handlers are to be
+    // suppressed; skip the update for this leave to avoid making code look
+    // reachable which is only reachable from handlers.
 
     IsInHandler = true;
     return TargetOffset;
