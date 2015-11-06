@@ -485,16 +485,10 @@ bool LLILCJit::readMethod(LLILCJitContext *JitContext) {
   }
 
   DumpLevel DumpLevel = JitContext->Options->DumpLevel;
-
-  LLILCJitPerThreadState *PerThreadState = State.get();
-  GenIR Reader(JitContext, &PerThreadState->ClassTypeMap,
-               &PerThreadState->ReverseClassTypeMap,
-               &PerThreadState->BoxedTypeMap, &PerThreadState->ArrayTypeMap,
-               &PerThreadState->FieldIndexMap);
-
   std::string FuncName = JitContext->MethodName;
 
   try {
+    GenIR Reader(JitContext);
     Reader.msilToIR();
   } catch (NotYetImplementedException &Nyi) {
     if (DumpLevel >= ::DumpLevel::SUMMARY) {

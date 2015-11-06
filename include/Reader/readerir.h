@@ -186,24 +186,20 @@ class GenIR : public ReaderBase {
   friend class ABIMethodSignature;
 
 public:
-  GenIR(LLILCJitContext *JitContext,
-        std::map<CORINFO_CLASS_HANDLE, llvm::Type *> *ClassTypeMap,
-        std::map<llvm::Type *, CORINFO_CLASS_HANDLE> *ReverseClassTypeMap,
-        std::map<CORINFO_CLASS_HANDLE, llvm::Type *> *BoxedTypeMap,
-        std::map<std::tuple<CorInfoType, CORINFO_CLASS_HANDLE, uint32_t, bool>,
-                 llvm::Type *> *ArrayTypeMap,
-        std::map<CORINFO_FIELD_HANDLE, uint32_t> *FieldIndexMap)
+  GenIR(LLILCJitContext *JitContext)
       : ReaderBase(JitContext->JitInfo, JitContext->MethodInfo,
                    JitContext->Flags),
         UnmanagedCallFrame(nullptr), ThreadPointer(nullptr),
         BuiltinObjectType(nullptr), ElementToArrayTypeMap() {
     this->JitContext = JitContext;
-    this->ClassTypeMap = ClassTypeMap;
-    this->ReverseClassTypeMap = ReverseClassTypeMap;
-    this->BoxedTypeMap = BoxedTypeMap;
-    this->ArrayTypeMap = ArrayTypeMap;
-    this->FieldIndexMap = FieldIndexMap;
     this->NameToHandleMap = &JitContext->NameToHandleMap;
+    // Cache a few things from the per-thread state.
+    LLILCJitPerThreadState *State = JitContext->State;
+    this->ClassTypeMap = &State->ClassTypeMap;
+    this->ReverseClassTypeMap = &State->ReverseClassTypeMap;
+    this->BoxedTypeMap = &State->BoxedTypeMap;
+    this->ArrayTypeMap = &State->ArrayTypeMap;
+    this->FieldIndexMap = &State->FieldIndexMap;
   }
 
   static bool isValidStackType(IRNode *Node);
