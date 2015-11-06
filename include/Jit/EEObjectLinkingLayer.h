@@ -42,7 +42,6 @@ private:
       State = Finalizing;
       RTDyld->registerEHFrames();
       MemMgr->finalizeMemory();
-      OwnedBuffers.clear();
       State = Finalized;
     }
 
