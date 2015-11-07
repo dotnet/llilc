@@ -2368,6 +2368,9 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V1.2-M02\b28158\b28158\*" >
              <Issue>898</Issue>
         </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\StructABI\StructABI\*" >
+             <Issue>927</Issue>
+        </ExcludeList>
     </ItemGroup>
     <ItemGroup Condition="'$(XunitTestBinBase)' != '' and '$(COMPLUS_INSERTSTATEPOINTS)' != ''">	
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\regress\ddb\113574\113574\*" >
