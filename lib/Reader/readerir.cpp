@@ -332,7 +332,7 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   DISubprogram *SP = DBuilder->createFunction(
       FContext, Function->getName(), StringRef(), Unit, LineNo,
       createFunctionType(Function, Unit), Function->hasInternalLinkage(),
-      IsDefinition, ScopeLine, DINode::FlagPrototyped, IsOptimized, Function);
+      IsDefinition, ScopeLine, DINode::FlagPrototyped, IsOptimized);
 
   LLILCDebugInfo.FunctionScope = SP;
 
