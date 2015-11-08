@@ -298,6 +298,12 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\StructABI\StructABI\*" >
              <Issue>927</Issue>
         </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\casts\SEH\_speed_relthrow\*" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\casts\SEH\_speed_dbgthrow\*" >
+             <Issue>13</Issue>
+        </ExcludeList>
     </ItemGroup>
     <ItemGroup Condition="'$(XunitTestBinBase)' != '' and '$(COMPlus_ExecuteHandlers)' == ''">
         <ExcludeList Include="$(XunitTestBinBase)\Interop\ICastable\Castable\*" >
@@ -1923,9 +1929,6 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V2.0-Beta2\b302558\b302558\*" >
              <Issue>13</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\casts\SEH\_speed_relthrow\*" >
-             <Issue>13</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\int64\signed\_il_rels_ldc_mulovf\*" >
              <Issue>13</Issue>
         </ExcludeList>
@@ -1957,9 +1960,6 @@
              <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V1.2-M02\b102886\b102886\*" >
-             <Issue>13</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\casts\SEH\_speed_dbgthrow\*" >
              <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1.2-Beta1\b220968\b220968\*" >
