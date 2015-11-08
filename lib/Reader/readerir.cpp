@@ -257,7 +257,7 @@ static Argument *functionArgAt(Function *F, uint32_t I) {
   for (; I > 0; I--) {
     ++Args;
   }
-  return Args;
+  return &*Args;
 }
 
 void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
@@ -370,7 +370,7 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
     if (ArgInfo.getKind() == ABIArgInfo::Indirect) {
       // Indirect arguments aren't homed.
     } else {
-      Value *Arg = ArgI;
+      Value *Arg = &*ArgI;
       Value *Home = Arguments[J];
       Type *HomeType = Home->getType()->getPointerElementType();
       Arg = ABISignature::coerce(*this, HomeType, Arg);
@@ -451,7 +451,7 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
 
   FlowGraphNode *CurrentFlowGraphNode =
       (FlowGraphNode *)LLVMBuilder->GetInsertBlock();
-  Instruction *CurrentInstruction = LLVMBuilder->GetInsertPoint();
+  Instruction *CurrentInstruction = &*LLVMBuilder->GetInsertPoint();
   IRNode *CurrentIRNode = (IRNode *)CurrentInstruction;
   FirstMSILBlock = fgSplitBlock(CurrentFlowGraphNode, CurrentIRNode);
 }
@@ -539,7 +539,7 @@ void GenIR::cloneFinallyBodies() {
 
     Instruction *InsertBefore;
     if (auto *Catchpad = dyn_cast<CatchPadInst>(First)) {
-      InsertBefore = Catchpad->getNormalDest()->getFirstInsertionPt();
+      InsertBefore = &*Catchpad->getNormalDest()->getFirstInsertionPt();
     } else {
       InsertBefore = First->getNextNode();
     }
@@ -1245,7 +1245,7 @@ Instruction *GenIR::createTemporary(Type *Ty, const Twine &Name) {
   if (AllocaInsertionPoint == nullptr) {
     // There are no local, param or temp allocas in the entry block, so set
     // the insertion point to the first point in the block.
-    InsertBefore = EntryBlock->getFirstInsertionPt();
+    InsertBefore = &*EntryBlock->getFirstInsertionPt();
     Block = EntryBlock;
   } else {
     // There are local, param or temp allocas. TempInsertionPoint refers to
@@ -1283,7 +1283,7 @@ IRNode *GenIR::secretParam() {
   assert(MethodSignature.hasSecretParameter());
   assert(MethodSignature.getSecretParameterIndex() == 0);
   Function::arg_iterator Args = Function->arg_begin();
-  Value *SecretParameter = Args;
+  Value *SecretParameter = &*Args;
   return (IRNode *)SecretParameter;
 }
 
@@ -3095,8 +3095,8 @@ FlowGraphNode *GenIR::fgSplitBlock(FlowGraphNode *Block, IRNode *Node) {
       NewBlock = BasicBlock::Create(*JitContext->LLVMContext, "", Function,
                                     TheBasicBlock->getNextNode());
       NewBlock->getInstList().splice(NewBlock->end(),
-                                     TheBasicBlock->getInstList(), Inst,
-                                     TheBasicBlock->end());
+                                     TheBasicBlock->getInstList(),
+                                     Inst->getIterator(), TheBasicBlock->end());
       BranchInst::Create(NewBlock, TheBasicBlock);
     }
   }
@@ -7585,7 +7585,7 @@ BasicBlock *GenIR::splitCurrentBlock(TerminatorInst **Goto) {
   if (NextInstruction == nullptr) {
     LLVMBuilder->SetInsertPoint(NewBlock);
   } else {
-    LLVMBuilder->SetInsertPoint(NewBlock, NextInstruction);
+    LLVMBuilder->SetInsertPoint(NewBlock, NextInstruction->getIterator());
   }
   return NewBlock;
 }
@@ -8458,7 +8458,7 @@ void GenIR::maintainOperandStack(FlowGraphNode *CurrentBlock) {
       const bool SuccessorDegenerate = (TermInst == nullptr);
 #endif
       Instruction *CurrentInst =
-          SuccessorBlock->empty() ? nullptr : SuccessorBlock->begin();
+          SuccessorBlock->empty() ? nullptr : &*SuccessorBlock->begin();
       PHINode *Phi = nullptr;
       for (IRNode *Current : *ReaderOperandStack) {
         Value *CurrentValue = (Value *)Current;
@@ -8672,7 +8672,7 @@ PHINode *GenIR::createPHINode(BasicBlock *Block, Type *Ty,
   if (I == IE) {
     Result = PHINode::Create(Ty, NumReservedValues, NameStr, Block);
   } else {
-    Result = PHINode::Create(Ty, NumReservedValues, NameStr, I);
+    Result = PHINode::Create(Ty, NumReservedValues, NameStr, &*I);
   }
 
   return Result;
