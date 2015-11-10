@@ -108,14 +108,6 @@ bool irNodeIsHandlerFlowAnnotation(IRNode *Node) {
   throw NotYetImplementedException("irNodeIsHandlerFlowAnnotation");
 }
 
-BranchList *branchListGetNext(BranchList *BranchList) {
-  throw NotYetImplementedException("branchListGetNext");
-}
-
-IRNode *branchListGetIRNode(BranchList *BranchList) {
-  throw NotYetImplementedException("branchListGetIRNode");
-}
-
 void ReaderBase::verifyNeedsVerification() { return; }
 
 VerificationState *ReaderBase::verifyInitializeBlock(FlowGraphNode *,

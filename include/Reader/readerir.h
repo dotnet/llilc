@@ -242,8 +242,7 @@ public:
   IRNode *call(ReaderBaseNS::CallOpcode Opcode, mdToken Token,
                mdToken ConstraintTypeRef, mdToken LoadFtnToken,
                bool HasReadOnlyPrefix, bool HasTailCallPrefix,
-               bool IsUnmarkedTailCall, uint32_t CurrOffset,
-               bool *RecursiveTailCall) override;
+               bool IsUnmarkedTailCall, uint32_t CurrOffset) override;
 
   IRNode *castOp(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *ObjRefNode,
                  CorInfoHelpFunc HelperId) override;
@@ -572,14 +571,6 @@ public:
                             CORINFO_METHOD_HANDLE ExactMethod,
                             bool IsUnmarkedTailCall, bool SuppressMsgs);
 
-  // Returns true iff client considers the JMP recursive and wants a
-  // loop back-edge rather than a forward edge to the exit label.
-  bool fgOptRecurse(mdToken Token) override;
-
-  // Returns true iff client considers the CALL/JMP recursive and wants a
-  // loop back-edge rather than a forward edge to the exit label.
-  bool fgOptRecurse(ReaderCallTargetData *Data) override;
-
   FlowGraphNode *fgSplitBlock(FlowGraphNode *Block, IRNode *Node) override;
   IRNode *fgMakeBranch(IRNode *LabelNode, IRNode *InsertNode,
                        uint32_t CurrentOffset, bool IsConditional,
@@ -607,14 +598,6 @@ public:
                                    FlowGraphNode *PreviousNode) override;
   // Allow client to override reader's decision to optimize castclass/isinst
   bool disableCastClassOptimization();
-
-  // Hook to permit client to record call information returns true if the call
-  // is a recursive tail
-  // call and thus should be turned into a loop
-  bool fgCall(ReaderBaseNS::OPCODE Opcode, mdToken Token,
-              mdToken ConstraintToken, unsigned MsilOffset, IRNode *Block,
-              bool CanInline, bool IsTailCall, bool IsUnmarkedTailCall,
-              bool IsReadOnly) override;
 
   // Replace all uses of oldNode in the IR with newNode and delete oldNode.
   void replaceFlowGraphNodeUses(FlowGraphNode *OldNode,
