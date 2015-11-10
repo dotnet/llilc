@@ -2373,6 +2373,9 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\explicit\basic\_il_relrefarg_i1\*" >
              <Issue>13</Issue>
         </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\gettypetypeof\gettypetypeofmatrix\*" >
+             <Issue>13</Issue>
+        </ExcludeList>
     </ItemGroup>
     <ItemGroup Condition="'$(XunitTestBinBase)' != '' and '$(COMPLUS_INSERTSTATEPOINTS)' != ''">	
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\regress\ddb\113574\113574\*" >
