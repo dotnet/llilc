@@ -6,3 +6,4 @@ EmitBlob
 EmitIntValue
 EmitSymbolDef
 EmitSymbolRef
+EmitFrameInfo
