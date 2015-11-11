@@ -1256,25 +1256,6 @@ bool irNodeIsHandlerFlowAnnotation(IRNode *Node);
 
 ///@}
 
-/// \name Client BranchList interface
-/// Used by \p fgFixRecursiveEdges to undo branches added by the optimistic
-/// recursive tail call transformation. Implementation supplied by the client.
-///@{
-
-/// Get the next branch list item
-///
-/// \param BranchList    Current list item
-/// \returns             Next list item
-BranchList *branchListGetNext(BranchList *BranchList);
-
-/// Get the client IR for a branch list item
-///
-/// \param BranchList    Current list item
-/// \returns             Client IR for the item
-IRNode *branchListGetIRNode(BranchList *BranchList);
-
-///@}
-
 /// Record information about a branch for verification
 struct VerificationBranchInfo {
   uint32_t SrcOffset;           ///< MSIL offset of the branch
@@ -1349,10 +1330,6 @@ public:
 
   /// True if this method contains the 'localloc' MSIL opcode.
   bool HasLocAlloc;
-
-  /// True if the client has optimistically transformed tail.
-  /// recursion into a branch.
-  bool HasOptimisticTailRecursionTransform;
 
   /// The current instruction's IL offset.
   uint32_t CurrInstrOffset;
@@ -1756,15 +1733,6 @@ private:
   ///
   /// \param HeadBlock   Initial block in the flow graph.
   void fgAttachGlobalVerifyData(FlowGraphNode *HeadBlock);
-
-  /// Perform special case repair for recursive tail call and localloc.
-  ///
-  /// The flow graph builder can optimistically describe recursive tail
-  /// calls as branches back to the start of the method. However this must
-  /// be undone if the method being compiled contains a localloc.
-  ///
-  /// \param HeadBlock   Initial block in the flow graph.
-  void fgFixRecursiveEdges(FlowGraphNode *HeadBlock);
 
   /// Helper method for building up the cases of a switch.
   ///
@@ -2652,8 +2620,7 @@ public:
   virtual IRNode *call(ReaderBaseNS::CallOpcode Opcode, mdToken Token,
                        mdToken ConstraintTypeRef, mdToken LoadFtnToken,
                        bool IsReadOnlyPrefix, bool IsTailCallPrefix,
-                       bool IsUnmarkedTailCall, uint32_t CurrentOffset,
-                       bool *IsRecursiveTailCall) = 0;
+                       bool IsUnmarkedTailCall, uint32_t CurrentOffset) = 0;
   virtual IRNode *castClass(CORINFO_RESOLVED_TOKEN *ResolvedToken,
                             IRNode *ObjRefNode);
   virtual IRNode *isInst(CORINFO_RESOLVED_TOKEN *ResolvedToken,
@@ -3071,15 +3038,6 @@ public:
   virtual void fgDeleteEdge(FlowGraphEdgeIterator &Iterator) = 0;
   virtual void fgDeleteNodesFromBlock(FlowGraphNode *Block) = 0;
   virtual IRNode *fgNodeGetEndInsertIRNode(FlowGraphNode *FgNode) = 0;
-
-  // Returns true iff client considers the JMP recursive and wants a
-  // loop back-edge rather than a forward edge to the exit label.
-  virtual bool fgOptRecurse(mdToken Token) = 0;
-
-  // Returns true iff client considers the CALL/JMP recursive and wants a
-  // loop back-edge rather than a forward edge to the exit label.
-  virtual bool fgOptRecurse(ReaderCallTargetData *CallTargetData) = 0;
-
   virtual FlowGraphNode *fgSplitBlock(FlowGraphNode *Block, IRNode *Node) = 0;
   virtual IRNode *fgMakeBranch(IRNode *LabelNode, IRNode *BlockNode,
                                uint32_t CurrentOffset, bool IsConditional,
@@ -3126,14 +3084,6 @@ public:
   /// \returns The new FlowGraphNode
   virtual FlowGraphNode *makeFlowGraphNode(uint32_t TargetOffset,
                                            FlowGraphNode *PreviousNode) = 0;
-
-  // Hook to permit client to record call information returns true if the call
-  // is a recursive tail
-  // call and thus should be turned into a loop
-  virtual bool fgCall(ReaderBaseNS::OPCODE Opcode, mdToken Token,
-                      mdToken ConstraintToken, uint32_t ILOffset, IRNode *Block,
-                      bool CanInline, bool IsTailCall, bool IsUnmarkedTailCall,
-                      bool IsReadOnly) = 0;
 
   // Replace all uses of oldNode in the IR with newNode and delete oldNode.
   virtual void replaceFlowGraphNodeUses(FlowGraphNode *OldNode,

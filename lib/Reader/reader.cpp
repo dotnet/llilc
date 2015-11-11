@@ -1744,30 +1744,13 @@ void ReaderBase::rgnCreateRegionTree(void) {
   EhRegionTree = RegionTreeRoot;
 }
 
-void ReaderBase::fgFixRecursiveEdges(FlowGraphNode *HeadBlock) {
-  // As a special case, localloc is incompatible with the recursive
-  // tail call optimization, and any branches that we initially set up
-  // for the recursive tail call (before we knew about the localloc)
-  // should instead be re-pointed at the fall-through (for tail.call)
-  // or the function exit (for jmp).
-  if (HasLocAlloc && HasOptimisticTailRecursionTransform) {
-    throw NotYetImplementedException("undo optimistic recursive tail calls");
-  }
-}
-
 // Builds flow graph from bytecode and initializes blocks for DFO traversal.
 FlowGraphNode *ReaderBase::buildFlowGraph(FlowGraphNode **FgTail) {
-  FlowGraphNode *HeadBlock;
-
   // Build a flow graph from the byte codes
-  HeadBlock =
+  FlowGraphNode *HeadBlock =
       fgBuildBasicBlocksFromBytes(MethodInfo->ILCode, MethodInfo->ILCodeSize);
-
-  // Fix recursive edges
-  fgFixRecursiveEdges(HeadBlock);
-
-  // Return head FlowGraphNode.
   *FgTail = fgGetTailBlock();
+  // Return head FlowGraphNode.
   return HeadBlock;
 }
 
@@ -2313,12 +2296,11 @@ EHRegion *ReaderBase::fgSwitchRegion(EHRegion *OldRegion, uint32_t Offset,
 // function. These labels are inserted in the next pass.
 void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
                                uint32_t ILInputSize) {
-  IRNode *BranchNode, *BlockNode, *TheExitLabel;
+  IRNode *BranchNode, *BlockNode;
   FlowGraphNode *GraphNode;
   uint32_t CurrentOffset, BranchOffset, TargetOffset, NextOffset, NumCases;
   uint32_t NextRegionTransitionOffset;
   bool IsShortInstr, IsConditional, IsTailCall, IsReadOnly, PreviousWasPrefix;
-  bool LoadFtnToken;
   mdToken TokenConstrained;
   uint32_t StackOffset = 0;
   ReaderBaseNS::OPCODE Opcode = ReaderBaseNS::CEE_ILLEGAL;
@@ -2350,7 +2332,6 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
   IsReadOnly = false;
   PreviousWasPrefix = false;
   TokenConstrained = mdTokenNil;
-  LoadFtnToken = false;
   BranchesToVerify = nullptr;
   HasLocAlloc = false;
   NextRegionTransitionOffset = NextOffset = CurrentOffset = 0;
@@ -2381,10 +2362,6 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
     // not a valid branch target.
     if (VerificationNeeded && !PreviousWasPrefix) {
       LegalTargetOffsets->setBit(CurrentOffset);
-    }
-
-    if (Opcode != ReaderBaseNS::CEE_NEWOBJ) {
-      LoadFtnToken = false;
     }
 
     VerInstrStartOffset = CurrentOffset;
@@ -2581,65 +2558,8 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
     case ReaderBaseNS::CEE_CALL:
     case ReaderBaseNS::CEE_CALLVIRT:
     case ReaderBaseNS::CEE_NEWOBJ:
-      // Optional client processing of calls. Client will not be
-      // called for invalid or unavailable token. Token verification
-      // occurs during second reader pass.
-      //
-      // If there is a RET immediately following a recursive tail
-      // call, it will be unreachable.  Same for a branch-to-return
-      // following a tail call.  In either case, the fact that the
-      // recursive tail call left nothing on the stack should not be a
-      // problem.
-      {
-        mdToken Token = readValue<mdToken>(Operand);
-
-        bool IsExplicitTailCall = IsTailCall;
-        bool IsRecursiveTailCall = false;
-        bool CanInline = false;
-
-        if (!IsExplicitTailCall && doTailCallOpt() &&
-            (Opcode != ReaderBaseNS::CEE_NEWOBJ)) {
-          ASSERTNR(!IsTailCall);
-          IsTailCall =
-              isUnmarkedTailCall(ILInput, ILInputSize, NextOffset, Token);
-        }
-
-        // Don't inline explicit tail calls.
-        CanInline = !IsExplicitTailCall;
-
-        if (LoadFtnToken) {
-          // We don't have flow information so this is really just a
-          // conservative guess but if the previous opcode was
-          // CEE_LDFTN or CEE_LDVIRTFTN, then it's better to call the
-          // optimized ctor (happens in rdrCall) than to inline the
-          // slow ctor.
-          CanInline = false;
-          ASSERTNR(!IsExplicitTailCall);
-          LoadFtnToken = false;
-        }
-
-        BlockNode = fgNodeGetStartIRNode(Block);
-
-        IsRecursiveTailCall =
-            fgCall(Opcode, Token, TokenConstrained, CurrentOffset, BlockNode,
-                   CanInline, IsTailCall, IsTailCall && !IsExplicitTailCall,
-                   IsReadOnly);
-
-        if (IsRecursiveTailCall) {
-          // insert an edge back to the function entry
-          TheExitLabel = entryLabel();
-          BranchNode =
-              fgMakeBranch(TheExitLabel, BlockNode, CurrentOffset, false, true);
-          fgNodeSetEndMSILOffset(Block, NextOffset);
-          Block = fgSplitBlock(Block, NextOffset,
-                               findBlockSplitPointAfterNode(BranchNode));
-        }
-      }
-      break;
-
     case ReaderBaseNS::CEE_LDFTN:
     case ReaderBaseNS::CEE_LDVIRTFTN:
-      LoadFtnToken = true;
       break;
 
     // Need to already know about any locallocs so client knows
@@ -6201,25 +6121,13 @@ void ReaderBase::readBytesForFlowGraphNodeHelper(
         IsUnmarkedTailCall = true;
       }
 
-      bool IsRecursiveTailCall = false;
-      ResultIR =
-          call((ReaderBaseNS::CallOpcode)MappedValue, Token, ConstraintTypeRef,
-               mdTokenNil, HasReadOnlyPrefix, HasTailCallPrefix,
-               IsUnmarkedTailCall, CurrentOffset, &IsRecursiveTailCall);
+      ResultIR = call((ReaderBaseNS::CallOpcode)MappedValue, Token,
+                      ConstraintTypeRef, mdTokenNil, HasReadOnlyPrefix,
+                      HasTailCallPrefix, IsUnmarkedTailCall, CurrentOffset);
       if (ResultIR != nullptr) {
         ReaderOperandStack->push(ResultIR);
       }
 
-      if (IsRecursiveTailCall) {
-        // We turned this into a recursive tail-call and the basic
-        // block no longer includes the subsequent (and required)
-        // return opcode that would normally set HasFallThrough to
-        // false.  This is unique to recursive tail calls.  Normal
-        // tail calls still include the return opcode.
-        ASSERTNR(NextOffset == fgNodeGetEndMSILOffset(Fg));
-        ASSERTNR(Param->HasFallThrough);
-        Param->HasFallThrough = false;
-      }
       // Only good for one call
       LastLoadToken = mdTokenNil;
     } break;
@@ -8251,12 +8159,8 @@ void ReaderCallTargetData::fillTargetInfo(mdToken TargetToken,
     IsTailCall = Reader->checkExplicitTailCall(MsilOffset, AllowPop);
   }
 
-  // Check for recursive tail call
-  if (IsTailCall) {
-    this->IsRecursiveTailCall = Reader->fgOptRecurse(this);
-  } else {
-    this->IsRecursiveTailCall = false;
-  }
+  // We no longer try and detect recursive tall calls here.
+  this->IsRecursiveTailCall = false;
 
 #if !defined(NODEBUG)
   // DEBUG: Attach the name of the target to the CallTargetData struct

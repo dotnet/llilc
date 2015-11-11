@@ -3508,14 +3508,6 @@ bool fgEdgeIteratorIsEnd(FlowGraphEdgeIterator &FgEdgeIterator) {
   return FgEdgeIterator.isEnd();
 }
 
-// Hook called from reader fg builder to identify potential inline candidates.
-bool GenIR::fgCall(ReaderBaseNS::OPCODE Opcode, mdToken Token,
-                   mdToken ConstraintToken, unsigned MsilOffset, IRNode *Block,
-                   bool CanInline, bool IsTailCall, bool IsUnmarkedTailCall,
-                   bool ReadOnly) {
-  return false;
-}
-
 // Small helper function that gets the next IDOM. It was pulled out-of-line
 // so that it can be called in a loop in FgNodeGetIDom.
 // TODO (Issue #38): currently we conservatively return single predecessor
@@ -5460,8 +5452,7 @@ void GenIR::branch() {
 IRNode *GenIR::call(ReaderBaseNS::CallOpcode Opcode, mdToken Token,
                     mdToken ConstraintTypeRef, mdToken LoadFtnToken,
                     bool HasReadOnlyPrefix, bool HasTailCallPrefix,
-                    bool IsUnmarkedTailCall, uint32_t CurrOffset,
-                    bool *RecursiveTailCall) {
+                    bool IsUnmarkedTailCall, uint32_t CurrOffset) {
   ReaderCallTargetData *Data =
       (ReaderCallTargetData *)_alloca(sizeof(ReaderCallTargetData));
   if (Opcode == ReaderBaseNS::NewObj) {
@@ -6485,9 +6476,6 @@ IRNode *GenIR::convert(Type *Ty, Value *Node, bool SourceIsSigned) {
 bool GenIR::commonTailCallChecks(CORINFO_METHOD_HANDLE DeclaredMethod,
                                  CORINFO_METHOD_HANDLE ExactMethod,
                                  bool IsUnmarkedTailCall, bool SuppressMsgs) {
-  // Note that localloc works with tail call provided that we don't perform
-  // recursive tail call optimization, so there is a special check for
-  // that condition in FgOptRecurse but not here.
   const char *Reason = nullptr;
   bool SuppressReport = false;
   uint32_t MethodCompFlags = getCurrentMethodAttribs();
@@ -6526,104 +6514,6 @@ bool GenIR::commonTailCallChecks(CORINFO_METHOD_HANDLE DeclaredMethod,
             IsUnmarkedTailCall ? "im" : "ex", Reason);
   }
   return false;
-}
-
-// return true iff recursive and should turn into loop
-// While building the flow graph, hasLocAlloc will always be false.
-// If the flowgraph builder was wrong in that guess, it takes responsibility
-// for fixing the bad labels before inserting arcs.  When this routine is
-// invoked later to fill in the blocks, it will get a useful hasLocAlloc
-// value and will know that we are treating the tail call or jmp as the
-// non-recursive case (in other words not optimizing it into a loop).
-// Note that we currently won't perform the recursive tail call optimization
-// on an inlined function because we use the parameter list from the entry
-// tuple in order to map outgoing parameters back into incoming parameters for
-// the loop, and inlinees do not have a standard entry tuple with a parameter
-// list.
-// NOTE: Do not do the recursive tail if the runtime says we can't inline this
-//  method into itself. The reasoning behind this is that it allows a profiler
-//  to disable this optimization since it results in the loss of some profiling
-//  information.
-bool GenIR::fgOptRecurse(ReaderCallTargetData *Data) {
-  if (Data->isCallI() || Data->isNewObj() || !Data->isTailCall())
-    return false;
-
-  ASSERTNR(Data->getMethodHandle());
-  CORINFO_METHOD_HANDLE Method = Data->getKnownMethodHandle();
-
-  // Do recursive tail call only on non-virtual method calls
-  if (Method == nullptr) {
-    return false;
-  }
-
-  uint32_t MethodCompFlags = getCurrentMethodAttribs();
-  if ((Method != getCurrentMethodHandle())
-      // Not yet implemented (but can do a regular tail call)
-      || (MethodCompFlags & CORINFO_FLG_SHAREDINST)
-#if 0
-    || (SS_ATTRIB(CI_Entry(ciPtr)) & AA_VARARGS)
-#endif
-      ||
-      !Data->recordCommonTailCallChecks(commonTailCallChecks(
-          Method, Method, Data->isUnmarkedTailCall(), false))
-      // treat as inlining since we're removing the call
-      || (canInline(Method, Method, nullptr) != INLINE_PASS)) {
-    // we might want a DBFLAG msg here, but since this routine may be
-    // called multiple times for a given call it would just add clutter.
-    return false;
-  }
-
-  return true;
-}
-
-// return true iff recursive and should turn into loop
-// *** only valid for JMP calls ***
-// NOTE: Do not do the recursive tail if the runtime says we can't inline this
-//  method into itself. The reasoning behind this is that it allows a profiler
-//  to disable this optimization since it results in the loss of some profiling
-//  information.
-bool GenIR::fgOptRecurse(mdToken Token) {
-  struct Param : RuntimeFilterParams {
-    CORINFO_METHOD_HANDLE Method;
-    mdToken Token;
-  } Params;
-
-  Params.Method = nullptr;
-  Params.Token = Token;
-  Params.This = this;
-
-  PAL_TRY(Param *, PParam, &Params) {
-    CORINFO_RESOLVED_TOKEN ResolvedToken;
-    PParam->This->resolveToken(PParam->Token, CORINFO_TOKENKIND_Method,
-                               &ResolvedToken);
-    PParam->Method = ResolvedToken.hMethod;
-  }
-  PAL_EXCEPT_FILTER(runtimeFilter) {
-    runtimeHandleException(&(Params.ExceptionPointers));
-    Params.Method = nullptr;
-  }
-  PAL_ENDTRY
-
-  if (!Params.Method) {
-    return false;
-  }
-
-  uint32_t MethodCompFlags = getCurrentMethodAttribs();
-  if ((Params.Method != getCurrentMethodHandle())
-      // Not yet implemented (but can do a regular tail call)
-      || (MethodCompFlags & CORINFO_FLG_SHAREDINST)
-#if 0
-    || (SS_ATTRIB(CI_Entry(ciPtr)) & AA_VARARGS)
-#endif
-      || (!commonTailCallChecks(Params.Method, Params.Method, false, true))
-      // treat as inlining since we're removing the call
-      || (canInline(Params.Method, Params.Method, nullptr) != INLINE_PASS)) {
-    // we might want a DBFLAG msg here, but since this routine may be
-    // called multiple times for a given call it would just add clutter.
-    return false;
-  }
-
-  return true;
 }
 
 void GenIR::returnOpcode(IRNode *Opr, bool IsSynchronizedMethod) {
@@ -8108,14 +7998,12 @@ IRNode *GenIR::newObj(mdToken Token, mdToken LoadFtnToken,
   // Generate the constructor call
   // rdrCall and GenCall process newobj
   //  so there's nothing else to do.
-  bool IsRecursive = false;
   bool ReadOnlyPrefix = false;
   bool TailCallPrefix = false;
   bool IsUnmarkedTailCall = false;
-  IRNode *Result = call(ReaderBaseNS::NewObj, Token, mdTokenNil, LoadFtnToken,
-                        ReadOnlyPrefix, TailCallPrefix, IsUnmarkedTailCall,
-                        CurrOffset, &IsRecursive);
-  ASSERTNR(!IsRecursive); // No tail recursive new-obj calls
+  IRNode *Result =
+      call(ReaderBaseNS::NewObj, Token, mdTokenNil, LoadFtnToken,
+           ReadOnlyPrefix, TailCallPrefix, IsUnmarkedTailCall, CurrOffset);
   return Result;
 }
 
