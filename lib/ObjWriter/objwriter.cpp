@@ -265,7 +265,7 @@ extern "C" void EmitAlignment(ObjectWriter *OW, int ByteAlignment) {
   OST.EmitValueToAlignment(ByteAlignment, 0x90 /* Nop */);
 }
 
-extern "C" void EmitBlob(ObjectWriter *OW, const char *Blob, int BlobSize) {
+extern "C" void EmitBlob(ObjectWriter *OW, int BlobSize, const char *Blob) {
   assert(OW && "ObjWriter null");
   auto *AsmPrinter = &OW->getAsmPrinter();
   auto &OST = *AsmPrinter->OutStreamer;
@@ -292,6 +292,21 @@ extern "C" void EmitSymbolDef(ObjectWriter *OW, const char *SymbolName) {
   OST.EmitLabel(Sym);
 }
 
+const MCSymbolRefExpr *
+GetSymbolRefExpr(ObjectWriter *OW, const char *SymbolName,
+                 MCSymbolRefExpr::VariantKind Kind = MCSymbolRefExpr::VK_None) {
+  assert(OW && "ObjWriter is null");
+  auto *AsmPrinter = &OW->getAsmPrinter();
+  auto &OST = static_cast<MCObjectStreamer &>(*AsmPrinter->OutStreamer);
+  MCContext &OutContext = OST.getContext();
+
+  // Create symbol reference
+  MCSymbol *T = OutContext.getOrCreateSymbol(SymbolName);
+  MCAssembler &MCAsm = OST.getAssembler();
+  MCAsm.registerSymbol(*T);
+  return MCSymbolRefExpr::create(T, Kind, OutContext);
+}
+
 extern "C" void EmitSymbolRef(ObjectWriter *OW, const char *SymbolName,
                               int Size, bool IsPCRelative, int Delta = 0) {
   assert(OW && "ObjWriter is null");
@@ -299,18 +314,14 @@ extern "C" void EmitSymbolRef(ObjectWriter *OW, const char *SymbolName,
   auto &OST = static_cast<MCObjectStreamer &>(*AsmPrinter->OutStreamer);
   MCContext &OutContext = OST.getContext();
 
-  // Create symbol reference
-  MCSymbol *target = OutContext.getOrCreateSymbol(SymbolName);
-  MCAssembler &MCAsm = OST.getAssembler();
-  MCAsm.registerSymbol(*target);
-  const MCExpr *TargetExpr = MCSymbolRefExpr::create(target, OutContext);
+  // Get symbol reference expression
+  const MCExpr *TargetExpr = GetSymbolRefExpr(OW, SymbolName);
 
   switch (Size) {
   case 8:
     assert(!IsPCRelative && "NYI no support for 8 byte pc-relative");
     break;
   case 4:
-    Size = 4;
     // If the fixup is pc-relative, we need to bias the value to be relative to
     // the start of the field, not the end of the field
     if (IsPCRelative) {
@@ -328,4 +339,60 @@ extern "C" void EmitSymbolRef(ObjectWriter *OW, const char *SymbolName,
   }
 
   OST.EmitValue(TargetExpr, Size, SMLoc(), IsPCRelative);
+}
+
+extern "C" void EmitFrameInfo(ObjectWriter *OW, const char *FunctionName,
+                              int StartOffset, int EndOffset, int BlobSize,
+                              const char *BlobData) {
+
+  assert(OW && "ObjWriter is null");
+  auto *AsmPrinter = &OW->getAsmPrinter();
+  auto &OST = static_cast<MCObjectStreamer &>(*AsmPrinter->OutStreamer);
+  MCContext &OutContext = OST.getContext();
+  const MCObjectFileInfo *MOFI = OutContext.getObjectFileInfo();
+
+  // Windows specific frame info for pdata/xdata.
+  // TODO: Should convert this for non-Windows.
+  if (MOFI->getObjectFileType() != MOFI->IsCOFF) {
+    return;
+  }
+
+  // .xdata emission
+  MCSection *Section = MOFI->getXDataSection();
+  OST.SwitchSection(Section);
+  OST.EmitValueToAlignment(4);
+
+  MCSymbol *FrameSymbol = OutContext.createTempSymbol();
+  OST.EmitLabel(FrameSymbol);
+
+  EmitBlob(OW, BlobSize, BlobData);
+
+  // Emit personality function symbol
+  // TODO: We now fake runtime as if it were C++ code.
+  // Need to clean up when EH plan is concrete.
+  OST.EmitValueToAlignment(4);
+  const MCExpr *PersonalityFn = GetSymbolRefExpr(
+      OW, "__CxxFrameHandler3", MCSymbolRefExpr::VK_COFF_IMGREL32);
+  OST.EmitValue(PersonalityFn, 4);
+
+  // .pdata emission
+  Section = MOFI->getPDataSection();
+  OST.SwitchSection(Section);
+  OST.EmitValueToAlignment(4);
+
+  const MCExpr *BaseRefRel =
+      GetSymbolRefExpr(OW, FunctionName, MCSymbolRefExpr::VK_COFF_IMGREL32);
+
+  // start offset
+  const MCExpr *StartOfs = MCConstantExpr::create(StartOffset, OutContext);
+  OST.EmitValue(MCBinaryExpr::createAdd(BaseRefRel, StartOfs, OutContext), 4);
+
+  // end offset
+  const MCExpr *EndOfs = MCConstantExpr::create(EndOffset, OutContext);
+  OST.EmitValue(MCBinaryExpr::createAdd(BaseRefRel, EndOfs, OutContext), 4);
+
+  // frame symbol reference
+  OST.EmitValue(MCSymbolRefExpr::create(
+                    FrameSymbol, MCSymbolRefExpr::VK_COFF_IMGREL32, OutContext),
+                4);
 }
