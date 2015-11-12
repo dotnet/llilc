@@ -7,3 +7,6 @@ EmitIntValue
 EmitSymbolDef
 EmitSymbolRef
 EmitFrameInfo
+EmitDebugFileInfo
+EmitDebugLoc
+FlushDebugLocs
