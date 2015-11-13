@@ -17,3 +17,7 @@ add_llilcjit_library(GcInfo
 	GcInfoUtil.cpp
 	GcInfo.cpp
 )
+
+if( NOT LLILC_BUILT_STANDALONE )
+  add_dependencies(GcInfo intrinsics_gen)
+endif()
