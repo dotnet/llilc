@@ -37,7 +37,39 @@ protected:
   ABISignature(const ReaderCallSignature &Signature, GenIR &Reader,
                const ABIInfo &TheABIInfo);
 
+  /// \brief Returns the number of arguments to the ABI signature.
+  ///
+  /// \returns The number of arguments to the ABI signature.
+  uint32_t getNumABIArgs() const;
+
 public:
+  /// \brief Expand a value according to a specific list of expansions.
+  ///
+  /// \param Reader        The \p GenIR instance that will be used to emit IR.
+  /// \param Expansions    The list of expansions to be applied.
+  /// \param Source        The value to expand.
+  /// \param Values [in]   A slice that will hold the values that result from
+  ///                      the expansion.
+  /// \param Values [in]   A slice that will hold the types of the values that
+  ///                      result from the expansion.
+  /// \param IsResult      True if the value being expanded is the result value
+  ///                      for a function.
+  static void expand(GenIR &Reader,
+                     llvm::ArrayRef<ABIArgInfo::Expansion> Expansions,
+                     llvm::Value *Source,
+                     llvm::MutableArrayRef<llvm::Value *> Values,
+                     llvm::MutableArrayRef<llvm::Type *> Types, bool IsResult);
+
+  /// \brief Store a single value from an expanded argument into its
+  /// destination.
+  ///
+  /// \param Reader  The \p GenIR instance that will be used to emit IR.
+  /// \param Exp     The expansion information for the given value.
+  /// \param Val     The value to be collapsed.
+  /// \param Base    The base address of the target value as an i8*.
+  static void collapse(GenIR &Reader, const ABIArgInfo::Expansion &Exp,
+                       llvm::Value *Val, llvm::Value *Base);
+
   /// \brief Coerces a value to a particular target type, casting or
   ///        reinterpreting as necessary.
   ///

@@ -66,6 +66,20 @@ getNormalizedCallingConvention(const ReaderCallSignature &Signature) {
   }
 }
 
+static Type *getExpandedResultType(LLVMContext &LLVMContext,
+                                   ArrayRef<ABIArgInfo::Expansion> Expansions) {
+  assert(Expansions.size() > 0);
+
+  // LLVM does not support multi-value returns, so we instead build an FCA value
+  // to hold the expanded result.
+  llvm::SmallVector<Type *, 2> FieldTypes;
+  for (const ABIArgInfo::Expansion &Exp : Expansions) {
+    FieldTypes.push_back(Exp.TheType);
+  }
+
+  return StructType::get(LLVMContext, FieldTypes);
+}
+
 ABISignature::ABISignature(const ReaderCallSignature &Signature, GenIR &Reader,
                            const ABIInfo &TheABIInfo) {
   const CallArgType &ResultType = Signature.getResultType();
@@ -73,26 +87,105 @@ ABISignature::ABISignature(const ReaderCallSignature &Signature, GenIR &Reader,
   const uint32_t NumArgs = ArgTypes.size();
 
   ABIType ABIResultType(Reader.getType(ResultType.CorType, ResultType.Class),
+                        ResultType.Class,
                         GenIR::isSignedIntegralType(ResultType.CorType));
 
   SmallVector<ABIType, 16> ABIArgTypes(NumArgs);
   uint32_t I = 0;
   for (const CallArgType &Arg : ArgTypes) {
-    ABIArgTypes[I++] = ABIType(Reader.getType(Arg.CorType, Arg.Class),
-                               GenIR::isSignedIntegralType(Arg.CorType));
+    ABIArgTypes[I++] =
+        ABIType(Reader.getType(Arg.CorType, Arg.Class), Arg.Class,
+                GenIR::isSignedIntegralType(Arg.CorType));
   }
 
   bool IsManagedCallingConv = false;
   CallingConv::ID CC = getLLVMCallingConv(
       getNormalizedCallingConvention(Signature), IsManagedCallingConv);
-  TheABIInfo.computeSignatureInfo(CC, IsManagedCallingConv, ABIResultType,
-                                  ABIArgTypes, Result, Args);
+  TheABIInfo.computeSignatureInfo(*Reader.JitContext, CC, IsManagedCallingConv,
+                                  ABIResultType, ABIArgTypes, Result, Args);
 
   if (Result.getKind() == ABIArgInfo::Indirect) {
     FuncResultType = Reader.getManagedPointerType(Result.getType());
+  } else if (Result.getKind() == ABIArgInfo::Expand) {
+    FuncResultType = getExpandedResultType(*Reader.JitContext->LLVMContext,
+                                           Result.getExpansions());
   } else {
     FuncResultType = Result.getType();
   }
+}
+
+uint32_t ABISignature::getNumABIArgs() const {
+  uint32_t NumArgs = 0;
+  for (const ABIArgInfo &Arg : Args) {
+    if (Arg.getKind() == ABIArgInfo::Expand) {
+      NumArgs += Arg.getExpansions().size();
+    } else {
+      NumArgs++;
+    }
+  }
+  return NumArgs;
+}
+
+void ABISignature::expand(GenIR &Reader,
+                          ArrayRef<ABIArgInfo::Expansion> Expansions,
+                          Value *Source, MutableArrayRef<Value *> Values,
+                          MutableArrayRef<Type *> Types, bool IsResult) {
+  assert(Source != nullptr);
+  assert(Source->getType()->isPointerTy());
+  assert(Reader.doesValueRepresentStruct(Source));
+  assert(Expansions.size() > 0);
+  assert((IsResult && Values.size() == 1) ||
+         (Values.size() == Expansions.size()));
+
+  LLVMContext &LLVMContext = *Reader.JitContext->LLVMContext;
+  IRBuilder<> &Builder = *Reader.LLVMBuilder;
+
+  Type *ResultType = nullptr;
+  Value *ResultValue = nullptr;
+  if (IsResult) {
+    ResultType = getExpandedResultType(LLVMContext, Expansions);
+    ResultValue = Constant::getNullValue(ResultType);
+  }
+
+  Type *BytePtrTy = Type::getInt8PtrTy(LLVMContext, 0);
+  Value *SourcePtr = Builder.CreatePointerCast(Source, BytePtrTy);
+  for (int32_t I = 0; I < static_cast<int32_t>(Expansions.size()); I++) {
+    const ABIArgInfo::Expansion &Exp = Expansions[I];
+    Value *LoadPtr = Builder.CreateConstGEP1_32(SourcePtr, Exp.Offset);
+    LoadPtr = Builder.CreatePointerCast(LoadPtr, Exp.TheType->getPointerTo(0));
+    const bool IsVolatile = false;
+    Value *Value = Builder.CreateLoad(LoadPtr, IsVolatile);
+
+    if (IsResult) {
+      ResultValue = Builder.CreateInsertValue(ResultValue, Value, I);
+    } else {
+      Values[I] = Value;
+    }
+
+    if (Types.size() > 0) {
+      Types[I] = Exp.TheType;
+    }
+  }
+
+  if (IsResult) {
+    Values[0] = ResultValue;
+  }
+}
+
+void ABISignature::collapse(GenIR &Reader, const ABIArgInfo::Expansion &Exp,
+                            Value *Val, Value *Base) {
+  assert(Exp.TheType != nullptr);
+  assert(Val != nullptr);
+  assert(Base != nullptr);
+  assert(Base->getType()->getPointerElementType()->isIntegerTy(8));
+
+  IRBuilder<> &Builder = *Reader.LLVMBuilder;
+
+  Value *StorePtr = Builder.CreateConstGEP1_32(Base, Exp.Offset);
+  StorePtr = Builder.CreatePointerCast(StorePtr, Exp.TheType->getPointerTo(0));
+
+  const bool IsVolatile = false;
+  Builder.CreateStore(Val, StorePtr, IsVolatile);
 }
 
 Value *ABISignature::coerce(GenIR &Reader, Type *TheType, Value *TheValue) {
@@ -334,7 +427,7 @@ Value *ABICallSignature::emitCall(GenIR &Reader, Value *Target, bool MayThrow,
   }
 
   uint32_t NumExtraArgs = (HasIndirectResult ? 1 : 0) + NumSpecialArgs;
-  const uint32_t NumArgs = Args.size() + NumExtraArgs;
+  const uint32_t NumArgs = getNumABIArgs() + NumExtraArgs;
   Value *ResultNode = nullptr;
   SmallVector<Type *, 16> ArgumentTypes(NumArgs);
   SmallVector<Value *, 16> Arguments(NumArgs);
@@ -403,8 +496,8 @@ Value *ABICallSignature::emitCall(GenIR &Reader, Value *Target, bool MayThrow,
     const ABIArgInfo &ArgInfo = this->Args[J];
     Type *ArgType = Arg->getType();
 
-    if (ArgInfo.getKind() == ABIArgInfo::Indirect) {
-      // TODO: byval attribute support
+    switch (ArgInfo.getKind()) {
+    case ABIArgInfo::Indirect:
       if (IsJmp) {
         // When processing jmp pass the pointer that we got from the caller
         // rather than a pointer to a copy in the current frame.
@@ -426,20 +519,58 @@ Value *ABICallSignature::emitCall(GenIR &Reader, Value *Target, bool MayThrow,
         }
         Arguments[I] = Temp;
       }
-    } else {
-      ArgumentTypes[I] = ArgInfo.getType();
-      Arguments[I] = coerce(Reader, ArgInfo.getType(), Arg);
+      break;
 
-      if (ArgInfo.getKind() == ABIArgInfo::ZeroExtend) {
-        ArgAttrs.addAttribute(Attribute::ZExt);
-      } else if (ArgInfo.getKind() == ABIArgInfo::SignExtend) {
-        ArgAttrs.addAttribute(Attribute::SExt);
+    case ABIArgInfo::Expand: {
+      const bool IsResult = false;
+      ArrayRef<ABIArgInfo::Expansion> Expansions = ArgInfo.getExpansions();
+      MutableArrayRef<Value *> Values =
+          MutableArrayRef<Value *>(Arguments).slice(I, Expansions.size());
+      MutableArrayRef<Type *> Types =
+          MutableArrayRef<Type *>(ArgumentTypes).slice(I, Expansions.size());
+      expand(Reader, ArgInfo.getExpansions(), Arg, Values, Types, IsResult);
+      I += Expansions.size() - 1;
+      break;
+    }
+
+    case ABIArgInfo::ZeroExtend:
+      ArgAttrs.addAttribute(Attribute::ZExt);
+      goto direct;
+
+    case ABIArgInfo::SignExtend:
+      ArgAttrs.addAttribute(Attribute::SExt);
+      goto direct;
+
+    case ABIArgInfo::Direct: {
+    direct:
+      Type *ArgTy = ArgInfo.getType();
+      Arg = coerce(Reader, ArgTy, Arg);
+
+      if (ArgTy->isStructTy()) {
+        assert(Arg->getType()->isPointerTy());
+        assert(Arg->getType()->getPointerElementType() == ArgTy);
+
+        ArgTy = ArgTy->getPointerTo();
+        ArgAttrs.addAttribute(Attribute::ByVal);
+      } else if (ArgTy->isVectorTy()) {
+        assert(Arg->getType() == ArgTy);
+
+        Value *Temp = Reader.createTemporary(ArgTy);
+        Builder.CreateStore(Arg, Temp);
+        Arg = Temp;
+
+        ArgTy = ArgTy->getPointerTo();
+        ArgAttrs.addAttribute(Attribute::ByVal);
       }
+
+      ArgumentTypes[I] = ArgTy;
+      Arguments[I] = Arg;
 
       if (ArgAttrs.hasAttributes()) {
         const unsigned Idx = I + 1; // Add one to accomodate the return attrs.
         Attrs.push_back(AttributeSet::get(Context, Idx, ArgAttrs));
       }
+    }
     }
 
     I++, J++;
@@ -484,27 +615,51 @@ Value *ABICallSignature::emitCall(GenIR &Reader, Value *Target, bool MayThrow,
     Call.setAttributes(AttributeSet::get(Context, Attrs));
   }
 
-  if (ResultNode == nullptr) {
-    assert(!HasIndirectResult);
-    const CallArgType &SigResultType = Signature.getResultType();
-    Type *Ty = Reader.getType(SigResultType.CorType, SigResultType.Class);
-    if (!Ty->isVoidTy()) {
-      ResultNode = coerce(Reader, Ty, IsUnmanagedCall ? UnmanagedCallResult
-                                                      : Call.getInstruction());
-    } else {
-      ResultNode = Call.getInstruction();
-    }
-  } else {
+  Value *TheCallInst = Call.getInstruction();
+  if (HasIndirectResult) {
+    assert(ResultNode != nullptr);
     if (!Reader.doesValueRepresentStruct(ResultNode)) {
       ResultNode = Builder.CreateLoad(ResultNode);
     }
+  } else {
+    assert(ResultNode == nullptr);
+
+    const CallArgType &SigResultType = Signature.getResultType();
+    Type *Ty = Reader.getType(SigResultType.CorType, SigResultType.Class);
+
+    Value *CallResult = IsUnmanagedCall ? UnmanagedCallResult : TheCallInst;
+
+    if (!Ty->isVoidTy()) {
+      if (Result.getKind() == ABIArgInfo::Expand) {
+        assert(FuncResultType->isStructTy());
+        ResultNode = Reader.createTemporary(Ty, "CallResult");
+        Reader.setValueRepresentsStruct(ResultNode);
+
+        Type *BytePtrTy = Type::getInt8PtrTy(Context, 0);
+        Value *DestPtr = Builder.CreatePointerCast(ResultNode, BytePtrTy);
+
+        assert(Result.getExpansions().size() ==
+               FuncResultType->getStructNumElements());
+
+        ArrayRef<ABIArgInfo::Expansion> Expansions = Result.getExpansions();
+        int32_t expansionCount = Expansions.size();
+        for (int32_t I = 0; I < expansionCount; I++) {
+          Value *StoreVal = Builder.CreateExtractValue(CallResult, I);
+          collapse(Reader, Expansions[I], StoreVal, DestPtr);
+        }
+      } else {
+        ResultNode = coerce(Reader, Ty, CallResult);
+      }
+    } else {
+      ResultNode = TheCallInst;
+    }
   }
 
-  *CallNode = Call.getInstruction();
+  *CallNode = TheCallInst;
 
   if (IsJmp) {
-    CallInst *TheCallInst = cast<CallInst>(*CallNode);
-    TheCallInst->setTailCallKind(CallInst::TailCallKind::TCK_MustTail);
+    cast<CallInst>(TheCallInst)
+        ->setTailCallKind(CallInst::TailCallKind::TCK_MustTail);
   }
 
   return ResultNode;
@@ -521,7 +676,7 @@ Function *ABIMethodSignature::createFunction(GenIR &Reader, Module &M) {
   LLVMContext &Context = M.getContext();
   bool HasIndirectResult = Result.getKind() == ABIArgInfo::Indirect;
   uint32_t NumExtraArgs = HasIndirectResult ? 1 : 0;
-  const uint32_t NumArgs = Args.size() + NumExtraArgs;
+  const uint32_t NumArgs = getNumABIArgs() + NumExtraArgs;
   int32_t ResultIndex = -1;
   SmallVector<Type *, 16> ArgumentTypes(NumArgs);
   SmallVector<AttributeSet, 16> Attrs(NumArgs + 1);
@@ -553,22 +708,40 @@ Function *ABIMethodSignature::createFunction(GenIR &Reader, Module &M) {
       I++;
     }
 
-    if (Arg.getKind() == ABIArgInfo::Indirect) {
-      // TODO: byval attribute support
+    switch (Arg.getKind()) {
+    case ABIArgInfo::Indirect:
       ArgumentTypes[I] = Reader.getManagedPointerType(Arg.getType());
-    } else {
-      ArgumentTypes[I] = Arg.getType();
+      break;
 
-      if (Arg.getKind() == ABIArgInfo::ZeroExtend) {
-        ArgAttrs.addAttribute(Attribute::ZExt);
-      } else if (Arg.getKind() == ABIArgInfo::SignExtend) {
-        ArgAttrs.addAttribute(Attribute::SExt);
+    case ABIArgInfo::Expand:
+      for (const ABIArgInfo::Expansion &Exp : Arg.getExpansions()) {
+        ArgumentTypes[I++] = Exp.TheType;
+      }
+      I--;
+      break;
+
+    case ABIArgInfo::ZeroExtend:
+      ArgAttrs.addAttribute(Attribute::ZExt);
+      goto direct;
+
+    case ABIArgInfo::SignExtend:
+      ArgAttrs.addAttribute(Attribute::SExt);
+      goto direct;
+
+    case ABIArgInfo::Direct: {
+    direct:
+      Type *ArgTy = Arg.getType();
+      if (ArgTy->isStructTy()) {
+        ArgTy = ArgTy->getPointerTo();
+        ArgAttrs.addAttribute(Attribute::ByVal);
       }
 
+      ArgumentTypes[I] = ArgTy;
       if (ArgAttrs.hasAttributes()) {
         const unsigned Idx = I + 1; // Add one to accomodate the return attrs.
         Attrs.push_back(AttributeSet::get(Context, Idx, ArgAttrs));
       }
+    }
     }
     Arg.setIndex(I);
 

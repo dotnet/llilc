@@ -3,7 +3,6 @@
 # pass the required WITH_CORECLR variable, so we would fail if we tried.
 
 if ( NOT LLVM_TARGET_IS_CROSSCOMPILE_HOST )
-
   # If we are not building as a part of LLVM, build LLILCJit as an
   # standalone project, using LLVM as an external library:
   if( CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
@@ -16,6 +15,8 @@ if ( NOT LLVM_TARGET_IS_CROSSCOMPILE_HOST )
         cmake_policy(SET CMP0042 NEW)
       endif()
     endif()
+
+    set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
     set(WITH_LLVM "" CACHE PATH "Path to the directory where LLVM was built or installed.")
 
