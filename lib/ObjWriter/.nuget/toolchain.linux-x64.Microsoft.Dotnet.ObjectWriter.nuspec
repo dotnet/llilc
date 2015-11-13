@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package >
   <metadata>
-    <id>Microsoft.DotNet.ObjectWriter</id>
-    <version>1.0.1-prerelease</version>
+    <id>toolchain.linux-x64.Microsoft.DotNet.ObjectWriter</id>
+    <version>1.0.2-prerelease</version>
     <title>Microsoft .NET Object File Generator</title>
     <authors>Microsoft</authors>
     <owners>Microsoft</owners>
