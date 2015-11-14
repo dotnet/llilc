@@ -19,7 +19,7 @@ mkdir %stagedir%
 xcopy /y %buildsubdir%\bin\%buildtype%\llilcjit.dll %stagedir%
 xcopy /S /Q Binaries\Debug\core-clr\* %stagedir%
 xcopy /S /Q /Y %WORKSPACE%\coreclr\bin\Product\Windows_NT.x64.Debug\* %stagedir%
-set command=python %WORKSPACE%\llvm\tools\llilc\test\llilc_run.py  -c %WORKSPACE%\roslyn\%stagedir% -r corerun.exe /v -a %WORKSPACE%\roslyn\%stagedir%\csc.exe -- %%*
+set command=python %WORKSPACE%\llvm\tools\llilc\test\llilc_run.py --eh -c %WORKSPACE%\roslyn\%stagedir% -r corerun.exe /v -a %WORKSPACE%\roslyn\%stagedir%\csc.exe -- %%*
 echo %command% > %stagedir%\runcsc.cmd
 echo exit /b %%ERRORLEVEL%% >> %stagedir%\runcsc.cmd
 
