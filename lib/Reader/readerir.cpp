@@ -580,13 +580,16 @@ void GenIR::cloneFinallyBodies() {
       continue;
     }
 
-    Instruction *InsertBefore;
+    BasicBlock *InsertBlock;
+    BasicBlock::iterator InsertPoint;
     if (auto *Catchpad = dyn_cast<CatchPadInst>(First)) {
-      InsertBefore = &*Catchpad->getNormalDest()->getFirstInsertionPt();
+      InsertBlock = Catchpad->getNormalDest();
+      InsertPoint = InsertBlock->getFirstInsertionPt();
     } else {
-      InsertBefore = First->getNextNode();
+      InsertBlock = &BB;
+      InsertPoint = std::next(First->getIterator());
     }
-    LLVMBuilder->SetInsertPoint(InsertBefore);
+    LLVMBuilder->SetInsertPoint(InsertBlock, InsertPoint);
     Type *VoidType = Type::getVoidTy(*JitContext->LLVMContext);
     const bool MayThrow = false;
     callHelperImpl(CORINFO_HELP_FAIL_FAST, MayThrow, VoidType);
@@ -754,7 +757,8 @@ void GenIR::readerPostPass(bool IsImportOnly) {
 
     // Zero Initialize all the GC-Objects recorded in GcFuncInfo
     assert(AllocaInsertionPoint != nullptr);
-    LLVMBuilder->SetInsertPoint(AllocaInsertionPoint->getNextNode());
+    LLVMBuilder->SetInsertPoint(AllocaInsertionPoint->getParent(),
+                                std::next(AllocaInsertionPoint->getIterator()));
 
     for (Value *EscapingValue : EscapingLocs) {
       if (GcInfo::isGcAllocation(EscapingValue)) {
@@ -810,7 +814,8 @@ void GenIR::insertIRToKeepGenericContextAlive() {
     Value *This = thisObj();
     Instruction *ScratchLocalAlloca = createTemporary(This->getType());
     // Put the store just after the newly added alloca.
-    LLVMBuilder->SetInsertPoint(ScratchLocalAlloca->getNextNode());
+    LLVMBuilder->SetInsertPoint(ScratchLocalAlloca->getParent(),
+                                std::next(ScratchLocalAlloca->getIterator()));
     InsertPoint = makeStoreNonNull(This, ScratchLocalAlloca, false);
     // The scratch local's address is the saved context address.
     ContextLocalAddress = ScratchLocalAlloca;
@@ -847,7 +852,8 @@ void GenIR::insertIRForSecurityObject() {
   Instruction *SecurityObjectAddress = createTemporary(Ty, "SecurityObject");
 
   // Zero out the security object.
-  LLVMBuilder->SetInsertPoint(SecurityObjectAddress->getNextNode());
+  LLVMBuilder->SetInsertPoint(SecurityObjectAddress->getParent(),
+                              std::next(SecurityObjectAddress->getIterator()));
   IRNode *NullValue = loadNull();
   const bool IsVolatile = true;
   makeStoreNonNull(NullValue, SecurityObjectAddress, IsVolatile);
@@ -916,7 +922,8 @@ void GenIR::insertIRForUnmanagedCallFrame() {
       createTemporary(ThreadPointerTy, "ThreadPointer");
 
   // Intialize the call frame
-  LLVMBuilder->SetInsertPoint(ThreadPointerAddress->getNextNode());
+  LLVMBuilder->SetInsertPoint(ThreadPointerAddress->getParent(),
+                              std::next(ThreadPointerAddress->getIterator()));
 
   // Argument 0: &InlinedCallFrame[CallFrameInfo.offsetOfFrameVptr]
   Value *FrameVPtrIndices[] = {
@@ -1283,26 +1290,22 @@ Instruction *GenIR::createTemporary(Type *Ty, const Twine &Name) {
   // the temporary uses can appear anywhere.
   IRBuilder<>::InsertPoint IP = LLVMBuilder->saveIP();
 
-  Instruction *InsertBefore = nullptr;
+  BasicBlock::iterator InsertPoint;
   BasicBlock *Block = nullptr;
   if (AllocaInsertionPoint == nullptr) {
     // There are no local, param or temp allocas in the entry block, so set
     // the insertion point to the first point in the block.
-    InsertBefore = &*EntryBlock->getFirstInsertionPt();
+    InsertPoint = EntryBlock->getFirstInsertionPt();
     Block = EntryBlock;
   } else {
     // There are local, param or temp allocas. TempInsertionPoint refers to
     // the last of them. Set the insertion point to the next instruction since
     // the builder will insert new instructions before the insertion point.
-    InsertBefore = AllocaInsertionPoint->getNextNode();
+    InsertPoint = std::next(AllocaInsertionPoint->getIterator());
     Block = AllocaInsertionPoint->getParent();
   }
 
-  if (InsertBefore == Block->end()) {
-    LLVMBuilder->SetInsertPoint(Block);
-  } else {
-    LLVMBuilder->SetInsertPoint(InsertBefore);
-  }
+  LLVMBuilder->SetInsertPoint(Block, InsertPoint);
 
   AllocaInst *AllocaInst = createAlloca(Ty, nullptr, Name);
   // Update the end of the alloca range.
