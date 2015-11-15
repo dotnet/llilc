@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package >
   <metadata>
-    <id>Microsoft.DotNet.ObjectWriter</id>
+    <id>toolchain.win7-x64.Microsoft.DotNet.ObjectWriter</id>
     <version>1.0.2-prerelease</version>
     <title>Microsoft .NET Object File Generator</title>
     <authors>Microsoft</authors>
@@ -15,6 +15,6 @@
     <copyright>Copyright &#169; Microsoft Corporation</copyright>
   </metadata>
   <files>
-    <file src="..\objwriter.dll" target="objwriter.dll" />
+    <file src="..\objwriter.dll" target="runtimes\win7-x64\native\objwriter.dll" />
   </files>
 </package>

@@ -40,6 +40,12 @@ def run(args):
     print("\nCopying " + args.nuspec + " to " + nugetSpec)
     shutil.copyfile(args.nuspec, nugetSpec)
 
+  if args.json != None:
+    nugetJson = os.path.join(nugetFolder, os.path.basename(args.json))
+    if args.json != nugetJson:
+      print("\nCopying " + args.json + " to " + nugetJson)
+      shutil.copyfile(args.json, nugetJson)
+
   nugetCommand = nugetExe + " pack " + nugetSpec \
                  + " -NoPackageAnalysis -NoDefaultExcludes" \
                  " -OutputDirectory %s" % nugetFolder
@@ -62,6 +68,10 @@ def main(argv):
             default=None,
             help="path to a nuspec file. This file is assumed to be under " \
                  "a child directory (.nuget) of the target by convetion")
+  parser.add_argument("--json", metavar="PATH",
+            default=None,
+            help="path to a json file. This file is used to create " \
+                 "a redirection package")
   args,unknown = parser.parse_known_args(argv)
 
   if unknown:
