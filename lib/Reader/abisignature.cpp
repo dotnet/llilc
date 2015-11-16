@@ -407,7 +407,8 @@ Value *ABICallSignature::emitCall(GenIR &Reader, Value *Target, bool MayThrow,
                                   ArrayRef<Value *> Args,
                                   Value *IndirectionCell, bool IsJmp,
                                   Value **CallNode) const {
-  assert(Target->getType()->isIntegerTy(Reader.TargetPointerSizeInBits));
+  assert(isa<llvm::Function>(Target) ||
+         Target->getType()->isIntegerTy(Reader.TargetPointerSizeInBits));
 
   LLVMContext &Context = *Reader.JitContext->LLVMContext;
 
@@ -580,7 +581,38 @@ Value *ABICallSignature::emitCall(GenIR &Reader, Value *Target, bool MayThrow,
   Type *FunctionTy = FunctionType::get(FuncResultType, ArgumentTypes, IsVarArg);
   Type *FunctionPtrTy = Reader.getUnmanagedPointerType(FunctionTy);
 
-  Target = Builder.CreateIntToPtr(Target, FunctionPtrTy);
+  // If we're passed a function value, we might need to update the type here
+  // to match, since we didn't know the right type when we created the function.
+  if (isa<llvm::Function>(Target)) {
+    llvm::Function *TargetFunc = cast<llvm::Function>(Target);
+    if (TargetFunc->getType() != FunctionPtrTy) {
+      bool MutateType = false;
+      // If we're going to Jmp to the target, don't mutate the type,
+      // since we may have added parameters to satisfy the constraints
+      // of LLVM's musttail that would cause this signature to diverge
+      // from what we'd have come up with in a normal call to the target.
+      if (!IsJmp) {
+        // We shouldn't change our view of function types multiple times,
+        // so only modify the type if it's the placeholder type we installed
+        // in makeDirectCallTargetNode.
+        Type *VoidType = Type::getVoidTy(Context);
+        PointerType *PlaceholderTy =
+            FunctionType::get(VoidType, false)->getPointerTo();
+        MutateType = TargetFunc->getType() == PlaceholderTy;
+      }
+
+      if (MutateType) {
+        // Update the type now that we know the full set of normal
+        // and special arguments.
+        TargetFunc->mutateType(FunctionPtrTy);
+      } else {
+        // Cast to the type we need for this call
+        Target = Builder.CreatePointerCast(Target, FunctionPtrTy);
+      }
+    }
+  } else {
+    Target = Builder.CreateIntToPtr(Target, FunctionPtrTy);
+  }
 
   // The most straightforward way to satisfy the constraints imposed by the GC
   // on threads that are executing unmanaged code is to make the transition to
