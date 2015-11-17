@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package >
   <metadata>
-    <id>toolchain.linux-x64.Microsoft.DotNet.ObjectWriter</id>
+    <id>toolchain.ubuntu.14.04-x64.Microsoft.DotNet.ObjectWriter</id>
     <version>1.0.2-prerelease</version>
     <title>Microsoft .NET Object File Generator</title>
     <authors>Microsoft</authors>
@@ -15,6 +15,6 @@
     <copyright>Copyright &#169; Microsoft Corporation</copyright>
   </metadata>
   <files>
-    <file src="../libobjwriter.so" target="libobjwriter.so" />
+    <file src="../libobjwriter.so" target="runtimes/ubuntu.14.04-x64/native/libobjwriter.so" />
   </files>
 </package>
