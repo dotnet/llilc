@@ -21,6 +21,9 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Object/StackMapParser.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
+#include "llvm/CodeGen/WinEHFuncInfo.h"
+#include "llvm/Target/TargetSubtargetInfo.h"
+#include "llvm/Target/TargetFrameLowering.h"
 
 using namespace llvm;
 
@@ -156,6 +159,8 @@ GcFuncInfo::GcFuncInfo(const llvm::Function *F) {
   GsCkValidRangeStart = 0;
   GsCkValidRangeEnd = 0;
   GenericsContextParamType = GENERIC_CONTEXTPARAM_NONE;
+  PSPSymOffset = 0;
+  HasFunclets = false;
 }
 
 void GcFuncInfo::recordAlloca(const AllocaInst *Alloca) {
@@ -376,6 +381,22 @@ bool GcInfoRecorder::runOnMachineFunction(MachineFunction &MF) {
     }
   }
 
+  // Unlike the other offsets reported to the GC, the PSPSym offset is relative
+  // to Initial-SP (i.e. the value of the stack pointer just after this
+  // method's prolog), NOT Caller-SP.
+  if (WinEHFuncInfo *EHInfo = MF.getWinEHFuncInfo()) {
+    int PSPSymIndex = EHInfo->PSPSymFrameIdx;
+    if (PSPSymIndex != INT_MAX) {
+      GcFuncInfo->HasFunclets = true;
+      const TargetFrameLowering *TFL = MF.getSubtarget().getFrameLowering();
+      // SPReg is an out parameter that we're not using here.
+      unsigned SPReg;
+      int PSPOffset = TFL->getFrameIndexReferenceFromSP(MF, PSPSymIndex, SPReg);
+      assert(PSPOffset >= 0);
+      GcFuncInfo->PSPSymOffset = static_cast<uint32_t>(PSPOffset);
+    }
+  }
+
   return false; // success
 }
 
@@ -404,6 +425,16 @@ void GcInfoEmitter::encodeHeader(const GcFuncInfo *GcFuncInfo) {
     dbgs() << "GcTable for Function: " << F->getName() << "\n";
   }
 #endif // !NDEBUG
+
+  if (GcFuncInfo->HasFunclets) {
+    Encoder.SetWantsReportOnlyLeaf();
+    Encoder.SetPSPSymStackSlot(GcFuncInfo->PSPSymOffset);
+#if !defined(NDEBUG)
+    if (EmitLogs) {
+      dbgs() << "Has funclets, PSP Slot: " << GcFuncInfo->PSPSymOffset << "\n";
+    }
+#endif // !NDEBUG
+  }
 
   // TODO: Set Code Length accurately.
   // https://github.com/dotnet/llilc/issues/679

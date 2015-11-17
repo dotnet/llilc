@@ -115,6 +115,8 @@ public:
   uint32_t GsCkValidRangeStart;
   uint32_t GsCkValidRangeEnd;
   GENERIC_CONTEXTPARAM_TYPE GenericsContextParamType;
+  uint32_t PSPSymOffset;
+  bool HasFunclets;
 
 private:
   // Record a Stack Allocation in the FuncInfo, with appropriate
