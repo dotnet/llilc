@@ -262,6 +262,9 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V1.2-M02\b28158\b28158\*" >
              <Issue>898</Issue>
         </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\structs\systemvbringup\structinregs\*" >
+             <Issue>927</Issue>
+        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\StructABI\StructABI\*" >
              <Issue>927</Issue>
         </ExcludeList>
