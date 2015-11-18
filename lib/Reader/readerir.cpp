@@ -5836,9 +5836,24 @@ bool GenIR::canMakeDirectCall(ReaderCallTargetData *CallTargetData) {
 GlobalVariable *GenIR::getGlobalVariable(uint64_t LookupHandle,
                                          uint64_t ValueHandle, Type *Ty,
                                          StringRef Name, bool IsConstant) {
-  GlobalVariable *&GlobalVar = HandleToGlobalVariableMap[LookupHandle];
-
-  if (GlobalVar == nullptr) {
+  GlobalObject *Object = HandleToGlobalObjectMap[LookupHandle];
+  GlobalVariable *GlobalVar = nullptr;
+  if (Object != nullptr) {
+    // Already have an object, make sure it's the right one.
+    //
+    // We'd like to assert that the name matches, but the same
+    // LookupHandle may go by many names.
+    assert(isa<GlobalVariable>(Object) && "expected variable");
+    // Note after setting a global var V's type to Ty, V->getType() will
+    // return ptr-to-Ty, while V->getValueType() will return Ty.
+    assert(Object->getValueType() == Ty && "type mismatch for global");
+    assert(NameToHandleMap->count(Object->getName()) == 1 &&
+           "missing value for global");
+    assert((*NameToHandleMap)[Object->getName()] == ValueHandle &&
+           "value mismatch for global");
+    GlobalVar = cast<GlobalVariable>(Object);
+  } else {
+    // Create a new global variable
     Constant *Initializer = nullptr;
     const bool IsExternallyInitialized = false;
     const GlobalValue::LinkageTypes LinkageType =
@@ -5850,23 +5865,70 @@ GlobalVariable *GenIR::getGlobalVariable(uint64_t LookupHandle,
                                    LinkageType, Initializer, Name, InsertBefore,
                                    GlobalValue::NotThreadLocal, AddressSpace,
                                    IsExternallyInitialized);
+
+    // Set up or verify the value mapping.
     StringRef ResultName = GlobalVar->getName();
     if (NameToHandleMap->count(ResultName) == 1) {
       assert((*NameToHandleMap)[ResultName] == ValueHandle);
     } else {
       (*NameToHandleMap)[ResultName] = ValueHandle;
     }
+
+    // Cache for future lookups.
+    HandleToGlobalObjectMap[LookupHandle] = GlobalVar;
   }
 
   return GlobalVar;
 }
 
+Function *GenIR::getFunction(uint64_t LookupHandle, uint64_t ValueHandle,
+                             FunctionType *Ty, StringRef Name) {
+  GlobalObject *Object = HandleToGlobalObjectMap[LookupHandle];
+  llvm::Function *F = nullptr;
+  if (Object != nullptr) {
+    // Already have an object, make sure it's the right one.
+    //
+    // We'd like to assert that the name matches, but the same
+    // LookupHandle may go by many names.
+    assert(isa<llvm::Function>(Object) && "expected function");
+    assert(NameToHandleMap->count(Object->getName()) == 1 &&
+           "missing value for function");
+    assert((*NameToHandleMap)[Object->getName()] == ValueHandle &&
+           "value mismatch for function");
+    F = cast<llvm::Function>(Object);
+  } else {
+    // Create a new function.
+    if (LookupHandle == (uint64_t)JitContext->MethodInfo->ftn) {
+      // Self-reference....
+      F = this->Function;
+    } else {
+      const GlobalValue::LinkageTypes LinkageType =
+          GlobalValue::LinkageTypes::ExternalLinkage;
+      F = Function::Create(Ty, LinkageType, Name, JitContext->CurrentModule);
+    }
+
+    // Set up or verify the value mapping.
+    StringRef ResultName = F->getName();
+    if (NameToHandleMap->count(ResultName) == 1) {
+      assert((*NameToHandleMap)[ResultName] == ValueHandle);
+    } else {
+      (*NameToHandleMap)[ResultName] = ValueHandle;
+    }
+
+    // Cache for future lookups.
+    HandleToGlobalObjectMap[LookupHandle] = F;
+  }
+
+  return F;
+}
+
 IRNode *GenIR::makeDirectCallTargetNode(CORINFO_METHOD_HANDLE MethodHandle,
                                         mdToken MethodToken, void *CodeAddr) {
-  uint64_t Handle = (uint64_t)CodeAddr;
-  Type *CodeAddrTy =
-      Type::getIntNTy(*JitContext->LLVMContext, TargetPointerSizeInBits);
-  const bool IsConstant = true;
+  // Use bogus function type for now. We'll fix it up later on when we
+  // know the actual signature.
+  llvm::LLVMContext *LLVMContext = JitContext->LLVMContext;
+  Type *VoidType = Type::getVoidTy(*LLVMContext);
+  FunctionType *FuncTy = FunctionType::get(VoidType, false);
   const char *ModuleName = nullptr;
   const char *MethodName =
       JitContext->JitInfo->getMethodName(MethodHandle, &ModuleName);
@@ -5875,12 +5937,10 @@ IRNode *GenIR::makeDirectCallTargetNode(CORINFO_METHOD_HANDLE MethodHandle,
   raw_string_ostream OS(FullName);
   OS << format("%s.%s(TK_%x)", ModuleName, MethodName, MethodToken);
   OS.flush();
-  GlobalVariable *GlobalVar =
-      getGlobalVariable(Handle, Handle, CodeAddrTy, FullName, IsConstant);
+  llvm::Function *Func =
+      getFunction((uint64_t)MethodHandle, (uint64_t)CodeAddr, FuncTy, FullName);
 
-  Value *CodeAddrValue = LLVMBuilder->CreatePtrToInt(GlobalVar, CodeAddrTy);
-
-  return (IRNode *)CodeAddrValue;
+  return (IRNode *)Func;
 }
 
 // Helper callback used by rdrCall to emit a call to allocate a new MDArray.
@@ -6054,7 +6114,8 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo, bool MayThrow,
                        std::vector<IRNode *> Args, IRNode **CallNode) {
   IRNode *Call = nullptr;
   IRNode *TargetNode = CallTargetInfo->getCallTargetNode();
-  if (TargetNode->getType()->isPointerTy()) {
+  if (!isa<llvm::Function>(TargetNode) &&
+      TargetNode->getType()->isPointerTy()) {
     // According to the ECMA CLI standard, II.14.5, the preferred
     // representation of method pointers is a native int
     // which is an int the size of a pointer.
@@ -8592,6 +8653,20 @@ Type *GenIR::getStackMergeType(Type *Ty1, Type *Ty2, bool IsStruct1,
     if (StructTy1->isLayoutIdentical(StructTy2)) {
       // Arbitrarily pick Ty1 as the resulting type.
       return Ty1;
+    }
+  }
+
+  // If we have (pointers to) two function types, if one or the other is not the
+  // default `void()` placeholder, use it as the resulting type.
+  Type *ReferentType1 = PointerTy1->getPointerElementType();
+  Type *ReferentType2 = PointerTy2->getPointerElementType();
+  if (isa<FunctionType>(ReferentType1) && isa<FunctionType>(ReferentType2)) {
+    Type *VoidType = Type::getVoidTy(LLVMContext);
+    FunctionType *PlaceholderType = FunctionType::get(VoidType, false);
+    if (ReferentType1 != PlaceholderType) {
+      return Ty1;
+    } else {
+      return Ty2;
     }
   }
 
