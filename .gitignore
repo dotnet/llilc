@@ -48,6 +48,7 @@ build/
 
 # Python cache
 __pycache__
+*.pyc
 
 # Visual C++ cache files
 ipch/
