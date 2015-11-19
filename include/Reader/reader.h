@@ -1331,6 +1331,9 @@ public:
   /// True if this method contains the 'localloc' MSIL opcode.
   bool HasLocAlloc;
 
+  /// True if this method takes a local or argument's address.
+  bool HasAddressTaken;
+
   /// The current instruction's IL offset.
   uint32_t CurrInstrOffset;
 

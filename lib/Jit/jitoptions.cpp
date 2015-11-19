@@ -63,6 +63,7 @@ JitOptions::JitOptions(LLILCJitContext &Context) {
 
   // Set optimization level for this JIT invocation.
   OptLevel = queryOptLevel(Context);
+  EnableOptimization = OptLevel != OptLevel::DEBUG_CODE;
 
   // Set whether to use conservative GC.
   UseConservativeGC = queryUseConservativeGC(Context);
@@ -270,7 +271,7 @@ bool JitOptions::queryDoSIMDIntrinsic(LLILCJitContext &Context) {
 }
 
 OptLevel JitOptions::queryOptLevel(LLILCJitContext &Context) {
-  ::OptLevel JitOptLevel = ::OptLevel::INVALID;
+  ::OptLevel JitOptLevel = ::OptLevel::BLENDED_CODE;
   // Currently we only check for the debug flag but this will be extended
   // to account for further opt levels as we move forward.
   if ((Context.Flags & CORJIT_FLG_DEBUG_CODE) != 0) {
