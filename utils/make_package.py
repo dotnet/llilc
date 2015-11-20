@@ -30,10 +30,13 @@ def run(args):
     os.chmod(nugetExe, st.st_mode | stat.S_IEXEC)
 
   if (sys.platform != "win32"):
-    mono = "/usr/bin/mono"
-    if not os.path.exists(mono):
-      raise mono + " is required to run nuget.exe"
-    nugetExe = mono + " " + nugetExe
+    # shutil.which can be used for python 3.3 or later, instead.
+    for mono in ["/usr/bin/mono", "/usr/local/bin/mono"]:
+      if os.path.exists(mono):
+        monopath = mono
+    if not monopath:
+      raise "mono is required to run nuget.exe"
+    nugetExe = monopath + " " + nugetExe
 
   nugetSpec = os.path.join(nugetFolder, os.path.basename(args.nuspec))
   if args.nuspec != nugetSpec:

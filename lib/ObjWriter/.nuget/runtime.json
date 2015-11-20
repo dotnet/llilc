@@ -9,6 +9,11 @@
       "Microsoft.DotNet.ObjectWriter": {
         "toolchain.ubuntu.14.04-x64.Microsoft.DotNet.ObjectWriter": "1.0.2-prerelease"
       }
+    },
+    "osx.10.10-x64": {
+      "Microsoft.DotNet.ObjectWriter": {
+        "toolchain.osx.10.10-x64.Microsoft.DotNet.ObjectWriter": "1.0.2-prerelease"
+      }
     }
   }
 }
