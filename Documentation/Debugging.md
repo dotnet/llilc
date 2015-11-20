@@ -203,24 +203,6 @@ the following environment variables are consulted:
   is executing. It is a semi-colon-separated list of
   directories in which to look for the assemblies.
 
-
-### Code Page Bug
-There is (or was) a bug which caused an exception to be
-thrown if the current code page is not 65001. 
-Since LLILC is not currently able to produce code that
-catches exception, testing must be done in an environment
-where the code page is 65001. This may be set using
-the command
-
-```
-chcp 65001
-```
-
-The LLILC scripts that run tests set this code page, but
-if you are setting up to run LLILC by hand, e.g. so
-you can run a single test, possibly under the control of
-a debugger, then you may need to set this manually.
-
 ## Running A Single Test from the command line
 To run a single test from the command line, use the
 python script llilc_run.py. Assuming your 

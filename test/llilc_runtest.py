@@ -201,7 +201,6 @@ def main(argv):
                 test_env.write('set COMPlus_InsertStatepoints=1\n')
             if (not args.ngen):
               test_env.write('set COMPlus_ZapDisable=1\n')
-            test_env.write('chcp 65001\n')
             if args.dump_level is not None:
                 test_env.write('set COMPlus_DumpLLVMIR=' + args.dump_level + '\n')
             if args.eh:
