@@ -147,7 +147,6 @@ def main(argv):
         log("llilc jit not found at ", jit_path)
         return 1
     
-    RunCommand('chcp 65001')
     os.environ["COMPlus_AltJit"]="*"
     os.environ["COMPlus_AltJitNgen"]="*"
     os.environ["COMPlus_AltJitName"]=jit_name

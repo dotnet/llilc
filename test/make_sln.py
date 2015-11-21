@@ -208,9 +208,6 @@ EndProject
         log("llilc jit not found at ", jit_path)
         return 1
 
-    # Avoid code-page exception.
-    RunCommand('chcp 65001')
-    
     # Compute desired environment.
 
     # First initialize empty values for variables known to LLILC.

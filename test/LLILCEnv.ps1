@@ -877,9 +877,6 @@ function Global:RunTest
   $LLILCTestResult = LLILCTestResult
   $CoreCLRTestTargetBinaries = CoreCLRTestTargetBinaries -Arch $Arch -Build $Build
   
-  # Workaround exception handling issue
-  chcp 65001 | Out-Null
-
   # Reserve the old jit and copy in the specified jit.
   if ($Jit -ne "") {
     #$CoreCLRRuntime = CoreCLRRuntime
