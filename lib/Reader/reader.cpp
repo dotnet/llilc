@@ -2334,6 +2334,7 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
   TokenConstrained = mdTokenNil;
   BranchesToVerify = nullptr;
   HasLocAlloc = false;
+  HasAddressTaken = false;
   NextRegionTransitionOffset = NextOffset = CurrentOffset = 0;
 
   // Keep going through the buffer of bytecodes until we get to the end.
@@ -2566,6 +2567,14 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
     // whether it is safe to recursively tail call.
     case ReaderBaseNS::CEE_LOCALLOC:
       HasLocAlloc = true;
+      break;
+
+    case ReaderBaseNS::CEE_LDLOCA:
+    case ReaderBaseNS::CEE_LDLOCA_S:
+    case ReaderBaseNS::CEE_LDARGA:
+    case ReaderBaseNS::CEE_LDARGA_S:
+    case ReaderBaseNS::CEE_ARGLIST:
+      HasAddressTaken = true;
       break;
 
     case ReaderBaseNS::CEE_CONSTRAINED:

@@ -302,8 +302,7 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
     // calls as possible in that form and use shared delay-load thunks when
     // possible. Setting OptLevel to Default increases the chances of calls via
     // memory and setting CodeModel to Default enables rel32 relocations.
-    if ((Context.Options->OptLevel != ::OptLevel::DEBUG_CODE) || IsNgen ||
-        IsReadyToRun) {
+    if ((Context.Options->EnableOptimization) || IsNgen || IsReadyToRun) {
       OptLevel = CodeGenOpt::Level::Default;
     } else {
       OptLevel = CodeGenOpt::Level::None;

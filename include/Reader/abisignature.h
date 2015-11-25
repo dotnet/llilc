@@ -132,6 +132,14 @@ public:
                         llvm::ArrayRef<llvm::Value *> Args,
                         llvm::Value *IndirectionCell, bool IsJmp,
                         llvm::Value **CallNode) const;
+
+  /// \brief Check for an indirect result or indirect argument.
+  ///
+  /// Determines if expansion of this call might result in references to temps
+  /// that live on the caller's stack.
+  ///
+  /// \returns True if there is an indirect result or indirect argument.
+  bool hasIndirectResultOrArg() const;
 };
 
 /// \brief Encapsulates ABI-specific argument and result passing information for

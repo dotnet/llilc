@@ -567,9 +567,10 @@ public:
   void fgDeleteNodesFromBlock(FlowGraphNode *Block) override;
   IRNode *fgNodeGetEndInsertIRNode(FlowGraphNode *FgNode) override;
 
-  bool commonTailCallChecks(CORINFO_METHOD_HANDLE DeclaredMethod,
-                            CORINFO_METHOD_HANDLE ExactMethod,
-                            bool IsUnmarkedTailCall, bool SuppressMsgs);
+  bool tailCallChecks(CORINFO_METHOD_HANDLE DeclaredMethod,
+                      CORINFO_METHOD_HANDLE ExactMethod,
+                      bool IsUnmarkedTailCall,
+                      bool HasIndirectResultOrArgument);
 
   FlowGraphNode *fgSplitBlock(FlowGraphNode *Block, IRNode *Node) override;
   IRNode *fgMakeBranch(IRNode *LabelNode, IRNode *InsertNode,
@@ -1786,6 +1787,7 @@ private:
                                        ///< LandingPads in this function.
                                        ///< Lazily created/cached.
   bool KeepGenericContextAlive;
+  bool NeedsStackSecurityCheck;
   bool NeedsSecurityObject;
   bool DoneBuildingFlowGraph;
   llvm::BasicBlock *EntryBlock;

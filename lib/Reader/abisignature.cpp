@@ -247,6 +247,20 @@ static Value *getFieldAddress(IRBuilder<> &Builder, Value *Base,
   return Address;
 }
 
+bool ABICallSignature::hasIndirectResultOrArg() const {
+  if (Result.getKind() == ABIArgInfo::Indirect) {
+    return true;
+  }
+
+  for (auto &Arg : Args) {
+    if (Arg.getKind() == ABIArgInfo::Indirect) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 CallSite ABICallSignature::emitUnmanagedCall(GenIR &Reader, Value *Target,
                                              bool MayThrow,
                                              ArrayRef<Value *> Arguments,

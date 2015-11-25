@@ -328,6 +328,7 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   LocalVars.resize(NumLocals);
   LocalVarCorTypes.resize(NumLocals);
   KeepGenericContextAlive = false;
+  NeedsStackSecurityCheck = HasLocAlloc;
   NeedsSecurityObject = false;
   DoneBuildingFlowGraph = false;
   UnreachableContinuationBlock = nullptr;
@@ -337,7 +338,7 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
   // Setup function for emiting debug locations
   DIFile *Unit = DBuilder->createFile(LLILCDebugInfo.TheCU->getFilename(),
                                       LLILCDebugInfo.TheCU->getDirectory());
-  bool IsOptimized = (JitContext->Flags & CORJIT_FLG_DEBUG_CODE) == 0;
+  bool IsOptimized = JitContext->Options->EnableOptimization;
   DIScope *FContext = Unit;
   unsigned LineNo = 0;
   unsigned ScopeLine = ICorDebugInfo::PROLOG;
@@ -452,7 +453,7 @@ void GenIR::readerPrePass(uint8_t *Buffer, uint32_t NumBytes) {
     callMonitorHelper(IsEnter);
   }
 
-  if ((JitFlags & CORJIT_FLG_DEBUG_CODE) && !(JitFlags & CORJIT_FLG_IL_STUB)) {
+  if (!IsOptimized && !(JitFlags & CORJIT_FLG_IL_STUB)) {
     // Get the handle from the EE.
     bool IsIndirect = false;
     void *DebugHandle =
@@ -1055,6 +1056,15 @@ void GenIR::createSym(uint32_t Num, bool IsAuto, CorInfoType CorType,
     if (!doesArgumentHaveHome(Info)) {
       Arguments[Num] = functionArgAt(Function, Info.getIndex());
       return;
+    }
+
+    // Look for unsafe locals (eventually we'll need to keep track
+    // of these and reorder the stack and such).
+    if (LLVMType->isStructTy() && (Class != nullptr)) {
+      uint32_t ClassFlags = getClassAttribs(Class);
+      if (ClassFlags & CORINFO_FLG_UNSAFE_VALUECLASS) {
+        NeedsStackSecurityCheck = true;
+      }
     }
   }
 
@@ -4330,6 +4340,7 @@ IRNode *GenIR::loadLocal(uint32_t LocalOrdinal) {
 }
 
 IRNode *GenIR::loadLocalAddress(uint32_t LocalOrdinal) {
+  assert(HasAddressTaken && "need to detect this in first pass");
   uint32_t LocalIndex = LocalOrdinal;
   return loadManagedAddress(LocalVars[LocalIndex]);
 }
@@ -4364,6 +4375,7 @@ IRNode *GenIR::loadArg(uint32_t ArgOrdinal, bool IsJmp) {
 }
 
 IRNode *GenIR::loadArgAddress(uint32_t ArgOrdinal) {
+  assert(HasAddressTaken && "need to detect this in first pass");
   uint32_t ArgIndex = MethodSignature.getArgIndexForILArg(ArgOrdinal);
   Value *Address = Arguments[ArgIndex];
   return loadManagedAddress(Address);
@@ -6130,14 +6142,6 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo, bool MayThrow,
   const ReaderCallSignature &Signature =
       CallTargetInfo->getCallTargetSignature();
 
-  if (CallTargetInfo->isTailCall()) {
-    // If there's no explicit tail prefix, we can generate
-    // a normal call and all will be well.
-    if (!CallTargetInfo->isUnmarkedTailCall()) {
-      throw NotYetImplementedException("Tail call");
-    }
-  }
-
   CorInfoCallConv CC = Signature.getCallingConvention();
   if (CC == CORINFO_CALLCONV_VARARG) {
     throw NotYetImplementedException("Vararg call");
@@ -6205,6 +6209,21 @@ IRNode *GenIR::genCall(ReaderCallTargetData *CallTargetInfo, bool MayThrow,
   // Add VarArgs cookie to outgoing param list
   if (CC == CORINFO_CALLCONV_VARARG) {
     canonVarargsCall(Call, CallTargetInfo);
+  }
+
+  // If this call is eligible for tail calls, mark it now.
+  if (!IsJmp) {
+    if (CallTargetInfo->isTailCall()) {
+      if (isa<CallInst>(Call)) {
+        CallInst *C = cast<CallInst>(Call);
+        bool canTailCall =
+            tailCallChecks(CallTargetInfo->getMethodHandle(),
+                           CallTargetInfo->getKnownMethodHandle(),
+                           CallTargetInfo->isUnmarkedTailCall(),
+                           ABICallSig.hasIndirectResultOrArg());
+        C->setTailCall(canTailCall);
+      }
+    }
   }
 
   *CallNode = Call;
@@ -6580,46 +6599,54 @@ IRNode *GenIR::convert(Type *Ty, Value *Node, bool SourceIsSigned) {
 // Common to both recursive and non-recursive tail call considerations.
 // The debug messages are only wanted when checking the general case
 // and not for special recursive checks.
-bool GenIR::commonTailCallChecks(CORINFO_METHOD_HANDLE DeclaredMethod,
-                                 CORINFO_METHOD_HANDLE ExactMethod,
-                                 bool IsUnmarkedTailCall, bool SuppressMsgs) {
+bool GenIR::tailCallChecks(CORINFO_METHOD_HANDLE DeclaredMethod,
+                           CORINFO_METHOD_HANDLE ExactMethod,
+                           bool IsUnmarkedTailCall,
+                           bool HasIndirectResultOrArgument) {
   const char *Reason = nullptr;
   bool SuppressReport = false;
   uint32_t MethodCompFlags = getCurrentMethodAttribs();
+
   if (MethodCompFlags & CORINFO_FLG_SYNCH) {
     Reason = "synchronized";
-  }
-#if 0
-  else if (MethodCompFlags & CORINFO_FLG_SECURITYCHECK) {
+  } else if (MethodCompFlags & CORINFO_FLG_SECURITYCHECK) {
     Reason = "caller's declarative security";
-  }
-  else if (IsUnmarkedTailCall && !Optimizing) {
+  } else if (IsUnmarkedTailCall && !JitContext->Options->EnableOptimization) {
     Reason = "not optimizing";
-  }
-#endif
-  else if (IsUnmarkedTailCall && HasLocAlloc) {
+  } else if (IsUnmarkedTailCall && !JitContext->Options->DoTailCallOpt) {
+    Reason = "tail call opt disabled";
+  } else if (IsUnmarkedTailCall && HasLocAlloc) {
     Reason = "localloc";
-  }
-#if 0
-  else if (FSecurityChecksNeeded) {
+  } else if (IsUnmarkedTailCall && HasAddressTaken) {
+    Reason = "address taken local or argument";
+  } else if (NeedsStackSecurityCheck) {
     Reason = "GS";
-  }
-  else if (IsUnmarkedTailCall && hasLocalAddressTaken()) {
-    Reason = "local address taken";
-  }
-#endif
-  else if (!canTailCall(DeclaredMethod, ExactMethod, !IsUnmarkedTailCall)) {
-    Reason = "canTailCall API\n";
+  } else if (!canTailCall(DeclaredMethod, ExactMethod, !IsUnmarkedTailCall)) {
+    Reason = "canTailCall declined";
     SuppressReport = true;
-  } else {
+  } else if (getCurrentMethodHandle() == ExactMethod) {
+    // For tail recursion, also run the canInline check.
+    CorInfoInline inlineCheck =
+        canInline(getCurrentMethodHandle(), ExactMethod, nullptr);
+    if (inlineCheck != CorInfoInline::INLINE_PASS) {
+      Reason = "tail recursion and can't inline";
+    }
+  } else if (HasIndirectResultOrArgument) {
+    Reason = "pass by reference result or argument";
+  }
+
+  // Did we find any reason not to tail call? If not, we're good.
+  if (Reason == nullptr) {
     return true;
   }
 
-  ASSERTNR(Reason != nullptr);
-  if (!SuppressMsgs) {
-    fprintf(stderr, "ALL: %splicit tail call request not honored due to %s\n",
-            IsUnmarkedTailCall ? "im" : "ex", Reason);
+  // Else report the failure to the EE, if needed
+  if (!SuppressReport) {
+    JitContext->JitInfo->reportTailCallDecision(
+        getCurrentMethodHandle(), ExactMethod, !IsUnmarkedTailCall,
+        TAILCALL_FAIL, Reason);
   }
+
   return false;
 }
 
@@ -6703,22 +6730,24 @@ void GenIR::methodNeedsToKeepAliveGenericsContext(bool NewValue) {
 
 void GenIR::nop() {
   // Preserve Nops in debug builds since they may carry unique source positions.
-  if ((JitContext->Flags & CORJIT_FLG_DEBUG_CODE) != 0) {
-    // LLVM has no high-level NOP instruction. Put in a placeholder for now.
-    // This will survive lowering, but we may want to do something else that
-    // is cleaner
-    // TODO: Look into creating a high-level NOP that doesn't get removed and
-    // gets lowered to the right platform-specific encoding
-
-    bool IsVariadic = false;
-    llvm::FunctionType *FTy = llvm::FunctionType::get(
-        llvm::Type::getVoidTy(*(JitContext->LLVMContext)), IsVariadic);
-
-    llvm::InlineAsm *AsmCode = llvm::InlineAsm::get(FTy, "nop", "", true, false,
-                                                    llvm::InlineAsm::AD_Intel);
-    ArrayRef<Value *> Args;
-    LLVMBuilder->CreateCall(AsmCode, Args);
+  if (JitContext->Options->EnableOptimization) {
+    return;
   }
+
+  // LLVM has no high-level NOP instruction. Put in a placeholder for now.
+  // This will survive lowering, but we may want to do something else that
+  // is cleaner
+  // TODO: Look into creating a high-level NOP that doesn't get removed and
+  // gets lowered to the right platform-specific encoding
+
+  bool IsVariadic = false;
+  llvm::FunctionType *FTy = llvm::FunctionType::get(
+      llvm::Type::getVoidTy(*(JitContext->LLVMContext)), IsVariadic);
+
+  llvm::InlineAsm *AsmCode = llvm::InlineAsm::get(FTy, "nop", "", true, false,
+                                                  llvm::InlineAsm::AD_Intel);
+  ArrayRef<Value *> Args;
+  LLVMBuilder->CreateCall(AsmCode, Args);
 }
 
 IRNode *GenIR::unbox(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Object,
@@ -8266,9 +8295,8 @@ bool GenIR::sqrt(IRNode *Argument, IRNode **Result) {
 }
 
 IRNode *GenIR::localAlloc(IRNode *Arg, bool ZeroInit) {
-  // Note that we've seen a localloc in this method, since it has repercussions
-  // on other aspects of code generation.
-  this->HasLocAlloc = true;
+  // We should have noticed this during the first pass.
+  assert(HasLocAlloc && "need to detect localloc early");
 
   // Arg is the number of bytes to allocate. Result must be pointer-aligned.
   const unsigned int Alignment = TargetPointerSizeInBits / 8;
