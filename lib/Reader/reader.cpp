@@ -4917,10 +4917,12 @@ IRNode *ReaderBase::rdrGetDirectCallTarget(CORINFO_METHOD_HANDLE Method,
     Address = CodePointerLookup.constLookup.addr;
     assert(Address != nullptr);
   } else {
+    // Ask for the generic "ANY" entry point. If NeedsNullCheck is true,
+    // we could instead ask for the CORINFO_ACCESS_NONNULL entry,
+    // but then we'd have to generalize the key used to look things
+    // up in the HandleToGlobalObjectMap.
     CORINFO_CONST_LOOKUP AddressInfo;
-    getFunctionEntryPoint(Method, &AddressInfo, NeedsNullCheck
-                                                    ? CORINFO_ACCESS_NONNULL
-                                                    : CORINFO_ACCESS_ANY);
+    getFunctionEntryPoint(Method, &AddressInfo, CORINFO_ACCESS_ANY);
     AccessType = AddressInfo.accessType;
     Address = AddressInfo.addr;
   }
