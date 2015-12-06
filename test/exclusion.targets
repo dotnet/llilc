@@ -1,6 +1,9 @@
 <Project DefaultTargets = "GetListOfTestCmds"
     xmlns="http://schemas.microsoft.com/developer/msbuild/2003" >
     <ItemGroup Condition="'$(XunitTestBinBase)' != ''">
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\tailcall_v4\hijacking\*" >
+             <Issue>13</Issue>
+        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V2.0-RTM\b539509\b539509\*" >
              <Issue>13</Issue>
         </ExcludeList>
@@ -256,7 +259,16 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\refany\_il_dbgseq\*" >
              <Issue>CoreCLR/1440</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Arrays\misc\arrres\*" >
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Arrays\misc\_dbgarrres\*" >
+             <Issue>CoreClr/1373</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Arrays\misc\_relarrres\*" >
+             <Issue>CoreClr/1373</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Arrays\misc\_speed_dbgarrres\*" >
+             <Issue>CoreClr/1373</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Arrays\misc\_speed_relarrres\*" >
              <Issue>CoreClr/1373</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V1.2-M02\b28158\b28158\*" >
@@ -468,7 +480,16 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\casts\iface\iface1\*" >
              <Issue>13</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\explicit\basic\refarg_i1\*" >
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\explicit\basic\_relrefarg_i1\*" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\explicit\basic\_dbgrefarg_i1\*" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\explicit\basic\_opt_relrefarg_i1\*" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\explicit\basic\_opt_dbgrefarg_i1\*" >
              <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\flowgraph\bug619534\ehCodeMotion\*" >
