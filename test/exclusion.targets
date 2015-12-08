@@ -2,7 +2,7 @@
     xmlns="http://schemas.microsoft.com/developer/msbuild/2003" >
     <ItemGroup Condition="'$(XunitTestBinBase)' != ''">
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\tailcall_v4\hijacking\*" >
-             <Issue>13</Issue>
+             <Issue>964</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V2.0-RTM\b539509\b539509\*" >
              <Issue>13</Issue>
@@ -280,6 +280,30 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\StructABI\StructABI\*" >
              <Issue>927</Issue>
         </ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V2.0-Beta2\b268908\b268908\b268908.cmd" >
+	     <Issue>963</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Arrays\misc\_speed_dbgarrres\_speed_dbgarrres.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Arrays\misc\_dbgarrres\_dbgarrres.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Arrays\misc\_speed_relarrres\_speed_relarrres.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Arrays\misc\_relarrres\_relarrres.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\hugeexpr1\hugeexpr1.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V1.2-M01\b10827\b10827\b10827.cmd" >
+	     <Issue>961</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b51875\b51875\b51875.cmd" >
+	     <Issue>962</Issue>
+	</ExcludeList>
     </ItemGroup>
     <ItemGroup Condition="'$(XunitTestBinBase)' != '' and '$(COMPlus_ExecuteHandlers)' == ''">
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\M00\b109721\b109721\*" >
@@ -2400,6 +2424,150 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\gettypetypeof\gettypetypeofmatrix\*" >
              <Issue>13</Issue>
         </ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\rtchecks\overflow\overflow01_add\overflow01_add.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\staticFieldExprUnchecked1_d_loop_try\staticFieldExprUnchecked1_d_loop_try.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\explicit\basic\_dbgrefarg_i1\_dbgrefarg_i1.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\rtchecks\overflow\overflow04_div\overflow04_div.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\staticFieldExprUnchecked1_ro_loop\staticFieldExprUnchecked1_ro_loop.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\unboxnullable_d\unboxnullable_d.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\rtchecks\overflow\overflow03_add\overflow03_add.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M09\b13944\b13944\b13944.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\explicit\basic\_opt_relrefarg_i1\_opt_relrefarg_i1.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\rtchecks\overflow\overflow02_mul\overflow02_mul.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\rtchecks\overflow\overflow02_add\overflow02_add.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\staticFieldExprUnchecked1_r_loop\staticFieldExprUnchecked1_r_loop.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\rtchecks\overflow\overflow03_div\overflow03_div.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\rngchk\ArrayWithThread_o\ArrayWithThread_o.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Boxing\seh\_oreltry_cs\_oreltry_cs.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\explicit\basic\_opt_dbgrefarg_i1\_opt_dbgrefarg_i1.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\cctor\misc\throw_cs_r\throw_cs_r.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\rtchecks\overflow\overflow03_mul\overflow03_mul.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\rtchecks\overflow\overflow03_sub\overflow03_sub.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Boxing\seh\_dbgtry_cs\_dbgtry_cs.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1.2-M02\b00719\b00719\b00719.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\cctor\misc\throw_cs_do\throw_cs_do.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\explicit\basic\_relrefarg_i1\_relrefarg_i1.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\staticFieldExprUnchecked1_r_loop_try\staticFieldExprUnchecked1_r_loop_try.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\unboxnullable_do\unboxnullable_do.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\unboxnullable_ro\unboxnullable_ro.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b83702\b83702\b83702.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\opt\Inline\tests\InlineThrow\InlineThrow.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\rtchecks\overflow\overflow02_div\overflow02_div.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\stringintern\_Simpleb207621\_Simpleb207621.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\unboxnullable_r\unboxnullable_r.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M11-Beta1\b41990\b41990\b41990.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\rtchecks\overflow\overflow04_sub\overflow04_sub.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Boxing\seh\_reltry_cs\_reltry_cs.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\Misc\gettype\gettypetypeofmatrix\gettypetypeofmatrix.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\opt\Inline\tests\Inline_handler\Inline_handler.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\rtchecks\overflow\overflow04_add\overflow04_add.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b80764\b80764\b80764.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\rtchecks\overflow\overflow04_mul\overflow04_mul.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\cctor\misc\throw_cs_ro\throw_cs_ro.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\rtchecks\overflow\overflow01_div\overflow01_div.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\rtchecks\overflow\overflow02_sub\overflow02_sub.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Boxing\seh\_odbgtry_cs\_odbgtry_cs.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\rtchecks\overflow\overflow01_sub\overflow01_sub.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\rtchecks\overflow\overflow01_mul\overflow01_mul.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b71093\b71093\b71093.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\cctor\misc\throw_cs_d\throw_cs_d.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\staticFieldExprUnchecked1_r_try\staticFieldExprUnchecked1_r_try.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
     </ItemGroup>
     <ItemGroup Condition="'$(XunitTestBinBase)' != '' and '$(COMPLUS_INSERTSTATEPOINTS)' != ''">	
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\regress\ddb\113574\113574\*" >
