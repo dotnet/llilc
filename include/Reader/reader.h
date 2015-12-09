@@ -967,6 +967,7 @@ EHRegion *rgnGetParent(EHRegion *EhRegion);
 /// \param Region   The child region to check against its parent
 /// \returns True iff this region is lexically outside its parent
 bool rgnIsOutsideParent(EHRegion *Region);
+EHRegion *rgnGetEnclosingAncestor(EHRegion *Region);
 void rgnSetChildList(EHRegion *EhRegion, EHRegionList *Children);
 EHRegionList *rgnGetChildList(EHRegion *EhRegion);
 EHRegion *rgnGetFilterHandlerRegion(EHRegion *EhRegion);

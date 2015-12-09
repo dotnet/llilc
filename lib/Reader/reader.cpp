@@ -2205,11 +2205,7 @@ EHRegion *ReaderBase::fgSwitchRegion(EHRegion *OldRegion, uint32_t Offset,
     // Exit this region; recursively check parent (may need to exit to ancestor
     // and/or may need to enter sibling/cousin).
     assert(Offset == TransitionOffset && "over-stepped region end");
-    EHRegion *ParentRegion = rgnGetParent(OldRegion);
-    if (rgnIsOutsideParent(OldRegion)) {
-      // We want the enclosing ancestor, not the immediate parent.
-      ParentRegion = rgnGetParent(ParentRegion);
-    }
+    EHRegion *ParentRegion = rgnGetEnclosingAncestor(OldRegion);
     return fgSwitchRegion(ParentRegion, Offset, NextOffset);
   }
 
