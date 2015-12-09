@@ -4,6 +4,15 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\tailcall_v4\hijacking\*" >
              <Issue>964</Issue>
         </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorArrayGet\VectorArrayGet.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorArrayInit\VectorArrayInit.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorCopyToArray\VectorCopyToArray.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V2.0-RTM\b539509\b539509\*" >
              <Issue>13</Issue>
         </ExcludeList>
