@@ -1,16 +1,13 @@
 <Project DefaultTargets = "GetListOfTestCmds"
     xmlns="http://schemas.microsoft.com/developer/msbuild/2003" >
     <ItemGroup Condition="'$(XunitTestBinBase)' != ''">
-        <ExcludeList Include="$(XunitTestBinBase)JIT\jit64\mcc\interop\mcc_i87\mcc_i87.cmd.cmd" >
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\refany\_il_dbglcs\_il_dbglcs.cmd" >
              <Issue>970</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)JIT\Methodical\refany\_il_dbglcs\_il_dbglcs.cmd.cmd" >
-             <Issue>###</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)JIT\Methodical\refany\_il_rellcs\_il_rellcs.cmd.cmd" >
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\refany\_il_rellcs\_il_rellcs.cmd" >
              <Issue>970</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)JIT\IL_Conformance\Old\Conformance_Base\starg_i\starg_i.cmd.cmd" >
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\starg_i\starg_i.cmd" >
              <Issue>970</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\ExcepFilters\mixed3\mixed3\mixed3.cmd" >
@@ -961,6 +958,18 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\localloc\ehverify\eh13_small\eh13_small.cmd" >
              <Issue>970</Issue>
         </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i00\mcc_i00.cmd" >
+             <Issue>970</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i01\mcc_i01.cmd" >
+             <Issue>970</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i02\mcc_i02.cmd" >
+             <Issue>970</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i03\mcc_i03.cmd" >
+             <Issue>970</Issue>
+        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i04\mcc_i04.cmd" >
              <Issue>970</Issue>
         </ExcludeList>
@@ -985,6 +994,18 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i17\mcc_i17.cmd" >
              <Issue>970</Issue>
         </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i30\mcc_i30.cmd" >
+             <Issue>970</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i31\mcc_i31.cmd" >
+             <Issue>970</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i32\mcc_i32.cmd" >
+             <Issue>970</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i33\mcc_i33.cmd" >
+             <Issue>970</Issue>
+        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i34\mcc_i34.cmd" >
              <Issue>970</Issue>
         </ExcludeList>
@@ -995,6 +1016,18 @@
              <Issue>970</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i37\mcc_i37.cmd" >
+             <Issue>970</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i50\mcc_i50.cmd" >
+             <Issue>970</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i51\mcc_i51.cmd" >
+             <Issue>970</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i52\mcc_i52.cmd" >
+             <Issue>970</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i53\mcc_i53.cmd" >
              <Issue>970</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i54\mcc_i54.cmd" >
@@ -1009,6 +1042,18 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i57\mcc_i57.cmd" >
              <Issue>970</Issue>
         </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i60\mcc_i60.cmd" >
+             <Issue>970</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i61\mcc_i61.cmd" >
+             <Issue>970</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i62\mcc_i62.cmd" >
+             <Issue>970</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i63\mcc_i63.cmd" >
+             <Issue>970</Issue>
+        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i64\mcc_i64.cmd" >
              <Issue>970</Issue>
         </ExcludeList>
@@ -1021,6 +1066,18 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i67\mcc_i67.cmd" >
              <Issue>970</Issue>
         </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i70\mcc_i70.cmd" >
+             <Issue>970</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i71\mcc_i71.cmd" >
+             <Issue>970</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i72\mcc_i72.cmd" >
+             <Issue>970</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i73\mcc_i73.cmd" >
+             <Issue>970</Issue>
+        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i74\mcc_i74.cmd" >
              <Issue>970</Issue>
         </ExcludeList>
@@ -1031,6 +1088,21 @@
              <Issue>970</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i77\mcc_i77.cmd" >
+             <Issue>970</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i80\mcc_i80.cmd" >
+             <Issue>970</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i81\mcc_i81.cmd" >
+             <Issue>970</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i82\mcc_i82.cmd" >
+             <Issue>970</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i83\mcc_i83.cmd" >
+             <Issue>970</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i87\mcc_i87.cmd" >
              <Issue>970</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\regress\ddb\87766\ddb87766\ddb87766.cmd" >
