@@ -193,6 +193,7 @@ def main(argv):
             test_env.write('set COMPlus_AltJit=*\n')
             test_env.write('set COMPlus_AltJitNgen=*\n')
             test_env.write('set COMPlus_AltJitName=' + time_stamped_jit_name + '\n')
+            test_env.write('set COMPlus_NoGuiOnAssert=1\n')
             if (args.precise_gc):
                 test_env.write('set COMPlus_InsertStatepoints=1\n')
             else:

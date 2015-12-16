@@ -1036,6 +1036,18 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i07\mcc_i07.cmd" >
              <Issue>970</Issue>
         </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i10\mcc_i10.cmd" >
+             <Issue>CoreClr/1440</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i11\mcc_i11.cmd" >
+             <Issue>CoreClr/1440</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i12\mcc_i12.cmd" >
+             <Issue>CoreClr/1440</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i13\mcc_i13.cmd" >
+             <Issue>CoreClr/1440</Issue>
+        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\mcc\interop\mcc_i14\mcc_i14.cmd" >
              <Issue>970</Issue>
         </ExcludeList>
