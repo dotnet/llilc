@@ -1,6 +1,24 @@
 <Project DefaultTargets = "GetListOfTestCmds"
     xmlns="http://schemas.microsoft.com/developer/msbuild/2003" >
     <ItemGroup Condition="'$(XunitTestBinBase)' != ''">
+       <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\tailcall_v4\stk_bndchk\stk_bndchk.cmd" >
+            <Issue>970</Issue>
+       </ExcludeList>
+       <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\stringintern\_XModuletest4-xmod\_XModuletest4-xmod.cmd" >
+            <Issue>970</Issue>
+       </ExcludeList>
+       <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\value_do\value_do.cmd" >
+            <Issue>970</Issue>
+       </ExcludeList>
+       <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\value_r\value_r.cmd" >
+            <Issue>970</Issue>
+       </ExcludeList>
+       <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\value_ro\value_ro.cmd" >
+            <Issue>970</Issue>
+       </ExcludeList>
+       <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\value_d\value_d.cmd" >
+            <Issue>970</Issue>
+       </ExcludeList>
        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\eh\deadcode\deadcodeincatch_d\deadcodeincatch_d.cmd" >
             <Issue>970</Issue>
        </ExcludeList>
