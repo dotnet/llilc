@@ -21,7 +21,7 @@
 #   -x [EXTRA [EXTRA ...]], --extra [EXTRA [EXTRA ...]]
 #                         list of extra COMPlus settings. Each item is
 #                         Name=Value, where Name does not have the
-#                         COMPlus_AltJit prefix.
+#                         COMPlus_ prefix.
 #   -n, --ngen            use ngened mscorlib
 #   -p, --precise-gc      test with precise gc
 #   -v, --verbose         echo commands
@@ -99,7 +99,7 @@ def main(argv):
                         help='the dump level: summary, or verbose')
     parser.add_argument('-x', '--extra', type=str, default=[], nargs='*',
                         help='''list of extra COMPlus settings. Each item is Name=Value, where
-                                Name does not have the COMPlus_AltJit prefix.
+                                Name does not have the COMPlus_ prefix.
                              ''')
     parser.add_argument('-n', '--ngen', help='use ngened mscorlib', default=False, action="store_true")
     parser.add_argument('-p', '--precise-gc', help='test with precise gc', default=False, action="store_true")
@@ -150,6 +150,7 @@ def main(argv):
     os.environ["COMPlus_AltJit"]="*"
     os.environ["COMPlus_AltJitNgen"]="*"
     os.environ["COMPlus_AltJitName"]=jit_name
+    os.environ["COMPlus_NoGuiOnAssert"]="1"
     if (args.precise_gc):
         os.environ["COMPlus_InsertStatepoints"]="1"
     else:
@@ -162,7 +163,7 @@ def main(argv):
         os.environ["COMPlus_ExecuteHandlers"]="1"
     for arg in args.extra:
         pair = UnquoteArg(arg).split('=', 1)
-        name = 'COMPLUS_AltJit' + pair[0]
+        name = 'COMPLUS_' + pair[0]
         value = pair[1]
         os.environ[name] = value
     os.environ["CORE_ROOT"]=args.coreclr_runtime_path
