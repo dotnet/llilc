@@ -1,256 +1,70 @@
 <Project DefaultTargets = "GetListOfTestCmds"
     xmlns="http://schemas.microsoft.com/developer/msbuild/2003" >
     <ItemGroup Condition="'$(XunitTestBinBase)' != ''">
-       <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\tailcall_v4\stk_bndchk\stk_bndchk.cmd" >
-            <Issue>970</Issue>
-       </ExcludeList>
-       <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\stringintern\_XModuletest4-xmod\_XModuletest4-xmod.cmd" >
-            <Issue>970</Issue>
-       </ExcludeList>
-       <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\value_do\value_do.cmd" >
-            <Issue>970</Issue>
-       </ExcludeList>
-       <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\value_r\value_r.cmd" >
-            <Issue>970</Issue>
-       </ExcludeList>
-       <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\value_ro\value_ro.cmd" >
-            <Issue>970</Issue>
-       </ExcludeList>
-       <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\value_d\value_d.cmd" >
-            <Issue>970</Issue>
-       </ExcludeList>
-       <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\eh\deadcode\deadcodeincatch_d\deadcodeincatch_d.cmd" >
-            <Issue>970</Issue>
-       </ExcludeList>
-       <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\eh\deadcode\deadcodeincatch_r\deadcodeincatch_r.cmd" >
-            <Issue>970</Issue>
-       </ExcludeList>
-       <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b37215\b37215\b37215.cmd" >
-            <Issue>970</Issue>
-       </ExcludeList>
-       <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M11-Beta1\b33928\b33928\b33928.cmd" >
-            <Issue>970</Issue>
-       </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\hfa\main\testE\hfa_sd2E_r\hfa_sd2E_r.cmd" >
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M11-Beta1\b33928\b33928\b33928.cmd" >
              <Issue>970</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b37215\b37215\b37215.cmd" >
+             <Issue>970</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\hfa\main\testE\hfa_sd2E_r\hfa_sd2E_r.cmd" >
+             <Issue>982</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\hfa\main\testE\hfa_nf2E_d\hfa_nf2E_d.cmd" >
-             <Issue>970</Issue>
+             <Issue>982</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\hfa\main\testE\hfa_sf2E_d\hfa_sf2E_d.cmd" >
-             <Issue>970</Issue>
+             <Issue>982</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\hfa\main\testE\hfa_nd2E_r\hfa_nd2E_r.cmd" >
-             <Issue>970</Issue>
+             <Issue>982</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\hfa\main\testE\hfa_nd2E_d\hfa_nd2E_d.cmd" >
-             <Issue>970</Issue>
+             <Issue>982</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\hfa\main\testE\hfa_sf2E_r\hfa_sf2E_r.cmd" >
-             <Issue>970</Issue>
+             <Issue>982</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\hfa\main\testE\hfa_sd2E_d\hfa_sd2E_d.cmd" >
-             <Issue>970</Issue>
+             <Issue>982</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\hfa\main\testE\hfa_nf2E_r\hfa_nf2E_r.cmd" >
-             <Issue>970</Issue>
+             <Issue>982</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\refany\_il_dbglcs\_il_dbglcs.cmd" >
-             <Issue>970</Issue>
+             <Issue>983</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\refany\_il_rellcs\_il_rellcs.cmd" >
-             <Issue>970</Issue>
+             <Issue>983</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\starg_i\starg_i.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\ExcepFilters\mixed3\mixed3\mixed3.cmd" >
-             <Issue>970</Issue>
+             <Issue>984</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\pinvoke\calli_excep\calli_excep.cmd" >
-             <Issue>970</Issue>
+             <Issue>13</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Base\add_ovf\add_ovf.cmd" >
-             <Issue>970</Issue>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V2.0-Beta2\b426654\b426654\*" >
+             <Issue>13</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Base\ckfinite\ckfinite.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Base\conv_ovf\conv_ovf.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Base\mul_ovf\mul_ovf.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Base\sub_ovf\sub_ovf.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\add_ovf_i1\add_ovf_i1.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\add_ovf_i2\add_ovf_i2.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\add_ovf_i4\add_ovf_i4.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\add_ovf_i8\add_ovf_i8.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\add_ovf_u1\add_ovf_u1.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\add_ovf_u2\add_ovf_u2.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\add_ovf_u4\add_ovf_u4.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\add_ovf_u8\add_ovf_u8.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\add_r4\add_r4.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\add_r8\add_r8.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\ckfinite_r4\ckfinite_r4.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\ckfinite_r8\ckfinite_r8.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\conv_ovf_i4_i1\conv_ovf_i4_i1.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\conv_ovf_i4_i2\conv_ovf_i4_i2.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\conv_ovf_i4_u4\conv_ovf_i4_u4.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\conv_ovf_i8_i4\conv_ovf_i8_i4.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\conv_ovf_i8_u8\conv_ovf_i8_u8.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\conv_ovf_r8_i4\conv_ovf_r8_i4.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\conv_ovf_r8_i8\conv_ovf_r8_i8.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\conv_ovf_r8_i\conv_ovf_r8_i.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\conv_ovf_u4_u1\conv_ovf_u4_u1.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\conv_ovf_u4_u2\conv_ovf_u4_u2.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\conv_ovf_u8_u4\conv_ovf_u8_u4.cmd" >
-             <Issue>970</Issue>
+        <ExcludeList Include="$(XunitTestBinBase)JIT\Methodical\eh\finallyexec\nonlocalexittonestedsibling_r\nonlocalexittonestedsibling_r.cmd" >
+             <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\div_i4\div_i4.cmd" >
-             <Issue>970</Issue>
+             <Issue>985</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\div_i8\div_i8.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\div_r4\div_r4.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\div_r8\div_r8.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\div_u4\div_u4.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\div_u8\div_u8.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\mul_ovf_i1\mul_ovf_i1.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\mul_ovf_i2\mul_ovf_i2.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\mul_ovf_i4\mul_ovf_i4.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\mul_ovf_i8\mul_ovf_i8.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\mul_ovf_u1\mul_ovf_u1.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\mul_ovf_u2\mul_ovf_u2.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\mul_ovf_u4\mul_ovf_u4.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\mul_ovf_u8\mul_ovf_u8.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\mul_r4\mul_r4.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\mul_r8\mul_r8.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\neg_r4\neg_r4.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\neg_r8\neg_r8.cmd" >
-             <Issue>970</Issue>
+             <Issue>985</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\rem_i4\rem_i4.cmd" >
-             <Issue>970</Issue>
+             <Issue>985</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\rem_i8\rem_i8.cmd" >
-             <Issue>970</Issue>
+             <Issue>985</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\rem_r8\rem_r8.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\rem_u4\rem_u4.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\rem_u8\rem_u8.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\sub_ovf_i1\sub_ovf_i1.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\sub_ovf_i2\sub_ovf_i2.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\sub_ovf_i4\sub_ovf_i4.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\sub_ovf_i8\sub_ovf_i8.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\sub_ovf_u1\sub_ovf_u1.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\sub_ovf_u2\sub_ovf_u2.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\sub_ovf_u4\sub_ovf_u4.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\sub_ovf_u8\sub_ovf_u8.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\sub_r4\sub_r4.cmd" >
-             <Issue>970</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\sub_r8\sub_r8.cmd" >
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\rtchecks\overflow\overflow03_div\overflow03_div.cmd" >
+	     <Issue>985</Issue>
+	</ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\ckfinite_r4\ckfinite_r4.cmd" >
              <Issue>970</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\directed\ldloca_s_r4\ldloca_s_r4.cmd" >
@@ -1411,6 +1225,15 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V2.0-Beta2\b409748\b409748\*" >
              <Issue>CoreClr/1440</Issue>
         </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Coverage\arglist_pos\arglist_pos\*" >
+             <Issue>CoreClr/1440</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M09.5-PDC\b26324\b26324a\*" >
+             <Issue>CoreClr/1440</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M09.5-PDC\b26324\b26324b\*" >
+             <Issue>CoreClr/1440</Issue>
+        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\HugeArray1\*" >
              <Issue>794</Issue>
         </ExcludeList>
@@ -1427,16 +1250,16 @@
              <Issue>640</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\PREFIX\unaligned\1\arglist\*" >
-             <Issue>52</Issue>
+             <Issue>CoreCLR/1440</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\PREFIX\unaligned\2\arglist\*" >
-             <Issue>52</Issue>
+             <Issue>CoreCLR/1440</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\PREFIX\unaligned\4\arglist\*" >
-             <Issue>52</Issue>
+             <Issue>CoreCLR/1440</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\PREFIX\volatile\1\arglist\*" >
-             <Issue>52</Issue>
+             <Issue>CoreCLR/1440</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\Interop\NativeCallable\NativeCallableTest\*" >
              <Issue>860</Issue>
@@ -1671,6 +1494,198 @@
 	</ExcludeList>
     </ItemGroup>
     <ItemGroup Condition="'$(XunitTestBinBase)' != '' and '$(COMPlus_ExecuteHandlers)' == ''">
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\stringintern\_XModuletest4-xmod\_XModuletest4-xmod.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\value_do\value_do.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\value_r\value_r.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\value_ro\value_ro.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\value_d\value_d.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\eh\deadcode\deadcodeincatch_d\deadcodeincatch_d.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\eh\deadcode\deadcodeincatch_r\deadcodeincatch_r.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\ExcepFilters\mixed3\mixed3\mixed3.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Base\add_ovf\add_ovf.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Base\ckfinite\ckfinite.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Base\conv_ovf\conv_ovf.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Base\mul_ovf\mul_ovf.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Base\sub_ovf\sub_ovf.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\add_ovf_i1\add_ovf_i1.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\add_ovf_i2\add_ovf_i2.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\add_ovf_i4\add_ovf_i4.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\add_ovf_i8\add_ovf_i8.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\add_ovf_u1\add_ovf_u1.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\add_ovf_u2\add_ovf_u2.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\add_ovf_u4\add_ovf_u4.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\add_ovf_u8\add_ovf_u8.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\add_r4\add_r4.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\add_r8\add_r8.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\ckfinite_r8\ckfinite_r8.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\conv_ovf_i4_i1\conv_ovf_i4_i1.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\conv_ovf_i4_i2\conv_ovf_i4_i2.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\conv_ovf_i4_u4\conv_ovf_i4_u4.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\conv_ovf_i8_i4\conv_ovf_i8_i4.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\conv_ovf_i8_u8\conv_ovf_i8_u8.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\conv_ovf_r8_i4\conv_ovf_r8_i4.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\conv_ovf_r8_i8\conv_ovf_r8_i8.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\conv_ovf_r8_i\conv_ovf_r8_i.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\conv_ovf_u4_u1\conv_ovf_u4_u1.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\conv_ovf_u4_u2\conv_ovf_u4_u2.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\conv_ovf_u8_u4\conv_ovf_u8_u4.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\div_r4\div_r4.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\div_r8\div_r8.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\div_u4\div_u4.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\div_u8\div_u8.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\mul_ovf_i1\mul_ovf_i1.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\mul_ovf_i2\mul_ovf_i2.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\mul_ovf_i4\mul_ovf_i4.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\mul_ovf_i8\mul_ovf_i8.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\mul_ovf_u1\mul_ovf_u1.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\mul_ovf_u2\mul_ovf_u2.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\mul_ovf_u4\mul_ovf_u4.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\mul_ovf_u8\mul_ovf_u8.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\mul_r4\mul_r4.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\mul_r8\mul_r8.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\neg_r4\neg_r4.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\neg_r8\neg_r8.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\rem_r8\rem_r8.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\rem_u4\rem_u4.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\rem_u8\rem_u8.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\sub_ovf_i1\sub_ovf_i1.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\sub_ovf_i2\sub_ovf_i2.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\sub_ovf_i4\sub_ovf_i4.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\sub_ovf_i8\sub_ovf_i8.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\sub_ovf_u1\sub_ovf_u1.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\sub_ovf_u2\sub_ovf_u2.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\sub_ovf_u4\sub_ovf_u4.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\sub_ovf_u8\sub_ovf_u8.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\sub_r4\sub_r4.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\IL_Conformance\Old\Conformance_Base\sub_r8\sub_r8.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M12-Beta2\b66533\b66533\*" >
              <Issue>13</Issue>
         </ExcludeList>
@@ -3880,9 +3895,6 @@
 	     <Issue>13</Issue>
 	</ExcludeList>
 	<ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\staticFieldExprUnchecked1_r_loop\staticFieldExprUnchecked1_r_loop.cmd" >
-	     <Issue>13</Issue>
-	</ExcludeList>
-	<ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\rtchecks\overflow\overflow03_div\overflow03_div.cmd" >
 	     <Issue>13</Issue>
 	</ExcludeList>
 	<ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\rngchk\ArrayWithThread_o\ArrayWithThread_o.cmd" >
