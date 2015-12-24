@@ -1225,7 +1225,7 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V2.0-Beta2\b409748\b409748\*" >
              <Issue>CoreClr/1440</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Coverage\arglist_pos\arglist_pos\*" >
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\Coverage\arglist_pos\arglist_pos.cmd" >
              <Issue>CoreClr/1440</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M09.5-PDC\b26324\b26324a\*" >
