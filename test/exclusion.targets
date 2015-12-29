@@ -1147,6 +1147,18 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\CodeGenBringUpTests\localloc\*" >
              <Issue>13</Issue>
         </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\StrAccess\straccess3_cs_r\*" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\StrAccess\straccess3_cs_ro\*" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\StrAccess\straccess3_cs_do\*" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\casts\SEH\_relthrow\*" >
+             <Issue>13</Issue>
+        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\v4\dev10_804810\dev10_804810\*" >
              <Issue>636</Issue>
         </ExcludeList>
@@ -1753,12 +1765,6 @@
              <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\M00\b112982\b112982\*" >
-             <Issue>13</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\StrAccess\straccess3_cs_ro\*" >
-             <Issue>13</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\StrAccess\straccess3_cs_do\*" >
              <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\MDArray\basics\structarr_cs_do\*" >
@@ -3432,9 +3438,6 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\int64\signed\_il_rels_ldsfld_mulovf\*" >
              <Issue>13</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\casts\SEH\_relthrow\*" >
-             <Issue>13</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\int64\unsigned\_reladdsub\*" >
              <Issue>13</Issue>
         </ExcludeList>
@@ -3757,9 +3760,6 @@
              <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\casts\iface\_il_dbgiface2\*" >
-             <Issue>13</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\StrAccess\straccess3_cs_r\*" >
              <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\int64\unsigned\_il_dbgldfld_mulovf\*" >
