@@ -78,7 +78,26 @@ bool CorDisasm::setTarget() {
 
   switch (TargetArch) {
   case Target_Host:
+    switch (TheTriple.getArch()) {
+    case Triple::x86:
+      TargetArch = Target_X86;
+      break;
+    case Triple::x86_64:
+      TargetArch = Target_X64;
+      break;
+    case Triple::thumb:
+      TargetArch = Target_Thumb;
+      break;
+    case Triple::aarch64:
+      TargetArch = Target_Arm64;
+      break;
+    default:
+      errs() << "Unsupported Architecture"
+             << Triple::getArchTypeName(TheTriple.getArch());
+      return false;
+    }
     break;
+
   case Target_Thumb:
     TheTriple.setArch(Triple::thumb);
     break;
@@ -89,6 +108,8 @@ bool CorDisasm::setTarget() {
   case Target_X64:
     TheTriple.setArch(Triple::x86_64);
   }
+
+  assert(TargetArch != Target_Host && "Target Expected to be specific");
 
   // Get the target specific parser.
   string Error;
@@ -173,24 +194,81 @@ bool CorDisasm::init() {
 size_t CorDisasm::disasmInstruction(size_t Address, const uint8_t *Bytes,
                                     size_t Maxlength, bool PrintAsm) const {
   uint64_t Size;
+  uint64_t TotalSize = 0;
   MCInst Inst;
   raw_ostream &CommentStream = nulls();
   raw_ostream &DebugOut = nulls();
   ArrayRef<uint8_t> ByteArray(Bytes, Maxlength);
+  bool ContinueDisasm;
 
-  bool success = Disassembler->getInstruction(Inst, Size, ByteArray, Address,
-                                              DebugOut, CommentStream);
+  // On X86, LLVM disassembler does not handle instruction prefixes
+  // correctly -- please see LLVM bug 7709.
+  // The disassembler reports instruction prefixes separate from the
+  // actual instruction. In order to work-around this problem, we
+  // continue decoding  past the prefix bytes.
+  //
+  // LLVM's MCInst does not expose Opcode enumerations by design.
+  // The following enumeration is a hack to use X86 opcode numbers,
+  // until bug 7709 is fixed.
 
-  if (!success) {
-    errs() << "Invalid instruction encoding\n";
-    return 0;
-  }
+  enum X86Prefix {
+    CS_PREFIX = 645,
+    DS_PREFIX = 768,
+    ES_PREFIX = 780,
+    FS_PREFIX = 843,
+    GS_PREFIX = 893,
+    SS_PREFIX = 2775,
+    DATA16_PREFIX = 694,
+    LOCK_PREFIX = 1333,
+    REPNE_PREFIX = 2433,
+    REP_PREFIX = 2441,
+    REX64_PREFIX = 2455,
+    XACQUIRE_PREFIX = 14626,
+    XRELEASE_PREFIX = 14699
+  };
 
-  if (PrintAsm) {
-    printInstruction(&Inst, Address, Size, ByteArray.slice(0, Size));
-  }
+  do {
 
-  return Size;
+    bool success = Disassembler->getInstruction(Inst, Size, ByteArray, Address,
+                                                DebugOut, CommentStream);
+    TotalSize += Size;
+
+    if (!success) {
+      errs() << "Invalid instruction encoding\n";
+      return 0;
+    }
+
+    if (PrintAsm) {
+      printInstruction(&Inst, Address, Size, ByteArray.slice(0, Size));
+    }
+
+    ContinueDisasm = false;
+    if ((TargetArch == Target_X86) || (TargetArch == Target_X64)) {
+      switch (Inst.getOpcode()) {
+      case CS_PREFIX:
+      case DS_PREFIX:
+      case ES_PREFIX:
+      case FS_PREFIX:
+      case GS_PREFIX:
+      case SS_PREFIX:
+      case DATA16_PREFIX:
+      case LOCK_PREFIX:
+      case REPNE_PREFIX:
+      case REP_PREFIX:
+      case REX64_PREFIX:
+      case XACQUIRE_PREFIX:
+      case XRELEASE_PREFIX:
+        ContinueDisasm = true;
+        Address += Size;
+        ByteArray = ByteArray.slice(Size);
+        break;
+      default:
+        break;
+      }
+    }
+  } while (ContinueDisasm);
+
+  return TotalSize;
 }
 
 void CorDisasm::printInstruction(const MCInst *MI, size_t Address,
