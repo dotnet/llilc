@@ -533,18 +533,14 @@ public:
 
   void fgEnterRegion(EHRegion *Region) override;
 
-  /// Make an EH pad suitable as an unwind label for code in the try region
-  /// protected by the given handler, and any dispatch code needed after the
-  /// EH pad to transfer control to the handler code.
+  /// Make an EH pad suitable as the head of the given handler.
   ///
-  /// \param Handler           Catch/Finally/Fault/Filter region we need to
-  ///                          build an EH pad for.
-  /// \param EndPad [in/out]   CatchEndPad/CleanupEndPad that should be the
-  ///                          unwind target of code in the handler body.
-  /// \param NextPad           Next outer (or successor catch) EH region.
+  /// \param Handler       Catch/Finally/Fault/Filter region we need to
+  ///                      build an EH pad for.
+  /// \param EnclosingPad  EH pad representing the handler enclosing this one
+  ///                      if there is one, ConstantTokenNone otherwise.
   /// \returns A new CatchPad/CleanupPad in a populated EH pad block.
-  llvm::Instruction *createEHPad(EHRegion *Handler, llvm::Instruction *&EndPad,
-                                 llvm::Instruction *NextPad);
+  llvm::Instruction *createEHPad(EHRegion *Handler, llvm::Value *EnclosingPad);
 
   IRNode *fgNodeFindStartLabel(FlowGraphNode *Block) override;
 
