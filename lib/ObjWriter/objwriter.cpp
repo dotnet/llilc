@@ -207,6 +207,7 @@ bool ObjectWriter::init(llvm::StringRef ObjectFilePath) {
 
   MS = TheTarget->createMCObjectStreamer(TheTriple, *MC, *MAB, *OS, MCE, *MSTI,
                                          RelaxAll,
+                                         /*IncrementalLinkerCompatible*/ true,
                                          /*DWARFMustBeAtTheEnd*/ false);
   if (!MS)
     return error("no object streamer for target " + TripleName);
