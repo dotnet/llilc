@@ -30,7 +30,7 @@
 #define DllIface EXTERN_C __declspec(dllimport)
 #endif // defined(DllInterfaceExporter)
 #else
-#define DllIface
+#define DllIface EXTERN_C
 #endif // defined(_MSC_VER)
 
 enum TargetArch {

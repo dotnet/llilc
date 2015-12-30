@@ -54,6 +54,7 @@ public:
 
 private:
   bool setTarget();
+  bool verifyPrefixDecoding();
 
   TargetArch TargetArch;
   string TargetTriple;
@@ -67,7 +68,44 @@ private:
   unique_ptr<MCContext> Ctx;
   unique_ptr<MCDisassembler> Disassembler;
   unique_ptr<MCInstPrinter> IP;
+
+  // LLVM's MCInst does not expose Opcode enumerations by design.
+  // The following enumeration is a hack to use X86 opcode numbers,
+  // until bug 7709 is fixed.
+  struct OpcodeMap {
+    const char *Name;
+    uint8_t MachineOpcode;
+    bool IsLlvmInstruction; // Does LLVM treat this opcode
+                            // as a separate instruction?
+  };
+
+  static const int X86NumPrefixes = 19;
+  static const OpcodeMap X86Prefix[X86NumPrefixes];
 };
+
+// clang-format off
+CorDisasm::OpcodeMap const CorDisasm::X86Prefix[CorDisasm::X86NumPrefixes] = {
+  { "LOCK",           0xF0, true },
+  { "REPNE/XACQUIRE", 0xF2, true }, // Both the (TSX/normal) instrs 
+  { "REP/XRELEASE",   0xF3, true }, // have the same byte encoding 
+  { "OP_OVR",         0x66, true },
+  { "CS_OVR",         0x2E, true },
+  { "DS_OVR",         0x3E, true },
+  { "ES_OVR",         0x26, true },
+  { "FS_OVR",         0x64, true },
+  { "GS_OVR",         0x65, true },
+  { "SS_OVR",         0x36, true },
+  { "ADDR_OVR",       0x67, false },
+  { "REX64W",         0x48, false },
+  { "REX64WB",        0x49, false },
+  { "REX64WX",        0x4A, false },
+  { "REX64WXB",       0x4B, false },
+  { "REX64WR",        0x4C, false },
+  { "REX64WRB",       0x4D, false },
+  { "REX64WRX",       0x4E, false },
+  { "REX64WRXB",      0x4F, false }
+};
+// clang-format on
 
 bool CorDisasm::setTarget() {
   // Figure out the target triple.
@@ -78,7 +116,26 @@ bool CorDisasm::setTarget() {
 
   switch (TargetArch) {
   case Target_Host:
+    switch (TheTriple.getArch()) {
+    case Triple::x86:
+      TargetArch = Target_X86;
+      break;
+    case Triple::x86_64:
+      TargetArch = Target_X64;
+      break;
+    case Triple::thumb:
+      TargetArch = Target_Thumb;
+      break;
+    case Triple::aarch64:
+      TargetArch = Target_Arm64;
+      break;
+    default:
+      errs() << "Unsupported Architecture"
+             << Triple::getArchTypeName(TheTriple.getArch());
+      return false;
+    }
     break;
+
   case Target_Thumb:
     TheTriple.setArch(Triple::thumb);
     break;
@@ -89,6 +146,8 @@ bool CorDisasm::setTarget() {
   case Target_X64:
     TheTriple.setArch(Triple::x86_64);
   }
+
+  assert(TargetArch != Target_Host && "Target Expected to be specific");
 
   // Get the target specific parser.
   string Error;
@@ -167,30 +226,98 @@ bool CorDisasm::init() {
     return false;
   }
 
+  if (!verifyPrefixDecoding()) {
+    // verifyOpcodes() prints error message if necessary
+    return false;
+  }
+
   return true;
+}
+
+// This function simply verifies our understanding of the way
+// X86 prefix bytes are decoded by LLVM -- and learn about
+// any change in behavior.
+bool CorDisasm::verifyPrefixDecoding() {
+  if ((TargetArch != Target_X86) && (TargetArch != Target_X64)) {
+    return true;
+  }
+
+  bool Verified = true;
+  raw_ostream &CommentStream = nulls();
+  raw_ostream &DebugOut = nulls();
+  MCInst Inst;
+  uint64_t Size;
+
+  for (uint8_t Pfx = 0; Pfx < X86NumPrefixes; Pfx++) {
+    OpcodeMap Prefix = X86Prefix[Pfx];
+    ArrayRef<uint8_t> ByteArray(&Prefix.MachineOpcode, 1);
+
+    bool Success = Disassembler->getInstruction(Inst, Size, ByteArray, 0,
+                                                DebugOut, CommentStream);
+
+    assert(!Success || (Size == 1) && "Decode past MaxSize");
+
+    if (!((Success && Prefix.IsLlvmInstruction) ||
+          (!Success && !Prefix.IsLlvmInstruction))) {
+      errs() << "Prefix Decode Verification failed for " << Prefix.Name << "\n";
+      Verified = false;
+    }
+  }
+
+  return Verified;
 }
 
 size_t CorDisasm::disasmInstruction(size_t Address, const uint8_t *Bytes,
                                     size_t Maxlength, bool PrintAsm) const {
   uint64_t Size;
+  uint64_t TotalSize = 0;
   MCInst Inst;
   raw_ostream &CommentStream = nulls();
   raw_ostream &DebugOut = nulls();
   ArrayRef<uint8_t> ByteArray(Bytes, Maxlength);
+  bool ContinueDisasm;
 
-  bool success = Disassembler->getInstruction(Inst, Size, ByteArray, Address,
-                                              DebugOut, CommentStream);
+  // On X86, LLVM disassembler does not handle instruction prefixes
+  // correctly -- please see LLVM bug 7709.
+  // The disassembler reports instruction prefixes separate from the
+  // actual instruction. In order to work-around this problem, we
+  // continue decoding  past the prefix bytes.
 
-  if (!success) {
-    errs() << "Invalid instruction encoding\n";
-    return 0;
-  }
+  do {
 
-  if (PrintAsm) {
-    printInstruction(&Inst, Address, Size, ByteArray.slice(0, Size));
-  }
+    bool success = Disassembler->getInstruction(Inst, Size, ByteArray, Address,
+                                                DebugOut, CommentStream);
+    TotalSize += Size;
 
-  return Size;
+    if (!success) {
+      errs() << "Invalid instruction encoding\n";
+      return 0;
+    }
+
+    if (PrintAsm) {
+      printInstruction(&Inst, Address, Size, ByteArray.slice(0, Size));
+    }
+
+    ContinueDisasm = false;
+    if ((TargetArch == Target_X86) || (TargetArch == Target_X64)) {
+
+      // Check if the decoded instruction is a prefix byte, and if so,
+      // continue decoding.
+      if (Size == 1) {
+        for (uint8_t Pfx = 0; Pfx < X86NumPrefixes; Pfx++) {
+          if (ByteArray[0] == X86Prefix[Pfx].MachineOpcode) {
+            assert(X86Prefix[Pfx].IsLlvmInstruction && "Unexpected Decode");
+            ContinueDisasm = true;
+            Address += Size;
+            ByteArray = ByteArray.slice(Size);
+            break;
+          }
+        }
+      }
+    }
+  } while (ContinueDisasm);
+
+  return TotalSize;
 }
 
 void CorDisasm::printInstruction(const MCInst *MI, size_t Address,
