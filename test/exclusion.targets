@@ -1,6 +1,108 @@
 <Project DefaultTargets = "GetListOfTestCmds"
     xmlns="http://schemas.microsoft.com/developer/msbuild/2003" >
     <ItemGroup Condition="'$(XunitTestBinBase)' != ''">
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\castclassenum_ro\castclassenum_ro.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\castclassinterface_do\castclassinterface_do.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M09.5-PDC\b29068\b29068\b29068.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\boxunboxinterface_r\boxunboxinterface_r.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M10\b06812\b06812\b06812.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\boxunboxenum_ro\boxunboxenum_ro.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V1.2-Beta1\b91944\b91944\b91944.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\v1-m08\b12668\b12668\b12668.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\Desktop\boxunboxvaluetype_do\boxunboxvaluetype_do.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\castclassinterface_d\castclassinterface_d.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\boxunboxinterface_do\boxunboxinterface_do.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\boxunboxenum_d\boxunboxenum_d.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\boxunboxinterface_ro\boxunboxinterface_ro.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\regress\ndpw\14888\objectusedonlyinhandler\objectusedonlyinhandler.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\castclassvaluetype_do\castclassvaluetype_do.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\boxunboxinterface_d\boxunboxinterface_d.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M10\b02352\b02352\b02352.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\castclassinterface_ro\castclassinterface_ro.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\castclassinterface_r\castclassinterface_r.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\Desktop\boxunboxvaluetype_ro\boxunboxvaluetype_ro.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\stringintern\_Simpletest4\_Simpletest4.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\Desktop\boxunboxvaluetype_r\boxunboxvaluetype_r.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\castclassenum_do\castclassenum_do.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\boxunboxenum_r\boxunboxenum_r.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\castclassvaluetype_d\castclassvaluetype_d.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\boxunboxenum_do\boxunboxenum_do.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\M00\b113493\b113493\b113493.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\castclassvaluetype_ro\castclassvaluetype_ro.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\castclassvaluetype_r\castclassvaluetype_r.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\castclassenum_r\castclassenum_r.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\castclassenum_d\castclassenum_d.cmd" >
+             <Issue>993</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V1.2-Beta1\b302509\b302509\b302509.cmd" >
+             <Issue>994</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\hfa\main\testC\hfa_nd2C_r\hfa_nd2C_r.cmd" >
+             <Issue>994</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\hfa\main\testC\hfa_nd2C_d\hfa_nd2C_d.cmd" >
+             <Issue>994</Issue>
+        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\hugeSimpleExpr1\hugeSimpleExpr1.cmd" >
              <Issue>990</Issue>
         </ExcludeList>
