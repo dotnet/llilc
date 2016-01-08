@@ -103,18 +103,6 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\hfa\main\testC\hfa_nd2C_d\hfa_nd2C_d.cmd" >
              <Issue>994</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\hugeSimpleExpr1\hugeSimpleExpr1.cmd" >
-             <Issue>990</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\opt\cse\HugeArray\HugeArray.cmd" >
-             <Issue>990</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V2.0-Beta2\b311420\b311420\b311420.cmd" >
-             <Issue>990</Issue>
-        </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V2.0-Beta2\b399444\b399444b\b399444b.cmd" >
-             <Issue>990</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M11-Beta1\b33928\b33928\b33928.cmd" >
              <Issue>970</Issue>
         </ExcludeList>
