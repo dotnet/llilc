@@ -42,6 +42,7 @@
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/ToolOutputFile.h"
+#include "llvm/Support/Win64EH.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/Target/TargetSubtargetInfo.h"
@@ -352,8 +353,9 @@ extern "C" void EmitSymbolRef(ObjectWriter *OW, const char *SymbolName,
 
 extern "C" void EmitFrameInfo(ObjectWriter *OW, const char *FunctionName,
                               int StartOffset, int EndOffset, int BlobSize,
-                              const char *BlobData) {
-
+                              const char *BlobData,
+                              const char *PersonalityFunctionName, int LSDASize,
+                              const char *LSDA) {
   assert(OW && "ObjWriter is null");
   auto *AsmPrinter = &OW->getAsmPrinter();
   auto &OST = static_cast<MCObjectStreamer &>(*AsmPrinter->OutStreamer);
@@ -376,13 +378,21 @@ extern "C" void EmitFrameInfo(ObjectWriter *OW, const char *FunctionName,
 
   EmitBlob(OW, BlobSize, BlobData);
 
-  // Emit personality function symbol
-  // TODO: We now fake runtime as if it were C++ code.
-  // Need to clean up when EH plan is concrete.
   OST.EmitValueToAlignment(4);
-  const MCExpr *PersonalityFn = GetSymbolRefExpr(
-      OW, "__CxxFrameHandler3", MCSymbolRefExpr::VK_COFF_IMGREL32);
-  OST.EmitValue(PersonalityFn, 4);
+  uint8_t flags = BlobData[0];
+  // The chained info is not currently emitted, verify that we don't see it.
+  assert((flags & (Win64EH::UNW_ChainInfo << 3)) == 0);
+  if ((flags &
+      (Win64EH::UNW_TerminateHandler | Win64EH::UNW_ExceptionHandler) << 3) != 0) {
+    assert(PersonalityFunctionName != nullptr);
+    const MCExpr *PersonalityFn = GetSymbolRefExpr(
+        OW, PersonalityFunctionName, MCSymbolRefExpr::VK_COFF_IMGREL32);
+    OST.EmitValue(PersonalityFn, 4);
+  }
+
+  if (LSDASize != 0) {
+    EmitBlob(OW, LSDASize, LSDA);
+  }
 
   // .pdata emission
   Section = MOFI->getPDataSection();
