@@ -383,7 +383,8 @@ extern "C" void EmitFrameInfo(ObjectWriter *OW, const char *FunctionName,
   // The chained info is not currently emitted, verify that we don't see it.
   assert((flags & (Win64EH::UNW_ChainInfo << 3)) == 0);
   if ((flags &
-      (Win64EH::UNW_TerminateHandler | Win64EH::UNW_ExceptionHandler) << 3) != 0) {
+       (Win64EH::UNW_TerminateHandler | Win64EH::UNW_ExceptionHandler) << 3) !=
+      0) {
     assert(PersonalityFunctionName != nullptr);
     const MCExpr *PersonalityFn = GetSymbolRefExpr(
         OW, PersonalityFunctionName, MCSymbolRefExpr::VK_COFF_IMGREL32);
