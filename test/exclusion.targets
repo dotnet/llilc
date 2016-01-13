@@ -4440,6 +4440,12 @@
 	<ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V1.2-M02\b27077\b27077\b27077.cmd" >
 	     <Issue>13</Issue>
 	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\CLR-x86-JIT\V1-M13-RTM\b99969\b99969\b99969.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
+	<ExcludeList Include="$(XunitTestBinBase)\JIT\RyuJIT\DoWhileBndChk\DoWhileBndChk.cmd" >
+	     <Issue>13</Issue>
+	</ExcludeList>
     </ItemGroup>
     <ItemGroup Condition="'$(XunitTestBinBase)' != '' and '$(COMPLUS_INSERTSTATEPOINTS)' != ''">	
         <ExcludeList Include="$(XunitTestBinBase)\JIT\jit64\regress\ddb\113574\113574\*" >
