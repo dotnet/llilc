@@ -93,13 +93,18 @@ public:
   /// allocate all sections to be loaded.
   ///
   /// \param CodeSize - the total size of all code sections.
-  /// \param DataSizeRO - the total size of all read-only data sections.
-  /// \param DataSizeRW - the total size of all read-write data sections.
+  /// \param CodeAlign - alignment required for the code sections.
+  /// \param RODataSize - the total size of all read-only data sections.
+  /// \param RODataAlign - alignment required for read-only data sections.
+  /// \param RWDataSize - the total size of all read-write data sections.
+  /// \param RWDataAlign - alignment required for read-write data sections.
   ///
   /// Note that by default the callback is disabled. To enable it
   /// redefine the method needsToReserveAllocationSpace to return true.
-  void reserveAllocationSpace(uintptr_t CodeSize, uintptr_t DataSizeRO,
-                              uintptr_t DataSizeRW) override;
+  void reserveAllocationSpace(uintptr_t CodeSize, uint32_t CodeAlign,
+                              uintptr_t RODataSize, uint32_t RODataAlign,
+                              uintptr_t RWDataSize,
+                              uint32_t RWDataAlign) override;
 
   /// Inform the memory manager about the amount of memory required to hold
   /// unwind codes for the function and funclets being loaded.
