@@ -7,7 +7,12 @@ import subprocess
 import platform
 import io
 import string
-import urllib2
+try:
+    # For Python >= 3.0
+    from urllib.request import urlopen
+except ImportError:
+    # For Python < 3.0
+    from urllib2 import urlopen
 import shutil
 import stat
 
@@ -21,7 +26,7 @@ def run(args):
   if not os.path.exists(nugetExe):
     nugetOrg = "http://nuget.org/nuget.exe"
     print("Downloading... %s" % nugetOrg )
-    response = urllib2.urlopen(nugetOrg)
+    response = urlopen(nugetOrg)
     output = open(nugetExe,'wb')
     output.write(response.read())
     output.close()
