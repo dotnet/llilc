@@ -2,7 +2,7 @@
 <package >
   <metadata>
     <id>Microsoft.DotNet.ObjectWriter</id>
-    <version>1.0.4-prerelease-0001</version>
+    <version>1.0.4-prerelease-00001</version>
     <title>Microsoft .NET Object File Generator</title>
     <authors>Microsoft</authors>
     <owners>Microsoft</owners>
