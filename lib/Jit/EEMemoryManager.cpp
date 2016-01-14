@@ -191,9 +191,9 @@ void EEMemoryManager::reserveUnwindSpace(const object::ObjectFile &Obj) {
   }
 }
 
-void EEMemoryManager::reserveAllocationSpace(uintptr_t CodeSize,
-                                             uintptr_t DataSizeRO,
-                                             uintptr_t DataSizeRW) {
+void EEMemoryManager::reserveAllocationSpace(
+    uintptr_t CodeSize, uint32_t CodeAlign, uintptr_t RODataSize,
+    uint32_t RODataAlign, uintptr_t RWDataSize, uint32_t RWDataAlign) {
   // Treat all code for now as "hot section"
   uintptr_t HotCodeSize = CodeSize;
   uintptr_t ColdCodeSize = 0;
@@ -203,16 +203,21 @@ void EEMemoryManager::reserveAllocationSpace(uintptr_t CodeSize,
   // So this gives the dynamic loader room to copy the RO sections, and later
   // the EE will copy from there to the place it really keeps unwind data.
 
-  uintptr_t ReadOnlyDataSize = DataSizeRO;
+  uintptr_t ReadOnlyDataSize = RODataSize;
+  assert(RWDataSize == 0);
   uint32_t ExceptionCount = 0;
 
   // Remap alignment to the EE notion of alignment.
-  // Conservatively request 16 bytes alignment for RODataBlock since one of the
-  // .rdata sections may be 16 bytes aligned (e.g., a floating-point constant
-  // pool.)
-  CorJitAllocMemFlag Flag =
-      CorJitAllocMemFlag::CORJIT_ALLOCMEM_DEFAULT_CODE_ALIGN |
-      CorJitAllocMemFlag::CORJIT_ALLOCMEM_FLG_RODATA_16BYTE_ALIGN;
+  assert(CodeAlign <= 16);
+  assert(RODataAlign <= 16);
+  CorJitAllocMemFlag AlignmentFlag =
+      (CodeAlign == 16
+           ? CorJitAllocMemFlag::CORJIT_ALLOCMEM_FLG_16BYTE_ALIGN
+           : CorJitAllocMemFlag::CORJIT_ALLOCMEM_DEFAULT_CODE_ALIGN);
+  if (RODataAlign == 16) {
+    AlignmentFlag = AlignmentFlag |
+                    CorJitAllocMemFlag::CORJIT_ALLOCMEM_FLG_RODATA_16BYTE_ALIGN;
+  }
 
   // We allow the amount of RW data to be nonzero to work around the fact that
   // MCJIT will not report a size of zero for any section, even if that
@@ -224,8 +229,9 @@ void EEMemoryManager::reserveAllocationSpace(uintptr_t CodeSize,
   uint8_t *RODataBlock = nullptr;
 
   this->Context->JitInfo->allocMem(HotCodeSize, ColdCodeSize, ReadOnlyDataSize,
-                                   ExceptionCount, Flag, (void **)&HotBlock,
-                                   (void **)&ColdBlock, (void **)&RODataBlock);
+                                   ExceptionCount, AlignmentFlag,
+                                   (void **)&HotBlock, (void **)&ColdBlock,
+                                   (void **)&RODataBlock);
 
   assert(ColdBlock == nullptr);
 
