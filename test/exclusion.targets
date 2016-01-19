@@ -1,6 +1,9 @@
 <Project DefaultTargets = "GetListOfTestCmds"
     xmlns="http://schemas.microsoft.com/developer/msbuild/2003" >
     <ItemGroup Condition="'$(XunitTestBinBase)' != ''">
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\CodeGenBringUpTests\RecursiveTailCall\RecursiveTailCall.cmd" >
+             <Issue>1005</Issue>
+        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Performance\CodeQuality\V8\DeltaBlue\DeltaBlue\DeltaBlue.cmd" >
              <Issue>1000</Issue>
         </ExcludeList>
