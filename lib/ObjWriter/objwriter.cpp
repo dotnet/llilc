@@ -14,6 +14,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/CodeGen/AsmPrinter.h"
+#include "llvm/DebugInfo/CodeView/CodeView.h"
+#include "llvm/DebugInfo/CodeView/SymbolRecord.h"
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCContext.h"
@@ -48,6 +50,7 @@
 #include "llvm/Target/TargetSubtargetInfo.h"
 
 using namespace llvm;
+using namespace llvm::codeview;
 
 static cl::opt<std::string>
     ArchName("arch", cl::desc("Target arch to assemble for, "
@@ -446,7 +449,7 @@ extern "C" void EmitDebugFileInfo(ObjectWriter *OW, int FileInfoSize,
   OST.EmitIntValue(COFF::DEBUG_SECTION_MAGIC, 4);
 
   // This subsection holds a file index to offset in string table table.
-  OST.EmitIntValue(COFF::DEBUG_INDEX_SUBSECTION, 4);
+  OST.EmitIntValue(unsigned(ModuleSubstreamKind::FileChecksums), 4);
   OST.EmitIntValue(8 * FileInfoSize, 4);
   int CurrentOffset = 1;
   for (int I = 0; I < FileInfoSize; I++) {
@@ -460,7 +463,7 @@ extern "C" void EmitDebugFileInfo(ObjectWriter *OW, int FileInfoSize,
   }
 
   // This subsection holds the string table.
-  OST.EmitIntValue(COFF::DEBUG_STRING_TABLE_SUBSECTION, 4);
+  OST.EmitIntValue(unsigned(ModuleSubstreamKind::StringTable), 4);
   OST.EmitIntValue(CurrentOffset, 4);
   // The payload starts with a null character.
   OST.EmitIntValue(0, 1);
@@ -498,7 +501,7 @@ static void EmitDebugLocInfo(ObjectWriter *OW, const char *FunctionName,
   // Emit a symbol subsection, required by VS2012+ to find function boundaries.
   MCSymbol *SymbolsBegin = OutContext.createTempSymbol(),
            *SymbolsEnd = OutContext.createTempSymbol();
-  OST.EmitIntValue(COFF::DEBUG_SYMBOL_SUBSECTION, 4);
+  OST.EmitIntValue(unsigned(ModuleSubstreamKind::Symbols), 4);
   EmitLabelDiff(OST, SymbolsBegin, SymbolsEnd);
   OST.EmitLabel(SymbolsBegin);
   {
@@ -507,7 +510,7 @@ static void EmitDebugLocInfo(ObjectWriter *OW, const char *FunctionName,
     EmitLabelDiff(OST, ProcSegmentBegin, ProcSegmentEnd, 2);
     OST.EmitLabel(ProcSegmentBegin);
 
-    OST.EmitIntValue(COFF::DEBUG_SYMBOL_TYPE_PROC_START, 2);
+    OST.EmitIntValue(unsigned(SymbolRecordKind::S_GPROC32_ID), 2);
     // Some bytes of this segment don't seem to be required for basic debugging,
     // so just fill them with zeroes.
     OST.EmitFill(12, 0);
@@ -525,7 +528,7 @@ static void EmitDebugLocInfo(ObjectWriter *OW, const char *FunctionName,
 
     // We're done with this function.
     OST.EmitIntValue(0x0002, 2);
-    OST.EmitIntValue(COFF::DEBUG_SYMBOL_TYPE_PROC_END, 2);
+    OST.EmitIntValue(unsigned(SymbolRecordKind::S_PROC_ID_END), 2);
   }
   OST.EmitLabel(SymbolsEnd);
 
@@ -549,7 +552,7 @@ static void EmitDebugLocInfo(ObjectWriter *OW, const char *FunctionName,
   FilenameSegmentLengths[LastSegmentEnd] = NumLocInfos - LastSegmentEnd;
 
   // Emit a line table subsection, required to do PC-to-file:line lookup.
-  OST.EmitIntValue(COFF::DEBUG_LINE_TABLE_SUBSECTION, 4);
+  OST.EmitIntValue(unsigned(ModuleSubstreamKind::Lines), 4);
   MCSymbol *LineTableBegin = OutContext.createTempSymbol(),
            *LineTableEnd = OutContext.createTempSymbol();
   EmitLabelDiff(OST, LineTableBegin, LineTableEnd);
