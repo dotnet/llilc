@@ -1102,16 +1102,22 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Methodical\tailcall_v4\hijacking\*" >
              <Issue>964</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorArrayGet\VectorArrayGet.cmd" >
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorArrayInit_r\VectorArrayInit_r.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorArrayInit\VectorArrayInit.cmd" >
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorArrayInit_ro\VectorArrayInit_ro.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorCopyToArray\VectorCopyToArray.cmd" >
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorCopyToArray_r\VectorCopyToArray_r.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorGet\VectorGet.cmd" >
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorCopyToArray_ro\VectorCopyToArray_ro.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorGet_r\VectorGet_r.cmd" >
+             <Issue>13</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorGet_ro\VectorGet_ro.cmd" >
              <Issue>13</Issue>
         </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Regression\VS-ia64-JIT\V2.0-RTM\b539509\b539509\*" >
