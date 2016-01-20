@@ -1,6 +1,93 @@
 <Project DefaultTargets = "GetListOfTestCmds"
     xmlns="http://schemas.microsoft.com/developer/msbuild/2003" >
     <ItemGroup Condition="'$(XunitTestBinBase)' != ''">
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorAbs_ro\VectorAbs_ro.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorAdd_r\VectorAdd_r.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorArgs_ro\VectorArgs_ro.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorMul_ro\VectorMul_ro.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\CreateGeneric_ro\CreateGeneric_ro.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorSub_r\VectorSub_r.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorDiv_r\VectorDiv_r.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorSub_ro\VectorSub_ro.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorMul_r\VectorMul_r.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\CtorFromArray_r\CtorFromArray_r.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\CtorFromArray_ro\CtorFromArray_ro.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorArray_ro\VectorArray_ro.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorMatrix_r\VectorMatrix_r.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorArgs_r\VectorArgs_r.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorMin_ro\VectorMin_ro.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorMatrix_ro\VectorMatrix_ro.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorDiv_ro\VectorDiv_ro.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorAbs_r\VectorAbs_r.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorMax_ro\VectorMax_ro.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\Haar-likeFeaturesGeneric_ro\Haar-likeFeaturesGeneric_ro.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorDot_ro\VectorDot_ro.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorArray_r\VectorArray_r.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorAdd_ro\VectorAdd_ro.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorMax_r\VectorMax_r.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\CreateGeneric_r\CreateGeneric_r.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorDot_r\VectorDot_r.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\Haar-likeFeaturesGeneric_r\Haar-likeFeaturesGeneric_r.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorMin_r\VectorMin_r.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\Performance\CodeQuality\Burgers\Burgers\Burgers.cmd" >
+             <Issue>1008</Issue>
+        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\CodeGenBringUpTests\RecursiveTailCall\RecursiveTailCall.cmd" >
              <Issue>1005</Issue>
         </ExcludeList>
