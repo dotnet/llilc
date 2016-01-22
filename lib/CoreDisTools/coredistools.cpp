@@ -25,7 +25,6 @@
 #include "llvm/Support/Format.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/PrettyStackTrace.h"
-#include "llvm/Support/Signals.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/TargetSelect.h"
@@ -164,8 +163,6 @@ bool CorDisasm::setTarget() {
 }
 
 bool CorDisasm::init() {
-  // Print a stack trace if we signal out.
-  sys::PrintStackTraceOnErrorSignal();
   // Call llvm_shutdown() on exit.
   llvm_shutdown_obj Y;
 
