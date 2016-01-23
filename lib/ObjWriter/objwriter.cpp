@@ -19,6 +19,7 @@
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCContext.h"
+#include "llvm/MC/MCDwarf.h"
 #include "llvm/MC/MCInstPrinter.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCObjectFileInfo.h"
@@ -48,6 +49,7 @@
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/Target/TargetSubtargetInfo.h"
+#include "cfi.h"
 
 using namespace llvm;
 using namespace llvm::codeview;
@@ -145,6 +147,7 @@ public:
   std::unique_ptr<raw_fd_ostream> OS;
   MCTargetOptions MCOptions;
   std::vector<DebugLocInfo> DebugLocInfos;
+  bool frameOpened;
 
 public:
   bool init(StringRef FunctionName);
@@ -225,6 +228,7 @@ bool ObjectWriter::init(llvm::StringRef ObjectFilePath) {
   if (!Asm)
     return error("no asm printer for target " + TripleName);
 
+  frameOpened = false;
   return true;
 }
 
@@ -354,22 +358,18 @@ extern "C" void EmitSymbolRef(ObjectWriter *OW, const char *SymbolName,
   OST.EmitValue(TargetExpr, Size, SMLoc(), IsPCRelative);
 }
 
-extern "C" void EmitFrameInfo(ObjectWriter *OW, const char *FunctionName,
-                              int StartOffset, int EndOffset, int BlobSize,
-                              const char *BlobData,
-                              const char *PersonalityFunctionName, int LSDASize,
-                              const char *LSDA) {
+extern "C" void EmitWinFrameInfo(ObjectWriter *OW, const char *FunctionName,
+                                 int StartOffset, int EndOffset, int BlobSize,
+                                 const char *BlobData,
+                                 const char *PersonalityFunctionName,
+                                 int LSDASize, const char *LSDA) {
   assert(OW && "ObjWriter is null");
   auto *AsmPrinter = &OW->getAsmPrinter();
   auto &OST = static_cast<MCObjectStreamer &>(*AsmPrinter->OutStreamer);
   MCContext &OutContext = OST.getContext();
   const MCObjectFileInfo *MOFI = OutContext.getObjectFileInfo();
 
-  // Windows specific frame info for pdata/xdata.
-  // TODO: Should convert this for non-Windows.
-  if (MOFI->getObjectFileType() != MOFI->IsCOFF) {
-    return;
-  }
+  assert(MOFI->getObjectFileType() == MOFI->IsCOFF);
 
   // .xdata emission
   MCSection *Section = MOFI->getXDataSection();
@@ -418,6 +418,53 @@ extern "C" void EmitFrameInfo(ObjectWriter *OW, const char *FunctionName,
   OST.EmitValue(MCSymbolRefExpr::create(
                     FrameSymbol, MCSymbolRefExpr::VK_COFF_IMGREL32, OutContext),
                 4);
+}
+
+extern "C" void EmitCFIStart(ObjectWriter *OW, int Offset) {
+  assert(OW && "ObjWriter is null");
+  assert(!OW->frameOpened && "frame should be closed before CFIStart");
+  auto *AsmPrinter = &OW->getAsmPrinter();
+  auto &OST = *AsmPrinter->OutStreamer;
+
+  OST.EmitCFIStartProc(false);
+  OW->frameOpened = true;
+}
+
+extern "C" void EmitCFIEnd(ObjectWriter *OW, int Offset) {
+  assert(OW && "ObjWriter is null");
+  assert(OW->frameOpened && "frame should be opened before CFIEnd");
+  auto *AsmPrinter = &OW->getAsmPrinter();
+  auto &OST = *AsmPrinter->OutStreamer;
+
+  OST.EmitCFIEndProc();
+  OW->frameOpened = false;
+}
+
+extern "C" void EmitCFICode(ObjectWriter *OW, int Offset, const char *Blob) {
+  assert(OW && "ObjWriter is null");
+  assert(OW->frameOpened && "frame should be opened before CFICode");
+  auto *AsmPrinter = &OW->getAsmPrinter();
+  auto &OST = *AsmPrinter->OutStreamer;
+
+  CFI_CODE *CfiCode = (CFI_CODE *)Blob;
+  switch (CfiCode->CfiOpCode) {
+  case CFI_ADJUST_CFA_OFFSET:
+    assert(CfiCode->DwarfReg == DWARF_REG_ILLEGAL &&
+           "Unexpected Register Value for OpAdjustCfaOffset");
+    OST.EmitCFIAdjustCfaOffset(CfiCode->Offset);
+    break;
+  case CFI_REL_OFFSET:
+    OST.EmitCFIRelOffset(CfiCode->DwarfReg, CfiCode->Offset);
+    break;
+  case CFI_DEF_CFA_REGISTER:
+    assert(CfiCode->Offset == 0 &&
+           "Unexpected Offset Value for OpDefCfaRegister");
+    OST.EmitCFIDefCfaRegister(CfiCode->DwarfReg);
+    break;
+  default:
+    assert(!"Unrecognized CFI");
+    break;
+  }
 }
 
 static void EmitLabelDiff(MCStreamer &Streamer, const MCSymbol *From,

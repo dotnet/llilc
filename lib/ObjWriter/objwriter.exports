@@ -6,7 +6,10 @@ EmitBlob
 EmitIntValue
 EmitSymbolDef
 EmitSymbolRef
-EmitFrameInfo
+EmitWinFrameInfo
+EmitCFIStart
+EmitCFIEnd
+EmitCFICode
 EmitDebugFileInfo
 EmitDebugLoc
 FlushDebugLocs
