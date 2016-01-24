@@ -22,13 +22,13 @@
 #include "readerir.h"
 #include "abi.h"
 #include "EEMemoryManager.h"
-#include "EEObjectLinkingLayer.h"
 #include "llvm/CodeGen/GCs.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/DebugInfo/DIContext.h"
 #include "llvm/DebugInfo/DWARF/DWARFContext.h"
 #include "llvm/DebugInfo/DWARF/DWARFFormValue.h"
 #include "llvm/ExecutionEngine/Orc/CompileUtils.h"
+#include "llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h"
 #include "llvm/ExecutionEngine/Orc/ObjectTransformLayer.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/Support/DataTypes.h"
@@ -76,7 +76,7 @@ public:
 
     for (const auto &PObj : Objs) {
 
-      const object::ObjectFile &Obj = *PObj;
+      const object::ObjectFile &Obj = *PObj->getBinary();
       const RuntimeDyld::LoadedObjectInfo &L = *LoadedObjInfos[I];
 
       getDebugInfoForObject(Obj, L);
@@ -345,11 +345,12 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
     // Construct the jitting layers.
     EEMemoryManager MM(&Context);
     ObjectLoadListener Listener(&Context);
-    orc::EEObjectLinkingLayer<decltype(Listener)> Loader(Listener);
-    auto ReserveUnwindSpace = [&MM](std::unique_ptr<object::ObjectFile> Obj) {
-      MM.reserveUnwindSpace(*Obj);
-      return std::move(Obj);
-    };
+    orc::ObjectLinkingLayer<decltype(Listener)> Loader(Listener);
+    auto ReserveUnwindSpace =
+        [&MM](std::unique_ptr<object::OwningBinary<object::ObjectFile>> Obj) {
+          MM.reserveUnwindSpace(*Obj->getBinary());
+          return std::move(Obj);
+        };
     orc::ObjectTransformLayer<decltype(Loader), decltype(ReserveUnwindSpace)>
         UnwindReserver(Loader, ReserveUnwindSpace);
     orc::IRCompileLayer<decltype(UnwindReserver)> Compiler(
