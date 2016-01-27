@@ -710,21 +710,33 @@ void GenIR::cloneFinallyBody(EHRegion *FinallyRegion) {
     for (User *U : ParentPad->users()) {
       Instruction *OldInstruction;
       Instruction *NewInstruction;
-      if (auto *Call = dyn_cast<CallInst>(U)) {
-        OldInstruction = Call;
-        NewInstruction = CallInst::Create(Call, {}, Call);
-      } else if (auto *Invoke = dyn_cast<InvokeInst>(U)) {
-        OldInstruction = Invoke;
-        NewInstruction = InvokeInst::Create(Invoke, {}, Invoke);
-      } else {
+      CallSite OldSite(U);
+      if (!OldSite) {
         continue;
       }
-      NewInstruction->setDebugLoc(OldInstruction->getDebugLoc());
+
+      // Copy any operand bundles (e.g. for gc-transition) other
+      // than the funclet bundle we're erasing.
+      SmallVector<OperandBundleDef, 1> NewBundles;
+      for (int Index = 0, End = OldSite.getNumOperandBundles(); Index != End;
+           ++Index) {
+        OperandBundleUse OldBundle = OldSite.getOperandBundleAt(Index);
+        if (!OldBundle.isFuncletOperandBundle()) {
+          NewBundles.emplace_back(OldBundle);
+        }
+      }
+
+      if (OldSite.isCall()) {
+        auto *Call = cast<CallInst>(OldSite.getInstruction());
+        OldInstruction = Call;
+        NewInstruction = CallInst::Create(Call, NewBundles, Call);
+      } else {
+        auto *Invoke = cast<InvokeInst>(OldSite.getInstruction());
+        OldInstruction = Invoke;
+        NewInstruction = InvokeInst::Create(Invoke, NewBundles, Invoke);
+      }
       OldInstruction->replaceAllUsesWith(NewInstruction);
-      // Make sure the funclet bundle is the only one we're removing
-      assert(CallSite(OldInstruction).getNumOperandBundles() == 1);
-      assert(CallSite(OldInstruction).getOperandBundleAt(0).getTagID() ==
-             LLVMContext::OB_funclet);
+
       // Queue the old instruction for deferred removal so we don't messs up
       // the user iterator.
       ReplacedInstructions.push_back(OldInstruction);
@@ -782,6 +794,13 @@ bool GenIR::canExecuteHandler(BasicBlock &Handler) {
   return false;
 }
 
+void GenIR::markGCLeaf(CallSite Call) {
+  AttributeSet Attrs = Call.getAttributes();
+  Attrs = Attrs.addAttribute(*JitContext->LLVMContext,
+                             AttributeSet::FunctionIndex, "gc-leaf-function");
+  Call.setAttributes(Attrs);
+}
+
 void GenIR::readerPostPass(bool IsImportOnly) {
 
   SmallVector<Value *, 4> EscapingLocs;
@@ -808,6 +827,23 @@ void GenIR::readerPostPass(bool IsImportOnly) {
     Instruction *InsertionPoint = Function->begin()->getTerminator();
     LLVMBuilder->SetInsertPoint(InsertionPoint);
     LLVMBuilder->CreateCall(FrameEscape, EscapingLocs);
+  }
+
+  if (containsUnmanagedCall() && !JitContext->Options->DoInsertStatepoints) {
+    // When we're not running the PlaceSafepoints pass to insert statepoints,
+    // we still need RewriteStatepointsForGC to process any calls/invokes
+    // that carry GC Transition bundles.  It will rewrite as a statepoint any
+    // call/invoke that is *not* flagged gc-leaf-function.  So apply that
+    // attribute to any call/invoke that does not have a GC Transition bundle.
+    for (auto &BB : *Function) {
+      for (auto &Instr : BB) {
+        CallSite Call(&Instr);
+        if (!Call || Call.getOperandBundle(LLVMContext::OB_gc_transition)) {
+          continue;
+        }
+        markGCLeaf(Call);
+      }
+    }
   }
 
   // Crossgen in ReadyToRun mode records structs that method compilation
@@ -4919,7 +4955,8 @@ LoadInst *GenIR::makeLoad(Value *Address, bool IsVolatile,
   return LLVMBuilder->CreateLoad(Address, IsVolatile);
 }
 
-CallSite GenIR::makeCall(Value *Callee, bool MayThrow, ArrayRef<Value *> Args) {
+CallSite GenIR::makeCall(Value *Callee, bool MayThrow, ArrayRef<Value *> Args,
+                         ArrayRef<OperandBundleDef> Bundles) {
   // First, figure out if we're inside a handler -- if so, we need a bundle
   // indicating which one.
   Value *ParentPad = nullptr;
@@ -4942,9 +4979,11 @@ CallSite GenIR::makeCall(Value *Callee, bool MayThrow, ArrayRef<Value *> Args) {
     }
   }
 
-  SmallVector<OperandBundleDef, 1> Bundles;
+  SmallVector<OperandBundleDef, 2> NewBundles;
   if (ParentPad != nullptr) {
-    Bundles.emplace_back("funclet", ParentPad);
+    NewBundles.append(Bundles.begin(), Bundles.end());
+    NewBundles.emplace_back("funclet", ParentPad);
+    Bundles = NewBundles;
   }
 
   if (MayThrow) {
@@ -6854,7 +6893,8 @@ void GenIR::nop() {
                                                   llvm::InlineAsm::AD_Intel);
   const bool MayThrow = false;
   ArrayRef<Value *> Args;
-  makeCall(AsmCode, MayThrow, Args);
+  CallSite Call = makeCall(AsmCode, MayThrow, Args);
+  markGCLeaf(Call);
 }
 
 IRNode *GenIR::unbox(CORINFO_RESOLVED_TOKEN *ResolvedToken, IRNode *Object,

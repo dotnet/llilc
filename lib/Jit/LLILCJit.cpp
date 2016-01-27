@@ -201,6 +201,17 @@ ICorJitCompiler *__stdcall getJit() {
       Opts["disable-cgp-gc-opts"]->addOccurrence(0, "disable-cgp-gc-opts",
                                                  "true");
     }
+    // Set flags indicating to statepoint lowering that call->statepoint
+    // rewriting happens in rs4gc rather than statepoint placement, and
+    // that we use operand bundles for deopt/transition arguments.
+    if (Opts["spp-no-statepoints"]->getNumOccurrences() == 0) {
+      Opts["spp-no-statepoints"]->addOccurrence(0, "spp-no-statepoints",
+                                                "true");
+    }
+    if (Opts["rs4gc-use-deopt-bundles"]->getNumOccurrences() == 0) {
+      Opts["rs4gc-use-deopt-bundles"]->addOccurrence(
+          0, "rs4gc-use-deopt-bundles", "true");
+    }
   }
 
   return LLILCJit::TheJit;
@@ -361,7 +372,8 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
       dbgs() << "INFO:  jitting method " << Context.MethodName
              << " using LLILCJit\n";
     }
-    bool HasMethod = this->readMethod(&Context);
+    bool ContainsUnmanagedCall;
+    bool HasMethod = this->readMethod(&Context, ContainsUnmanagedCall);
 
 #ifndef FEATURE_VERIFICATION
     bool IsImportOnly = (Context.Flags & CORJIT_FLG_IMPORT_ONLY) != 0;
@@ -384,11 +396,16 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
                << "\n";
         Context.CurrentModule->dump();
       }
-      if (Context.Options->DoInsertStatepoints) {
-        // If using Precise GC, run the GC-Safepoint insertion
-        // and lowering passes before generating code.
+      // If using Precise GC, run the GC-Safepoint insertion
+      // and lowering passes before generating code.  If
+      // using conservative GC but the function has an unmanaged
+      // call, skip safepoint insertion but run the lowering
+      // pass to lower the gc-transition arguments.
+      if (ContainsUnmanagedCall || Context.Options->DoInsertStatepoints) {
         legacy::PassManager Passes;
-        Passes.add(createPlaceSafepointsPass());
+        if (Context.Options->DoInsertStatepoints) {
+          Passes.add(createPlaceSafepointsPass());
+        }
         Passes.add(createRewriteStatepointsForGCPass());
         Passes.run(*M);
       }
@@ -501,7 +518,8 @@ LLILCJitContext::getModuleForMethod(CORINFO_METHOD_INFO *MethodInfo) {
 }
 
 // Read method MSIL and construct LLVM bitcode
-bool LLILCJit::readMethod(LLILCJitContext *JitContext) {
+bool LLILCJit::readMethod(LLILCJitContext *JitContext,
+                          bool &ContainsUnmanagedCall) {
   if (JitContext->HasLoadedBitCode) {
     // This is a case where we side loaded a llvm bitcode module.
     // The module is already complete so we avoid reading entirely.
@@ -514,6 +532,7 @@ bool LLILCJit::readMethod(LLILCJitContext *JitContext) {
   try {
     GenIR Reader(JitContext);
     Reader.msilToIR();
+    ContainsUnmanagedCall = Reader.containsUnmanagedCall();
   } catch (NotYetImplementedException &Nyi) {
     if (DumpLevel >= ::DumpLevel::SUMMARY) {
       errs() << "Failed to read " << FuncName << '[' << Nyi.reason() << "]\n";

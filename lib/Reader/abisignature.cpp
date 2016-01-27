@@ -261,17 +261,15 @@ bool ABICallSignature::hasIndirectResultOrArg() const {
   return false;
 }
 
-CallSite ABICallSignature::emitUnmanagedCall(GenIR &Reader, Value *Target,
-                                             bool MayThrow,
-                                             ArrayRef<Value *> Arguments,
-                                             Value *&Result) const {
+CallSite
+ABICallSignature::emitUnmanagedCall(GenIR &Reader, Value *Target, bool MayThrow,
+                                    ArrayRef<Value *> Arguments) const {
   const LLILCJitContext &JitContext = *Reader.JitContext;
   const struct CORINFO_EE_INFO::InlinedCallFrameInfo &CallFrameInfo =
       JitContext.EEInfo.inlinedCallFrameInfo;
   LLVMContext &LLVMContext = *JitContext.LLVMContext;
   Type *Int8Ty = Type::getInt8Ty(LLVMContext);
   Type *Int32Ty = Type::getInt32Ty(LLVMContext);
-  Type *Int64Ty = Type::getInt64Ty(LLVMContext);
   Type *Int8PtrTy = Reader.getUnmanagedPointerType(Int8Ty);
   IRBuilder<> &Builder = *Reader.LLVMBuilder;
 
@@ -342,68 +340,19 @@ CallSite ABICallSignature::emitUnmanagedCall(GenIR &Reader, Value *Target,
 
   // Construct the call.
   //
-  // The signature of the intrinsic is:
-  // @llvm.experimental_gc_transition(
-  //   fn_ptr target,
-  //   i32 numCallArgs,
-  //   i32 flags,
-  //   ... call args ...,
-  //   i32 numTransitionArgs,
-  //   ... transition args...,
-  //   i32 numDeoptArgs,
-  //   ... deopt args...)
-  //
-  // In the case of CoreCLR, there are 4 transition args and 0 deopt args.
-  //
   // The transition args are:
   // 0) Address of the return address field
   // 1) Address of the GC mode field
   // 2) Address of the thread trap global
   // 3) Address of CORINFO_HELP_STOP_FOR_GC
-  Module *M = Reader.Function->getParent();
-  Type *CallTypeArgs[] = {Target->getType()};
-  Function *CallIntrinsic = Intrinsic::getDeclaration(
-      M, Intrinsic::experimental_gc_statepoint, CallTypeArgs);
+  Value *TransitionArgs[] = {ReturnAddressAddress, GCStateAddress,
+                             ThreadTrapAddress, PauseHelperAddress};
+  OperandBundleDef TransitionBundle("gc-transition", TransitionArgs);
 
-  const uint32_t PrefixArgCount = 5;
-  const uint32_t TransitionArgCount = 4;
-  const uint32_t PostfixArgCount = TransitionArgCount + 2;
-  const uint32_t TargetArgCount = Arguments.size();
-  SmallVector<Value *, 24> IntrinsicArgs(PrefixArgCount + TargetArgCount +
-                                         PostfixArgCount);
-
-  // ID, nop bytes, call target and target arguments
-  IntrinsicArgs[0] = ConstantInt::get(Int64Ty, 0);
-  IntrinsicArgs[1] = ConstantInt::get(Int32Ty, 0);
-  IntrinsicArgs[2] = Target;
-  IntrinsicArgs[3] = ConstantInt::get(Int32Ty, TargetArgCount);
-  IntrinsicArgs[4] =
-      ConstantInt::get(Int32Ty, (uint32_t)StatepointFlags::GCTransition);
-
-  uint32_t I, J;
-  for (I = 0, J = PrefixArgCount; I < TargetArgCount; I++, J++) {
-    IntrinsicArgs[J] = Arguments[I];
-  }
-
-  // GC transition arguments
-  IntrinsicArgs[J] = ConstantInt::get(Int32Ty, TransitionArgCount);
-  IntrinsicArgs[J + 1] = ReturnAddressAddress;
-  IntrinsicArgs[J + 2] = GCStateAddress;
-  IntrinsicArgs[J + 3] = ThreadTrapAddress;
-  IntrinsicArgs[J + 4] = PauseHelperAddress;
-
-  // Deopt arguments
-  IntrinsicArgs[J + 5] = ConstantInt::get(Int32Ty, 0);
-
-  CallSite Call = Reader.makeCall(CallIntrinsic, MayThrow, IntrinsicArgs);
-
-  // Get the call result if necessary
-  if (!FuncResultType->isVoidTy()) {
-    Type *ResultTypeArgs[] = {FuncResultType};
-    Function *ResultIntrinsic = Intrinsic::getDeclaration(
-        M, Intrinsic::experimental_gc_result, ResultTypeArgs);
-    Result = Builder.CreateCall(ResultIntrinsic, Call.getInstruction());
-  }
+  CallSite Call =
+      Reader.makeCall(Target, MayThrow, Arguments, {TransitionBundle});
+  assert(Call.getOperandBundle(LLVMContext::OB_gc_transition).hasValue() &&
+         "tag string mismatch?");
 
   // Deactivate the unmanaged call frame
   Builder.CreateStore(Constant::getNullValue(Int8PtrTy), ReturnAddressAddress);
@@ -636,10 +585,8 @@ Value *ABICallSignature::emitCall(GenIR &Reader, Value *Target, bool MayThrow,
   // a special GC statepoint that forces any GC pointers in callee-saved
   // registers to be spilled to the stack.
   CallSite Call;
-  Value *UnmanagedCallResult = nullptr;
   if (IsUnmanagedCall) {
-    Call = emitUnmanagedCall(Reader, Target, MayThrow, Arguments,
-                             UnmanagedCallResult);
+    Call = emitUnmanagedCall(Reader, Target, MayThrow, Arguments);
   } else {
     Call = Reader.makeCall(Target, MayThrow, Arguments);
   }
@@ -673,7 +620,7 @@ Value *ABICallSignature::emitCall(GenIR &Reader, Value *Target, bool MayThrow,
     const CallArgType &SigResultType = Signature.getResultType();
     Type *Ty = Reader.getType(SigResultType.CorType, SigResultType.Class);
 
-    Value *CallResult = IsUnmanagedCall ? UnmanagedCallResult : TheCallInst;
+    Value *CallResult = TheCallInst;
 
     if (!Ty->isVoidTy()) {
       if (Result.getKind() == ABIArgInfo::Expand) {
