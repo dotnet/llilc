@@ -91,9 +91,6 @@
         <ExcludeList Include="$(XunitTestBinBase)\JIT\CodeGenBringUpTests\RecursiveTailCall\RecursiveTailCall.cmd" >
              <Issue>1005</Issue>
         </ExcludeList>
-        <ExcludeList Include="$(XunitTestBinBase)\JIT\Performance\CodeQuality\V8\DeltaBlue\DeltaBlue\DeltaBlue.cmd" >
-             <Issue>1000</Issue>
-        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\Directed\nullabletypes\castclassenum_ro\castclassenum_ro.cmd" >
              <Issue>993</Issue>
         </ExcludeList>
