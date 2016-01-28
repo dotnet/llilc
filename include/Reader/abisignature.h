@@ -102,13 +102,11 @@ private:
   /// \oaram MayThrow      True iff the callee may raise an exception.
   /// \param Args          The arguments to the call, arranged as per the
   ///                      calling convention and target ABI.
-  /// \param Result [out]  The result of the call, if any.
   ///
   /// \returns The call site corresponding to the unmanaged call.
   llvm::CallSite emitUnmanagedCall(GenIR &Reader, llvm::Value *Target,
                                    bool MayThrow,
-                                   llvm::ArrayRef<llvm::Value *> Args,
-                                   llvm::Value *&Result) const;
+                                   llvm::ArrayRef<llvm::Value *> Args) const;
 
 public:
   ABICallSignature(const ReaderCallSignature &Signature, GenIR &Reader,

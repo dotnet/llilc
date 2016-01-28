@@ -272,8 +272,10 @@ public:
 private:
   /// Convert a method into LLVM IR.
   /// \param JitContext Context record for the method's jit request.
+  /// \param ContainsUnmanagedCall [out] Indicates whether the method read
+  ///                                    contains a call to unmanaged code.
   /// \returns \p true if the conversion was successful.
-  bool readMethod(LLILCJitContext *JitContext);
+  bool readMethod(LLILCJitContext *JitContext, bool &ContainsUnmanagedCall);
 
 public:
   /// A pointer to the singleton jit instance.
