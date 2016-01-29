@@ -26,6 +26,8 @@
 #include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/MC/MCParser/AsmLexer.h"
 #include "llvm/MC/MCRegisterInfo.h"
+#include "llvm/MC/MCSectionCOFF.h"
+#include "llvm/MC/MCSectionELF.h"
 #include "llvm/MC/MCSectionMachO.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSubtargetInfo.h"
@@ -148,6 +150,7 @@ public:
   MCTargetOptions MCOptions;
   std::vector<DebugLocInfo> DebugLocInfos;
   bool frameOpened;
+  std::map<std::string, MCSection *> CustomSections;
 
 public:
   bool init(StringRef FunctionName);
@@ -250,6 +253,53 @@ extern "C" void FinishObjWriter(ObjectWriter *OW) {
   delete OW;
 }
 
+extern "C" bool CreateDataSection(ObjectWriter *OW, const char *SectionName,
+                                  bool IsReadOnly) {
+  assert(OW && "ObjWriter is null");
+  Triple TheTriple(TripleName);
+  auto *AsmPrinter = &OW->getAsmPrinter();
+  auto &OST = *AsmPrinter->OutStreamer;
+  MCContext &OutContext = OST.getContext();
+
+  std::string SectionNameStr(SectionName);
+  assert(OW->CustomSections.find(SectionNameStr) == OW->CustomSections.end() &&
+         "Section with duplicate name already exists");
+
+  MCSection *Section = nullptr;
+  SectionKind Kind =
+      IsReadOnly ? SectionKind::getReadOnly() : SectionKind::getData();
+
+  switch (TheTriple.getObjectFormat()) {
+  case Triple::MachO:
+    Section = OutContext.getMachOSection("__DATA", SectionName, 0, Kind);
+    break;
+  case Triple::COFF: {
+    unsigned Characteristics =
+        COFF::IMAGE_SCN_CNT_INITIALIZED_DATA | COFF::IMAGE_SCN_MEM_READ;
+
+    if (!IsReadOnly) {
+      Characteristics |= COFF::IMAGE_SCN_MEM_WRITE;
+    }
+    Section = OutContext.getCOFFSection(SectionName, Characteristics, Kind);
+    break;
+  }
+  case Triple::ELF: {
+    unsigned Flags = ELF::SHF_ALLOC;
+    if (!IsReadOnly) {
+      Flags |= ELF::SHF_WRITE;
+    }
+    Section = OutContext.getELFSection(SectionName, ELF::SHT_PROGBITS, Flags);
+    break;
+  }
+  default:
+    return error("Unknown output format for target " + TripleName);
+    break;
+  }
+
+  OW->CustomSections[SectionNameStr] = Section;
+  return true;
+}
+
 extern "C" void SwitchSection(ObjectWriter *OW, const char *SectionName) {
   assert(OW && "ObjWriter is null");
   auto *AsmPrinter = &OW->getAsmPrinter();
@@ -265,8 +315,13 @@ extern "C" void SwitchSection(ObjectWriter *OW, const char *SectionName) {
   } else if (strcmp(SectionName, "rdata") == 0) {
     Section = MOFI->getReadOnlySection();
   } else {
-    // Add more general cases
-    assert(!"Unsupported section");
+    std::string SectionNameStr(SectionName);
+    if (OW->CustomSections.find(SectionNameStr) != OW->CustomSections.end()) {
+      Section = OW->CustomSections[SectionNameStr];
+    } else {
+      // Add more general cases
+      assert(!"Unsupported section");
+    }
   }
 
   OST.SwitchSection(Section);
