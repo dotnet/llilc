@@ -1,6 +1,7 @@
 project(objwriter)
 
 include_directories(${LLVM_INCLUDE_DIRS})
+include_directories(${CORECLR_INCLUDE})
 add_definitions(${LLVM_DEFINITIONS})
 
 if (WIN32)
