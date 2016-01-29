@@ -201,17 +201,6 @@ ICorJitCompiler *__stdcall getJit() {
       Opts["disable-cgp-gc-opts"]->addOccurrence(0, "disable-cgp-gc-opts",
                                                  "true");
     }
-    // Set flags indicating to statepoint lowering that call->statepoint
-    // rewriting happens in rs4gc rather than statepoint placement, and
-    // that we use operand bundles for deopt/transition arguments.
-    if (Opts["spp-no-statepoints"]->getNumOccurrences() == 0) {
-      Opts["spp-no-statepoints"]->addOccurrence(0, "spp-no-statepoints",
-                                                "true");
-    }
-    if (Opts["rs4gc-use-deopt-bundles"]->getNumOccurrences() == 0) {
-      Opts["rs4gc-use-deopt-bundles"]->addOccurrence(
-          0, "rs4gc-use-deopt-bundles", "true");
-    }
   }
 
   return LLILCJit::TheJit;
