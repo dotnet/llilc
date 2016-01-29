@@ -15,6 +15,7 @@
 
 #include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/DebugInfo/CodeView/CodeView.h"
+#include "llvm/DebugInfo/CodeView/Line.h"
 #include "llvm/DebugInfo/CodeView/SymbolRecord.h"
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCAsmInfo.h"
@@ -606,7 +607,7 @@ static void EmitDebugLocInfo(ObjectWriter *OW, const char *FunctionName,
   OST.EmitCOFFSecRel32(Fn);
   OST.EmitCOFFSectionIndex(Fn);
   // Insert flags after a 16-bit section index.
-  OST.EmitIntValue(COFF::DEBUG_LINE_TABLES_HAVE_COLUMN_RECORDS, 2);
+  OST.EmitIntValue(codeview::LineFlags::HaveColumns, 2);
 
   // Length of the function's code, in bytes.
   OST.EmitIntValue(FunctionSize, 4);
