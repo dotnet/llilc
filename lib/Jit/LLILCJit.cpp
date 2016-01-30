@@ -22,6 +22,7 @@
 #include "readerir.h"
 #include "abi.h"
 #include "EEMemoryManager.h"
+#include "EEObjectLinkingLayer.h"
 #include "llvm/CodeGen/GCs.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/DebugInfo/DIContext.h"
@@ -345,7 +346,7 @@ CorJitResult LLILCJit::compileMethod(ICorJitInfo *JitInfo,
     // Construct the jitting layers.
     EEMemoryManager MM(&Context);
     ObjectLoadListener Listener(&Context);
-    orc::ObjectLinkingLayer<decltype(Listener)> Loader(Listener);
+    orc::EEObjectLinkingLayer<decltype(Listener)> Loader(Listener);
     auto ReserveUnwindSpace =
         [&MM](std::unique_ptr<object::OwningBinary<object::ObjectFile>> Obj) {
           MM.reserveUnwindSpace(*Obj->getBinary());
