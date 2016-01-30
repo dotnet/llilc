@@ -13,3 +13,4 @@ EmitCFICode
 EmitDebugFileInfo
 EmitDebugLoc
 FlushDebugLocs
+CreateDataSection
