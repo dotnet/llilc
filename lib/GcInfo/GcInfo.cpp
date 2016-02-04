@@ -580,7 +580,7 @@ void GcInfoEmitter::encodeTrackedPointers(const GcFuncInfo *GcFuncInfo) {
         assert(false && "GC-Pointer Live in Register");
         break;
 
-      case StackMapParserType::LocationKind::Direct: {
+      case StackMapParserType::LocationKind::Indirect: {
         // __LLVM_Stackmap reports the liveness of pointers wrt SP even for
         // methods which have a FP.
         assert(Loc.getDwarfRegNum() == DW_STACK_POINTER &&
