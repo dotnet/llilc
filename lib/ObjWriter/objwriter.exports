@@ -12,5 +12,6 @@ EmitCFIEnd
 EmitCFICode
 EmitDebugFileInfo
 EmitDebugLoc
-FlushDebugLocs
+EmitDebugFunctionInfo
+EmitDebugModuleInfo
 CreateDataSection

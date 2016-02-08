@@ -148,9 +148,9 @@ public:
 
   std::unique_ptr<raw_fd_ostream> OS;
   MCTargetOptions MCOptions;
-  std::vector<DebugLocInfo> DebugLocInfos;
-  bool frameOpened;
+  bool FrameOpened;
   std::map<std::string, MCSection *> CustomSections;
+  int FuncId;
 
 public:
   bool init(StringRef FunctionName);
@@ -229,7 +229,9 @@ bool ObjectWriter::init(llvm::StringRef ObjectFilePath) {
   if (!Asm)
     return error("no asm printer for target " + TripleName);
 
-  frameOpened = false;
+  FrameOpened = false;
+  FuncId = 1;
+
   return true;
 }
 
@@ -475,27 +477,27 @@ extern "C" void EmitWinFrameInfo(ObjectWriter *OW, const char *FunctionName,
 
 extern "C" void EmitCFIStart(ObjectWriter *OW, int Offset) {
   assert(OW && "ObjWriter is null");
-  assert(!OW->frameOpened && "frame should be closed before CFIStart");
+  assert(!OW->FrameOpened && "frame should be closed before CFIStart");
   auto *AsmPrinter = &OW->getAsmPrinter();
   auto &OST = *AsmPrinter->OutStreamer;
 
   OST.EmitCFIStartProc(false);
-  OW->frameOpened = true;
+  OW->FrameOpened = true;
 }
 
 extern "C" void EmitCFIEnd(ObjectWriter *OW, int Offset) {
   assert(OW && "ObjWriter is null");
-  assert(OW->frameOpened && "frame should be opened before CFIEnd");
+  assert(OW->FrameOpened && "frame should be opened before CFIEnd");
   auto *AsmPrinter = &OW->getAsmPrinter();
   auto &OST = *AsmPrinter->OutStreamer;
 
   OST.EmitCFIEndProc();
-  OW->frameOpened = false;
+  OW->FrameOpened = false;
 }
 
 extern "C" void EmitCFICode(ObjectWriter *OW, int Offset, const char *Blob) {
   assert(OW && "ObjWriter is null");
-  assert(OW->frameOpened && "frame should be opened before CFICode");
+  assert(OW->FrameOpened && "frame should be opened before CFICode");
   auto *AsmPrinter = &OW->getAsmPrinter();
   auto &OST = *AsmPrinter->OutStreamer;
 
@@ -531,8 +533,8 @@ static void EmitLabelDiff(MCStreamer &Streamer, const MCSymbol *From,
   Streamer.EmitValue(AddrDelta, Size);
 }
 
-extern "C" void EmitDebugFileInfo(ObjectWriter *OW, int FileInfoSize,
-                                  const char *FileInfos[]) {
+extern "C" void EmitDebugFileInfo(ObjectWriter *OW, int FileId,
+                                  const char *FileName) {
   assert(OW && "ObjWriter is null");
   auto *AsmPrinter = &OW->getAsmPrinter();
   auto &OST = static_cast<MCObjectStreamer &>(*AsmPrinter->OutStreamer);
@@ -544,43 +546,15 @@ extern "C" void EmitDebugFileInfo(ObjectWriter *OW, int FileInfoSize,
     return;
   }
 
-  MCSection *Section = MOFI->getCOFFDebugSymbolsSection();
-  OST.SwitchSection(Section);
-  OST.EmitIntValue(COFF::DEBUG_SECTION_MAGIC, 4);
-
-  // This subsection holds a file index to offset in string table table.
-  OST.EmitIntValue(unsigned(ModuleSubstreamKind::FileChecksums), 4);
-  OST.EmitIntValue(8 * FileInfoSize, 4);
-  int CurrentOffset = 1;
-  for (int I = 0; I < FileInfoSize; I++) {
-    StringRef Filename = FileInfos[I];
-    // For each unique filename, just write its offset in the string table.
-    OST.EmitIntValue(CurrentOffset, 4);
-    // The function name offset is not followed by any additional data.
-    OST.EmitIntValue(0, 4);
-
-    CurrentOffset += Filename.size() + 1;
-  }
-
-  // This subsection holds the string table.
-  OST.EmitIntValue(unsigned(ModuleSubstreamKind::StringTable), 4);
-  OST.EmitIntValue(CurrentOffset, 4);
-  // The payload starts with a null character.
-  OST.EmitIntValue(0, 1);
-
-  for (int I = 0; I < FileInfoSize; I++) {
-    // Just emit unique filenames one by one, separated by a null character.
-    OST.EmitBytes(FileInfos[I]);
-    OST.EmitIntValue(0, 1);
-  }
-
-  // No more subsections. Fill with zeros to align the end of the section by 4.
-  OST.EmitValueToAlignment(4);
+  assert(FileId > 0 && "FileId should be greater than 0.");
+  OST.EmitCVFileDirective(FileId, FileName);
 }
 
-static void EmitDebugLocInfo(ObjectWriter *OW, const char *FunctionName,
-                             int FunctionSize, int NumLocInfos,
-                             DebugLocInfo LocInfos[]) {
+// This should be invoked at the end of function code emission to flush
+// debug function info.
+extern "C" void EmitDebugFunctionInfo(ObjectWriter *OW,
+                                      const char *FunctionName,
+                                      int FunctionSize) {
 
   assert(OW && "ObjWriter is null");
   auto *AsmPrinter = &OW->getAsmPrinter();
@@ -593,8 +567,16 @@ static void EmitDebugLocInfo(ObjectWriter *OW, const char *FunctionName,
     return;
   }
 
+  // Mark the end of function.
+  MCSymbol *FnEnd = OutContext.createTempSymbol();
+  OST.EmitLabel(FnEnd);
+
   MCSection *Section = MOFI->getCOFFDebugSymbolsSection();
   OST.SwitchSection(Section);
+  // Emit debug section magic before the first entry.
+  if (OW->FuncId == 1) {
+    OST.EmitIntValue(COFF::DEBUG_SECTION_MAGIC, 4);
+  }
 
   MCSymbol *Fn = OutContext.getOrCreateSymbol(Twine(FunctionName));
 
@@ -635,87 +617,9 @@ static void EmitDebugLocInfo(ObjectWriter *OW, const char *FunctionName,
   // Every subsection must be aligned to a 4-byte boundary.
   OST.EmitValueToAlignment(4);
 
-  // PCs/Instructions are grouped into segments sharing the same filename.
-  // Pre-calculate the lengths (in instructions) of these segments and store
-  // them in a map for convenience.  Each index in the map is the sequential
-  // number of the respective instruction that starts a new segment.
-  DenseMap<size_t, size_t> FilenameSegmentLengths;
-  size_t LastSegmentEnd = 0;
-  int PrevFileId = LocInfos[0].FileId;
-  for (int J = 1; J < NumLocInfos; ++J) {
-    if (PrevFileId == LocInfos[J].FileId)
-      continue;
-    FilenameSegmentLengths[LastSegmentEnd] = J - LastSegmentEnd;
-    LastSegmentEnd = J;
-    PrevFileId = LocInfos[J].FileId;
-  }
-  FilenameSegmentLengths[LastSegmentEnd] = NumLocInfos - LastSegmentEnd;
-
-  // Emit a line table subsection, required to do PC-to-file:line lookup.
-  OST.EmitIntValue(unsigned(ModuleSubstreamKind::Lines), 4);
-  MCSymbol *LineTableBegin = OutContext.createTempSymbol(),
-           *LineTableEnd = OutContext.createTempSymbol();
-  EmitLabelDiff(OST, LineTableBegin, LineTableEnd);
-  OST.EmitLabel(LineTableBegin);
-
-  // Identify the function this subsection is for.
-  OST.EmitCOFFSecRel32(Fn);
-  OST.EmitCOFFSectionIndex(Fn);
-  // Insert flags after a 16-bit section index.
-  OST.EmitIntValue(codeview::LineFlags::HaveColumns, 2);
-
-  // Length of the function's code, in bytes.
-  OST.EmitIntValue(FunctionSize, 4);
-
-  // PC-to-linenumber lookup table:
-  MCSymbol *FileSegmentEnd = nullptr;
-
-  // The start of the last segment:
-  size_t LastSegmentStart = 0;
-
-  auto FinishPreviousChunk = [&] {
-    if (!FileSegmentEnd)
-      return;
-    for (size_t ColSegI = LastSegmentStart,
-                ColSegEnd = ColSegI + FilenameSegmentLengths[LastSegmentStart];
-         ColSegI != ColSegEnd; ++ColSegI) {
-      unsigned ColumnNumber = LocInfos[ColSegI].ColNumber;
-      OST.EmitIntValue(ColumnNumber, 2); // Start column
-      OST.EmitIntValue(ColumnNumber, 2); // End column
-    }
-    OST.EmitLabel(FileSegmentEnd);
-  };
-
-  for (int J = 0; J < NumLocInfos; ++J) {
-    DebugLocInfo Loc = LocInfos[J];
-
-    if (FilenameSegmentLengths.count(J)) {
-      // We came to a beginning of a new filename segment.
-      FinishPreviousChunk();
-
-      MCSymbol *FileSegmentBegin = OutContext.createTempSymbol();
-      OST.EmitLabel(FileSegmentBegin);
-      // Each entry in string index table is 8 byte.
-      OST.EmitIntValue(8 * Loc.FileId, 4);
-
-      // Number of PC records in the lookup table.
-      size_t SegmentLength = FilenameSegmentLengths[J];
-      OST.EmitIntValue(SegmentLength, 4);
-
-      // Full size of the segment for this filename, including the prev two
-      // records.
-      FileSegmentEnd = OutContext.createTempSymbol();
-      EmitLabelDiff(OST, FileSegmentBegin, FileSegmentEnd);
-      LastSegmentStart = J;
-    }
-
-    // The first PC with the given linenumber and the linenumber itself.
-    OST.EmitIntValue(Loc.NativeOffset, 4);
-    OST.EmitIntValue(Loc.LineNumber, 4);
-  }
-
-  FinishPreviousChunk();
-  OST.EmitLabel(LineTableEnd);
+  // We have an assembler directive that takes care of the whole line table.
+  // We also increase function id for the next function.
+  OST.EmitCVLinetableDirective(OW->FuncId++, Fn, FnEnd);
 }
 
 extern "C" void EmitDebugLoc(ObjectWriter *OW, int NativeOffset, int FileId,
@@ -731,13 +635,14 @@ extern "C" void EmitDebugLoc(ObjectWriter *OW, int NativeOffset, int FileId,
     return;
   }
 
-  // We just aggregate locs for CodeView emission.
-  DebugLocInfo Loc = {NativeOffset, FileId, LineNumber, ColNumber};
-  OW->DebugLocInfos.push_back(Loc);
+  assert(FileId > 0 && "FileId should be greater than 0.");
+  OST.EmitCVLocDirective(OW->FuncId, FileId, LineNumber, ColNumber, false, true,
+                         "");
 }
 
-extern "C" void FlushDebugLocs(ObjectWriter *OW, const char *FunctionName,
-                               int FunctionSize) {
+// This should be invoked at the end of module emission to finalize
+// debug module info.
+extern "C" void EmitDebugModuleInfo(ObjectWriter *OW) {
   assert(OW && "ObjWriter is null");
   auto *AsmPrinter = &OW->getAsmPrinter();
   auto &OST = static_cast<MCObjectStreamer &>(*AsmPrinter->OutStreamer);
@@ -749,15 +654,8 @@ extern "C" void FlushDebugLocs(ObjectWriter *OW, const char *FunctionName,
     return;
   }
 
-  int NumLocInfos = OW->DebugLocInfos.size();
-  if (NumLocInfos > 0) {
-    std::unique_ptr<DebugLocInfo[]> LocInfos(new DebugLocInfo[NumLocInfos]);
-    std::copy(OW->DebugLocInfos.begin(), OW->DebugLocInfos.end(),
-              LocInfos.get());
-
-    EmitDebugLocInfo(OW, FunctionName, FunctionSize, NumLocInfos,
-                     LocInfos.get());
-
-    OW->DebugLocInfos.clear();
-  }
+  MCSection *Section = MOFI->getCOFFDebugSymbolsSection();
+  OST.SwitchSection(Section);
+  OST.EmitCVFileChecksumsDirective();
+  OST.EmitCVStringTableDirective();
 }
