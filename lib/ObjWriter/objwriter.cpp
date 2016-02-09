@@ -312,6 +312,10 @@ extern "C" void SwitchSection(ObjectWriter *OW, const char *SectionName) {
   MCSection *Section = nullptr;
   if (strcmp(SectionName, "text") == 0) {
     Section = MOFI->getTextSection();
+    if (!Section->hasInstructions()) {
+      Section->setHasInstructions(true);
+      OutContext.addGenDwarfSection(Section);
+    }
   } else if (strcmp(SectionName, "data") == 0) {
     Section = MOFI->getDataSection();
   } else if (strcmp(SectionName, "rdata") == 0) {
@@ -327,6 +331,12 @@ extern "C" void SwitchSection(ObjectWriter *OW, const char *SectionName) {
   }
 
   OST.SwitchSection(Section);
+
+  if (!Section->getBeginSymbol()) {
+    MCSymbol *SectionStartSym = OutContext.createTempSymbol();
+    OST.EmitLabel(SectionStartSym);
+    Section->setBeginSymbol(SectionStartSym);
+  }
 }
 
 extern "C" void EmitAlignment(ObjectWriter *OW, int ByteAlignment) {
@@ -541,13 +551,12 @@ extern "C" void EmitDebugFileInfo(ObjectWriter *OW, int FileId,
   MCContext &OutContext = OST.getContext();
   const MCObjectFileInfo *MOFI = OutContext.getObjectFileInfo();
 
-  // TODO: Should convert this for non-Windows.
-  if (MOFI->getObjectFileType() != MOFI->IsCOFF) {
-    return;
-  }
-
   assert(FileId > 0 && "FileId should be greater than 0.");
-  OST.EmitCVFileDirective(FileId, FileName);
+  if (MOFI->getObjectFileType() == MOFI->IsCOFF) {
+    OST.EmitCVFileDirective(FileId, FileName);
+  } else {
+    OST.EmitDwarfFileDirective(FileId, "", FileName);
+  }
 }
 
 // This should be invoked at the end of function code emission to flush
@@ -630,14 +639,13 @@ extern "C" void EmitDebugLoc(ObjectWriter *OW, int NativeOffset, int FileId,
   MCContext &OutContext = OST.getContext();
   const MCObjectFileInfo *MOFI = OutContext.getObjectFileInfo();
 
-  // TODO: Should convert this for non-Windows.
-  if (MOFI->getObjectFileType() != MOFI->IsCOFF) {
-    return;
-  }
-
   assert(FileId > 0 && "FileId should be greater than 0.");
-  OST.EmitCVLocDirective(OW->FuncId, FileId, LineNumber, ColNumber, false, true,
-                         "");
+  if (MOFI->getObjectFileType() == MOFI->IsCOFF) {
+    OST.EmitCVLocDirective(OW->FuncId, FileId, LineNumber, ColNumber, false,
+                           true, "");
+  } else {
+    OST.EmitDwarfLocDirective(FileId, LineNumber, ColNumber, 1, 0, 0, "");
+  }
 }
 
 // This should be invoked at the end of module emission to finalize
@@ -649,13 +657,12 @@ extern "C" void EmitDebugModuleInfo(ObjectWriter *OW) {
   MCContext &OutContext = OST.getContext();
   const MCObjectFileInfo *MOFI = OutContext.getObjectFileInfo();
 
-  // TODO: Should convert this for non-Windows.
-  if (MOFI->getObjectFileType() != MOFI->IsCOFF) {
-    return;
+  if (MOFI->getObjectFileType() == MOFI->IsCOFF) {
+    MCSection *Section = MOFI->getCOFFDebugSymbolsSection();
+    OST.SwitchSection(Section);
+    OST.EmitCVFileChecksumsDirective();
+    OST.EmitCVStringTableDirective();
+  } else {
+    MCGenDwarfInfo::Emit(&OST);
   }
-
-  MCSection *Section = MOFI->getCOFFDebugSymbolsSection();
-  OST.SwitchSection(Section);
-  OST.EmitCVFileChecksumsDirective();
-  OST.EmitCVStringTableDirective();
 }
