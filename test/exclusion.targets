@@ -1,6 +1,12 @@
 <Project DefaultTargets = "GetListOfTestCmds"
     xmlns="http://schemas.microsoft.com/developer/msbuild/2003" >
     <ItemGroup Condition="'$(XunitTestBinBase)' != ''">
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\opt\Inline\regression\mismatch32\mismatch32\mismatch32.cmd" >
+             <Issue>1025</Issue>
+        </ExcludeList>
+        <ExcludeList Include="$(XunitTestBinBase)\JIT\opt\Inline\regression\mismatch64\mismatch64\mismatch64.cmd" >
+             <Issue>1025</Issue>
+        </ExcludeList>
         <ExcludeList Include="$(XunitTestBinBase)\JIT\SIMD\VectorAbs_ro\VectorAbs_ro.cmd" >
              <Issue>1008</Issue>
         </ExcludeList>
