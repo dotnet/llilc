@@ -1,18 +1,18 @@
 {
   "runtimes": {
     "win7-x64": {
-      "Microsoft.DotNet.CoreDisTools": {
-        "toolchain.win7-x64.Microsoft.DotNet.CoreDisTools": "1.0.0-prerelease"
+      "Microsoft.NETCore.CoreDisTools": {
+        "runtime.win7-x64.Microsoft.NETCore.CoreDisTools": "1.0.0-prerelease-00001"
       }
     },
     "ubuntu.14.04-x64": {
-      "Microsoft.DotNet.CoreDisTools": {
-        "toolchain.ubuntu.14.04-x64.Microsoft.DotNet.CoreDisTools": "1.0.0-prerelease"
+      "Microsoft.NETCore.CoreDisTools": {
+        "runtime.ubuntu.14.04-x64.Microsoft.NETCore.CoreDisTools": "1.0.0-prerelease-00001"
       }
     },
     "osx.10.10-x64": {
-      "Microsoft.DotNet.CoreDisTools": {
-        "toolchain.osx.10.10-x64.Microsoft.DotNet.CoreDisTools": "1.0.0-prerelease"
+      "Microsoft.NETCore.CoreDisTools": {
+        "runtime.osx.10.10-x64.Microsoft.NETCore.CoreDisTools": "1.0.0-prerelease-00001"
       }
     }
   }
