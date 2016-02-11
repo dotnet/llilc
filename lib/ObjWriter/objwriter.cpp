@@ -52,6 +52,8 @@
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/Target/TargetSubtargetInfo.h"
 #include "cfi.h"
+#include <string>
+#include "jitDebugInfo.h"
 
 using namespace llvm;
 using namespace llvm::codeview;
@@ -123,13 +125,6 @@ bool error(const Twine &Error) {
   return false;
 }
 
-typedef struct _DebugLocInfo {
-  int NativeOffset;
-  int FileId;
-  int LineNumber;
-  int ColNumber;
-} DebugLocInfo;
-
 class ObjectWriter {
 public:
   std::unique_ptr<MCRegisterInfo> MRI;
@@ -149,6 +144,8 @@ public:
   std::unique_ptr<raw_fd_ostream> OS;
   MCTargetOptions MCOptions;
   bool FrameOpened;
+  std::vector<DebugVarInfo> DebugVarInfos;
+
   std::map<std::string, MCSection *> CustomSections;
   int FuncId;
 
@@ -559,22 +556,118 @@ extern "C" void EmitDebugFileInfo(ObjectWriter *OW, int FileId,
   }
 }
 
-// This should be invoked at the end of function code emission to flush
-// debug function info.
-extern "C" void EmitDebugFunctionInfo(ObjectWriter *OW,
-                                      const char *FunctionName,
-                                      int FunctionSize) {
+static void EmitSymRecord(MCObjectStreamer &OST, int Size,
+                          SymbolRecordKind SymbolKind) {
+  SymRecord Rec = {ulittle16_t(Size + sizeof(ulittle16_t)),
+                   ulittle16_t(SymbolKind)};
+  OST.EmitBytes(StringRef((char *)&Rec, sizeof(Rec)));
+}
 
+static void EmitVarDefRange(MCObjectStreamer &OST, const MCSymbol *Fn,
+                            LocalVariableAddrRange &Range) {
+  const MCSymbolRefExpr *BaseSym =
+      MCSymbolRefExpr::create(Fn, OST.getContext());
+  const MCExpr *Offset =
+      MCConstantExpr::create(Range.OffsetStart, OST.getContext());
+  const MCExpr *Expr =
+      MCBinaryExpr::createAdd(BaseSym, Offset, OST.getContext());
+  OST.EmitCOFFSecRel32Value(Expr);
+  OST.EmitCOFFSectionIndex(Fn);
+  OST.EmitIntValue(Range.Range, 2);
+}
+
+static void EmitCVDebugVarInfo(MCObjectStreamer &OST, const MCSymbol *Fn,
+                               DebugVarInfo LocInfos[], int NumVarInfos) {
+  for (int I = 0; I < NumVarInfos; I++) {
+    // Emit an S_LOCAL record
+    DebugVarInfo Var = LocInfos[I];
+    LocalSym Sym = {};
+
+    int SizeofSym = sizeof(LocalSym);
+    EmitSymRecord(OST, SizeofSym + Var.Name.length() + 1,
+                  SymbolRecordKind::S_LOCAL);
+
+    Sym.Type = TypeIndex(Var.TypeIndex);
+
+    if (Var.IsParam) {
+      Sym.Flags |= LocalSym::IsParameter;
+    }
+
+    OST.EmitBytes(StringRef((char *)&Sym, SizeofSym));
+    OST.EmitBytes(StringRef(Var.Name.c_str(), Var.Name.length() + 1));
+
+    for (const auto &Range : Var.Ranges) {
+      // Emit a range record
+      switch (Range.loc.vlType) {
+      case ICorDebugInfo::VLT_REG:
+      case ICorDebugInfo::VLT_REG_FP: {
+        DefRangeRegisterSym Rec = {};
+        Rec.Range.OffsetStart = Range.startOffset;
+        Rec.Range.Range = Range.endOffset - Range.startOffset;
+        Rec.Range.ISectStart = 0;
+
+        // Currently only support integer registers.
+        // TODO: support xmm registers
+        if (Range.loc.vlReg.vlrReg >=
+            sizeof(cvRegMapAmd64) / sizeof(cvRegMapAmd64[0])) {
+          break;
+        }
+
+        Rec.Register = cvRegMapAmd64[Range.loc.vlReg.vlrReg];
+        EmitSymRecord(OST, sizeof(DefRangeRegisterSym),
+                      SymbolRecordKind::S_DEFRANGE_REGISTER);
+        OST.EmitBytes(
+            StringRef((char *)&Rec, offsetof(DefRangeRegisterSym, Range)));
+        EmitVarDefRange(OST, Fn, Rec.Range);
+        break;
+      }
+
+      case ICorDebugInfo::VLT_STK: {
+        DefRangeRegisterRelSym Rec = {};
+        Rec.Range.OffsetStart = Range.startOffset;
+        Rec.Range.Range = Range.endOffset - Range.startOffset;
+        Rec.Range.ISectStart = 0;
+        assert(Range.loc.vlStk.vlsBaseReg <
+                   sizeof(cvRegMapAmd64) / sizeof(cvRegMapAmd64[0]) &&
+               "Register number should be in the range of [REGNUM_RAX, "
+               "REGNUM_R15].");
+        Rec.BaseRegister = cvRegMapAmd64[Range.loc.vlStk.vlsBaseReg];
+        Rec.BasePointerOffset = Range.loc.vlStk.vlsOffset;
+        EmitSymRecord(OST, sizeof(DefRangeRegisterRelSym),
+                      SymbolRecordKind::S_DEFRANGE_REGISTER_REL);
+        OST.EmitBytes(
+            StringRef((char *)&Rec, offsetof(DefRangeRegisterRelSym, Range)));
+        EmitVarDefRange(OST, Fn, Rec.Range);
+        break;
+      }
+
+      case ICorDebugInfo::VLT_REG_BYREF:
+      case ICorDebugInfo::VLT_STK_BYREF:
+      case ICorDebugInfo::VLT_REG_REG:
+      case ICorDebugInfo::VLT_REG_STK:
+      case ICorDebugInfo::VLT_STK_REG:
+      case ICorDebugInfo::VLT_STK2:
+      case ICorDebugInfo::VLT_FPSTK:
+      case ICorDebugInfo::VLT_FIXED_VA:
+        // TODO: for optimized debugging
+        break;
+
+      default:
+        assert(!"Unknown varloc type!");
+        break;
+      }
+    }
+  }
+}
+
+static void EmitCVDebugFunctionInfo(ObjectWriter *OW, const char *FunctionName,
+                                    int FunctionSize) {
   assert(OW && "ObjWriter is null");
   auto *AsmPrinter = &OW->getAsmPrinter();
   auto &OST = static_cast<MCObjectStreamer &>(*AsmPrinter->OutStreamer);
   MCContext &OutContext = OST.getContext();
   const MCObjectFileInfo *MOFI = OutContext.getObjectFileInfo();
-
-  // TODO: Should convert this for non-Windows.
-  if (MOFI->getObjectFileType() != MOFI->IsCOFF) {
-    return;
-  }
+  assert(MOFI->getObjectFileType() == MOFI->IsCOFF);
 
   // Mark the end of function.
   MCSymbol *FnEnd = OutContext.createTempSymbol();
@@ -596,31 +689,36 @@ extern "C" void EmitDebugFunctionInfo(ObjectWriter *OW,
   EmitLabelDiff(OST, SymbolsBegin, SymbolsEnd);
   OST.EmitLabel(SymbolsBegin);
   {
-    MCSymbol *ProcSegmentBegin = OutContext.createTempSymbol(),
-             *ProcSegmentEnd = OutContext.createTempSymbol();
-    EmitLabelDiff(OST, ProcSegmentBegin, ProcSegmentEnd, 2);
-    OST.EmitLabel(ProcSegmentBegin);
+    int RecSize = sizeof(ProcSym) + strlen(FunctionName) + 1;
+    EmitSymRecord(OST, RecSize, SymbolRecordKind::S_GPROC32_ID);
 
-    OST.EmitIntValue(unsigned(SymbolRecordKind::S_GPROC32_ID), 2);
-    // Some bytes of this segment don't seem to be required for basic debugging,
-    // so just fill them with zeroes.
-    OST.EmitFill(12, 0);
-    // This is the important bit that tells the debugger where the function
-    // code is located and what's its size:
-    OST.EmitIntValue(FunctionSize, 4);
-    OST.EmitFill(12, 0);
+    ProcSym ProRec = {};
+    ProRec.CodeSize = FunctionSize;
+    ProRec.DbgEnd = FunctionSize;
+
+    OST.EmitBytes(StringRef((char *)&ProRec, offsetof(ProcSym, CodeOffset)));
+
+    // Emit relocation
     OST.EmitCOFFSecRel32(Fn);
     OST.EmitCOFFSectionIndex(Fn);
-    OST.EmitIntValue(0, 1);
+
+    // Emit flags
+    OST.EmitIntValue(ProRec.Flags, sizeof(ProRec.Flags));
+
     // Emit the function display name as a null-terminated string.
-    OST.EmitBytes(FunctionName);
-    OST.EmitIntValue(0, 1);
-    OST.EmitLabel(ProcSegmentEnd);
+    OST.EmitBytes(StringRef(FunctionName, strlen(FunctionName) + 1));
+
+    // Emit local var info
+    int NumVarInfos = OW->DebugVarInfos.size();
+    if (NumVarInfos > 0) {
+      EmitCVDebugVarInfo(OST, Fn, &OW->DebugVarInfos[0], NumVarInfos);
+      OW->DebugVarInfos.clear();
+    }
 
     // We're done with this function.
-    OST.EmitIntValue(0x0002, 2);
-    OST.EmitIntValue(unsigned(SymbolRecordKind::S_PROC_ID_END), 2);
+    EmitSymRecord(OST, 0, SymbolRecordKind::S_PROC_ID_END);
   }
+
   OST.EmitLabel(SymbolsEnd);
 
   // Every subsection must be aligned to a 4-byte boundary.
@@ -629,6 +727,37 @@ extern "C" void EmitDebugFunctionInfo(ObjectWriter *OW,
   // We have an assembler directive that takes care of the whole line table.
   // We also increase function id for the next function.
   OST.EmitCVLinetableDirective(OW->FuncId++, Fn, FnEnd);
+}
+
+extern "C" void EmitDebugFunctionInfo(ObjectWriter *OW,
+                                      const char *FunctionName,
+                                      int FunctionSize) {
+  assert(OW && "ObjWriter is null");
+  auto *AsmPrinter = &OW->getAsmPrinter();
+  auto &OST = static_cast<MCObjectStreamer &>(*AsmPrinter->OutStreamer);
+  MCContext &OutContext = OST.getContext();
+  const MCObjectFileInfo *MOFI = OutContext.getObjectFileInfo();
+
+  if (MOFI->getObjectFileType() == MOFI->IsCOFF) {
+    EmitCVDebugFunctionInfo(OW, FunctionName, FunctionSize);
+  } else {
+    // TODO: Should convert this for non-Windows.
+  }
+}
+
+extern "C" void EmitDebugVar(ObjectWriter *OW, char *Name, int TypeIndex,
+                             bool IsParm, int RangeCount,
+                             ICorDebugInfo::NativeVarInfo *Ranges) {
+  assert(OW && "ObjWriter is null");
+  assert(RangeCount != 0);
+  DebugVarInfo NewVar(Name, TypeIndex, IsParm);
+
+  for (int I = 0; I < RangeCount; I++) {
+    assert(Ranges[0].varNumber == Ranges[I].varNumber);
+    NewVar.Ranges.push_back(Ranges[I]);
+  }
+
+  OW->DebugVarInfos.push_back(NewVar);
 }
 
 extern "C" void EmitDebugLoc(ObjectWriter *OW, int NativeOffset, int FileId,

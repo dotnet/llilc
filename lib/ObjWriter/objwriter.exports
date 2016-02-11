@@ -14,4 +14,5 @@ EmitDebugFileInfo
 EmitDebugLoc
 EmitDebugFunctionInfo
 EmitDebugModuleInfo
+EmitDebugVar
 CreateDataSection
