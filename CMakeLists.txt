@@ -61,12 +61,10 @@ if ( NOT LLVM_TARGET_IS_CROSSCOMPILE_HOST )
         message(FATAL_ERROR "Could not find LLVM. Please set WITH_LLVM to a directory where LLVM has been built or installed.")
       endif()
 
-      list(APPEND CMAKE_MODULE_PATH "${WITH_LLVM_ABS}/share/llvm/cmake")
+      list(APPEND CMAKE_MODULE_PATH "${WITH_LLVM_ABS}/lib/cmake/llvm")
     else()
       list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
     endif()
-
-    list(APPEND CMAKE_MODULE_PATH "${WITH_LLVM_ABS}/share/llvm/cmake")
 
     option(LLVM_INSTALL_TOOLCHAIN_ONLY "Only include toolchain files in the 'install' target." OFF)
 
