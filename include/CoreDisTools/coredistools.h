@@ -44,6 +44,7 @@ enum TargetArch {
 struct CorDisasm;
 
 DllIface CorDisasm *InitDisasm(enum TargetArch Target);
+DllIface void FinishDisasm(const CorDisasm *Disasm);
 
 // DisasmInstruction -- Disassemble one instruction
 // Arguments:
@@ -59,6 +60,27 @@ DllIface size_t DisasmInstruction(const CorDisasm *Disasm, size_t Address,
                                   const uint8_t *Bytes, size_t Maxlength,
                                   bool PrintAssembly);
 
-DllIface void FinishDisasm(const CorDisasm *Disasm);
+struct DiffControl {
+  // The disassembler to use for Diffing code blocks.
+  const CorDisasm *Disasm;
+  // Are the two offsets considered equivalent by the consumer
+  bool (*areEquivalent)(const void *userData, size_t blockOffset,
+                        uint64_t offset1, uint64_t offset2);
+  // Always dump the code blocks compared
+  bool VerboseDump;
+  // Whether to dump the entire code blocks on MisCompare
+  bool DumpBlocksOnMisCompare;
+  // Any state that the user of this library wants to pass
+  // through into areEquivalent() function.
+  void *userData;
+};
+
+DllIface bool NearDiffCodeBlocks(const DiffControl *Control, size_t Address1,
+                                 const uint8_t *Bytes1, size_t Size1,
+                                 size_t Address2, const uint8_t *Bytes2,
+                                 size_t Size2);
+
+DllIface void PrintCodeBlock(const CorDisasm *Disasm, size_t Address,
+                             const uint8_t *Bytes, size_t Size);
 
 #endif // !defined(LLILC_TOOLS_COREDISTOOLS)
