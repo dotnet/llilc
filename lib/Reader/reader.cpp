@@ -2277,11 +2277,6 @@ EHRegion *ReaderBase::fgSwitchRegion(EHRegion *OldRegion, uint32_t Offset,
   return OldRegion;
 }
 
-#define CHECKTARGET(TargetOffset, BufSize)                                     \
-  {                                                                            \
-    if ((TargetOffset) < 0 || (TargetOffset) >= (BufSize))                     \
-      ReaderBase::verGlobalError(MVER_E_BAD_BRANCH);                           \
-  }
 
 // Parse bytecode to blocks.  Incoming argument 'block' holds dummy
 // entry block. This entry block may be preceeded by another block
@@ -2410,7 +2405,10 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
 
       // Make the label node
       TargetOffset = NextOffset + BranchOffset;
-      CHECKTARGET(TargetOffset, ILInputSize);
+
+      // Check target size
+      if (TargetOffset >= ILInputSize)
+        ReaderBase::verGlobalError(MVER_E_BAD_BRANCH);
 
       if (Opcode == ReaderBaseNS::CEE_LEAVE ||
           Opcode == ReaderBaseNS::CEE_LEAVE_S) {
@@ -2456,7 +2454,11 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
       // Make the short-circuit target label
       BlockNode = fgNodeGetStartIRNode(Block);
       GraphNode = nullptr;
-      CHECKTARGET(NextOffset, ILInputSize);
+
+      // Check target size
+      if (NextOffset >= ILInputSize)
+        ReaderBase::verGlobalError(MVER_E_BAD_BRANCH);
+
       fgAddNodeMSILOffset(&GraphNode, NextOffset);
 
       // Make the switch node.
@@ -2470,7 +2472,10 @@ void ReaderBase::fgBuildPhase1(FlowGraphNode *Block, uint8_t *ILInput,
       for (uint32_t I = 0; (uint32_t)I < NumCases; I++) {
         BranchOffset = readSwitchCase(&Operand);
         TargetOffset = NextOffset + BranchOffset;
-        CHECKTARGET(TargetOffset, ILInputSize);
+
+        // Check target size
+        if (TargetOffset >= ILInputSize)
+          ReaderBase::verGlobalError(MVER_E_BAD_BRANCH);
 
         GraphNode = nullptr;
         fgAddNodeMSILOffset(&GraphNode, TargetOffset);
