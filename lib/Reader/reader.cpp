@@ -2277,7 +2277,6 @@ EHRegion *ReaderBase::fgSwitchRegion(EHRegion *OldRegion, uint32_t Offset,
   return OldRegion;
 }
 
-
 // Parse bytecode to blocks.  Incoming argument 'block' holds dummy
 // entry block. This entry block may be preceeded by another block
 // that holds IRNodes (to support monitored routines.)  When this

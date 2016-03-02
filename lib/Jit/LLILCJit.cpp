@@ -148,6 +148,7 @@ private:
 
 // The one and only Jit Object.
 LLILCJit *LLILCJit::TheJit = nullptr;
+ICorJitHost *LLILCJit::TheJitHost = nullptr;
 
 // This is guaranteed to be called by the EE
 // in single-threaded mode.
@@ -234,6 +235,10 @@ BOOL WINAPI DllMain(HANDLE Instance, DWORD Reason, LPVOID Reserved) {
 
 extern "C" void __stdcall sxsJitStartup(void *CcCallbacks) {
   // nothing to do
+}
+
+extern "C" void __stdcall jitStartup(ICorJitHost *JitHost) {
+  LLILCJit::TheJitHost = JitHost;
 }
 
 LLILCJitContext::LLILCJitContext(LLILCJitPerThreadState *PerThreadState)

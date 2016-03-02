@@ -74,6 +74,7 @@ public:
   /// \name CoreCLR EE information
   //@{
   ICorJitInfo *JitInfo;            ///< EE callback interface.
+  ICorJitHost *JitHost;            ///< EE Host Interface
   CORINFO_METHOD_INFO *MethodInfo; ///< Description of method to jit.
   uint32_t Flags;                  ///< Flags controlling jit behavior.
   CORINFO_EE_INFO EEInfo;          ///< Information about internal EE data.
@@ -280,6 +281,9 @@ private:
 public:
   /// A pointer to the singleton jit instance.
   static LLILCJit *TheJit;
+
+  /// A pointer to the singleton jit-host instance.
+  static ICorJitHost *TheJitHost;
 
 private:
   /// Thread local storage for the jit's per-thread state.
