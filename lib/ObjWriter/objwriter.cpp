@@ -317,6 +317,8 @@ extern "C" void SwitchSection(ObjectWriter *OW, const char *SectionName) {
     Section = MOFI->getDataSection();
   } else if (strcmp(SectionName, "rdata") == 0) {
     Section = MOFI->getReadOnlySection();
+  } else if (strcmp(SectionName, "xdata") == 0) {
+    Section = MOFI->getXDataSection();
   } else {
     std::string SectionNameStr(SectionName);
     if (OW->CustomSections.find(SectionNameStr) != OW->CustomSections.end()) {
@@ -386,30 +388,54 @@ GetSymbolRefExpr(ObjectWriter *OW, const char *SymbolName,
   return MCSymbolRefExpr::create(T, Kind, OutContext);
 }
 
-extern "C" void EmitSymbolRef(ObjectWriter *OW, const char *SymbolName,
-                              int Size, bool IsPCRelative, int Delta = 0) {
+enum class RelocType
+{
+    IMAGE_REL_BASED_ABSOLUTE    = 0x00,
+    IMAGE_REL_BASED_HIGHLOW     = 0x03,
+    IMAGE_REL_BASED_DIR64       = 0x0A,
+    IMAGE_REL_BASED_REL32       = 0x10,
+};
+
+extern "C" int EmitSymbolRef(ObjectWriter *OW, const char *SymbolName,
+                             RelocType RelocType, int Delta) {
   assert(OW && "ObjWriter is null");
   auto *AsmPrinter = &OW->getAsmPrinter();
   auto &OST = static_cast<MCObjectStreamer &>(*AsmPrinter->OutStreamer);
   MCContext &OutContext = OST.getContext();
 
-  // Get symbol reference expression
-  const MCExpr *TargetExpr = GetSymbolRefExpr(OW, SymbolName);
+  bool IsPCRelative = false;
+  int Size = 0;
+  MCSymbolRefExpr::VariantKind Kind = MCSymbolRefExpr::VK_None;
 
-  switch (Size) {
-  case 8:
-    assert(!IsPCRelative && "NYI no support for 8 byte pc-relative");
+  // Convert RelocType to MCSymbolRefExpr
+  switch (RelocType) {
+  case RelocType::IMAGE_REL_BASED_ABSOLUTE:
+    assert(OW->MOFI->getObjectFileType() == OW->MOFI->IsCOFF);
+    Kind = MCSymbolRefExpr::VK_COFF_IMGREL32;
+    Size = 4;
     break;
-  case 4:
-    // If the fixup is pc-relative, we need to bias the value to be relative to
-    // the start of the field, not the end of the field
-    if (IsPCRelative) {
-      TargetExpr = MCBinaryExpr::createSub(
-          TargetExpr, MCConstantExpr::create(Size, OutContext), OutContext);
-    }
+  case RelocType::IMAGE_REL_BASED_HIGHLOW:
+    Size = 4;
+    break;
+  case RelocType::IMAGE_REL_BASED_DIR64:
+    Size = 8;
+    break;
+  case RelocType::IMAGE_REL_BASED_REL32:
+    Size = 4;
+    IsPCRelative = true;
     break;
   default:
-    assert(false && "NYI symbol reference size!");
+    assert(false && "NYI RelocType!");
+  }
+
+  const MCExpr *TargetExpr = GetSymbolRefExpr(OW, SymbolName, Kind);
+
+  if (IsPCRelative)
+  {
+    // If the fixup is pc-relative, we need to bias the value to be relative to
+    // the start of the field, not the end of the field
+    TargetExpr = MCBinaryExpr::createSub(
+        TargetExpr, MCConstantExpr::create(Size, OutContext), OutContext);
   }
 
   if (Delta != 0) {
@@ -418,13 +444,13 @@ extern "C" void EmitSymbolRef(ObjectWriter *OW, const char *SymbolName,
   }
 
   OST.EmitValue(TargetExpr, Size, SMLoc(), IsPCRelative);
+
+  return Size;
 }
 
 extern "C" void EmitWinFrameInfo(ObjectWriter *OW, const char *FunctionName,
-                                 int StartOffset, int EndOffset, int BlobSize,
-                                 const char *BlobData,
-                                 const char *PersonalityFunctionName,
-                                 int LSDASize, const char *LSDA) {
+                                 int StartOffset, int EndOffset, 
+                                 const char *BlobSymbolName) {
   assert(OW && "ObjWriter is null");
   auto *AsmPrinter = &OW->getAsmPrinter();
   auto &OST = static_cast<MCObjectStreamer &>(*AsmPrinter->OutStreamer);
@@ -433,35 +459,8 @@ extern "C" void EmitWinFrameInfo(ObjectWriter *OW, const char *FunctionName,
 
   assert(MOFI->getObjectFileType() == MOFI->IsCOFF);
 
-  // .xdata emission
-  MCSection *Section = MOFI->getXDataSection();
-  OST.SwitchSection(Section);
-  OST.EmitValueToAlignment(4);
-
-  MCSymbol *FrameSymbol = OutContext.createTempSymbol();
-  OST.EmitLabel(FrameSymbol);
-
-  EmitBlob(OW, BlobSize, BlobData);
-
-  OST.EmitValueToAlignment(4);
-  uint8_t flags = BlobData[0];
-  // The chained info is not currently emitted, verify that we don't see it.
-  assert((flags & (Win64EH::UNW_ChainInfo << 3)) == 0);
-  if ((flags &
-       (Win64EH::UNW_TerminateHandler | Win64EH::UNW_ExceptionHandler) << 3) !=
-      0) {
-    assert(PersonalityFunctionName != nullptr);
-    const MCExpr *PersonalityFn = GetSymbolRefExpr(
-        OW, PersonalityFunctionName, MCSymbolRefExpr::VK_COFF_IMGREL32);
-    OST.EmitValue(PersonalityFn, 4);
-  }
-
-  if (LSDASize != 0) {
-    EmitBlob(OW, LSDASize, LSDA);
-  }
-
   // .pdata emission
-  Section = MOFI->getPDataSection();
+  MCSection *Section = MOFI->getPDataSection();
   OST.SwitchSection(Section);
   OST.EmitValueToAlignment(4);
 
@@ -477,9 +476,7 @@ extern "C" void EmitWinFrameInfo(ObjectWriter *OW, const char *FunctionName,
   OST.EmitValue(MCBinaryExpr::createAdd(BaseRefRel, EndOfs, OutContext), 4);
 
   // frame symbol reference
-  OST.EmitValue(MCSymbolRefExpr::create(
-                    FrameSymbol, MCSymbolRefExpr::VK_COFF_IMGREL32, OutContext),
-                4);
+  OST.EmitValue(GetSymbolRefExpr(OW, BlobSymbolName, MCSymbolRefExpr::VK_COFF_IMGREL32), 4);
 }
 
 extern "C" void EmitCFIStart(ObjectWriter *OW, int Offset) {
