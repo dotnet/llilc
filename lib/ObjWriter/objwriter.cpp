@@ -252,8 +252,14 @@ extern "C" void FinishObjWriter(ObjectWriter *OW) {
   delete OW;
 }
 
-extern "C" bool CreateDataSection(ObjectWriter *OW, const char *SectionName,
-                                  bool IsReadOnly) {
+enum CustomSectionAttributes : int32_t {
+  CustomSectionAttributes_ReadOnly = 0x0000,
+  CustomSectionAttributes_Writeable = 0x0001,
+  CustomSectionAttributes_Executable = 0x0002,
+};
+
+extern "C" bool CreateCustomSection(ObjectWriter *OW, const char *SectionName,
+                                    CustomSectionAttributes attributes) {
   assert(OW && "ObjWriter is null");
   Triple TheTriple(TripleName);
   auto *AsmPrinter = &OW->getAsmPrinter();
@@ -265,26 +271,38 @@ extern "C" bool CreateDataSection(ObjectWriter *OW, const char *SectionName,
          "Section with duplicate name already exists");
 
   MCSection *Section = nullptr;
-  SectionKind Kind =
-      IsReadOnly ? SectionKind::getReadOnly() : SectionKind::getData();
+  SectionKind Kind = (attributes & CustomSectionAttributes_Executable)
+                         ? SectionKind::getText()
+                         : (attributes & CustomSectionAttributes_Writeable)
+                               ? SectionKind::getData()
+                               : SectionKind::getReadOnly();
 
   switch (TheTriple.getObjectFormat()) {
   case Triple::MachO:
-    Section = OutContext.getMachOSection("__DATA", SectionName, 0, Kind);
+    Section = OutContext.getMachOSection(
+        (attributes & CustomSectionAttributes_Executable) ? "__TEXT" : "__DATA",
+        SectionName, 0, Kind);
     break;
   case Triple::COFF: {
-    unsigned Characteristics =
-        COFF::IMAGE_SCN_CNT_INITIALIZED_DATA | COFF::IMAGE_SCN_MEM_READ;
+    unsigned Characteristics = COFF::IMAGE_SCN_MEM_READ;
 
-    if (!IsReadOnly) {
-      Characteristics |= COFF::IMAGE_SCN_MEM_WRITE;
+    if (attributes & CustomSectionAttributes_Executable) {
+      Characteristics |= COFF::IMAGE_SCN_CNT_CODE | COFF::IMAGE_SCN_MEM_EXECUTE;
+    } else if (attributes & CustomSectionAttributes_Writeable) {
+      Characteristics |=
+          COFF::IMAGE_SCN_CNT_INITIALIZED_DATA | COFF::IMAGE_SCN_MEM_WRITE;
+    } else {
+      Characteristics |= COFF::IMAGE_SCN_CNT_INITIALIZED_DATA;
     }
+
     Section = OutContext.getCOFFSection(SectionName, Characteristics, Kind);
     break;
   }
   case Triple::ELF: {
     unsigned Flags = ELF::SHF_ALLOC;
-    if (!IsReadOnly) {
+    if (attributes & CustomSectionAttributes_Executable) {
+      Flags |= ELF::SHF_EXECINSTR;
+    } else if (attributes & CustomSectionAttributes_Writeable) {
       Flags |= ELF::SHF_WRITE;
     }
     Section = OutContext.getELFSection(SectionName, ELF::SHT_PROGBITS, Flags);
@@ -388,12 +406,11 @@ GetSymbolRefExpr(ObjectWriter *OW, const char *SymbolName,
   return MCSymbolRefExpr::create(T, Kind, OutContext);
 }
 
-enum class RelocType
-{
-    IMAGE_REL_BASED_ABSOLUTE    = 0x00,
-    IMAGE_REL_BASED_HIGHLOW     = 0x03,
-    IMAGE_REL_BASED_DIR64       = 0x0A,
-    IMAGE_REL_BASED_REL32       = 0x10,
+enum class RelocType {
+  IMAGE_REL_BASED_ABSOLUTE = 0x00,
+  IMAGE_REL_BASED_HIGHLOW = 0x03,
+  IMAGE_REL_BASED_DIR64 = 0x0A,
+  IMAGE_REL_BASED_REL32 = 0x10,
 };
 
 extern "C" int EmitSymbolRef(ObjectWriter *OW, const char *SymbolName,
@@ -430,8 +447,7 @@ extern "C" int EmitSymbolRef(ObjectWriter *OW, const char *SymbolName,
 
   const MCExpr *TargetExpr = GetSymbolRefExpr(OW, SymbolName, Kind);
 
-  if (IsPCRelative)
-  {
+  if (IsPCRelative) {
     // If the fixup is pc-relative, we need to bias the value to be relative to
     // the start of the field, not the end of the field
     TargetExpr = MCBinaryExpr::createSub(
@@ -449,7 +465,7 @@ extern "C" int EmitSymbolRef(ObjectWriter *OW, const char *SymbolName,
 }
 
 extern "C" void EmitWinFrameInfo(ObjectWriter *OW, const char *FunctionName,
-                                 int StartOffset, int EndOffset, 
+                                 int StartOffset, int EndOffset,
                                  const char *BlobSymbolName) {
   assert(OW && "ObjWriter is null");
   auto *AsmPrinter = &OW->getAsmPrinter();
@@ -476,7 +492,9 @@ extern "C" void EmitWinFrameInfo(ObjectWriter *OW, const char *FunctionName,
   OST.EmitValue(MCBinaryExpr::createAdd(BaseRefRel, EndOfs, OutContext), 4);
 
   // frame symbol reference
-  OST.EmitValue(GetSymbolRefExpr(OW, BlobSymbolName, MCSymbolRefExpr::VK_COFF_IMGREL32), 4);
+  OST.EmitValue(
+      GetSymbolRefExpr(OW, BlobSymbolName, MCSymbolRefExpr::VK_COFF_IMGREL32),
+      4);
 }
 
 extern "C" void EmitCFIStart(ObjectWriter *OW, int Offset) {
@@ -624,6 +642,13 @@ static void EmitCVDebugVarInfo(MCObjectStreamer &OST, const MCSymbol *Fn,
         Rec.Range.OffsetStart = Range.startOffset;
         Rec.Range.Range = Range.endOffset - Range.startOffset;
         Rec.Range.ISectStart = 0;
+
+        // TODO: support REGNUM_AMBIENT_SP
+        if (Range.loc.vlStk.vlsBaseReg >=
+            sizeof(cvRegMapAmd64) / sizeof(cvRegMapAmd64[0])) {
+          break;
+        }
+
         assert(Range.loc.vlStk.vlsBaseReg <
                    sizeof(cvRegMapAmd64) / sizeof(cvRegMapAmd64[0]) &&
                "Register number should be in the range of [REGNUM_RAX, "
