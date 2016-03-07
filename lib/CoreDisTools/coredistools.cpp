@@ -37,25 +37,101 @@
 using namespace llvm;
 using namespace std;
 
+class BlockIterator;
+
+// Represents a Code block
+class BlockInfo {
+public:
+  BlockInfo(const uint8_t *Pointer, uint64_t Size, uintptr_t Address,
+            const char *BlockName = "")
+      : Ptr(Pointer), BlockSize(Size), Addr(Address), Name(BlockName) {}
+
+  void printHeader() const;
+  void dump(const CorDisasm *Disasm) const;
+  // Determine if the current Block is equivalent to the input `Block`
+  // according to the settings in DiffControl.
+  bool nearDiffCodeBlock(const BlockInfo &Block,
+                         const DiffControl &Control) const;
+  bool isEmpty() const { return BlockSize == 0; }
+
+  // A pointer to the code block to diassemble.
+  const uint8_t *Ptr;
+  // The size of the code block to compare.
+  uint64_t BlockSize;
+  // The original base address of the code block.
+  uintptr_t Addr;
+  // An identifying string, debug output only
+  const char *Name;
+
+private:
+  bool nearDiff(const BlockInfo &Block, const DiffControl &Control) const;
+  static bool diffError(const DiffControl &Control, const char *Mesg,
+                        const BlockIterator &Left, const BlockIterator &Right);
+};
+
+// A block iterator reoresents a code-point within a code block.
+// It represents an instruction within the block, and can move
+// forward to subsequent instructions via the advance() method.
+// The iterator can be in two modes:
+//  Not-Decoded: Before DecodeInstruction() is called at this
+//               code point
+//  Decoded: After the current instrction is Decoded. In this state,
+//           Inst is a valid MCInst and InstrSize is an actual non-zero
+//           length of the current instruction.
+class BlockIterator : public BlockInfo {
+public:
+  BlockIterator(const BlockInfo &Block)
+      : BlockInfo(Block), Inst(), InstrSize(0) {}
+  BlockIterator(const uint8_t *Pointer, uint64_t Size, uintptr_t Address = 0,
+                const char *BlockName = "")
+      : BlockInfo(Pointer, Size, Address, BlockName), Inst(), InstrSize(0) {}
+
+  void advance() {
+    assert(isDecoded() && "Cannot advance before Decode");
+    assert(InstrSize <= BlockSize && "Overflow");
+    Ptr += InstrSize;
+    Addr += InstrSize;
+    BlockSize -= InstrSize;
+
+    // Next instruction is not yet decoded
+    InstrSize = 0;
+  }
+
+  bool isDecoded() const { return (InstrSize != 0); }
+  bool isBitwiseEqual(const BlockIterator &BIter) const;
+
+  // Offset of this iterator (Instruction) wrt a Code Block
+  size_t Offset(const BlockInfo &Block) const { return this->Ptr - Block.Ptr; }
+
+  // The machine instruction at this code point, after decode.
+  MCInst Inst;
+
+  // Why store the InstrSize separately, rather than obtaining
+  // it from Inst.Size()? This is because of a limitation in
+  // MCInst representation on certain architectures.
+  // Prefix instructions on X64 such as Lock prefix are
+  // encoded as an MCInst of zero size! When such a prefix is
+  // decoded, the actual decode InstrSize=1, but Inst.Size()=0
+  uint64_t InstrSize;
+};
+
 // Instruction-wise disassembler helper.
 // This utility is used to implement GcStress in CoreCLr
 // Adapted from LLVM-objdump
 
 struct CorDisasm {
 public:
+  CorDisasm(enum TargetArch Target) { TheTargetArch = Target; }
   bool init();
-  size_t disasmInstruction(size_t Address, const uint8_t *Bytes,
-                           size_t Maxlength, bool PrintAsm = false) const;
-  void printInstruction(const MCInst *MI, size_t Address, size_t InstSize,
-                        ArrayRef<uint8_t> Bytes) const;
-
-  CorDisasm(TargetArch Target) { TheTargetArch = Target; }
+  void decodeInstruction(BlockIterator &BIter) const;
+  uint64_t disasmInstruction(BlockIterator &BIter, bool PrintAsm = false) const;
+  void printInstruction(const BlockIterator &BIter) const;
 
 private:
   bool setTarget();
   bool verifyPrefixDecoding();
 
-  TargetArch TheTargetArch;
+  enum TargetArch TheTargetArch;
   string TargetTriple;
   const Target *TheTarget;
 
@@ -240,22 +316,14 @@ bool CorDisasm::verifyPrefixDecoding() {
   }
 
   bool Verified = true;
-  raw_ostream &CommentStream = nulls();
-  raw_ostream &DebugOut = nulls();
-  MCInst Inst;
-  uint64_t Size;
 
   for (uint8_t Pfx = 0; Pfx < X86NumPrefixes; Pfx++) {
     OpcodeMap Prefix = X86Prefix[Pfx];
-    ArrayRef<uint8_t> ByteArray(&Prefix.MachineOpcode, 1);
+    BlockIterator BIter(&Prefix.MachineOpcode, 1);
 
-    bool Success = Disassembler->getInstruction(Inst, Size, ByteArray, 0,
-                                                DebugOut, CommentStream);
-
-    assert(!Success || (Size == 1) && "Decode past MaxSize");
-
-    if (!((Success && Prefix.IsLlvmInstruction) ||
-          (!Success && !Prefix.IsLlvmInstruction))) {
+    decodeInstruction(BIter);
+    if (!((BIter.isDecoded() && Prefix.IsLlvmInstruction) ||
+          (!BIter.isDecoded() && !Prefix.IsLlvmInstruction))) {
       errs() << "Prefix Decode Verification failed for " << Prefix.Name << "\n";
       Verified = false;
     }
@@ -264,14 +332,25 @@ bool CorDisasm::verifyPrefixDecoding() {
   return Verified;
 }
 
-size_t CorDisasm::disasmInstruction(size_t Address, const uint8_t *Bytes,
-                                    size_t Maxlength, bool PrintAsm) const {
-  uint64_t Size;
-  uint64_t TotalSize = 0;
-  MCInst Inst;
+void CorDisasm::decodeInstruction(BlockIterator &BIter) const {
   raw_ostream &CommentStream = nulls();
   raw_ostream &DebugOut = nulls();
-  ArrayRef<uint8_t> ByteArray(Bytes, Maxlength);
+  ArrayRef<uint8_t> ByteArray(BIter.Ptr, BIter.BlockSize);
+  bool IsDecoded =
+      Disassembler->getInstruction(BIter.Inst, BIter.InstrSize, ByteArray,
+                                   BIter.Addr, DebugOut, CommentStream);
+
+  if (!IsDecoded) {
+    BIter.InstrSize = 0;
+  } else {
+    assert((BIter.InstrSize <= BIter.BlockSize) && "Invalid Decode");
+    assert(BIter.InstrSize > 0 && "Zero Length Decode");
+  }
+}
+
+uint64_t CorDisasm::disasmInstruction(BlockIterator &BIter,
+                                      bool PrintAsm) const {
+  uint64_t TotalSize = 0;
   bool ContinueDisasm;
 
   // On X86, LLVM disassembler does not handle instruction prefixes
@@ -282,17 +361,17 @@ size_t CorDisasm::disasmInstruction(size_t Address, const uint8_t *Bytes,
 
   do {
 
-    bool success = Disassembler->getInstruction(Inst, Size, ByteArray, Address,
-                                                DebugOut, CommentStream);
-    TotalSize += Size;
-
-    if (!success) {
-      errs() << "Invalid instruction encoding\n";
+    decodeInstruction(BIter);
+    if (!BIter.isDecoded()) {
+      errs() << "Decode Failure @ offset " << TotalSize;
       return 0;
     }
 
+    uint64_t Size = BIter.InstrSize;
+    TotalSize += Size;
+
     if (PrintAsm) {
-      printInstruction(&Inst, Address, Size, ByteArray.slice(0, Size));
+      printInstruction(BIter);
     }
 
     ContinueDisasm = false;
@@ -302,11 +381,10 @@ size_t CorDisasm::disasmInstruction(size_t Address, const uint8_t *Bytes,
       // continue decoding.
       if (Size == 1) {
         for (uint8_t Pfx = 0; Pfx < X86NumPrefixes; Pfx++) {
-          if (ByteArray[0] == X86Prefix[Pfx].MachineOpcode) {
+          if (BIter.Ptr[0] == X86Prefix[Pfx].MachineOpcode) {
             assert(X86Prefix[Pfx].IsLlvmInstruction && "Unexpected Decode");
             ContinueDisasm = true;
-            Address += Size;
-            ByteArray = ByteArray.slice(Size);
+            BIter.advance();
             break;
           }
         }
@@ -317,20 +395,213 @@ size_t CorDisasm::disasmInstruction(size_t Address, const uint8_t *Bytes,
   return TotalSize;
 }
 
-void CorDisasm::printInstruction(const MCInst *MI, size_t Address,
-                                 size_t InstSize,
-                                 ArrayRef<uint8_t> Bytes) const {
-  outs() << format("%8" PRIx64 ":", Address);
-  outs() << "\t";
-  dumpBytes(Bytes.slice(0, InstSize), outs());
+void CorDisasm::printInstruction(const BlockIterator &BIter) const {
+  assert(BIter.isDecoded() && "Cannot print before Decode");
 
-  IP->printInst(MI, outs(), "", *STI);
+  outs() << format("%8llx:", BIter.Addr);
+  outs() << " ";
+
+  uint64_t InstSize = BIter.InstrSize;
+  dumpBytes(ArrayRef<uint8_t>(BIter.Ptr, InstSize), outs());
+  if ((TheTargetArch == Target_X86) || (TheTargetArch == Target_X64)) {
+    // For architectures with a variable size instruction, pad the
+    // byte dump with space up to 7 bytes.
+    // Some instructions might be longer, but ...
+    while (InstSize++ < 7) {
+      outs() << "   ";
+    }
+  }
+
+  IP->printInst(&BIter.Inst, outs(), "", *STI);
   outs() << "\n";
+}
+
+void BlockInfo::printHeader() const {
+  outs() << "--------------------------------------------------------------\n";
+  outs() << "Block: " << Name << "\n";
+  outs() << "Address: " << format("%8llx", Addr) << "\n";
+  outs() << "Size: " << BlockSize << "\n";
+  outs() << "Code Ptr: " << format("%8llx", Ptr) << "\n";
+  outs() << "--------------------------------------------------------------\n";
+}
+
+void BlockInfo::dump(const CorDisasm *Disasm) const {
+  BlockIterator Iter(*this);
+
+  printHeader();
+
+  while (!Iter.isEmpty()) {
+    Disasm->disasmInstruction(Iter, true);
+    if (!Iter.isDecoded()) {
+      break;
+    }
+    Iter.advance();
+  }
+  outs()
+      << "--------------------------------------------------------------\n\n";
+}
+
+// Compares two code sections for syntactic equality. This is the core of the
+// asm diffing logic.
+//
+// This function mostly relies on McInst representation of an instruction to
+// compare for equality. That is, it goes through the code stream and compares,
+// instruction by instruction, op code and operand values for equality.
+//
+// Obviously, just blindly comparing operand values will raise a lot of false
+// alarms (ex: literal pointer addresses changing in the code stream).
+// Therefore, this utility provides a facility via the
+// DiffControl::areEquivalent() API  where the users can provide custom
+// heuristics on mismatching operand values to try to normalize the false
+// alarms.
+//
+// Notes:
+//    - The core syntactic comparison is platform agnostic; we compare op codes
+//      and operand values in an architecture independent way.
+//    - The heuristics provided by the customer are not guaranteed to be
+//      platform agnostic.
+//
+// Arguments:
+//    Left: The first code block information
+//    Right: The second code block information
+//
+// Return Value:
+//    True if the code sections are syntactically identical; false otherwise.
+//
+bool BlockInfo::nearDiff(const BlockInfo &Block,
+                         const DiffControl &Control) const {
+  BlockIterator Left(*this);
+  BlockIterator Right(Block);
+
+  if (Left.BlockSize != Right.BlockSize) {
+    errs() << "Code Size mismatch";
+    return false;
+  }
+
+  const CorDisasm *Disasm = Control.Disasm;
+
+  while (!Left.isEmpty() && !Right.isEmpty()) {
+
+    Disasm->decodeInstruction(Left);
+    Disasm->decodeInstruction(Right);
+
+    if (!Left.isDecoded() || !Right.isDecoded()) {
+      errs() << "Decode Failure @" << Left.Addr << "/" << Right.Addr << "\n";
+      return false;
+    }
+
+    if (Left.InstrSize != Right.InstrSize) {
+      return diffError(Control, "Instruction Size Mismatch", Left, Right);
+    }
+
+    // First, check to see if these instructions are actually identical.
+    // This is done 1) to avoid the detailed comparison of the fields of InstL
+    // and InstR if they are identical, and 2) because in the event that
+    // there are bugs or limitations in the user-supplied heuristics,
+    // we don't want to count two Instructions as diffs if they are bitwise
+    // identical.
+    if (Left.isBitwiseEqual(Right)) {
+      // Bytes are identical
+    } else {
+      // Compare field-wise
+
+      const MCInst &InstL = Left.Inst;
+      const MCInst &InstR = Right.Inst;
+
+      if (InstL.getOpcode() != InstL.getOpcode()) {
+        return diffError(Control, "OpCode Mismatch", Left, Right);
+      }
+
+      size_t numOperands = InstL.getNumOperands();
+
+      if (numOperands != InstL.getNumOperands()) {
+        return diffError(Control, "Operand Count Mismatch", Left, Right);
+      }
+
+      for (size_t i = 0; i < numOperands; i++) {
+        const MCOperand &OperandL = InstL.getOperand(i);
+        const MCOperand &OperandR = InstR.getOperand(i);
+
+        if (OperandL.isExpr() || OperandR.isExpr() || OperandL.isInst() ||
+            OperandR.isInst()) {
+          return diffError(Control, "Unexpected Operand Kind", Left, Right);
+        } else if (OperandL.isReg()) {
+          if (!OperandR.isReg()) {
+            return diffError(Control, "Operand Kind Mismatch", Left, Right);
+          }
+
+          if (OperandL.getReg() != OperandR.getReg()) {
+            return diffError(Control, "Operand Register Mismatch", Left, Right);
+          }
+        } else if (OperandL.isFPImm()) {
+          if (!OperandR.isFPImm()) {
+            return diffError(Control, "Operand Kind Mismatch", Left, Right);
+          }
+
+          if (OperandL.getFPImm() != OperandR.getFPImm()) {
+            return diffError(Control, "Operand FP value Mismatch", Left, Right);
+          }
+        } else if (OperandL.isImm()) {
+          if (!OperandR.isImm()) {
+            return diffError(Control, "Operand Kind Mismatch", Left, Right);
+          }
+
+          int64_t ImmL = OperandL.getImm();
+          int64_t ImmR = OperandR.getImm();
+
+          if (ImmL == ImmR) {
+            continue;
+          }
+
+          if (Control.areEquivalent(Control.userData, Left.Offset(*this), ImmL,
+                                    ImmR)) {
+            // The client somehow thinks that these offsets are equivalent
+            continue;
+          }
+
+          return diffError(Control, "Immediate Operand Value Mismatch", Left,
+                           Right);
+        }
+      }
+    }
+
+    Left.advance();
+    Right.advance();
+  }
+
+  return true;
+}
+
+bool BlockIterator::isBitwiseEqual(const BlockIterator &BIter) const {
+  return memcmp(this->Ptr, BIter.Ptr, this->InstrSize) == 0;
+}
+
+bool BlockInfo::nearDiffCodeBlock(const BlockInfo &Block,
+                                  const DiffControl &Control) const {
+
+  bool Success = nearDiff(Block, Control);
+
+  if (Control.VerboseDump || (!Success && Control.DumpBlocksOnMisCompare)) {
+    outs() << (Success ? "NO DIFF" : "DIFF") << "\n";
+    this->dump(Control.Disasm);
+    Block.dump(Control.Disasm);
+  }
+
+  return Success;
+}
+
+bool BlockInfo::diffError(const DiffControl &Control, const char *Mesg,
+                          const BlockIterator &Left,
+                          const BlockIterator &Right) {
+  errs() << Mesg << "\n";
+  Control.Disasm->printInstruction(Left);
+  Control.Disasm->printInstruction(Right);
+  return false;
 }
 
 // Implementation for CoreDisTools Interface
 
-CorDisasm *InitDisasm(TargetArch Target) {
+CorDisasm *InitDisasm(enum TargetArch Target) {
   CorDisasm *Disassembler = new CorDisasm(Target);
   if (Disassembler->init()) {
     return Disassembler;
@@ -346,5 +617,24 @@ size_t DisasmInstruction(const CorDisasm *Disasm, size_t Address,
                          const uint8_t *Bytes, size_t Maxlength,
                          bool PrintAssembly) {
   assert((Disasm != nullptr) && "Disassembler object Expected ");
-  return Disasm->disasmInstruction(Address, Bytes, Maxlength, PrintAssembly);
+  BlockIterator BIter(Bytes, Maxlength, Address);
+  size_t DecodeLength = (size_t)Disasm->disasmInstruction(BIter, PrintAssembly);
+  return DecodeLength;
+}
+
+DllIface bool NearDiffCodeBlocks(const DiffControl *Control, size_t Address1,
+                                 const uint8_t *Bytes1, size_t Size1,
+                                 size_t Address2, const uint8_t *Bytes2,
+                                 size_t Size2) {
+
+  BlockIterator Left(Bytes1, Size1, Address1, "Left");
+  BlockIterator Right(Bytes2, Size2, Address2, "Right");
+
+  return Left.nearDiffCodeBlock(Right, *Control);
+}
+
+DllIface void PrintCodeBlock(const CorDisasm *Disasm, size_t Address,
+                             const uint8_t *Bytes, size_t Size) {
+  BlockInfo Block(Bytes, Size, Address);
+  Block.dump(Disasm);
 }
