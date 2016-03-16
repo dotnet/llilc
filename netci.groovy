@@ -76,7 +76,8 @@ static void addMultiScm(def myJob) {
 
 [true, false].each { isPR ->
   ['Debug', 'Release'].each { configuration ->
-    def newJobName = Utilities.getFullJobName(project, "windows_nt_${configuration}", isPR)
+    lowerConfiguration = configuration.toLowerCase()
+    def newJobName = Utilities.getFullJobName(project, "windows_nt_${lowerConfiguration}", isPR)
     
     def newJob = job (newJobName) {
       steps {
@@ -97,7 +98,7 @@ if exist test/ rd /s /q test
 mkdir test
 
 cd coreclr
-./build.cmd ${configuration}""")
+./build.cmd ${lowerConfiguration}""")
         batchFile("""cd build
 cmake -G \"Visual Studio 14 2015 Win64\" -DWITH_CORECLR=%WORKSPACE%\\coreclr\\bin\\Product\\Windows_NT.x64.Release -DLLVM_OPTIMIZED_TABLEGEN=ON ..\\llvm
 \"%VS140COMNTOOLS%\\..\\..\\VC\\vcvarsall.bat\" x86 && msbuild llvm.sln /p:Configuration=${configuration} /p:Platform=x64 /t:ALL_BUILD /m""")
@@ -124,7 +125,7 @@ mkdir target
 
 cd coreclr\\tests
 
-C:\\Python27\\python %WORKSPACE%\\llvm\\tools\\llilc\\test\\llilc_runtest.py -a x64 -b ${configuration} --ngen -d summary -r ..\\..\\target -j %WORKSPACE%\\build\\bin\\${configuration}\\llilcjit.dll -c %WORKSPACE%\\coreclr\\bin\\Product\\Windows_NT.x64.${configuration} || (echo There were failures with the new JIT& exit /b -1)
+C:\\Python27\\python %WORKSPACE%\\llvm\\tools\\llilc\\test\\llilc_runtest.py -a x64 -b ${lowerConfiguration} --ngen -d summary -r ..\\..\\target -j %WORKSPACE%\\build\\bin\\${configuration}\\llilcjit.dll -c %WORKSPACE%\\coreclr\\bin\\Product\\Windows_NT.x64.${configuration} || (echo There were failures with the new JIT& exit /b -1)
 
 C:\\Python27\\python %WORKSPACE%\\llvm\\tools\\llilc\\test\\llilc_checkpass.py -d ..\\..\\target || (echo There were faulures.& exit /b -1)""")
       }
@@ -135,10 +136,46 @@ C:\\Python27\\python %WORKSPACE%\\llvm\\tools\\llilc\\test\\llilc_checkpass.py -
     addMultiScm(newJob, isPR)
     Utilities.addStandardOptions(newJob, isPR)
     if (isPR) {
-      Utilities.addGithubPRTriggerForBranch(newJob, branch, "Windows ${configuration}")
+      Utilities.addGithubPRTriggerForBranch(newJob, branch, "Windows ${lowerConfiguration}")
     }
     else {
       Utilities.addGithubPushTrigger(newJob)
     }
   }
 }
+
+[true, false].each { isPR ->
+  ['Debug', 'Release'].each { configuration ->
+    String lowerConfiguration = configuration.toLowerCase()
+    def newJobName = Utilities.getFullJobName(project, "ubuntu_${lowerConfiguration}", isPR)
+
+    def newJob = job (newJobName) {
+      steps {
+        shell('''if which clang-3.5; then
+	export CC=$(which clang-3.5)
+    export CXX=$(which clang++-3.5)
+elif which clang; then
+	export CC=$(which clang)
+    export CXX=$(which clang++) 
+else
+    echo Could not find clang or clang-3.5
+    exit 1
+fi
+
+(cd coreclr && ./build.sh skipmscorlib ${lowerConfiguration} && cd ..) && (cd llvm && mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=${configuration} -DWITH_CORECLR=../../coreclr/bin/Product/Linux.x64.${configuration} .. && make -j 5)''')
+      }
+    }
+
+    Utilities.setMachineAffinity(newJob, 'Ubuntu', 'latest-or-auto')
+    Utilities.addStandardParameters(newJob, project, isPR, '*/master')
+    addMultiScm(newJob, isPR)
+    Utilities.addStandardOptions(newJob, isPR)
+    if (isPR) {
+      Utilities.addGithubPRTriggerForBranch(newJob, branch, "ubuntu ${lowerConfiguration}")
+    }
+    else {
+      Utilities.addGithubPushTrigger(newJob)
+    }
+  }
+}
+
