@@ -270,6 +270,8 @@ extern "C" bool CreateCustomSection(ObjectWriter *OW, const char *SectionName,
   std::string SectionNameStr(SectionName);
   assert(OW->CustomSections.find(SectionNameStr) == OW->CustomSections.end() &&
          "Section with duplicate name already exists");
+  assert(ComdatName == nullptr ||
+         OW->MOFI->getObjectFileType() == OW->MOFI->IsCOFF);
 
   MCSection *Section = nullptr;
   SectionKind Kind = (attributes & CustomSectionAttributes_Executable)
