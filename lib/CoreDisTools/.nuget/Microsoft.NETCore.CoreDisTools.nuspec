@@ -2,7 +2,7 @@
 <package >
   <metadata>
     <id>Microsoft.NETCore.CoreDisTools </id>
-    <version>1.0.0-prerelease-00001</version>
+    <version>1.0.1-prerelease-00001</version>
     <title>Microsoft.NETCore Instruction-wise Disassembler</title>
     <authors>Microsoft</authors>
     <owners>Microsoft</owners>

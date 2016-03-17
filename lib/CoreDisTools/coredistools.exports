@@ -1,3 +1,9 @@
 InitDisasm
+NewDisasm
 FinishDisasm
 DisasmInstruction
+NewDiffer
+FinishDiff
+NearDiffCodeBlocks
+DumpCodeBlock
+DumpDiffBlocks
