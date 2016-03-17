@@ -259,7 +259,8 @@ enum CustomSectionAttributes : int32_t {
 };
 
 extern "C" bool CreateCustomSection(ObjectWriter *OW, const char *SectionName,
-                                    CustomSectionAttributes attributes) {
+                                    CustomSectionAttributes attributes,
+                                    const char *ComdatName) {
   assert(OW && "ObjWriter is null");
   Triple TheTriple(TripleName);
   auto *AsmPrinter = &OW->getAsmPrinter();
@@ -269,6 +270,8 @@ extern "C" bool CreateCustomSection(ObjectWriter *OW, const char *SectionName,
   std::string SectionNameStr(SectionName);
   assert(OW->CustomSections.find(SectionNameStr) == OW->CustomSections.end() &&
          "Section with duplicate name already exists");
+  assert(ComdatName == nullptr ||
+         OW->MOFI->getObjectFileType() == OW->MOFI->IsCOFF);
 
   MCSection *Section = nullptr;
   SectionKind Kind = (attributes & CustomSectionAttributes_Executable)
@@ -295,7 +298,13 @@ extern "C" bool CreateCustomSection(ObjectWriter *OW, const char *SectionName,
       Characteristics |= COFF::IMAGE_SCN_CNT_INITIALIZED_DATA;
     }
 
-    Section = OutContext.getCOFFSection(SectionName, Characteristics, Kind);
+    if (ComdatName != nullptr) {
+      Section = OutContext.getCOFFSection(SectionName, Characteristics | 
+          COFF::IMAGE_SCN_LNK_COMDAT, Kind, ComdatName,
+          COFF::COMDATType::IMAGE_COMDAT_SELECT_ANY);
+    } else {
+      Section = OutContext.getCOFFSection(SectionName, Characteristics, Kind);
+    }
     break;
   }
   case Triple::ELF: {
