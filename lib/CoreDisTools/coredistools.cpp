@@ -112,17 +112,29 @@ public:
 };
 
 // Default Print Controls
+//
+// The default controls simply print to stdout and stderr.
+// Unfortunately, some of the CoreDisTools' clients expect the
+// print messages without a trailing newline -- because the
+// printing functions append the newline themselves.
+// Therefore all messages are generated without the trailing
+// newline. Consequently, the default printers add a newline
+// at the end of the message.
 
 void StdOut(const char *msg, ...) {
   va_list argList;
   va_start(argList, msg);
-  vprintf(msg, argList);
+  string message = msg;
+  message += "\n";
+  vprintf(message.c_str(), argList);
   va_end(argList);
 }
 void StdErr(const char *msg, ...) {
   va_list argList;
   va_start(argList, msg);
-  vfprintf(stderr, msg, argList);
+  string message = msg;
+  message += "\n";
+  vfprintf(stderr, message.c_str(), argList);
   va_end(argList);
 }
 const PrintControl DefaultPrintControl = {StdErr, StdErr, StdOut, StdOut};
@@ -466,9 +478,15 @@ void CorDisasm::dumpInstruction(const BlockIterator &BIter) const {
   if ((TheTargetArch == Target_X86) || (TheTargetArch == Target_X64)) {
     // For architectures with a variable size instruction, we pad the
     // byte dump with space up to 7 bytes. Some instructions might be longer,
-    // but
-    // ...
-    const char *Padding[] = {"", " ", "  ", "   ", "    ", "     ", "      "};
+    // but ...
+
+    const char *Padding[] = {"",
+                             "   ",
+                             "      ",
+                             "         ",
+                             "            ",
+                             "               ",
+                             "                  "};
     OS << (Padding[(InstSize < 7) ? (7 - InstSize) : 0]);
   }
 
