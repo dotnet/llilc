@@ -15,5 +15,20 @@
         "runtime.osx.10.10-x64.Microsoft.NETCore.CoreDisTools": "1.0.1-prerelease-00001"
       }
     }
+    "win7-x86": {
+      "Microsoft.NETCore.CoreDisTools": {
+        "runtime.win7-x86.Microsoft.NETCore.CoreDisTools": "1.0.1-prerelease-00001"
+      }
+    },
+    "ubuntu.14.04-x86": {
+      "Microsoft.NETCore.CoreDisTools": {
+        "runtime.ubuntu.14.04-x86.Microsoft.NETCore.CoreDisTools": "1.0.1-prerelease-00001"
+      }
+    },
+    "osx.10.10-x86": {
+      "Microsoft.NETCore.CoreDisTools": {
+        "runtime.osx.10.10-x86.Microsoft.NETCore.CoreDisTools": "1.0.1-prerelease-00001"
+      }
+    }
   }
 }

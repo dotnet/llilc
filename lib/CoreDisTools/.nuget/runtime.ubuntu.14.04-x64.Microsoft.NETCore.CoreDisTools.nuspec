@@ -10,7 +10,7 @@
     <projectUrl>https://github.com/dotnet/coreclr</projectUrl>
     <iconUrl>http://go.microsoft.com/fwlink/?LinkID=288859</iconUrl>
     <requireLicenseAcceptance>true</requireLicenseAcceptance>
-    <description>Machine Code Disassembly Tools</description>
+    <description>Disassembly Tools for CoreCLR</description>
     <releaseNotes>Initial release</releaseNotes>
     <copyright>Copyright &#169; Microsoft Corporation</copyright>
   </metadata>
