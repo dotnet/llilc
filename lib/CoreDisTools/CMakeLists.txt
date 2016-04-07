@@ -3,7 +3,7 @@ project(coredistools)
 get_filename_component(LLILC_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR}/../../include ABSOLUTE)
 
 include_directories(${LLVM_INCLUDE_DIRS}
-                    ${LLILC_INCLUDES}/CoreDisTools)
+                    ${CORECLR_INCLUDE})
 
 add_definitions(${LLVM_DEFINITIONS})
 
@@ -43,5 +43,5 @@ ${llvm_libs})
 # Output the export header corresponding to the coredistools library
 add_custom_command(TARGET coredistools POST_BUILD 
   COMMAND ${CMAKE_COMMAND} -E copy_if_different 
-  ${LLILC_INCLUDES}/CoreDisTools/coredistools.h 
+  ${CORECLR_INCLUDE}/coredistools.h 
   $<TARGET_FILE_DIR:coredistools>/include/coredistools.h)
