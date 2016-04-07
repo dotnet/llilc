@@ -63,6 +63,8 @@ and building both can be found below.
     $ cmake -DWITH_CORECLR=../../coreclr/path/to/CoreCLR/binaries -DLLVM_OPTIMIZED_TABLEGEN=ON ..
     ```
 
+    Ie, ../../coreclr/bin/Product/OSX.x64.Debug
+
 5. Build LLVM and LLILC:
 
     ```
