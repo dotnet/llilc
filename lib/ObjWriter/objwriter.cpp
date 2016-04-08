@@ -256,6 +256,7 @@ enum CustomSectionAttributes : int32_t {
   CustomSectionAttributes_ReadOnly = 0x0000,
   CustomSectionAttributes_Writeable = 0x0001,
   CustomSectionAttributes_Executable = 0x0002,
+  CustomSectionAttributes_MachO_Init_Func_Pointers = 0x0100,
 };
 
 extern "C" bool CreateCustomSection(ObjectWriter *OW, const char *SectionName,
@@ -281,11 +282,16 @@ extern "C" bool CreateCustomSection(ObjectWriter *OW, const char *SectionName,
                                : SectionKind::getReadOnly();
 
   switch (TheTriple.getObjectFormat()) {
-  case Triple::MachO:
+  case Triple::MachO: {
+    unsigned typeAndAttributes = 0;
+    if (attributes & CustomSectionAttributes_MachO_Init_Func_Pointers) {
+      typeAndAttributes |= MachO::SectionType::S_MOD_INIT_FUNC_POINTERS;
+    }
     Section = OutContext.getMachOSection(
         (attributes & CustomSectionAttributes_Executable) ? "__TEXT" : "__DATA",
-        SectionName, 0, Kind);
+        SectionName, typeAndAttributes, Kind);
     break;
+  }
   case Triple::COFF: {
     unsigned Characteristics = COFF::IMAGE_SCN_MEM_READ;
 
