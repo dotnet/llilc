@@ -272,7 +272,8 @@ extern "C" bool CreateCustomSection(ObjectWriter *OW, const char *SectionName,
   assert(OW->CustomSections.find(SectionNameStr) == OW->CustomSections.end() &&
          "Section with duplicate name already exists");
   assert(ComdatName == nullptr ||
-         OW->MOFI->getObjectFileType() == OW->MOFI->IsCOFF);
+         OW->MOFI->getObjectFileType() == OW->MOFI->IsCOFF ||
+         OW->MOFI->getObjectFileType() == OW->MOFI->IsELF);
 
   MCSection *Section = nullptr;
   SectionKind Kind = (attributes & CustomSectionAttributes_Executable)
@@ -315,12 +316,20 @@ extern "C" bool CreateCustomSection(ObjectWriter *OW, const char *SectionName,
   }
   case Triple::ELF: {
     unsigned Flags = ELF::SHF_ALLOC;
+    if (ComdatName != nullptr) {
+      MCSymbolELF *GroupSym = 
+          cast<MCSymbolELF>(OutContext.getOrCreateSymbol(ComdatName));
+      OutContext.createELFGroupSection(GroupSym);
+      Flags |= ELF::SHF_GROUP;
+    }
+
     if (attributes & CustomSectionAttributes_Executable) {
       Flags |= ELF::SHF_EXECINSTR;
     } else if (attributes & CustomSectionAttributes_Writeable) {
       Flags |= ELF::SHF_WRITE;
     }
-    Section = OutContext.getELFSection(SectionName, ELF::SHT_PROGBITS, Flags);
+    Section = OutContext.getELFSection(SectionName, ELF::SHT_PROGBITS, Flags,
+        0, ComdatName != nullptr ? ComdatName : "");
     break;
   }
   default:
@@ -429,7 +438,7 @@ enum class RelocType {
 };
 
 extern "C" int EmitSymbolRef(ObjectWriter *OW, const char *SymbolName,
-                             RelocType RelocType, int Delta) {
+                             RelocType SymbolRelocType, int Delta) {
   assert(OW && "ObjWriter is null");
   auto *AsmPrinter = &OW->getAsmPrinter();
   auto &OST = static_cast<MCObjectStreamer &>(*AsmPrinter->OutStreamer);
@@ -440,7 +449,7 @@ extern "C" int EmitSymbolRef(ObjectWriter *OW, const char *SymbolName,
   MCSymbolRefExpr::VariantKind Kind = MCSymbolRefExpr::VK_None;
 
   // Convert RelocType to MCSymbolRefExpr
-  switch (RelocType) {
+  switch (SymbolRelocType) {
   case RelocType::IMAGE_REL_BASED_ABSOLUTE:
     assert(OW->MOFI->getObjectFileType() == OW->MOFI->IsCOFF);
     Kind = MCSymbolRefExpr::VK_COFF_IMGREL32;
@@ -538,7 +547,7 @@ extern "C" void EmitCFICode(ObjectWriter *OW, int Offset, const char *Blob) {
   auto *AsmPrinter = &OW->getAsmPrinter();
   auto &OST = *AsmPrinter->OutStreamer;
 
-  CFI_CODE *CfiCode = (CFI_CODE *)Blob;
+  const CFI_CODE *CfiCode = (const CFI_CODE *)Blob;
   switch (CfiCode->CfiOpCode) {
   case CFI_ADJUST_CFA_OFFSET:
     assert(CfiCode->DwarfReg == DWARF_REG_ILLEGAL &&
