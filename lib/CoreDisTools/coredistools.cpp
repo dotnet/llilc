@@ -169,7 +169,6 @@ protected:
 
 private:
   bool setTarget();
-  bool verifyPrefixDecoding();
 
   string TargetTriple;
   const Target *TheTarget;
@@ -189,8 +188,6 @@ private:
   struct OpcodeMap {
     const char *Name;
     uint8_t MachineOpcode;
-    bool IsLlvmInstruction; // Does LLVM treat this opcode
-                            // as a separate instruction?
   };
 
   static const int X86NumPrefixes = 19;
@@ -216,25 +213,25 @@ private:
 
 // clang-format off
 CorDisasm::OpcodeMap const CorDisasm::X86Prefix[CorDisasm::X86NumPrefixes] = {
-  { "LOCK",           0xF0, true },
-  { "REPNE/XACQUIRE", 0xF2, true }, // Both the (TSX/normal) instrs 
-  { "REP/XRELEASE",   0xF3, true }, // have the same byte encoding 
-  { "OP_OVR",         0x66, true },
-  { "CS_OVR",         0x2E, true },
-  { "DS_OVR",         0x3E, true },
-  { "ES_OVR",         0x26, true },
-  { "FS_OVR",         0x64, true },
-  { "GS_OVR",         0x65, true },
-  { "SS_OVR",         0x36, true },
-  { "ADDR_OVR",       0x67, false },
-  { "REX64W",         0x48, false },
-  { "REX64WB",        0x49, false },
-  { "REX64WX",        0x4A, false },
-  { "REX64WXB",       0x4B, false },
-  { "REX64WR",        0x4C, false },
-  { "REX64WRB",       0x4D, false },
-  { "REX64WRX",       0x4E, false },
-  { "REX64WRXB",      0x4F, false }
+  { "LOCK",           0xF0 },
+  { "REPNE/XACQUIRE", 0xF2 }, // Both the (TSX/normal) instrs 
+  { "REP/XRELEASE",   0xF3 }, // have the same byte encoding 
+  { "OP_OVR",         0x66 },
+  { "CS_OVR",         0x2E },
+  { "DS_OVR",         0x3E },
+  { "ES_OVR",         0x26 },
+  { "FS_OVR",         0x64 },
+  { "GS_OVR",         0x65 },
+  { "SS_OVR",         0x36 },
+  { "ADDR_OVR",       0x67 },
+  { "REX64W",         0x48 },
+  { "REX64WB",        0x49 },
+  { "REX64WX",        0x4A },
+  { "REX64WXB",       0x4B },
+  { "REX64WR",        0x4C },
+  { "REX64WRB",       0x4D },
+  { "REX64WRX",       0x4E },
+  { "REX64WRXB",      0x4F }
 };
 // clang-format on
 
@@ -363,39 +360,6 @@ bool CorDisasm::init() {
     return false;
   }
 
-  if (!verifyPrefixDecoding()) {
-    // verifyOpcodes() prints error message if necessary
-    return false;
-  }
-
-  return true;
-}
-
-// This function simply verifies our understanding of the way
-// X86 prefix bytes are decoded by LLVM -- and learn about
-// any change in behavior.
-bool CorDisasm::verifyPrefixDecoding() {
-  if ((TheTargetArch != Target_X86) && (TheTargetArch != Target_X64)) {
-    return true;
-  }
-
-  for (uint8_t Pfx = 0; Pfx < X86NumPrefixes; Pfx++) {
-    OpcodeMap Prefix = X86Prefix[Pfx];
-    BlockIterator BIter(&Prefix.MachineOpcode, 1);
-
-    if (decodeInstruction(BIter, true)) {
-      if (!Prefix.IsLlvmInstruction) {
-        Print->Error("Prefix Decode Verification failed for %s\n", Prefix.Name);
-        return false;
-      }
-    } else {
-      if (Prefix.IsLlvmInstruction) {
-        Print->Error("Prefix Decode Verification failed for %s\n", Prefix.Name);
-        return false;
-      }
-    }
-  }
-
   return true;
 }
 
@@ -452,7 +416,6 @@ uint64_t CorDisasm::disasmInstruction(BlockIterator &BIter,
       if (Size == 1) {
         for (uint8_t Pfx = 0; Pfx < X86NumPrefixes; Pfx++) {
           if (BIter.Ptr[0] == X86Prefix[Pfx].MachineOpcode) {
-            assert(X86Prefix[Pfx].IsLlvmInstruction && "Unexpected Decode");
             ContinueDisasm = true;
             BIter.advance();
             break;
