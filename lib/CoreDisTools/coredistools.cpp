@@ -307,7 +307,8 @@ bool CorDisasm::init() {
 
   MRI.reset(TheTarget->createMCRegInfo(TargetTriple));
   if (!MRI) {
-    Print->Error("Error: no register info for target %s\n", TargetTriple.c_str());
+    Print->Error("Error: no register info for target %s\n",
+                 TargetTriple.c_str());
     return false;
   }
 
@@ -322,13 +323,15 @@ bool CorDisasm::init() {
   string FeaturesStr; // No additional target specific attributes.
   STI.reset(TheTarget->createMCSubtargetInfo(TargetTriple, Mcpu, FeaturesStr));
   if (!STI) {
-    Print->Error("error: no subtarget info for target %s\n", TargetTriple.c_str());
+    Print->Error("error: no subtarget info for target %s\n",
+                 TargetTriple.c_str());
     return false;
   }
 
   MII.reset(TheTarget->createMCInstrInfo());
   if (!MII) {
-    Print->Error("error: no instruction info for target %s\n", TargetTriple.c_str());
+    Print->Error("error: no instruction info for target %s\n",
+                 TargetTriple.c_str());
     return false;
   }
 
@@ -338,7 +341,8 @@ bool CorDisasm::init() {
   Disassembler.reset(TheTarget->createMCDisassembler(*STI, *Ctx));
 
   if (!Disassembler) {
-    Print->Error("error: no disassembler for target %s\n", TargetTriple.c_str());
+    Print->Error("error: no disassembler for target %s\n",
+                 TargetTriple.c_str());
     return false;
   }
 
@@ -356,7 +360,8 @@ bool CorDisasm::init() {
       Triple(TargetTriple), AsmPrinterVariant, *AsmInfo, *MII, *MRI));
 
   if (!IP) {
-    Print->Error("error: No Instruction Printer for target %s\n", TargetTriple.c_str());
+    Print->Error("error: No Instruction Printer for target %s\n",
+                 TargetTriple.c_str());
     return false;
   }
 

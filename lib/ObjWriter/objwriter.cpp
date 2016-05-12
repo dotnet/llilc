@@ -147,6 +147,7 @@ public:
   std::vector<DebugVarInfo> DebugVarInfos;
 
   std::map<std::string, MCSection *> CustomSections;
+  std::set<MCSection *> Sections;
   int FuncId;
 
 public:
@@ -305,9 +306,9 @@ extern "C" bool CreateCustomSection(ObjectWriter *OW, const char *SectionName,
     }
 
     if (ComdatName != nullptr) {
-      Section = OutContext.getCOFFSection(SectionName, Characteristics | 
-          COFF::IMAGE_SCN_LNK_COMDAT, Kind, ComdatName,
-          COFF::COMDATType::IMAGE_COMDAT_SELECT_ANY);
+      Section = OutContext.getCOFFSection(
+          SectionName, Characteristics | COFF::IMAGE_SCN_LNK_COMDAT, Kind,
+          ComdatName, COFF::COMDATType::IMAGE_COMDAT_SELECT_ANY);
     } else {
       Section = OutContext.getCOFFSection(SectionName, Characteristics, Kind);
     }
@@ -326,6 +327,11 @@ extern "C" bool CreateCustomSection(ObjectWriter *OW, const char *SectionName,
   default:
     return error("Unknown output format for target " + TripleName);
     break;
+  }
+
+  if (attributes & CustomSectionAttributes_Executable) {
+    Section->setHasInstructions(true);
+    OutContext.addGenDwarfSection(Section);
   }
 
   OW->CustomSections[SectionNameStr] = Section;
@@ -362,6 +368,7 @@ extern "C" void SwitchSection(ObjectWriter *OW, const char *SectionName) {
     }
   }
 
+  OW->Sections.insert(Section);
   OST.SwitchSection(Section);
 
   if (!Section->getBeginSymbol()) {
@@ -822,6 +829,11 @@ extern "C" void EmitDebugModuleInfo(ObjectWriter *OW) {
   auto &OST = static_cast<MCObjectStreamer &>(*AsmPrinter->OutStreamer);
   MCContext &OutContext = OST.getContext();
   const MCObjectFileInfo *MOFI = OutContext.getObjectFileInfo();
+
+  // Ensure ending all sections.
+  for (auto Section : OW->Sections) {
+    OST.endSection(Section);
+  }
 
   if (MOFI->getObjectFileType() == MOFI->IsCOFF) {
     MCSection *Section = MOFI->getCOFFDebugSymbolsSection();
