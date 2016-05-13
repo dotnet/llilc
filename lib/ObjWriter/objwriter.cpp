@@ -539,6 +539,21 @@ extern "C" void EmitCFIEnd(ObjectWriter *OW, int Offset) {
   OW->FrameOpened = false;
 }
 
+extern "C" void EmitCFILsda(ObjectWriter *OW,  const char *LsdaBlobSymbolName) {
+  assert(OW && "ObjWriter is null");
+  assert(OW->FrameOpened && "frame should be opened before CFILsda");
+  auto *AsmPrinter = &OW->getAsmPrinter();
+  auto &OST = static_cast<MCObjectStreamer &>(*AsmPrinter->OutStreamer);
+  MCContext &OutContext = OST.getContext();
+
+  // Create symbol reference
+  MCSymbol *T = OutContext.getOrCreateSymbol(LsdaBlobSymbolName);
+  MCAssembler &MCAsm = OST.getAssembler();
+  MCAsm.registerSymbol(*T);
+  OST.EmitCFILsda(T, llvm::dwarf::Constants::DW_EH_PE_pcrel |
+                         llvm::dwarf::Constants::DW_EH_PE_sdata4);
+}
+
 extern "C" void EmitCFICode(ObjectWriter *OW, int Offset, const char *Blob) {
   assert(OW && "ObjWriter is null");
   assert(OW->FrameOpened && "frame should be opened before CFICode");
