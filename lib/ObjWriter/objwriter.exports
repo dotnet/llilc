@@ -10,6 +10,7 @@ EmitWinFrameInfo
 EmitCFIStart
 EmitCFIEnd
 EmitCFICode
+EmitCFILsda
 EmitDebugFileInfo
 EmitDebugLoc
 EmitDebugFunctionInfo
