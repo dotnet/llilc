@@ -2,7 +2,7 @@
 <package >
   <metadata>
     <id>runtime.osx.10.10-x86.Microsoft.NETCore.CoreDisTools</id>
-    <version>1.0.1-prerelease-00001</version>
+    <version>1.0.1-prerelease-00002</version>
     <title>Microsoft.NETCore Instruction-wise Disassembler</title>
     <authors>Microsoft</authors>
     <owners>Microsoft</owners>
