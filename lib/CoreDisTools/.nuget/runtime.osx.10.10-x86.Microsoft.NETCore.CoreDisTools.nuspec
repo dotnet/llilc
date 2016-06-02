@@ -16,6 +16,5 @@
   </metadata>
   <files>
     <file src="../libcoredistools.dylib" target="runtimes/osx.10.10-x86/native/libcoredistools.dylib" />
-    <file src="../include/coredistools.h" target="runtimes/osx.10.10-x86/native/coredistools.h" />
   </files>
 </package>
