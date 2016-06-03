@@ -16,6 +16,5 @@
   </metadata>
   <files>
     <file src="../libcoredistools.so" target="runtimes/ubuntu.14.04-x86/native/libcoredistools.so" />
-    <file src="../include/coredistools.h" target="runtimes/ubuntu.14.04-x86/native/coredistools.h" />
   </files>
 </package>

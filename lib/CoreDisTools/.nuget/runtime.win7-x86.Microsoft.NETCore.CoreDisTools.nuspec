@@ -16,6 +16,5 @@
   </metadata>
   <files>
     <file src="..\coredistools.dll" target="runtimes\win7-x86\native\coredistools.dll" />
-    <file src="..\include\coredistools.h" target="runtimes\win7-x86\native\coredistools.h" />
   </files>
 </package>
