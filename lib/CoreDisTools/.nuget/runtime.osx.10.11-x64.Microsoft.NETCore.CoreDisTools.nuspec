@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package >
   <metadata>
-    <id>runtime.osx.10.10-x64.Microsoft.NETCore.CoreDisTools</id>
+    <id>runtime.osx.10.11-x64.Microsoft.NETCore.CoreDisTools</id>
     <version>1.0.1-prerelease-00002</version>
     <title>Microsoft.NETCore Instruction-wise Disassembler</title>
     <authors>Microsoft</authors>
@@ -15,6 +15,6 @@
     <copyright>Copyright &#169; Microsoft Corporation</copyright>
   </metadata>
   <files>
-    <file src="../libcoredistools.dylib" target="runtimes/osx.10.10-x64/native/libcoredistools.dylib" />
+    <file src="../libcoredistools.dylib" target="runtimes/osx.10.11-x64/native/libcoredistools.dylib" />
   </files>
 </package>
