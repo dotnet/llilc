@@ -96,7 +96,7 @@ git rev-parse "refs/remotes/origin/master^{commit}" >> %WORKSPACE%\\commits.txt"
 mkdir build
 
 cd coreclr
-./build.cmd ${lowerConfiguration} skipmscorlib skiptests""")
+./build.cmd ${lowerConfiguration} skiptests""")
         batchFile("""cd build
 cmake -G \"Visual Studio 14 2015 Win64\" -DWITH_CORECLR=%WORKSPACE%\\coreclr\\bin\\Product\\Windows_NT.x64.${configuration} -DLLVM_OPTIMIZED_TABLEGEN=ON ..\\llvm
 \"%VS140COMNTOOLS%\\..\\..\\VC\\vcvarsall.bat\" x86 && msbuild llvm.sln /p:Configuration=${configuration} /p:Platform=x64 /t:ALL_BUILD /m""")
@@ -123,7 +123,7 @@ cmake -G \"Visual Studio 14 2015 Win64\" -DWITH_CORECLR=%WORKSPACE%\\coreclr\\bi
 
     def newJob = job (newJobName) {
       steps {
-        shell("if which clang-3.5; then \n    export CC=\$(which clang-3.5)\n    export CXX=\$(which clang++-3.5)\nelif which clang; then\n    export CC=\$(which clang)\n    export CXX=\$(which clang++)\nelse\n    echo Could not find clang or clang-3.5\n    exit 1\nfi\n\n(cd coreclr && ./build.sh skipmscorlib ${lowerConfiguration}) && (cd llvm && mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=${configuration} -DWITH_CORECLR=../../coreclr/bin/Product/Linux.x64.${configuration} .. && make -j 5)")
+        shell("if which clang-3.5; then \n    export CC=\$(which clang-3.5)\n    export CXX=\$(which clang++-3.5)\nelif which clang; then\n    export CC=\$(which clang)\n    export CXX=\$(which clang++)\nelse\n    echo Could not find clang or clang-3.5\n    exit 1\nfi\n\n(cd coreclr && ./build.sh ${lowerConfiguration}) && (cd llvm && mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=${configuration} -DWITH_CORECLR=../../coreclr/bin/Product/Linux.x64.${configuration} .. && make -j 5)")
       }
     }
 
