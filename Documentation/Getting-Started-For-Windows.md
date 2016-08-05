@@ -15,6 +15,7 @@ may be replaced in all commands below with the directory of your choice.
 * Clone and build CoreCLR:
     ```
     $ git clone https://github.com/dotnet/coreclr
+    $ git clone https://github.com/dotnet/corefx
     $ cd coreclr
     $ .\build.cmd
     $ cd ..
@@ -22,6 +23,7 @@ may be replaced in all commands below with the directory of your choice.
     After it completes, the build will indicate where the CoreCLR binaries
     are available. Make a note of this location
     (typically bin/Product/Windows_NT.x64.debug).
+				For more detailed instructions, see [Build CoreCLR on Windows](https://github.com/dotnet/coreclr/blob/master/Documentation/building/windows-instructions.md).
 
 * Clone the Microsoft fork of LLVM to your PC
   * Change directories to where you want to place your clone and run `git`
