@@ -86,6 +86,7 @@ public:
   llvm::LLVMContext *LLVMContext; ///< LLVM context for types and similar.
   llvm::Module *CurrentModule;    ///< Module holding LLVM IR.
   llvm::TargetMachine *TM;        ///< Target characteristics
+  llvm::Function *SafepointPoll;  /// < The Safepoint Poll helper
   bool HasLoadedBitCode;          ///< Flag for side-loaded LLVM IR.
   llvm::StringMap<uint64_t> NameToHandleMap; ///< Map from global object names
                                              ///< to the corresponding CLR

@@ -1484,6 +1484,8 @@ void GenIR::createSafepointPoll() {
 
   CallInst::Create(Target, "", EntryBlock);
   ReturnInst::Create(*LLVMContext, EntryBlock);
+
+  JitContext->SafepointPoll = SafepointPoll;
 }
 
 bool GenIR::doTailCallOpt() { return JitContext->Options->DoTailCallOpt; }
