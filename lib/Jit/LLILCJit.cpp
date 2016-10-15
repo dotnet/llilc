@@ -772,13 +772,13 @@ uint64_t ObjectLoadListener::getRelocationAddend(uint64_t LLVMRelocationType,
   uint64_t Addend = 0;
   switch (LLVMRelocationType) {
   case IMAGE_REL_AMD64_ABSOLUTE:
-    Addend = *(uint32_t *)FixupAddress;
+    memcpy(&Addend, FixupAddress, sizeof(uint32_t));
     break;
   case IMAGE_REL_AMD64_ADDR64:
-    Addend = *(uint64_t *)FixupAddress;
+    memcpy(&Addend, FixupAddress, sizeof(uint64_t));
     break;
   case IMAGE_REL_AMD64_REL32:
-    Addend = *(uint32_t *)FixupAddress;
+    memcpy(&Addend, FixupAddress, sizeof(uint32_t));
     break;
   default:
     llvm_unreachable("Unknown reloc type.");
