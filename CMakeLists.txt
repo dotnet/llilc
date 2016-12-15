@@ -494,9 +494,9 @@ if ( NOT LLVM_TARGET_IS_CROSSCOMPILE_HOST )
       "Version number that will be placed into the libllilcjit library , in the form XX.YY")
   mark_as_advanced(LLILC_EXECUTABLE_VERSION LIBLLILC_LIBRARY_VERSION)
 
-  add_subdirectory(include)
+  #add_subdirectory(include)
   add_subdirectory(lib)
-  add_subdirectory(tools)
+  #add_subdirectory(tools)
 
   option (LLILC_ENABLE_DOXYGEN "Use doxygen to generate LLILC API documentation." OFF)
 
