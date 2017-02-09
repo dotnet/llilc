@@ -492,6 +492,18 @@ extern "C" void EmitWinFrameInfo(ObjectWriter *OW, const char *FunctionName,
 
   // .pdata emission
   MCSection *Section = MOFI->getPDataSection();
+  
+  // If the function was emitted to a Comdat section, create an associative
+  // section to place the frame info in. This is due to the Windows linker
+  // requirement that a function and its unwind info come from the same 
+  // object file.
+  MCSymbol *Fn = OutContext.getOrCreateSymbol(Twine(FunctionName));
+  const MCSectionCOFF *FunctionSection = cast<MCSectionCOFF>(&Fn->getSection());
+  if (FunctionSection->getCharacteristics() & COFF::IMAGE_SCN_LNK_COMDAT) {
+    Section = OutContext.getAssociativeCOFFSection(
+      cast<MCSectionCOFF>(Section), FunctionSection->getCOMDATSymbol());
+  }
+  
   OST.SwitchSection(Section);
   OST.EmitValueToAlignment(4);
 
