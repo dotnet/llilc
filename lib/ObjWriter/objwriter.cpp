@@ -72,17 +72,13 @@ static cl::opt<std::string>
          cl::value_desc("cpu-name"), cl::init(""));
 
 static cl::opt<Reloc::Model> RelocModel(
-    "relocation-model", cl::desc("Choose relocation model"),
-    cl::init(Reloc::Default),
+    "relocation-model", cl::desc("Choose relocation model"),    
     cl::values(
-        clEnumValN(Reloc::Default, "default",
-                   "Target default relocation model"),
         clEnumValN(Reloc::Static, "static", "Non-relocatable code"),
         clEnumValN(Reloc::PIC_, "pic",
                    "Fully relocatable, position independent code"),
         clEnumValN(Reloc::DynamicNoPIC, "dynamic-no-pic",
-                   "Relocatable external references, non-relocatable code"),
-        clEnumValEnd));
+                   "Relocatable external references, non-relocatable code")));
 
 static cl::opt<llvm::CodeModel::Model> CMModel(
     "code-model", cl::desc("Choose code model"), cl::init(CodeModel::Default),
@@ -91,8 +87,7 @@ static cl::opt<llvm::CodeModel::Model> CMModel(
                clEnumValN(CodeModel::Small, "small", "Small code model"),
                clEnumValN(CodeModel::Kernel, "kernel", "Kernel code model"),
                clEnumValN(CodeModel::Medium, "medium", "Medium code model"),
-               clEnumValN(CodeModel::Large, "large", "Large code model"),
-               clEnumValEnd));
+               clEnumValN(CodeModel::Large, "large", "Large code model")));
 
 static cl::opt<bool> SaveTempLabels("save-temp-labels",
                                     cl::desc("Don't discard temporary labels"));
@@ -147,7 +142,7 @@ public:
   std::vector<DebugVarInfo> DebugVarInfos;
 
   std::map<std::string, MCSection *> CustomSections;
-  std::set<MCSection *> Sections;
+  std::list<MCSection *> Sections;
   int FuncId;
 
 public:
@@ -207,7 +202,7 @@ bool ObjectWriter::init(llvm::StringRef ObjectFilePath) {
   if (!MCE)
     return error("no code emitter for target " + TripleName);
 
-  MAB = TheTarget->createMCAsmBackend(*MRI, TripleName, MCPU);
+  MAB = TheTarget->createMCAsmBackend(*MRI, TripleName, MCPU, MCOptions);
   if (!MAB)
     return error("no asm backend for target " + TripleName);
 
@@ -219,7 +214,7 @@ bool ObjectWriter::init(llvm::StringRef ObjectFilePath) {
     return error("no object streamer for target " + TripleName);
 
   TM.reset(TheTarget->createTargetMachine(TripleName, MCPU, FeaturesStr,
-                                          TargetOptions()));
+                                          TargetOptions(), None));
   if (!TM)
     return error("no target machine for target " + TripleName);
 
@@ -368,7 +363,7 @@ extern "C" void SwitchSection(ObjectWriter *OW, const char *SectionName) {
     }
   }
 
-  OW->Sections.insert(Section);
+  OW->Sections.push_back(Section);
   OST.SwitchSection(Section);
 
   if (!Section->getBeginSymbol()) {
@@ -480,9 +475,7 @@ extern "C" int EmitSymbolRef(ObjectWriter *OW, const char *SymbolName,
     TargetExpr = MCBinaryExpr::createAdd(
         TargetExpr, MCConstantExpr::create(Delta, OutContext), OutContext);
   }
-
-  OST.EmitValue(TargetExpr, Size, SMLoc(), IsPCRelative);
-
+  OST.EmitValueImpl(TargetExpr, Size, SMLoc(), IsPCRelative);
   return Size;
 }
 
@@ -610,11 +603,18 @@ extern "C" void EmitDebugFileInfo(ObjectWriter *OW, int FileId,
 
 static void EmitSymRecord(MCObjectStreamer &OST, int Size,
                           SymbolRecordKind SymbolKind) {
-  SymRecord Rec = {ulittle16_t(Size + sizeof(ulittle16_t)),
-                   ulittle16_t(SymbolKind)};
+  RecordPrefix Rec;
+  Rec.RecordLen  = ulittle16_t(Size + sizeof(ulittle16_t));
+  Rec.RecordKind = ulittle16_t((uint16_t)SymbolKind);
   OST.EmitBytes(StringRef((char *)&Rec, sizeof(Rec)));
 }
 
+static void EmitCOFFSecRel32Value(MCObjectStreamer &OST, MCExpr const *Value) {
+    MCDataFragment *DF = OST.getOrCreateDataFragment();
+    MCFixup Fixup = MCFixup::create(DF->getContents().size(), Value, FK_SecRel_4);
+    DF->getFixups().push_back(Fixup);
+    DF->getContents().resize(DF->getContents().size() + 4, 0);
+}
 static void EmitVarDefRange(MCObjectStreamer &OST, const MCSymbol *Fn,
                             LocalVariableAddrRange &Range) {
   const MCSymbolRefExpr *BaseSym =
@@ -623,7 +623,7 @@ static void EmitVarDefRange(MCObjectStreamer &OST, const MCSymbol *Fn,
       MCConstantExpr::create(Range.OffsetStart, OST.getContext());
   const MCExpr *Expr =
       MCBinaryExpr::createAdd(BaseSym, Offset, OST.getContext());
-  OST.EmitCOFFSecRel32Value(Expr);
+  EmitCOFFSecRel32Value(OST, Expr);
   OST.EmitCOFFSectionIndex(Fn);
   OST.EmitIntValue(Range.Range, 2);
 }
@@ -633,53 +633,48 @@ static void EmitCVDebugVarInfo(MCObjectStreamer &OST, const MCSymbol *Fn,
   for (int I = 0; I < NumVarInfos; I++) {
     // Emit an S_LOCAL record
     DebugVarInfo Var = LocInfos[I];
-    LocalSym Sym = {};
-
-    int SizeofSym = sizeof(LocalSym);
-    EmitSymRecord(OST, SizeofSym + Var.Name.length() + 1,
-                  SymbolRecordKind::S_LOCAL);
-
-    Sym.Type = TypeIndex(Var.TypeIndex);
-
+    TypeIndex Type = TypeIndex(Var.TypeIndex);
+    LocalSymFlags Flags = LocalSymFlags::None;
+    unsigned SizeofSym = sizeof(Type) + sizeof(Flags);
+    unsigned NameLength = Var.Name.length() + 1;
+    EmitSymRecord(OST, SizeofSym + NameLength,
+                  SymbolRecordKind::LocalSym);
     if (Var.IsParam) {
-      Sym.Flags |= LocalSym::IsParameter;
+        Flags |= LocalSymFlags::IsParameter;
     }
-
-    OST.EmitBytes(StringRef((char *)&Sym, SizeofSym));
-    OST.EmitBytes(StringRef(Var.Name.c_str(), Var.Name.length() + 1));
+    OST.EmitBytes(StringRef((char *)&Type, sizeof(Type)));
+    OST.EmitIntValue(static_cast<uint16_t>(Flags), sizeof(Flags));
+    OST.EmitBytes(StringRef(Var.Name.c_str(), NameLength));
 
     for (const auto &Range : Var.Ranges) {
       // Emit a range record
       switch (Range.loc.vlType) {
       case ICorDebugInfo::VLT_REG:
       case ICorDebugInfo::VLT_REG_FP: {
-        DefRangeRegisterSym Rec = {};
-        Rec.Range.OffsetStart = Range.startOffset;
-        Rec.Range.Range = Range.endOffset - Range.startOffset;
-        Rec.Range.ISectStart = 0;
 
-        // Currently only support integer registers.
-        // TODO: support xmm registers
-        if (Range.loc.vlReg.vlrReg >=
-            sizeof(cvRegMapAmd64) / sizeof(cvRegMapAmd64[0])) {
+          // Currently only support integer registers.
+          // TODO: support xmm registers
+          if (Range.loc.vlReg.vlrReg >=
+              sizeof(cvRegMapAmd64) / sizeof(cvRegMapAmd64[0])) {
+              break;
+          }
+          SymbolRecordKind SymbolKind = SymbolRecordKind::DefRangeRegisterSym;
+          unsigned SizeofDefRangeRegisterSym = sizeof(DefRangeRegisterSym::Hdr) + sizeof(DefRangeRegisterSym::Range);
+          EmitSymRecord(OST, SizeofDefRangeRegisterSym, SymbolKind);
+
+          DefRangeRegisterSym DefRangeRegisterSymbol(SymbolKind);
+          DefRangeRegisterSymbol.Range.OffsetStart = Range.startOffset;
+          DefRangeRegisterSymbol.Range.Range = Range.endOffset - Range.startOffset;
+          DefRangeRegisterSymbol.Range.ISectStart = 0;
+          DefRangeRegisterSymbol.Hdr.Register = cvRegMapAmd64[Range.loc.vlReg.vlrReg];
+          unsigned Length = sizeof(DefRangeRegisterSymbol.Hdr);
+          OST.EmitBytes(StringRef((char *)&DefRangeRegisterSymbol.Hdr, Length));
+          EmitVarDefRange(OST, Fn, DefRangeRegisterSymbol.Range);
           break;
-        }
-
-        Rec.Register = cvRegMapAmd64[Range.loc.vlReg.vlrReg];
-        EmitSymRecord(OST, sizeof(DefRangeRegisterSym),
-                      SymbolRecordKind::S_DEFRANGE_REGISTER);
-        OST.EmitBytes(
-            StringRef((char *)&Rec, offsetof(DefRangeRegisterSym, Range)));
-        EmitVarDefRange(OST, Fn, Rec.Range);
-        break;
       }
 
       case ICorDebugInfo::VLT_STK: {
-        DefRangeRegisterRelSym Rec = {};
-        Rec.Range.OffsetStart = Range.startOffset;
-        Rec.Range.Range = Range.endOffset - Range.startOffset;
-        Rec.Range.ISectStart = 0;
-
+        
         // TODO: support REGNUM_AMBIENT_SP
         if (Range.loc.vlStk.vlsBaseReg >=
             sizeof(cvRegMapAmd64) / sizeof(cvRegMapAmd64[0])) {
@@ -687,16 +682,25 @@ static void EmitCVDebugVarInfo(MCObjectStreamer &OST, const MCSymbol *Fn,
         }
 
         assert(Range.loc.vlStk.vlsBaseReg <
-                   sizeof(cvRegMapAmd64) / sizeof(cvRegMapAmd64[0]) &&
-               "Register number should be in the range of [REGNUM_RAX, "
-               "REGNUM_R15].");
-        Rec.BaseRegister = cvRegMapAmd64[Range.loc.vlStk.vlsBaseReg];
-        Rec.BasePointerOffset = Range.loc.vlStk.vlsOffset;
-        EmitSymRecord(OST, sizeof(DefRangeRegisterRelSym),
-                      SymbolRecordKind::S_DEFRANGE_REGISTER_REL);
+            sizeof(cvRegMapAmd64) / sizeof(cvRegMapAmd64[0]) &&
+            "Register number should be in the range of [REGNUM_RAX, "
+            "REGNUM_R15].");
+
+        SymbolRecordKind SymbolKind = SymbolRecordKind::DefRangeRegisterRelSym;
+        unsigned SizeofDefRangeRegisterRelSym = sizeof(DefRangeRegisterRelSym::Hdr) + sizeof(DefRangeRegisterRelSym::Range);
+        EmitSymRecord(OST, SizeofDefRangeRegisterRelSym, SymbolKind);
+
+        DefRangeRegisterRelSym DefRangeRegisterRelSymbol(SymbolKind);
+        DefRangeRegisterRelSymbol.Range.OffsetStart = Range.startOffset;
+        DefRangeRegisterRelSymbol.Range.Range = Range.endOffset - Range.startOffset;
+        DefRangeRegisterRelSymbol.Range.ISectStart = 0;
+        DefRangeRegisterRelSymbol.Hdr.Register = cvRegMapAmd64[Range.loc.vlStk.vlsBaseReg];
+        DefRangeRegisterRelSymbol.Hdr.BasePointerOffset = Range.loc.vlStk.vlsOffset;
+
+        unsigned Length = sizeof(DefRangeRegisterRelSymbol.Hdr);
         OST.EmitBytes(
-            StringRef((char *)&Rec, offsetof(DefRangeRegisterRelSym, Range)));
-        EmitVarDefRange(OST, Fn, Rec.Range);
+            StringRef((char *)&DefRangeRegisterRelSymbol.Hdr, Length));
+        EmitVarDefRange(OST, Fn, DefRangeRegisterRelSymbol.Range);
         break;
       }
 
@@ -738,7 +742,6 @@ static void EmitCVDebugFunctionInfo(ObjectWriter *OW, const char *FunctionName,
   if (OW->FuncId == 1) {
     OST.EmitIntValue(COFF::DEBUG_SECTION_MAGIC, 4);
   }
-
   MCSymbol *Fn = OutContext.getOrCreateSymbol(Twine(FunctionName));
 
   // Emit a symbol subsection, required by VS2012+ to find function boundaries.
@@ -748,24 +751,28 @@ static void EmitCVDebugFunctionInfo(ObjectWriter *OW, const char *FunctionName,
   EmitLabelDiff(OST, SymbolsBegin, SymbolsEnd);
   OST.EmitLabel(SymbolsBegin);
   {
-    int RecSize = sizeof(ProcSym) + strlen(FunctionName) + 1;
-    EmitSymRecord(OST, RecSize, SymbolRecordKind::S_GPROC32_ID);
+    ProcSym ProcSymbol(SymbolRecordKind::GlobalProcIdSym);
+    ProcSymbol.CodeSize = FunctionSize;
+    ProcSymbol.DbgEnd = FunctionSize;
 
-    ProcSym ProRec = {};
-    ProRec.CodeSize = FunctionSize;
-    ProRec.DbgEnd = FunctionSize;
+    unsigned FunctionNameLength = strlen(FunctionName) + 1;
+    unsigned HeaderSize = sizeof(ProcSymbol.Parent) + sizeof(ProcSymbol.End) + sizeof(ProcSymbol.Next) +
+      sizeof(ProcSymbol.CodeSize) + sizeof(ProcSymbol.DbgStart) + sizeof(ProcSymbol.DbgEnd) + sizeof(ProcSymbol.FunctionType);
+    unsigned SymbolSize = HeaderSize + 4 + 2 + 1 + FunctionNameLength;
+    EmitSymRecord(OST, SymbolSize, SymbolRecordKind::GlobalProcIdSym);
 
-    OST.EmitBytes(StringRef((char *)&ProRec, offsetof(ProcSym, CodeOffset)));
 
+    OST.EmitBytes(StringRef((char *)&ProcSymbol.Parent, HeaderSize));
     // Emit relocation
-    OST.EmitCOFFSecRel32(Fn);
+    OST.EmitCOFFSecRel32(Fn, 0);
     OST.EmitCOFFSectionIndex(Fn);
 
     // Emit flags
-    OST.EmitIntValue(ProRec.Flags, sizeof(ProRec.Flags));
+    OST.EmitIntValue(0, 1);
 
     // Emit the function display name as a null-terminated string.
-    OST.EmitBytes(StringRef(FunctionName, strlen(FunctionName) + 1));
+
+    OST.EmitBytes(StringRef(FunctionName, FunctionNameLength));
 
     // Emit local var info
     int NumVarInfos = OW->DebugVarInfos.size();
@@ -775,7 +782,7 @@ static void EmitCVDebugFunctionInfo(ObjectWriter *OW, const char *FunctionName,
     }
 
     // We're done with this function.
-    EmitSymRecord(OST, 0, SymbolRecordKind::S_PROC_ID_END);
+    EmitSymRecord(OST, 0, SymbolRecordKind::ProcEnd);
   }
 
   OST.EmitLabel(SymbolsEnd);
@@ -796,6 +803,7 @@ extern "C" void EmitDebugFunctionInfo(ObjectWriter *OW,
   auto &OST = static_cast<MCObjectStreamer &>(*AsmPrinter->OutStreamer);
   MCContext &OutContext = OST.getContext();
   const MCObjectFileInfo *MOFI = OutContext.getObjectFileInfo();
+  OST.EmitCVFuncIdDirective(OW->FuncId);
 
   if (MOFI->getObjectFileType() == MOFI->IsCOFF) {
     EmitCVDebugFunctionInfo(OW, FunctionName, FunctionSize);
@@ -829,8 +837,9 @@ extern "C" void EmitDebugLoc(ObjectWriter *OW, int NativeOffset, int FileId,
 
   assert(FileId > 0 && "FileId should be greater than 0.");
   if (MOFI->getObjectFileType() == MOFI->IsCOFF) {
+    OST.EmitCVFuncIdDirective(OW->FuncId);
     OST.EmitCVLocDirective(OW->FuncId, FileId, LineNumber, ColNumber, false,
-                           true, "");
+                           true, "", SMLoc());
   } else {
     OST.EmitDwarfLocDirective(FileId, LineNumber, ColNumber, 1, 0, 0, "");
   }
