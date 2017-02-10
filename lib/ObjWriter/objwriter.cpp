@@ -142,7 +142,7 @@ public:
   std::vector<DebugVarInfo> DebugVarInfos;
 
   std::map<std::string, MCSection *> CustomSections;
-  std::set<MCSection *> Sections;
+  std::list<MCSection *> Sections;
   int FuncId;
 
 public:
@@ -363,7 +363,7 @@ extern "C" void SwitchSection(ObjectWriter *OW, const char *SectionName) {
     }
   }
 
-  OW->Sections.insert(Section);
+  OW->Sections.push_back(Section);
   OST.SwitchSection(Section);
 
   if (!Section->getBeginSymbol()) {
@@ -633,24 +633,24 @@ static void EmitCVDebugVarInfo(MCObjectStreamer &OST, const MCSymbol *Fn,
   for (int I = 0; I < NumVarInfos; I++) {
     // Emit an S_LOCAL record
     DebugVarInfo Var = LocInfos[I];
-    LocalSym::Hdr SymHdr = {};
-    SymHdr.Type = TypeIndex(Var.TypeIndex);;
-
-    int SizeofSym = sizeof(SymHdr);
-    EmitSymRecord(OST, SizeofSym + Var.Name.length() + 1,
+    TypeIndex Type = TypeIndex(Var.TypeIndex);
+    LocalSymFlags Flags = LocalSymFlags::None;
+    unsigned SizeofSym = sizeof(Type) + sizeof(Flags);
+    unsigned NameLength = Var.Name.length() + 1;
+    EmitSymRecord(OST, SizeofSym + NameLength,
                   SymbolRecordKind::LocalSym);
     if (Var.IsParam) {
-        SymHdr.Flags |= (uint16_t)LocalSymFlags::IsParameter;
+        Flags |= LocalSymFlags::IsParameter;
     }
-    OST.EmitBytes(StringRef((char *)&SymHdr, sizeof(SymHdr)));
-    OST.EmitBytes(StringRef(Var.Name.c_str(), Var.Name.length() + 1));
+    OST.EmitBytes(StringRef((char *)&Type, sizeof(Type)));
+    OST.EmitIntValue(static_cast<uint16_t>(Flags), sizeof(Flags));
+    OST.EmitBytes(StringRef(Var.Name.c_str(), NameLength));
 
     for (const auto &Range : Var.Ranges) {
       // Emit a range record
       switch (Range.loc.vlType) {
       case ICorDebugInfo::VLT_REG:
       case ICorDebugInfo::VLT_REG_FP: {
-        
 
           // Currently only support integer registers.
           // TODO: support xmm registers
@@ -658,23 +658,23 @@ static void EmitCVDebugVarInfo(MCObjectStreamer &OST, const MCSymbol *Fn,
               sizeof(cvRegMapAmd64) / sizeof(cvRegMapAmd64[0])) {
               break;
           }
+          SymbolRecordKind SymbolKind = SymbolRecordKind::DefRangeRegisterSym;
+          unsigned SizeofDefRangeRegisterSym = sizeof(DefRangeRegisterSym::Hdr) + sizeof(DefRangeRegisterSym::Range);
+          EmitSymRecord(OST, SizeofDefRangeRegisterSym, SymbolKind);
 
-          DefRangeRegisterSym::Hdr RecHdr = {};
-          RecHdr.Range.OffsetStart = Range.startOffset;
-          RecHdr.Range.Range = Range.endOffset - Range.startOffset;
-          RecHdr.Range.ISectStart = 0;
-          RecHdr.Register = cvRegMapAmd64[Range.loc.vlReg.vlrReg];
-          EmitSymRecord(OST, sizeof(RecHdr),
-              SymbolRecordKind::DefRangeRegisterSym);
-          OST.EmitBytes(
-              StringRef((char *)&RecHdr, offsetof(DefRangeRegisterSym::Hdr, Range)));
-          EmitVarDefRange(OST, Fn, RecHdr.Range);
+          DefRangeRegisterSym DefRangeRegisterSymbol(SymbolKind);
+          DefRangeRegisterSymbol.Range.OffsetStart = Range.startOffset;
+          DefRangeRegisterSymbol.Range.Range = Range.endOffset - Range.startOffset;
+          DefRangeRegisterSymbol.Range.ISectStart = 0;
+          DefRangeRegisterSymbol.Hdr.Register = cvRegMapAmd64[Range.loc.vlReg.vlrReg];
+          unsigned Length = sizeof(DefRangeRegisterSymbol.Hdr);
+          OST.EmitBytes(StringRef((char *)&DefRangeRegisterSymbol.Hdr, Length));
+          EmitVarDefRange(OST, Fn, DefRangeRegisterSymbol.Range);
           break;
       }
 
       case ICorDebugInfo::VLT_STK: {
-       
-
+        
         // TODO: support REGNUM_AMBIENT_SP
         if (Range.loc.vlStk.vlsBaseReg >=
             sizeof(cvRegMapAmd64) / sizeof(cvRegMapAmd64[0])) {
@@ -682,20 +682,25 @@ static void EmitCVDebugVarInfo(MCObjectStreamer &OST, const MCSymbol *Fn,
         }
 
         assert(Range.loc.vlStk.vlsBaseReg <
-                   sizeof(cvRegMapAmd64) / sizeof(cvRegMapAmd64[0]) &&
-               "Register number should be in the range of [REGNUM_RAX, "
-               "REGNUM_R15].");
-        DefRangeRegisterRelSym::Hdr RecHdr = {};
-        RecHdr.Range.OffsetStart = Range.startOffset;
-        RecHdr.Range.Range = Range.endOffset - Range.startOffset;
-        RecHdr.Range.ISectStart = 0;
-        RecHdr.BaseRegister = cvRegMapAmd64[Range.loc.vlStk.vlsBaseReg];
-        RecHdr.BasePointerOffset = Range.loc.vlStk.vlsOffset;
-        EmitSymRecord(OST, sizeof(RecHdr),
-                      SymbolRecordKind::DefRangeRegisterRelSym);
+            sizeof(cvRegMapAmd64) / sizeof(cvRegMapAmd64[0]) &&
+            "Register number should be in the range of [REGNUM_RAX, "
+            "REGNUM_R15].");
+
+        SymbolRecordKind SymbolKind = SymbolRecordKind::DefRangeRegisterRelSym;
+        unsigned SizeofDefRangeRegisterRelSym = sizeof(DefRangeRegisterRelSym::Hdr) + sizeof(DefRangeRegisterRelSym::Range);
+        EmitSymRecord(OST, SizeofDefRangeRegisterRelSym, SymbolKind);
+
+        DefRangeRegisterRelSym DefRangeRegisterRelSymbol(SymbolKind);
+        DefRangeRegisterRelSymbol.Range.OffsetStart = Range.startOffset;
+        DefRangeRegisterRelSymbol.Range.Range = Range.endOffset - Range.startOffset;
+        DefRangeRegisterRelSymbol.Range.ISectStart = 0;
+        DefRangeRegisterRelSymbol.Hdr.Register = cvRegMapAmd64[Range.loc.vlStk.vlsBaseReg];
+        DefRangeRegisterRelSymbol.Hdr.BasePointerOffset = Range.loc.vlStk.vlsOffset;
+
+        unsigned Length = sizeof(DefRangeRegisterRelSymbol.Hdr);
         OST.EmitBytes(
-            StringRef((char *)&RecHdr, offsetof(DefRangeRegisterRelSym::Hdr, Range)));
-        EmitVarDefRange(OST, Fn, RecHdr.Range);
+            StringRef((char *)&DefRangeRegisterRelSymbol.Hdr, Length));
+        EmitVarDefRange(OST, Fn, DefRangeRegisterRelSymbol.Range);
         break;
       }
 
@@ -746,23 +751,28 @@ static void EmitCVDebugFunctionInfo(ObjectWriter *OW, const char *FunctionName,
   EmitLabelDiff(OST, SymbolsBegin, SymbolsEnd);
   OST.EmitLabel(SymbolsBegin);
   {
-    ProcSym::Hdr ProRecHdr = {};
-    ProRecHdr.CodeSize = FunctionSize;
-    ProRecHdr.DbgEnd = FunctionSize;
+    ProcSym ProcSymbol(SymbolRecordKind::GlobalProcIdSym);
+    ProcSymbol.CodeSize = FunctionSize;
+    ProcSymbol.DbgEnd = FunctionSize;
 
-    int RecSize = sizeof(ProRecHdr) + strlen(FunctionName) + 1;
-    EmitSymRecord(OST, RecSize, SymbolRecordKind::GlobalProcIdSym);
-    OST.EmitBytes(StringRef((char *)&ProRecHdr, offsetof(ProcSym::Hdr, CodeOffset)));
+    unsigned FunctionNameLength = strlen(FunctionName) + 1;
+    unsigned HeaderSize = sizeof(ProcSymbol.Parent) + sizeof(ProcSymbol.End) + sizeof(ProcSymbol.Next) +
+      sizeof(ProcSymbol.CodeSize) + sizeof(ProcSymbol.DbgStart) + sizeof(ProcSymbol.DbgEnd) + sizeof(ProcSymbol.FunctionType);
+    unsigned SymbolSize = HeaderSize + 4 + 2 + 1 + FunctionNameLength;
+    EmitSymRecord(OST, SymbolSize, SymbolRecordKind::GlobalProcIdSym);
 
+
+    OST.EmitBytes(StringRef((char *)&ProcSymbol.Parent, HeaderSize));
     // Emit relocation
-    OST.EmitCOFFSecRel32(Fn);
+    OST.EmitCOFFSecRel32(Fn, 0);
     OST.EmitCOFFSectionIndex(Fn);
 
     // Emit flags
-    OST.EmitIntValue(ProRecHdr.Flags, sizeof(ProRecHdr.Flags));
+    OST.EmitIntValue(0, 1);
 
     // Emit the function display name as a null-terminated string.
-    OST.EmitBytes(StringRef(FunctionName, strlen(FunctionName) + 1));
+
+    OST.EmitBytes(StringRef(FunctionName, FunctionNameLength));
 
     // Emit local var info
     int NumVarInfos = OW->DebugVarInfos.size();
