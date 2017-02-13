@@ -431,7 +431,7 @@ enum class RelocType {
 };
 
 extern "C" int EmitSymbolRef(ObjectWriter *OW, const char *SymbolName,
-                             RelocType RelocType, int Delta) {
+                             RelocType RelocationType, int Delta) {
   assert(OW && "ObjWriter is null");
   auto *AsmPrinter = &OW->getAsmPrinter();
   auto &OST = static_cast<MCObjectStreamer &>(*AsmPrinter->OutStreamer);
@@ -441,8 +441,8 @@ extern "C" int EmitSymbolRef(ObjectWriter *OW, const char *SymbolName,
   int Size = 0;
   MCSymbolRefExpr::VariantKind Kind = MCSymbolRefExpr::VK_None;
 
-  // Convert RelocType to MCSymbolRefExpr
-  switch (RelocType) {
+  // Convert RelocationType to MCSymbolRefExpr
+  switch (RelocationType) {
   case RelocType::IMAGE_REL_BASED_ABSOLUTE:
     assert(OW->MOFI->getObjectFileType() == OW->MOFI->IsCOFF);
     Kind = MCSymbolRefExpr::VK_COFF_IMGREL32;
@@ -459,7 +459,7 @@ extern "C" int EmitSymbolRef(ObjectWriter *OW, const char *SymbolName,
     IsPCRelative = true;
     break;
   default:
-    assert(false && "NYI RelocType!");
+    assert(false && "NYI RelocationType!");
   }
 
   const MCExpr *TargetExpr = GetSymbolRefExpr(OW, SymbolName, Kind);
@@ -565,7 +565,7 @@ extern "C" void EmitCFICode(ObjectWriter *OW, int Offset, const char *Blob) {
   auto *AsmPrinter = &OW->getAsmPrinter();
   auto &OST = *AsmPrinter->OutStreamer;
 
-  CFI_CODE *CfiCode = (CFI_CODE *)Blob;
+  const CFI_CODE *CfiCode = (const CFI_CODE *)Blob;
   switch (CfiCode->CfiOpCode) {
   case CFI_ADJUST_CFA_OFFSET:
     assert(CfiCode->DwarfReg == DWARF_REG_ILLEGAL &&
