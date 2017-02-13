@@ -3,5 +3,5 @@
 #add_subdirectory(Jit)
 #add_subdirectory(GcInfo)
 add_subdirectory(ObjWriter)
-add_subdirectory(CoreDisTools)
+#add_subdirectory(CoreDisTools)
 
