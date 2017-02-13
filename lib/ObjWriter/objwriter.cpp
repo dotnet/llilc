@@ -141,7 +141,6 @@ public:
   bool FrameOpened;
   std::vector<DebugVarInfo> DebugVarInfos;
 
-  std::map<std::string, MCSection *> CustomSections;
   std::list<MCSection *> Sections;
   int FuncId;
 
@@ -255,91 +254,16 @@ enum CustomSectionAttributes : int32_t {
   CustomSectionAttributes_MachO_Init_Func_Pointers = 0x0100,
 };
 
-extern "C" bool CreateCustomSection(ObjectWriter *OW, const char *SectionName,
+extern "C" void SwitchSection(ObjectWriter *OW, const char *SectionName,
                                     CustomSectionAttributes attributes,
                                     const char *ComdatName) {
-  assert(OW && "ObjWriter is null");
-  Triple TheTriple(TripleName);
-  auto *AsmPrinter = &OW->getAsmPrinter();
-  auto &OST = *AsmPrinter->OutStreamer;
-  MCContext &OutContext = OST.getContext();
-
-  std::string SectionNameStr(SectionName);
-  assert(OW->CustomSections.find(SectionNameStr) == OW->CustomSections.end() &&
-         "Section with duplicate name already exists");
-  assert(ComdatName == nullptr ||
-         OW->MOFI->getObjectFileType() == OW->MOFI->IsCOFF);
-
-  MCSection *Section = nullptr;
-  SectionKind Kind = (attributes & CustomSectionAttributes_Executable)
-                         ? SectionKind::getText()
-                         : (attributes & CustomSectionAttributes_Writeable)
-                               ? SectionKind::getData()
-                               : SectionKind::getReadOnly();
-
-  switch (TheTriple.getObjectFormat()) {
-  case Triple::MachO: {
-    unsigned typeAndAttributes = 0;
-    if (attributes & CustomSectionAttributes_MachO_Init_Func_Pointers) {
-      typeAndAttributes |= MachO::SectionType::S_MOD_INIT_FUNC_POINTERS;
-    }
-    Section = OutContext.getMachOSection(
-        (attributes & CustomSectionAttributes_Executable) ? "__TEXT" : "__DATA",
-        SectionName, typeAndAttributes, Kind);
-    break;
-  }
-  case Triple::COFF: {
-    unsigned Characteristics = COFF::IMAGE_SCN_MEM_READ;
-
-    if (attributes & CustomSectionAttributes_Executable) {
-      Characteristics |= COFF::IMAGE_SCN_CNT_CODE | COFF::IMAGE_SCN_MEM_EXECUTE;
-    } else if (attributes & CustomSectionAttributes_Writeable) {
-      Characteristics |=
-          COFF::IMAGE_SCN_CNT_INITIALIZED_DATA | COFF::IMAGE_SCN_MEM_WRITE;
-    } else {
-      Characteristics |= COFF::IMAGE_SCN_CNT_INITIALIZED_DATA;
-    }
-
-    if (ComdatName != nullptr) {
-      Section = OutContext.getCOFFSection(
-          SectionName, Characteristics | COFF::IMAGE_SCN_LNK_COMDAT, Kind,
-          ComdatName, COFF::COMDATType::IMAGE_COMDAT_SELECT_ANY);
-    } else {
-      Section = OutContext.getCOFFSection(SectionName, Characteristics, Kind);
-    }
-    break;
-  }
-  case Triple::ELF: {
-    unsigned Flags = ELF::SHF_ALLOC;
-    if (attributes & CustomSectionAttributes_Executable) {
-      Flags |= ELF::SHF_EXECINSTR;
-    } else if (attributes & CustomSectionAttributes_Writeable) {
-      Flags |= ELF::SHF_WRITE;
-    }
-    Section = OutContext.getELFSection(SectionName, ELF::SHT_PROGBITS, Flags);
-    break;
-  }
-  default:
-    return error("Unknown output format for target " + TripleName);
-    break;
-  }
-
-  if (attributes & CustomSectionAttributes_Executable) {
-    Section->setHasInstructions(true);
-    OutContext.addGenDwarfSection(Section);
-  }
-
-  OW->CustomSections[SectionNameStr] = Section;
-  return true;
-}
-
-extern "C" void SwitchSection(ObjectWriter *OW, const char *SectionName) {
   assert(OW && "ObjWriter is null");
   auto *AsmPrinter = &OW->getAsmPrinter();
   auto &OST = *AsmPrinter->OutStreamer;
   MCContext &OutContext = OST.getContext();
   const MCObjectFileInfo *MOFI = OutContext.getObjectFileInfo();
-
+  Triple TheTriple(TripleName);
+  
   MCSection *Section = nullptr;
   if (strcmp(SectionName, "text") == 0) {
     Section = MOFI->getTextSection();
@@ -354,12 +278,56 @@ extern "C" void SwitchSection(ObjectWriter *OW, const char *SectionName) {
   } else if (strcmp(SectionName, "xdata") == 0) {
     Section = MOFI->getXDataSection();
   } else {
-    std::string SectionNameStr(SectionName);
-    if (OW->CustomSections.find(SectionNameStr) != OW->CustomSections.end()) {
-      Section = OW->CustomSections[SectionNameStr];
-    } else {
-      // Add more general cases
-      assert(!"Unsupported section");
+    SectionKind Kind = (attributes & CustomSectionAttributes_Executable)
+                         ? SectionKind::getText()
+                         : (attributes & CustomSectionAttributes_Writeable)
+                               ? SectionKind::getData()
+                               : SectionKind::getReadOnly();
+    switch (TheTriple.getObjectFormat()) {
+      case Triple::MachO: {
+        unsigned typeAndAttributes = 0;
+        if (attributes & CustomSectionAttributes_MachO_Init_Func_Pointers) {
+          typeAndAttributes |= MachO::SectionType::S_MOD_INIT_FUNC_POINTERS;
+        }
+        Section = OutContext.getMachOSection(
+            (attributes & CustomSectionAttributes_Executable) ? "__TEXT" : "__DATA",
+            SectionName, typeAndAttributes, Kind);
+        break;
+      }
+      case Triple::COFF: {
+        unsigned Characteristics = COFF::IMAGE_SCN_MEM_READ;
+
+        if (attributes & CustomSectionAttributes_Executable) {
+          Characteristics |= COFF::IMAGE_SCN_CNT_CODE | COFF::IMAGE_SCN_MEM_EXECUTE;
+        } else if (attributes & CustomSectionAttributes_Writeable) {
+          Characteristics |=
+              COFF::IMAGE_SCN_CNT_INITIALIZED_DATA | COFF::IMAGE_SCN_MEM_WRITE;
+        } else {
+          Characteristics |= COFF::IMAGE_SCN_CNT_INITIALIZED_DATA;
+        }
+
+        if (ComdatName != nullptr) {
+          Section = OutContext.getCOFFSection(
+              SectionName, Characteristics | COFF::IMAGE_SCN_LNK_COMDAT, Kind,
+              ComdatName, COFF::COMDATType::IMAGE_COMDAT_SELECT_ANY);
+        } else {
+          Section = OutContext.getCOFFSection(SectionName, Characteristics, Kind);
+        }
+        break;
+      }
+      case Triple::ELF: {
+        unsigned Flags = ELF::SHF_ALLOC;
+        if (attributes & CustomSectionAttributes_Executable) {
+          Flags |= ELF::SHF_EXECINSTR;
+        } else if (attributes & CustomSectionAttributes_Writeable) {
+          Flags |= ELF::SHF_WRITE;
+        }
+        Section = OutContext.getELFSection(SectionName, ELF::SHT_PROGBITS, Flags);
+        break;
+      }
+      default:
+        error("Unknown output format for target " + TripleName);
+        break;
     }
   }
 
