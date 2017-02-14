@@ -581,7 +581,7 @@ extern "C" void EmitCFICode(ObjectWriter *OW, int Offset, const char *Blob) {
     OST.EmitCFIDefCfaRegister(CfiCode->DwarfReg);
     break;
   default:
-    assert(!"Unrecognized CFI");
+    error("Unrecognized CFI");
     break;
   }
 }
@@ -728,7 +728,7 @@ static void EmitCVDebugVarInfo(MCObjectStreamer &OST, const MCSymbol *Fn,
         break;
 
       default:
-        assert(!"Unknown varloc type!");
+        error("Unknown varloc type!");
         break;
       }
     }
