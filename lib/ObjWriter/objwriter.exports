@@ -16,4 +16,3 @@ EmitDebugLoc
 EmitDebugFunctionInfo
 EmitDebugModuleInfo
 EmitDebugVar
-CreateCustomSection
