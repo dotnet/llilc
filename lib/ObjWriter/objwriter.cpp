@@ -670,7 +670,12 @@ void ObjectWriter::EmitDebugFunctionInfo(const char *FunctionName,
     OST.EmitCVFuncIdDirective(FuncId);
     EmitCVDebugFunctionInfo(FunctionName, FunctionSize);
   } else {
-    // TODO: Should convert this for non-Windows.
+    if (MOFI->getObjectFileType() == MOFI->IsELF) {
+      MCSymbol *Sym = OutContext.getOrCreateSymbol(Twine(FunctionName));
+      OST.EmitSymbolAttribute(Sym, MCSA_ELF_TypeFunction);
+      OST.emitELFSize(Sym, MCConstantExpr::create(FunctionSize, OutContext));
+    }
+    // TODO: Should test it for MachO.
   }
 }
 
@@ -720,6 +725,6 @@ void ObjectWriter::EmitDebugModuleInfo() {
     OST.EmitCVFileChecksumsDirective();
     OST.EmitCVStringTableDirective();
   } else {
-    MCGenDwarfInfo::Emit(&OST);
+    OutContext.setGenDwarfForAssembly(true);
   }
 }
