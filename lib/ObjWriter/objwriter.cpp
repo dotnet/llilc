@@ -13,7 +13,7 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#include "llvm/CodeGen/AsmPrinter.h"
+#include "objwriter.h"
 #include "llvm/DebugInfo/CodeView/CodeView.h"
 #include "llvm/DebugInfo/CodeView/Line.h"
 #include "llvm/DebugInfo/CodeView/SymbolRecord.h"
@@ -23,20 +23,20 @@
 #include "llvm/MC/MCDwarf.h"
 #include "llvm/MC/MCInstPrinter.h"
 #include "llvm/MC/MCInstrInfo.h"
-#include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/MC/MCParser/AsmLexer.h"
+#include "llvm/MC/MCParser/MCTargetAsmParser.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSectionCOFF.h"
 #include "llvm/MC/MCSectionELF.h"
 #include "llvm/MC/MCSectionMachO.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSubtargetInfo.h"
-#include "llvm/MC/MCParser/MCTargetAsmParser.h"
 #include "llvm/MC/MCTargetOptionsCommandFlags.h"
 #include "llvm/MC/MCWinCOFFStreamer.h"
 #include "llvm/Support/COFF.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compression.h"
+#include "llvm/Support/ELF.h"
 #include "llvm/Support/FileUtilities.h"
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/Host.h"
@@ -49,110 +49,34 @@
 #include "llvm/Support/ToolOutputFile.h"
 #include "llvm/Support/Win64EH.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetOptions.h"
 #include "llvm/Target/TargetSubtargetInfo.h"
-#include "cfi.h"
-#include <string>
-#include "jitDebugInfo.h"
 
 using namespace llvm;
 using namespace llvm::codeview;
-
-static cl::opt<std::string>
-    ArchName("arch", cl::desc("Target arch to assemble for, "
-                              "see -version for available targets"));
-
-static cl::opt<std::string>
-    TripleName("triple", cl::desc("Target triple to assemble for, "
-                                  "see -version for available targets"));
-
-static cl::opt<std::string>
-    MCPU("mcpu",
-         cl::desc("Target a specific cpu type (-mcpu=help for details)"),
-         cl::value_desc("cpu-name"), cl::init(""));
-
-static cl::opt<Reloc::Model> RelocModel(
-    "relocation-model", cl::desc("Choose relocation model"),    
-    cl::values(
-        clEnumValN(Reloc::Static, "static", "Non-relocatable code"),
-        clEnumValN(Reloc::PIC_, "pic",
-                   "Fully relocatable, position independent code"),
-        clEnumValN(Reloc::DynamicNoPIC, "dynamic-no-pic",
-                   "Relocatable external references, non-relocatable code")));
-
-static cl::opt<llvm::CodeModel::Model> CMModel(
-    "code-model", cl::desc("Choose code model"), cl::init(CodeModel::Default),
-    cl::values(clEnumValN(CodeModel::Default, "default",
-                          "Target default code model"),
-               clEnumValN(CodeModel::Small, "small", "Small code model"),
-               clEnumValN(CodeModel::Kernel, "kernel", "Kernel code model"),
-               clEnumValN(CodeModel::Medium, "medium", "Medium code model"),
-               clEnumValN(CodeModel::Large, "large", "Large code model")));
-
-static cl::opt<bool> SaveTempLabels("save-temp-labels",
-                                    cl::desc("Don't discard temporary labels"));
-
-static cl::opt<bool> NoExecStack("no-exec-stack",
-                                 cl::desc("File doesn't need an exec stack"));
-
-static const Target *GetTarget() {
-  // Figure out the target triple.
-  if (TripleName.empty())
-    TripleName = sys::getDefaultTargetTriple();
-  Triple TheTriple(Triple::normalize(TripleName));
-
-  // Get the target specific parser.
-  std::string Error;
-  const Target *TheTarget =
-      TargetRegistry::lookupTarget(ArchName, TheTriple, Error);
-  if (!TheTarget) {
-    errs() << "Error: " << Error;
-    return nullptr;
-  }
-
-  // Update the triple name and return the found target.
-  TripleName = TheTriple.getTriple();
-  return TheTarget;
-}
 
 bool error(const Twine &Error) {
   errs() << Twine("error: ") + Error + "\n";
   return false;
 }
 
-class ObjectWriter {
-public:
-  std::unique_ptr<MCRegisterInfo> MRI;
-  std::unique_ptr<MCAsmInfo> MAI;
-  std::unique_ptr<MCObjectFileInfo> MOFI;
-  std::unique_ptr<MCContext> MC;
-  MCAsmBackend *MAB; // Owned by MCStreamer
-  std::unique_ptr<MCInstrInfo> MII;
-  std::unique_ptr<MCSubtargetInfo> MSTI;
-  MCCodeEmitter *MCE; // Owned by MCStreamer
-  std::unique_ptr<TargetMachine> TM;
-  std::unique_ptr<AsmPrinter> Asm;
+void ObjectWriter::InitTripleName() {
+  TripleName = sys::getDefaultTargetTriple();
+}
 
-  std::unique_ptr<MCAsmParser> Parser;
-  std::unique_ptr<MCTargetAsmParser> TAP;
+Triple ObjectWriter::GetTriple() {
+  Triple TheTriple(TripleName);
 
-  std::unique_ptr<raw_fd_ostream> OS;
-  MCTargetOptions MCOptions;
-  bool FrameOpened;
-  std::vector<DebugVarInfo> DebugVarInfos;
+  if (TheTriple.getOS() == Triple::OSType::Darwin) {
+    TheTriple = Triple(
+        TheTriple.getArchName(), TheTriple.getVendorName(), "darwin",
+        TheTriple
+            .getEnvironmentName()); // it is workaround for llvm bug
+                                    // https://bugs.llvm.org//show_bug.cgi?id=24927.
+  }
+  return TheTriple;
+}
 
-  std::list<MCSection *> Sections;
-  int FuncId;
-
-public:
-  bool init(StringRef FunctionName);
-  void finish();
-  AsmPrinter &getAsmPrinter() const { return *Asm; }
-  MCStreamer *MS; // Owned by AsmPrinter
-  const Target *TheTarget;
-};
-
-bool ObjectWriter::init(llvm::StringRef ObjectFilePath) {
+bool ObjectWriter::Init(llvm::StringRef ObjectFilePath) {
   llvm_shutdown_obj Y; // Call llvm_shutdown() on exit.
 
   // Initialize targets
@@ -160,14 +84,18 @@ bool ObjectWriter::init(llvm::StringRef ObjectFilePath) {
   InitializeNativeTargetAsmPrinter();
 
   MCOptions = InitMCTargetOptionsFromFlags();
-  TripleName = Triple::normalize(TripleName);
 
-  TheTarget = GetTarget();
-  if (!TheTarget)
-    return error("Unable to get Target");
-  // Now that GetTarget() has (potentially) replaced TripleName, it's safe to
-  // construct the Triple object.
-  Triple TheTriple(TripleName);
+  InitTripleName();
+  Triple TheTriple = GetTriple();
+
+  // Get the target specific parser.
+  std::string TargetError;
+  const Target *TheTarget =
+      TargetRegistry::lookupTarget(TripleName, TargetError);
+  if (!TheTarget) {
+    return error("Unable to create target for " + ObjectFilePath + ": " +
+                 TargetError);
+  }
 
   std::error_code EC;
   OS.reset(new raw_fd_ostream(ObjectFilePath, EC, sys::fs::F_None));
@@ -185,13 +113,15 @@ bool ObjectWriter::init(llvm::StringRef ObjectFilePath) {
 
   MOFI.reset(new MCObjectFileInfo);
   MC.reset(new MCContext(MAI.get(), MRI.get(), MOFI.get()));
-  MOFI->InitMCObjectFileInfo(TheTriple, RelocModel, CMModel, *MC);
+  MOFI->InitMCObjectFileInfo(TheTriple, false, CodeModel::Default, *MC);
 
   std::string FeaturesStr;
 
   MII.reset(TheTarget->createMCInstrInfo());
   if (!MII)
     return error("no instr info info for target " + TripleName);
+
+  std::string MCPU;
 
   MSTI.reset(TheTarget->createMCSubtargetInfo(TripleName, MCPU, FeaturesStr));
   if (!MSTI)
@@ -227,43 +157,16 @@ bool ObjectWriter::init(llvm::StringRef ObjectFilePath) {
   return true;
 }
 
-void ObjectWriter::finish() { MS->Finish(); }
+void ObjectWriter::Finish() { MS->Finish(); }
 
-// When object writer is created/initialized successfully, it is returned.
-// Or null object is returned. Client should check this.
-extern "C" ObjectWriter *InitObjWriter(const char *ObjectFilePath) {
-  ObjectWriter *OW = new ObjectWriter();
-  if (OW->init(ObjectFilePath)) {
-    return OW;
-  }
-
-  delete OW;
-  return nullptr;
-}
-
-extern "C" void FinishObjWriter(ObjectWriter *OW) {
-  assert(OW && "ObjWriter is null");
-  OW->finish();
-  delete OW;
-}
-
-enum CustomSectionAttributes : int32_t {
-  CustomSectionAttributes_ReadOnly = 0x0000,
-  CustomSectionAttributes_Writeable = 0x0001,
-  CustomSectionAttributes_Executable = 0x0002,
-  CustomSectionAttributes_MachO_Init_Func_Pointers = 0x0100,
-};
-
-extern "C" void SwitchSection(ObjectWriter *OW, const char *SectionName,
-                                    CustomSectionAttributes attributes,
-                                    const char *ComdatName) {
-  assert(OW && "ObjWriter is null");
-  auto *AsmPrinter = &OW->getAsmPrinter();
-  auto &OST = *AsmPrinter->OutStreamer;
+void ObjectWriter::SwitchSection(const char *SectionName,
+                                 CustomSectionAttributes attributes,
+                                 const char *ComdatName) {
+  auto &OST = *Asm->OutStreamer;
   MCContext &OutContext = OST.getContext();
   const MCObjectFileInfo *MOFI = OutContext.getObjectFileInfo();
   Triple TheTriple(TripleName);
-  
+
   MCSection *Section = nullptr;
   if (strcmp(SectionName, "text") == 0) {
     Section = MOFI->getTextSection();
@@ -279,66 +182,69 @@ extern "C" void SwitchSection(ObjectWriter *OW, const char *SectionName,
     Section = MOFI->getXDataSection();
   } else {
     SectionKind Kind = (attributes & CustomSectionAttributes_Executable)
-                         ? SectionKind::getText()
-                         : (attributes & CustomSectionAttributes_Writeable)
-                               ? SectionKind::getData()
-                               : SectionKind::getReadOnly();
+                           ? SectionKind::getText()
+                           : (attributes & CustomSectionAttributes_Writeable)
+                                 ? SectionKind::getData()
+                                 : SectionKind::getReadOnly();
     switch (TheTriple.getObjectFormat()) {
-      case Triple::MachO: {
-        unsigned typeAndAttributes = 0;
-        if (attributes & CustomSectionAttributes_MachO_Init_Func_Pointers) {
-          typeAndAttributes |= MachO::SectionType::S_MOD_INIT_FUNC_POINTERS;
-        }
-        Section = OutContext.getMachOSection(
-            (attributes & CustomSectionAttributes_Executable) ? "__TEXT" : "__DATA",
-            SectionName, typeAndAttributes, Kind);
-        break;
+    case Triple::MachO: {
+      unsigned typeAndAttributes = 0;
+      if (attributes & CustomSectionAttributes_MachO_Init_Func_Pointers) {
+        typeAndAttributes |= MachO::SectionType::S_MOD_INIT_FUNC_POINTERS;
       }
-      case Triple::COFF: {
-        unsigned Characteristics = COFF::IMAGE_SCN_MEM_READ;
+      Section = OutContext.getMachOSection(
+          (attributes & CustomSectionAttributes_Executable) ? "__TEXT"
+                                                            : "__DATA",
+          SectionName, typeAndAttributes, Kind);
+      break;
+    }
+    case Triple::COFF: {
+      unsigned Characteristics = COFF::IMAGE_SCN_MEM_READ;
 
-        if (attributes & CustomSectionAttributes_Executable) {
-          Characteristics |= COFF::IMAGE_SCN_CNT_CODE | COFF::IMAGE_SCN_MEM_EXECUTE;
-        } else if (attributes & CustomSectionAttributes_Writeable) {
-          Characteristics |=
-              COFF::IMAGE_SCN_CNT_INITIALIZED_DATA | COFF::IMAGE_SCN_MEM_WRITE;
-        } else {
-          Characteristics |= COFF::IMAGE_SCN_CNT_INITIALIZED_DATA;
-        }
+      if (attributes & CustomSectionAttributes_Executable) {
+        Characteristics |=
+            COFF::IMAGE_SCN_CNT_CODE | COFF::IMAGE_SCN_MEM_EXECUTE;
+      } else if (attributes & CustomSectionAttributes_Writeable) {
+        Characteristics |=
+            COFF::IMAGE_SCN_CNT_INITIALIZED_DATA | COFF::IMAGE_SCN_MEM_WRITE;
+      } else {
+        Characteristics |= COFF::IMAGE_SCN_CNT_INITIALIZED_DATA;
+      }
 
-        if (ComdatName != nullptr) {
-          Section = OutContext.getCOFFSection(
-              SectionName, Characteristics | COFF::IMAGE_SCN_LNK_COMDAT, Kind,
-              ComdatName, COFF::COMDATType::IMAGE_COMDAT_SELECT_ANY);
-        } else {
-          Section = OutContext.getCOFFSection(SectionName, Characteristics, Kind);
-        }
-        break;
+      if (ComdatName != nullptr) {
+        Section = OutContext.getCOFFSection(
+            SectionName, Characteristics | COFF::IMAGE_SCN_LNK_COMDAT, Kind,
+            ComdatName, COFF::COMDATType::IMAGE_COMDAT_SELECT_ANY);
+      } else {
+        Section = OutContext.getCOFFSection(SectionName, Characteristics, Kind);
       }
-      case Triple::ELF: {
-        unsigned Flags = ELF::SHF_ALLOC;
-        if (ComdatName != nullptr) {
-          MCSymbolELF *GroupSym =
-              cast<MCSymbolELF>(OutContext.getOrCreateSymbol(ComdatName));
-          OutContext.createELFGroupSection(GroupSym);
-          Flags |= ELF::SHF_GROUP;
-        }
-        if (attributes & CustomSectionAttributes_Executable) {
-          Flags |= ELF::SHF_EXECINSTR;
-        } else if (attributes & CustomSectionAttributes_Writeable) {
-          Flags |= ELF::SHF_WRITE;
-        }
-        Section = OutContext.getELFSection(SectionName, ELF::SHT_PROGBITS, Flags,
-            0, ComdatName != nullptr ? ComdatName : "");
-        break;
+      break;
+    }
+    case Triple::ELF: {
+      unsigned Flags = ELF::SHF_ALLOC;
+      if (ComdatName != nullptr) {
+        MCSymbolELF *GroupSym =
+            cast<MCSymbolELF>(OutContext.getOrCreateSymbol(ComdatName));
+        OutContext.createELFGroupSection(GroupSym);
+        Flags |= ELF::SHF_GROUP;
       }
-      default:
-        error("Unknown output format for target " + TripleName);
-        break;
+      if (attributes & CustomSectionAttributes_Executable) {
+        Flags |= ELF::SHF_EXECINSTR;
+      } else if (attributes & CustomSectionAttributes_Writeable) {
+        Flags |= ELF::SHF_WRITE;
+      }
+      Section =
+          OutContext.getELFSection(SectionName, ELF::SHT_PROGBITS, Flags, 0,
+                                   ComdatName != nullptr ? ComdatName : "");
+      break;
+    }
+    default:
+      error("Unknown output format for target " + TripleName);
+      break;
     }
   }
 
-  OW->Sections.push_back(Section);
+  Sections.push_back(Section);
   OST.SwitchSection(Section);
 
   if (!Section->getBeginSymbol()) {
@@ -348,34 +254,23 @@ extern "C" void SwitchSection(ObjectWriter *OW, const char *SectionName,
   }
 }
 
-extern "C" void EmitAlignment(ObjectWriter *OW, int ByteAlignment) {
-  assert(OW && "ObjWriter is null");
-  auto *AsmPrinter = &OW->getAsmPrinter();
-  auto &OST = *AsmPrinter->OutStreamer;
-
+void ObjectWriter::EmitAlignment(int ByteAlignment) {
+  auto &OST = *Asm->OutStreamer;
   OST.EmitValueToAlignment(ByteAlignment, 0x90 /* Nop */);
 }
 
-extern "C" void EmitBlob(ObjectWriter *OW, int BlobSize, const char *Blob) {
-  assert(OW && "ObjWriter null");
-  auto *AsmPrinter = &OW->getAsmPrinter();
-  auto &OST = *AsmPrinter->OutStreamer;
-
+void ObjectWriter::EmitBlob(int BlobSize, const char *Blob) {
+  auto &OST = *Asm->OutStreamer;
   OST.EmitBytes(StringRef(Blob, BlobSize));
 }
 
-extern "C" void EmitIntValue(ObjectWriter *OW, uint64_t Value, unsigned Size) {
-  assert(OW && "ObjWriter is null");
-  auto *AsmPrinter = &OW->getAsmPrinter();
-  auto &OST = *AsmPrinter->OutStreamer;
-
+void ObjectWriter::EmitIntValue(uint64_t Value, unsigned Size) {
+  auto &OST = *Asm->OutStreamer;
   OST.EmitIntValue(Value, Size);
 }
 
-extern "C" void EmitSymbolDef(ObjectWriter *OW, const char *SymbolName) {
-  assert(OW && "ObjWriter is null");
-  auto *AsmPrinter = &OW->getAsmPrinter();
-  auto &OST = *AsmPrinter->OutStreamer;
+void ObjectWriter::EmitSymbolDef(const char *SymbolName) {
+  auto &OST = *Asm->OutStreamer;
   MCContext &OutContext = OST.getContext();
 
   MCSymbol *Sym = OutContext.getOrCreateSymbol(Twine(SymbolName));
@@ -383,12 +278,10 @@ extern "C" void EmitSymbolDef(ObjectWriter *OW, const char *SymbolName) {
   OST.EmitLabel(Sym);
 }
 
-static const MCSymbolRefExpr *
-GetSymbolRefExpr(ObjectWriter *OW, const char *SymbolName,
-                 MCSymbolRefExpr::VariantKind Kind = MCSymbolRefExpr::VK_None) {
-  assert(OW && "ObjWriter is null");
-  auto *AsmPrinter = &OW->getAsmPrinter();
-  auto &OST = static_cast<MCObjectStreamer &>(*AsmPrinter->OutStreamer);
+const MCSymbolRefExpr *
+ObjectWriter::GetSymbolRefExpr(const char *SymbolName,
+                               MCSymbolRefExpr::VariantKind Kind) {
+  auto &OST = static_cast<MCObjectStreamer &>(*Asm->OutStreamer);
   MCContext &OutContext = OST.getContext();
 
   // Create symbol reference
@@ -398,18 +291,9 @@ GetSymbolRefExpr(ObjectWriter *OW, const char *SymbolName,
   return MCSymbolRefExpr::create(T, Kind, OutContext);
 }
 
-enum class RelocType {
-  IMAGE_REL_BASED_ABSOLUTE = 0x00,
-  IMAGE_REL_BASED_HIGHLOW = 0x03,
-  IMAGE_REL_BASED_DIR64 = 0x0A,
-  IMAGE_REL_BASED_REL32 = 0x10,
-};
-
-extern "C" int EmitSymbolRef(ObjectWriter *OW, const char *SymbolName,
-                             RelocType RelocationType, int Delta) {
-  assert(OW && "ObjWriter is null");
-  auto *AsmPrinter = &OW->getAsmPrinter();
-  auto &OST = static_cast<MCObjectStreamer &>(*AsmPrinter->OutStreamer);
+int ObjectWriter::EmitSymbolRef(const char *SymbolName,
+                                RelocType RelocationType, int Delta) {
+  auto &OST = static_cast<MCObjectStreamer &>(*Asm->OutStreamer);
   MCContext &OutContext = OST.getContext();
 
   bool IsPCRelative = false;
@@ -419,7 +303,7 @@ extern "C" int EmitSymbolRef(ObjectWriter *OW, const char *SymbolName,
   // Convert RelocationType to MCSymbolRefExpr
   switch (RelocationType) {
   case RelocType::IMAGE_REL_BASED_ABSOLUTE:
-    assert(OW->MOFI->getObjectFileType() == OW->MOFI->IsCOFF);
+    assert(MOFI->getObjectFileType() == MOFI->IsCOFF);
     Kind = MCSymbolRefExpr::VK_COFF_IMGREL32;
     Size = 4;
     break;
@@ -437,7 +321,7 @@ extern "C" int EmitSymbolRef(ObjectWriter *OW, const char *SymbolName,
     assert(false && "NYI RelocationType!");
   }
 
-  const MCExpr *TargetExpr = GetSymbolRefExpr(OW, SymbolName, Kind);
+  const MCExpr *TargetExpr = GetSymbolRefExpr(SymbolName, Kind);
 
   if (IsPCRelative) {
     // If the fixup is pc-relative, we need to bias the value to be relative to
@@ -454,12 +338,9 @@ extern "C" int EmitSymbolRef(ObjectWriter *OW, const char *SymbolName,
   return Size;
 }
 
-extern "C" void EmitWinFrameInfo(ObjectWriter *OW, const char *FunctionName,
-                                 int StartOffset, int EndOffset,
-                                 const char *BlobSymbolName) {
-  assert(OW && "ObjWriter is null");
-  auto *AsmPrinter = &OW->getAsmPrinter();
-  auto &OST = static_cast<MCObjectStreamer &>(*AsmPrinter->OutStreamer);
+void ObjectWriter::EmitWinFrameInfo(const char *FunctionName, int StartOffset,
+                                    int EndOffset, const char *BlobSymbolName) {
+  auto &OST = static_cast<MCObjectStreamer &>(*Asm->OutStreamer);
   MCContext &OutContext = OST.getContext();
   const MCObjectFileInfo *MOFI = OutContext.getObjectFileInfo();
 
@@ -467,7 +348,7 @@ extern "C" void EmitWinFrameInfo(ObjectWriter *OW, const char *FunctionName,
 
   // .pdata emission
   MCSection *Section = MOFI->getPDataSection();
-  
+
   // If the function was emitted to a Comdat section, create an associative
   // section to place the frame info in. This is due to the Windows linker
   // requirement that a function and its unwind info come from the same 
@@ -476,14 +357,14 @@ extern "C" void EmitWinFrameInfo(ObjectWriter *OW, const char *FunctionName,
   const MCSectionCOFF *FunctionSection = cast<MCSectionCOFF>(&Fn->getSection());
   if (FunctionSection->getCharacteristics() & COFF::IMAGE_SCN_LNK_COMDAT) {
     Section = OutContext.getAssociativeCOFFSection(
-      cast<MCSectionCOFF>(Section), FunctionSection->getCOMDATSymbol());
+        cast<MCSectionCOFF>(Section), FunctionSection->getCOMDATSymbol());
   }
-  
+
   OST.SwitchSection(Section);
   OST.EmitValueToAlignment(4);
 
   const MCExpr *BaseRefRel =
-      GetSymbolRefExpr(OW, FunctionName, MCSymbolRefExpr::VK_COFF_IMGREL32);
+      GetSymbolRefExpr(FunctionName, MCSymbolRefExpr::VK_COFF_IMGREL32);
 
   // start offset
   const MCExpr *StartOfs = MCConstantExpr::create(StartOffset, OutContext);
@@ -495,50 +376,41 @@ extern "C" void EmitWinFrameInfo(ObjectWriter *OW, const char *FunctionName,
 
   // frame symbol reference
   OST.EmitValue(
-      GetSymbolRefExpr(OW, BlobSymbolName, MCSymbolRefExpr::VK_COFF_IMGREL32),
-      4);
+      GetSymbolRefExpr(BlobSymbolName, MCSymbolRefExpr::VK_COFF_IMGREL32), 4);
 }
 
-extern "C" void EmitCFIStart(ObjectWriter *OW, int Offset) {
-  assert(OW && "ObjWriter is null");
-  assert(!OW->FrameOpened && "frame should be closed before CFIStart");
-  auto *AsmPrinter = &OW->getAsmPrinter();
-  auto &OST = *AsmPrinter->OutStreamer;
+void ObjectWriter::EmitCFIStart(int Offset) {
+  assert(!FrameOpened && "frame should be closed before CFIStart");
+  auto &OST = *Asm->OutStreamer;
 
   OST.EmitCFIStartProc(false);
-  OW->FrameOpened = true;
+  FrameOpened = true;
 }
 
-extern "C" void EmitCFIEnd(ObjectWriter *OW, int Offset) {
-  assert(OW && "ObjWriter is null");
-  assert(OW->FrameOpened && "frame should be opened before CFIEnd");
-  auto *AsmPrinter = &OW->getAsmPrinter();
-  auto &OST = *AsmPrinter->OutStreamer;
-
+void ObjectWriter::EmitCFIEnd(int Offset) {
+  assert(FrameOpened && "frame should be opened before CFIEnd");
+  auto &OST = *Asm->OutStreamer;
   OST.EmitCFIEndProc();
-  OW->FrameOpened = false;
+  FrameOpened = false;
 }
 
-extern "C" void EmitCFILsda(ObjectWriter *OW,  const char *LsdaBlobSymbolName) {
-  assert(OW && "ObjWriter is null");
-  assert(OW->FrameOpened && "frame should be opened before CFILsda");
-  auto *AsmPrinter = &OW->getAsmPrinter();
-  auto &OST = static_cast<MCObjectStreamer &>(*AsmPrinter->OutStreamer);
+void ObjectWriter::EmitCFILsda(const char *LsdaBlobSymbolName) {
+  assert(FrameOpened && "frame should be opened before CFILsda");
+  auto &OST = static_cast<MCObjectStreamer &>(*Asm->OutStreamer);
   MCContext &OutContext = OST.getContext();
 
   // Create symbol reference
   MCSymbol *T = OutContext.getOrCreateSymbol(LsdaBlobSymbolName);
   MCAssembler &MCAsm = OST.getAssembler();
   MCAsm.registerSymbol(*T);
-  OST.EmitCFILsda(T, llvm::dwarf::Constants::DW_EH_PE_pcrel |
-                         llvm::dwarf::Constants::DW_EH_PE_sdata4);
+  OST.EmitCFILsda(T,
+                  llvm::dwarf::Constants::DW_EH_PE_pcrel |
+                      llvm::dwarf::Constants::DW_EH_PE_sdata4);
 }
 
-extern "C" void EmitCFICode(ObjectWriter *OW, int Offset, const char *Blob) {
-  assert(OW && "ObjWriter is null");
-  assert(OW->FrameOpened && "frame should be opened before CFICode");
-  auto *AsmPrinter = &OW->getAsmPrinter();
-  auto &OST = *AsmPrinter->OutStreamer;
+void ObjectWriter::EmitCFICode(int Offset, const char *Blob) {
+  assert(FrameOpened && "frame should be opened before CFICode");
+  auto &OST = *Asm->OutStreamer;
 
   const CFI_CODE *CfiCode = (const CFI_CODE *)Blob;
   switch (CfiCode->CfiOpCode) {
@@ -556,13 +428,13 @@ extern "C" void EmitCFICode(ObjectWriter *OW, int Offset, const char *Blob) {
     OST.EmitCFIDefCfaRegister(CfiCode->DwarfReg);
     break;
   default:
-    error("Unrecognized CFI");
+    assert(false && "Unrecognized CFI");
     break;
   }
 }
 
-static void EmitLabelDiff(MCStreamer &Streamer, const MCSymbol *From,
-                          const MCSymbol *To, unsigned int Size = 4) {
+void ObjectWriter::EmitLabelDiff(MCStreamer &Streamer, const MCSymbol *From,
+                                 const MCSymbol *To, unsigned int Size) {
   MCSymbolRefExpr::VariantKind Variant = MCSymbolRefExpr::VK_None;
   MCContext &Context = Streamer.getContext();
   const MCExpr *FromRef = MCSymbolRefExpr::create(From, Variant, Context),
@@ -572,38 +444,24 @@ static void EmitLabelDiff(MCStreamer &Streamer, const MCSymbol *From,
   Streamer.EmitValue(AddrDelta, Size);
 }
 
-extern "C" void EmitDebugFileInfo(ObjectWriter *OW, int FileId,
-                                  const char *FileName) {
-  assert(OW && "ObjWriter is null");
-  auto *AsmPrinter = &OW->getAsmPrinter();
-  auto &OST = static_cast<MCObjectStreamer &>(*AsmPrinter->OutStreamer);
-  MCContext &OutContext = OST.getContext();
-  const MCObjectFileInfo *MOFI = OutContext.getObjectFileInfo();
-
-  assert(FileId > 0 && "FileId should be greater than 0.");
-  if (MOFI->getObjectFileType() == MOFI->IsCOFF) {
-    OST.EmitCVFileDirective(FileId, FileName);
-  } else {
-    OST.EmitDwarfFileDirective(FileId, "", FileName);
-  }
-}
-
-static void EmitSymRecord(MCObjectStreamer &OST, int Size,
-                          SymbolRecordKind SymbolKind) {
+void ObjectWriter::EmitSymRecord(MCObjectStreamer &OST, int Size,
+                                 SymbolRecordKind SymbolKind) {
   RecordPrefix Rec;
-  Rec.RecordLen  = ulittle16_t(Size + sizeof(ulittle16_t));
+  Rec.RecordLen = ulittle16_t(Size + sizeof(ulittle16_t));
   Rec.RecordKind = ulittle16_t((uint16_t)SymbolKind);
   OST.EmitBytes(StringRef((char *)&Rec, sizeof(Rec)));
 }
 
-static void EmitCOFFSecRel32Value(MCObjectStreamer &OST, MCExpr const *Value) {
-    MCDataFragment *DF = OST.getOrCreateDataFragment();
-    MCFixup Fixup = MCFixup::create(DF->getContents().size(), Value, FK_SecRel_4);
-    DF->getFixups().push_back(Fixup);
-    DF->getContents().resize(DF->getContents().size() + 4, 0);
+void ObjectWriter::EmitCOFFSecRel32Value(MCObjectStreamer &OST,
+                                         MCExpr const *Value) {
+  MCDataFragment *DF = OST.getOrCreateDataFragment();
+  MCFixup Fixup = MCFixup::create(DF->getContents().size(), Value, FK_SecRel_4);
+  DF->getFixups().push_back(Fixup);
+  DF->getContents().resize(DF->getContents().size() + 4, 0);
 }
-static void EmitVarDefRange(MCObjectStreamer &OST, const MCSymbol *Fn,
-                            LocalVariableAddrRange &Range) {
+
+void ObjectWriter::EmitVarDefRange(MCObjectStreamer &OST, const MCSymbol *Fn,
+                                   LocalVariableAddrRange &Range) {
   const MCSymbolRefExpr *BaseSym =
       MCSymbolRefExpr::create(Fn, OST.getContext());
   const MCExpr *Offset =
@@ -615,8 +473,9 @@ static void EmitVarDefRange(MCObjectStreamer &OST, const MCSymbol *Fn,
   OST.EmitIntValue(Range.Range, 2);
 }
 
-static void EmitCVDebugVarInfo(MCObjectStreamer &OST, const MCSymbol *Fn,
-                               DebugVarInfo LocInfos[], int NumVarInfos) {
+void ObjectWriter::EmitCVDebugVarInfo(MCObjectStreamer &OST, const MCSymbol *Fn,
+                                      DebugVarInfo LocInfos[],
+                                      int NumVarInfos) {
   for (int I = 0; I < NumVarInfos; I++) {
     // Emit an S_LOCAL record
     DebugVarInfo Var = LocInfos[I];
@@ -624,10 +483,9 @@ static void EmitCVDebugVarInfo(MCObjectStreamer &OST, const MCSymbol *Fn,
     LocalSymFlags Flags = LocalSymFlags::None;
     unsigned SizeofSym = sizeof(Type) + sizeof(Flags);
     unsigned NameLength = Var.Name.length() + 1;
-    EmitSymRecord(OST, SizeofSym + NameLength,
-                  SymbolRecordKind::LocalSym);
+    EmitSymRecord(OST, SizeofSym + NameLength, SymbolRecordKind::LocalSym);
     if (Var.IsParam) {
-        Flags |= LocalSymFlags::IsParameter;
+      Flags |= LocalSymFlags::IsParameter;
     }
     OST.EmitBytes(StringRef((char *)&Type, sizeof(Type)));
     OST.EmitIntValue(static_cast<uint16_t>(Flags), sizeof(Flags));
@@ -639,29 +497,32 @@ static void EmitCVDebugVarInfo(MCObjectStreamer &OST, const MCSymbol *Fn,
       case ICorDebugInfo::VLT_REG:
       case ICorDebugInfo::VLT_REG_FP: {
 
-          // Currently only support integer registers.
-          // TODO: support xmm registers
-          if (Range.loc.vlReg.vlrReg >=
-              sizeof(cvRegMapAmd64) / sizeof(cvRegMapAmd64[0])) {
-              break;
-          }
-          SymbolRecordKind SymbolKind = SymbolRecordKind::DefRangeRegisterSym;
-          unsigned SizeofDefRangeRegisterSym = sizeof(DefRangeRegisterSym::Hdr) + sizeof(DefRangeRegisterSym::Range);
-          EmitSymRecord(OST, SizeofDefRangeRegisterSym, SymbolKind);
-
-          DefRangeRegisterSym DefRangeRegisterSymbol(SymbolKind);
-          DefRangeRegisterSymbol.Range.OffsetStart = Range.startOffset;
-          DefRangeRegisterSymbol.Range.Range = Range.endOffset - Range.startOffset;
-          DefRangeRegisterSymbol.Range.ISectStart = 0;
-          DefRangeRegisterSymbol.Hdr.Register = cvRegMapAmd64[Range.loc.vlReg.vlrReg];
-          unsigned Length = sizeof(DefRangeRegisterSymbol.Hdr);
-          OST.EmitBytes(StringRef((char *)&DefRangeRegisterSymbol.Hdr, Length));
-          EmitVarDefRange(OST, Fn, DefRangeRegisterSymbol.Range);
+        // Currently only support integer registers.
+        // TODO: support xmm registers
+        if (Range.loc.vlReg.vlrReg >=
+            sizeof(cvRegMapAmd64) / sizeof(cvRegMapAmd64[0])) {
           break;
+        }
+        SymbolRecordKind SymbolKind = SymbolRecordKind::DefRangeRegisterSym;
+        unsigned SizeofDefRangeRegisterSym = sizeof(DefRangeRegisterSym::Hdr) +
+                                             sizeof(DefRangeRegisterSym::Range);
+        EmitSymRecord(OST, SizeofDefRangeRegisterSym, SymbolKind);
+
+        DefRangeRegisterSym DefRangeRegisterSymbol(SymbolKind);
+        DefRangeRegisterSymbol.Range.OffsetStart = Range.startOffset;
+        DefRangeRegisterSymbol.Range.Range =
+            Range.endOffset - Range.startOffset;
+        DefRangeRegisterSymbol.Range.ISectStart = 0;
+        DefRangeRegisterSymbol.Hdr.Register =
+            cvRegMapAmd64[Range.loc.vlReg.vlrReg];
+        unsigned Length = sizeof(DefRangeRegisterSymbol.Hdr);
+        OST.EmitBytes(StringRef((char *)&DefRangeRegisterSymbol.Hdr, Length));
+        EmitVarDefRange(OST, Fn, DefRangeRegisterSymbol.Range);
+        break;
       }
 
       case ICorDebugInfo::VLT_STK: {
-        
+
         // TODO: support REGNUM_AMBIENT_SP
         if (Range.loc.vlStk.vlsBaseReg >=
             sizeof(cvRegMapAmd64) / sizeof(cvRegMapAmd64[0])) {
@@ -669,20 +530,25 @@ static void EmitCVDebugVarInfo(MCObjectStreamer &OST, const MCSymbol *Fn,
         }
 
         assert(Range.loc.vlStk.vlsBaseReg <
-            sizeof(cvRegMapAmd64) / sizeof(cvRegMapAmd64[0]) &&
-            "Register number should be in the range of [REGNUM_RAX, "
-            "REGNUM_R15].");
+                   sizeof(cvRegMapAmd64) / sizeof(cvRegMapAmd64[0]) &&
+               "Register number should be in the range of [REGNUM_RAX, "
+               "REGNUM_R15].");
 
         SymbolRecordKind SymbolKind = SymbolRecordKind::DefRangeRegisterRelSym;
-        unsigned SizeofDefRangeRegisterRelSym = sizeof(DefRangeRegisterRelSym::Hdr) + sizeof(DefRangeRegisterRelSym::Range);
+        unsigned SizeofDefRangeRegisterRelSym =
+            sizeof(DefRangeRegisterRelSym::Hdr) +
+            sizeof(DefRangeRegisterRelSym::Range);
         EmitSymRecord(OST, SizeofDefRangeRegisterRelSym, SymbolKind);
 
         DefRangeRegisterRelSym DefRangeRegisterRelSymbol(SymbolKind);
         DefRangeRegisterRelSymbol.Range.OffsetStart = Range.startOffset;
-        DefRangeRegisterRelSymbol.Range.Range = Range.endOffset - Range.startOffset;
+        DefRangeRegisterRelSymbol.Range.Range =
+            Range.endOffset - Range.startOffset;
         DefRangeRegisterRelSymbol.Range.ISectStart = 0;
-        DefRangeRegisterRelSymbol.Hdr.Register = cvRegMapAmd64[Range.loc.vlStk.vlsBaseReg];
-        DefRangeRegisterRelSymbol.Hdr.BasePointerOffset = Range.loc.vlStk.vlsOffset;
+        DefRangeRegisterRelSymbol.Hdr.Register =
+            cvRegMapAmd64[Range.loc.vlStk.vlsBaseReg];
+        DefRangeRegisterRelSymbol.Hdr.BasePointerOffset =
+            Range.loc.vlStk.vlsOffset;
 
         unsigned Length = sizeof(DefRangeRegisterRelSymbol.Hdr);
         OST.EmitBytes(
@@ -703,18 +569,16 @@ static void EmitCVDebugVarInfo(MCObjectStreamer &OST, const MCSymbol *Fn,
         break;
 
       default:
-        error("Unknown varloc type!");
+        assert(false && "Unknown varloc type!");
         break;
       }
     }
   }
 }
 
-static void EmitCVDebugFunctionInfo(ObjectWriter *OW, const char *FunctionName,
-                                    int FunctionSize) {
-  assert(OW && "ObjWriter is null");
-  auto *AsmPrinter = &OW->getAsmPrinter();
-  auto &OST = static_cast<MCObjectStreamer &>(*AsmPrinter->OutStreamer);
+void ObjectWriter::EmitCVDebugFunctionInfo(const char *FunctionName,
+                                           int FunctionSize) {
+  auto &OST = static_cast<MCObjectStreamer &>(*Asm->OutStreamer);
   MCContext &OutContext = OST.getContext();
   const MCObjectFileInfo *MOFI = OutContext.getObjectFileInfo();
   assert(MOFI->getObjectFileType() == MOFI->IsCOFF);
@@ -726,7 +590,7 @@ static void EmitCVDebugFunctionInfo(ObjectWriter *OW, const char *FunctionName,
   MCSection *Section = MOFI->getCOFFDebugSymbolsSection();
   OST.SwitchSection(Section);
   // Emit debug section magic before the first entry.
-  if (OW->FuncId == 1) {
+  if (FuncId == 1) {
     OST.EmitIntValue(COFF::DEBUG_SECTION_MAGIC, 4);
   }
   MCSymbol *Fn = OutContext.getOrCreateSymbol(Twine(FunctionName));
@@ -743,11 +607,13 @@ static void EmitCVDebugFunctionInfo(ObjectWriter *OW, const char *FunctionName,
     ProcSymbol.DbgEnd = FunctionSize;
 
     unsigned FunctionNameLength = strlen(FunctionName) + 1;
-    unsigned HeaderSize = sizeof(ProcSymbol.Parent) + sizeof(ProcSymbol.End) + sizeof(ProcSymbol.Next) +
-      sizeof(ProcSymbol.CodeSize) + sizeof(ProcSymbol.DbgStart) + sizeof(ProcSymbol.DbgEnd) + sizeof(ProcSymbol.FunctionType);
+    unsigned HeaderSize =
+        sizeof(ProcSymbol.Parent) + sizeof(ProcSymbol.End) +
+        sizeof(ProcSymbol.Next) + sizeof(ProcSymbol.CodeSize) +
+        sizeof(ProcSymbol.DbgStart) + sizeof(ProcSymbol.DbgEnd) +
+        sizeof(ProcSymbol.FunctionType);
     unsigned SymbolSize = HeaderSize + 4 + 2 + 1 + FunctionNameLength;
     EmitSymRecord(OST, SymbolSize, SymbolRecordKind::GlobalProcIdSym);
-
 
     OST.EmitBytes(StringRef((char *)&ProcSymbol.Parent, HeaderSize));
     // Emit relocation
@@ -762,10 +628,10 @@ static void EmitCVDebugFunctionInfo(ObjectWriter *OW, const char *FunctionName,
     OST.EmitBytes(StringRef(FunctionName, FunctionNameLength));
 
     // Emit local var info
-    int NumVarInfos = OW->DebugVarInfos.size();
+    int NumVarInfos = DebugVarInfos.size();
     if (NumVarInfos > 0) {
-      EmitCVDebugVarInfo(OST, Fn, &OW->DebugVarInfos[0], NumVarInfos);
-      OW->DebugVarInfos.clear();
+      EmitCVDebugVarInfo(OST, Fn, &DebugVarInfos[0], NumVarInfos);
+      DebugVarInfos.clear();
     }
 
     // We're done with this function.
@@ -779,30 +645,39 @@ static void EmitCVDebugFunctionInfo(ObjectWriter *OW, const char *FunctionName,
 
   // We have an assembler directive that takes care of the whole line table.
   // We also increase function id for the next function.
-  OST.EmitCVLinetableDirective(OW->FuncId++, Fn, FnEnd);
+  OST.EmitCVLinetableDirective(FuncId++, Fn, FnEnd);
 }
 
-extern "C" void EmitDebugFunctionInfo(ObjectWriter *OW,
-                                      const char *FunctionName,
-                                      int FunctionSize) {
-  assert(OW && "ObjWriter is null");
-  auto *AsmPrinter = &OW->getAsmPrinter();
-  auto &OST = static_cast<MCObjectStreamer &>(*AsmPrinter->OutStreamer);
+void ObjectWriter::EmitDebugFileInfo(int FileId, const char *FileName) {
+  auto &OST = static_cast<MCObjectStreamer &>(*Asm->OutStreamer);
   MCContext &OutContext = OST.getContext();
   const MCObjectFileInfo *MOFI = OutContext.getObjectFileInfo();
-  OST.EmitCVFuncIdDirective(OW->FuncId);
+
+  assert(FileId > 0 && "FileId should be greater than 0.");
+  if (MOFI->getObjectFileType() == MOFI->IsCOFF) {
+    OST.EmitCVFileDirective(FileId, FileName);
+  } else {
+    OST.EmitDwarfFileDirective(FileId, "", FileName);
+  }
+}
+
+void ObjectWriter::EmitDebugFunctionInfo(const char *FunctionName,
+                                         int FunctionSize) {
+  auto &OST = static_cast<MCObjectStreamer &>(*Asm->OutStreamer);
+  MCContext &OutContext = OST.getContext();
+  const MCObjectFileInfo *MOFI = OutContext.getObjectFileInfo();
 
   if (MOFI->getObjectFileType() == MOFI->IsCOFF) {
-    EmitCVDebugFunctionInfo(OW, FunctionName, FunctionSize);
+    OST.EmitCVFuncIdDirective(FuncId);
+    EmitCVDebugFunctionInfo(FunctionName, FunctionSize);
   } else {
     // TODO: Should convert this for non-Windows.
   }
 }
 
-extern "C" void EmitDebugVar(ObjectWriter *OW, char *Name, int TypeIndex,
-                             bool IsParm, int RangeCount,
-                             ICorDebugInfo::NativeVarInfo *Ranges) {
-  assert(OW && "ObjWriter is null");
+void ObjectWriter::EmitDebugVar(char *Name, int TypeIndex, bool IsParm,
+                                int RangeCount,
+                                ICorDebugInfo::NativeVarInfo *Ranges) {
   assert(RangeCount != 0);
   DebugVarInfo NewVar(Name, TypeIndex, IsParm);
 
@@ -811,38 +686,32 @@ extern "C" void EmitDebugVar(ObjectWriter *OW, char *Name, int TypeIndex,
     NewVar.Ranges.push_back(Ranges[I]);
   }
 
-  OW->DebugVarInfos.push_back(NewVar);
+  DebugVarInfos.push_back(NewVar);
 }
 
-extern "C" void EmitDebugLoc(ObjectWriter *OW, int NativeOffset, int FileId,
-                             int LineNumber, int ColNumber) {
-  assert(OW && "ObjWriter is null");
-  auto *AsmPrinter = &OW->getAsmPrinter();
-  auto &OST = static_cast<MCObjectStreamer &>(*AsmPrinter->OutStreamer);
+void ObjectWriter::EmitDebugLoc(int NativeOffset, int FileId, int LineNumber,
+                                int ColNumber) {
+  auto &OST = static_cast<MCObjectStreamer &>(*Asm->OutStreamer);
   MCContext &OutContext = OST.getContext();
   const MCObjectFileInfo *MOFI = OutContext.getObjectFileInfo();
 
   assert(FileId > 0 && "FileId should be greater than 0.");
   if (MOFI->getObjectFileType() == MOFI->IsCOFF) {
-    OST.EmitCVFuncIdDirective(OW->FuncId);
-    OST.EmitCVLocDirective(OW->FuncId, FileId, LineNumber, ColNumber, false,
-                           true, "", SMLoc());
+    OST.EmitCVFuncIdDirective(FuncId);
+    OST.EmitCVLocDirective(FuncId, FileId, LineNumber, ColNumber, false, true,
+                           "", SMLoc());
   } else {
     OST.EmitDwarfLocDirective(FileId, LineNumber, ColNumber, 1, 0, 0, "");
   }
 }
 
-// This should be invoked at the end of module emission to finalize
-// debug module info.
-extern "C" void EmitDebugModuleInfo(ObjectWriter *OW) {
-  assert(OW && "ObjWriter is null");
-  auto *AsmPrinter = &OW->getAsmPrinter();
-  auto &OST = static_cast<MCObjectStreamer &>(*AsmPrinter->OutStreamer);
+void ObjectWriter::EmitDebugModuleInfo() {
+  auto &OST = static_cast<MCObjectStreamer &>(*Asm->OutStreamer);
   MCContext &OutContext = OST.getContext();
   const MCObjectFileInfo *MOFI = OutContext.getObjectFileInfo();
 
   // Ensure ending all sections.
-  for (auto Section : OW->Sections) {
+  for (auto Section : Sections) {
     OST.endSection(Section);
   }
 
