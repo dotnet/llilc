@@ -351,7 +351,7 @@ void ObjectWriter::EmitWinFrameInfo(const char *FunctionName, int StartOffset,
 
   // If the function was emitted to a Comdat section, create an associative
   // section to place the frame info in. This is due to the Windows linker
-  // requirement that a function and its unwind info come from the same 
+  // requirement that a function and its unwind info come from the same
   // object file.
   MCSymbol *Fn = OutContext.getOrCreateSymbol(Twine(FunctionName));
   const MCSectionCOFF *FunctionSection = cast<MCSectionCOFF>(&Fn->getSection());
@@ -403,9 +403,8 @@ void ObjectWriter::EmitCFILsda(const char *LsdaBlobSymbolName) {
   MCSymbol *T = OutContext.getOrCreateSymbol(LsdaBlobSymbolName);
   MCAssembler &MCAsm = OST.getAssembler();
   MCAsm.registerSymbol(*T);
-  OST.EmitCFILsda(T,
-                  llvm::dwarf::Constants::DW_EH_PE_pcrel |
-                      llvm::dwarf::Constants::DW_EH_PE_sdata4);
+  OST.EmitCFILsda(T, llvm::dwarf::Constants::DW_EH_PE_pcrel |
+                         llvm::dwarf::Constants::DW_EH_PE_sdata4);
 }
 
 void ObjectWriter::EmitCFICode(int Offset, const char *Blob) {
