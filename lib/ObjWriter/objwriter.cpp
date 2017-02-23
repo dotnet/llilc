@@ -317,12 +317,19 @@ extern "C" void SwitchSection(ObjectWriter *OW, const char *SectionName,
       }
       case Triple::ELF: {
         unsigned Flags = ELF::SHF_ALLOC;
+        if (ComdatName != nullptr) {
+          MCSymbolELF *GroupSym =
+              cast<MCSymbolELF>(OutContext.getOrCreateSymbol(ComdatName));
+          OutContext.createELFGroupSection(GroupSym);
+          Flags |= ELF::SHF_GROUP;
+        }
         if (attributes & CustomSectionAttributes_Executable) {
           Flags |= ELF::SHF_EXECINSTR;
         } else if (attributes & CustomSectionAttributes_Writeable) {
           Flags |= ELF::SHF_WRITE;
         }
-        Section = OutContext.getELFSection(SectionName, ELF::SHT_PROGBITS, Flags);
+        Section = OutContext.getELFSection(SectionName, ELF::SHT_PROGBITS, Flags,
+            0, ComdatName != nullptr ? ComdatName : "");
         break;
       }
       default:
