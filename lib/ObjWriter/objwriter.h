@@ -17,6 +17,7 @@
 #include "cfi.h"
 #include "jitDebugInfo.h"
 #include <string>
+#include <set>
 
 using namespace llvm;
 using namespace llvm::codeview;
@@ -102,7 +103,7 @@ private:
   bool FrameOpened;
   std::vector<DebugVarInfo> DebugVarInfos;
 
-  std::list<MCSection *> Sections;
+  std::set<MCSection *> Sections;
   int FuncId;
 
   std::string TripleName;

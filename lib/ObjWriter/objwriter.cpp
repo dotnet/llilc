@@ -244,7 +244,9 @@ void ObjectWriter::SwitchSection(const char *SectionName,
     }
   }
 
-  Sections.push_back(Section);
+  if (Sections.count(Section) == 0) {
+    Sections.insert(Section);
+  }
   OST.SwitchSection(Section);
 
   if (!Section->getBeginSymbol()) {
@@ -675,7 +677,7 @@ void ObjectWriter::EmitDebugFunctionInfo(const char *FunctionName,
       OST.EmitSymbolAttribute(Sym, MCSA_ELF_TypeFunction);
       OST.emitELFSize(Sym, MCConstantExpr::create(FunctionSize, OutContext));
     }
-    // TODO: Should test it for MachO.
+    // TODO: Should test it for Macho.
   }
 }
 
