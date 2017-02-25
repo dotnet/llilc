@@ -67,16 +67,14 @@ public:
   void EmitCFICode(int Offset, const char *Blob);
 
 private:
-  void EmitLabelDiff(MCStreamer &Streamer, const MCSymbol *From,
-                     const MCSymbol *To, unsigned int Size = 4);
-  void EmitSymRecord(MCObjectStreamer &OST, int Size,
-                     SymbolRecordKind SymbolKind);
-  void EmitCOFFSecRel32Value(MCObjectStreamer &OST, MCExpr const *Value);
+  void EmitLabelDiff(const MCSymbol *From, const MCSymbol *To,
+                     unsigned int Size = 4);
+  void EmitSymRecord(int Size, SymbolRecordKind SymbolKind);
+  void EmitCOFFSecRel32Value(MCExpr const *Value);
 
-  void EmitVarDefRange(MCObjectStreamer &OST, const MCSymbol *Fn,
-                       LocalVariableAddrRange &Range);
-  void EmitCVDebugVarInfo(MCObjectStreamer &OST, const MCSymbol *Fn,
-                          DebugVarInfo LocInfos[], int NumVarInfos);
+  void EmitVarDefRange(const MCSymbol *Fn, LocalVariableAddrRange &Range);
+  void EmitCVDebugVarInfo(const MCSymbol *Fn, DebugVarInfo LocInfos[],
+                          int NumVarInfos);
   void EmitCVDebugFunctionInfo(const char *FunctionName, int FunctionSize);
 
   const MCSymbolRefExpr *GetSymbolRefExpr(
@@ -87,19 +85,20 @@ private:
   Triple GetTriple();
 
 private:
-  std::unique_ptr<MCRegisterInfo> MRI;
-  std::unique_ptr<MCAsmInfo> MAI;
-  std::unique_ptr<MCObjectFileInfo> MOFI;
-  std::unique_ptr<MCContext> MC;
-  MCAsmBackend *MAB; // Owned by MCStreamer
-  std::unique_ptr<MCInstrInfo> MII;
-  std::unique_ptr<MCSubtargetInfo> MSTI;
-  MCCodeEmitter *MCE; // Owned by MCStreamer
-  std::unique_ptr<TargetMachine> TM;
-  std::unique_ptr<AsmPrinter> Asm;
+  std::unique_ptr<MCRegisterInfo> RegisterInfo;
+  std::unique_ptr<MCAsmInfo> AsmInfo;
+  std::unique_ptr<MCObjectFileInfo> ObjFileInfo;
+  std::unique_ptr<MCContext> OutContext;
+  MCAsmBackend *AsmBackend; // Owned by MCStreamer
+  std::unique_ptr<MCInstrInfo> InstrInfo;
+  std::unique_ptr<MCSubtargetInfo> SubtargetInfo;
+  MCCodeEmitter *CodeEmitter; // Owned by MCStreamer
+  std::unique_ptr<TargetMachine> TMachine;
+  std::unique_ptr<AsmPrinter> AssemblerPrinter;
+  MCAssembler *Assembler; // Owned by MCStreamer
 
   std::unique_ptr<raw_fd_ostream> OS;
-  MCTargetOptions MCOptions;
+  MCTargetOptions TargetMOptions;
   bool FrameOpened;
   std::vector<DebugVarInfo> DebugVarInfos;
 
@@ -108,7 +107,7 @@ private:
 
   std::string TripleName;
 
-  MCStreamer *MS; // Owned by AsmPrinter
+  MCObjectStreamer *Streamer; // Owned by AsmPrinter
 };
 
 // When object writer is created/initialized successfully, it is returned.
