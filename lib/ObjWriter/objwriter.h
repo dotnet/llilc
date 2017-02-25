@@ -44,6 +44,9 @@ public:
   void SwitchSection(const char *SectionName,
                      CustomSectionAttributes attributes,
                      const char *ComdatName);
+  void SetCodeSectionAttribute(const char *SectionName,
+                               CustomSectionAttributes attributes,
+                               const char *ComdatName);
 
   void EmitAlignment(int ByteAlignment);
   void EmitBlob(int BlobSize, const char *Blob);
@@ -80,6 +83,14 @@ private:
   const MCSymbolRefExpr *GetSymbolRefExpr(
       const char *SymbolName,
       MCSymbolRefExpr::VariantKind Kind = MCSymbolRefExpr::VK_None);
+
+  MCSection *GetSection(const char *SectionName,
+                        CustomSectionAttributes attributes,
+                        const char *ComdatName);
+
+  MCSection *GetSpecificSection(const char *SectionName,
+                                CustomSectionAttributes attributes,
+                                const char *ComdatName);
 
   void InitTripleName();
   Triple GetTriple();
@@ -132,6 +143,14 @@ extern "C" void SwitchSection(ObjectWriter *OW, const char *SectionName,
                               const char *ComdatName) {
   assert(OW && "ObjWriter is null");
   OW->SwitchSection(SectionName, attributes, ComdatName);
+}
+
+extern "C" void SetCodeSectionAttribute(ObjectWriter *OW,
+                                        const char *SectionName,
+                                        CustomSectionAttributes attributes,
+                                        const char *ComdatName) {
+  assert(OW && "ObjWriter is null");
+  OW->SetCodeSectionAttribute(SectionName, attributes, ComdatName);
 }
 
 extern "C" void EmitAlignment(ObjectWriter *OW, int ByteAlignment) {

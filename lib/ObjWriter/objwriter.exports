@@ -1,6 +1,7 @@
 InitObjWriter
 FinishObjWriter
 SwitchSection
+SetCodeSectionAttribute
 EmitAlignment
 EmitBlob
 EmitIntValue

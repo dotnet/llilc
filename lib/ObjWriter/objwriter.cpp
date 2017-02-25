@@ -160,6 +160,8 @@ bool ObjectWriter::Init(llvm::StringRef ObjectFilePath) {
   FrameOpened = false;
   FuncId = 1;
 
+  SetCodeSectionAttribute("text", CustomSectionAttributes_Executable, nullptr);
+
   return true;
 }
 
@@ -168,15 +170,26 @@ void ObjectWriter::Finish() { Streamer->Finish(); }
 void ObjectWriter::SwitchSection(const char *SectionName,
                                  CustomSectionAttributes attributes,
                                  const char *ComdatName) {
-  Triple TheTriple(TripleName);
+  MCSection *Section = GetSection(SectionName, attributes, ComdatName);
+  Streamer->SwitchSection(Section);
+  if (Sections.count(Section) == 0) {
+    Sections.insert(Section);
+    if (ObjFileInfo->getObjectFileType() != ObjFileInfo->IsCOFF) {
+      assert(!Section->getBeginSymbol());
+      MCSymbol *SectionStartSym = OutContext->createTempSymbol();
+      Streamer->EmitLabel(SectionStartSym);
+      Section->setBeginSymbol(SectionStartSym);
+    }
+  }
+}
 
+MCSection *ObjectWriter::GetSection(const char *SectionName,
+                                    CustomSectionAttributes attributes,
+                                    const char *ComdatName) {
   MCSection *Section = nullptr;
+
   if (strcmp(SectionName, "text") == 0) {
     Section = ObjFileInfo->getTextSection();
-    if (!Section->hasInstructions()) {
-      Section->setHasInstructions(true);
-      OutContext->addGenDwarfSection(Section);
-    }
   } else if (strcmp(SectionName, "data") == 0) {
     Section = ObjFileInfo->getDataSection();
   } else if (strcmp(SectionName, "rdata") == 0) {
@@ -184,79 +197,88 @@ void ObjectWriter::SwitchSection(const char *SectionName,
   } else if (strcmp(SectionName, "xdata") == 0) {
     Section = ObjFileInfo->getXDataSection();
   } else {
-    SectionKind Kind = (attributes & CustomSectionAttributes_Executable)
-                           ? SectionKind::getText()
-                           : (attributes & CustomSectionAttributes_Writeable)
-                                 ? SectionKind::getData()
-                                 : SectionKind::getReadOnly();
-    switch (TheTriple.getObjectFormat()) {
-    case Triple::MachO: {
-      unsigned typeAndAttributes = 0;
-      if (attributes & CustomSectionAttributes_MachO_Init_Func_Pointers) {
-        typeAndAttributes |= MachO::SectionType::S_MOD_INIT_FUNC_POINTERS;
-      }
-      Section = OutContext->getMachOSection(
-          (attributes & CustomSectionAttributes_Executable) ? "__TEXT"
-                                                            : "__DATA",
-          SectionName, typeAndAttributes, Kind);
-      break;
-    }
-    case Triple::COFF: {
-      unsigned Characteristics = COFF::IMAGE_SCN_MEM_READ;
-
-      if (attributes & CustomSectionAttributes_Executable) {
-        Characteristics |=
-            COFF::IMAGE_SCN_CNT_CODE | COFF::IMAGE_SCN_MEM_EXECUTE;
-      } else if (attributes & CustomSectionAttributes_Writeable) {
-        Characteristics |=
-            COFF::IMAGE_SCN_CNT_INITIALIZED_DATA | COFF::IMAGE_SCN_MEM_WRITE;
-      } else {
-        Characteristics |= COFF::IMAGE_SCN_CNT_INITIALIZED_DATA;
-      }
-
-      if (ComdatName != nullptr) {
-        Section = OutContext->getCOFFSection(
-            SectionName, Characteristics | COFF::IMAGE_SCN_LNK_COMDAT, Kind,
-            ComdatName, COFF::COMDATType::IMAGE_COMDAT_SELECT_ANY);
-      } else {
-        Section =
-            OutContext->getCOFFSection(SectionName, Characteristics, Kind);
-      }
-      break;
-    }
-    case Triple::ELF: {
-      unsigned Flags = ELF::SHF_ALLOC;
-      if (ComdatName != nullptr) {
-        MCSymbolELF *GroupSym =
-            cast<MCSymbolELF>(OutContext->getOrCreateSymbol(ComdatName));
-        OutContext->createELFGroupSection(GroupSym);
-        Flags |= ELF::SHF_GROUP;
-      }
-      if (attributes & CustomSectionAttributes_Executable) {
-        Flags |= ELF::SHF_EXECINSTR;
-      } else if (attributes & CustomSectionAttributes_Writeable) {
-        Flags |= ELF::SHF_WRITE;
-      }
-      Section =
-          OutContext->getELFSection(SectionName, ELF::SHT_PROGBITS, Flags, 0,
-                                    ComdatName != nullptr ? ComdatName : "");
-      break;
-    }
-    default:
-      error("Unknown output format for target " + TripleName);
-      break;
-    }
+    Section = GetSpecificSection(SectionName, attributes, ComdatName);
   }
+  assert(Section);
+  return Section;
+}
 
-  if (Sections.count(Section) == 0) {
-    Sections.insert(Section);
+MCSection *ObjectWriter::GetSpecificSection(const char *SectionName,
+                                            CustomSectionAttributes attributes,
+                                            const char *ComdatName) {
+  Triple TheTriple(TripleName);
+  MCSection *Section = nullptr;
+  SectionKind Kind = (attributes & CustomSectionAttributes_Executable)
+                         ? SectionKind::getText()
+                         : (attributes & CustomSectionAttributes_Writeable)
+                               ? SectionKind::getData()
+                               : SectionKind::getReadOnly();
+  switch (TheTriple.getObjectFormat()) {
+  case Triple::MachO: {
+    unsigned typeAndAttributes = 0;
+    if (attributes & CustomSectionAttributes_MachO_Init_Func_Pointers) {
+      typeAndAttributes |= MachO::SectionType::S_MOD_INIT_FUNC_POINTERS;
+    }
+    Section = OutContext->getMachOSection(
+        (attributes & CustomSectionAttributes_Executable) ? "__TEXT" : "__DATA",
+        SectionName, typeAndAttributes, Kind);
+    break;
   }
-  Streamer->SwitchSection(Section);
+  case Triple::COFF: {
+    unsigned Characteristics = COFF::IMAGE_SCN_MEM_READ;
 
-  if (!Section->getBeginSymbol()) {
-    MCSymbol *SectionStartSym = OutContext->createTempSymbol();
-    Streamer->EmitLabel(SectionStartSym);
-    Section->setBeginSymbol(SectionStartSym);
+    if (attributes & CustomSectionAttributes_Executable) {
+      Characteristics |= COFF::IMAGE_SCN_CNT_CODE | COFF::IMAGE_SCN_MEM_EXECUTE;
+    } else if (attributes & CustomSectionAttributes_Writeable) {
+      Characteristics |=
+          COFF::IMAGE_SCN_CNT_INITIALIZED_DATA | COFF::IMAGE_SCN_MEM_WRITE;
+    } else {
+      Characteristics |= COFF::IMAGE_SCN_CNT_INITIALIZED_DATA;
+    }
+
+    if (ComdatName != nullptr) {
+      Section = OutContext->getCOFFSection(
+          SectionName, Characteristics | COFF::IMAGE_SCN_LNK_COMDAT, Kind,
+          ComdatName, COFF::COMDATType::IMAGE_COMDAT_SELECT_ANY);
+    } else {
+      Section = OutContext->getCOFFSection(SectionName, Characteristics, Kind);
+    }
+    break;
+  }
+  case Triple::ELF: {
+    unsigned Flags = ELF::SHF_ALLOC;
+    if (ComdatName != nullptr) {
+      MCSymbolELF *GroupSym =
+          cast<MCSymbolELF>(OutContext->getOrCreateSymbol(ComdatName));
+      OutContext->createELFGroupSection(GroupSym);
+      Flags |= ELF::SHF_GROUP;
+    }
+    if (attributes & CustomSectionAttributes_Executable) {
+      Flags |= ELF::SHF_EXECINSTR;
+    } else if (attributes & CustomSectionAttributes_Writeable) {
+      Flags |= ELF::SHF_WRITE;
+    }
+    Section =
+        OutContext->getELFSection(SectionName, ELF::SHT_PROGBITS, Flags, 0,
+                                  ComdatName != nullptr ? ComdatName : "");
+    break;
+  }
+  default:
+    error("Unknown output format for target " + TripleName);
+    break;
+  }
+  return Section;
+}
+
+void ObjectWriter::SetCodeSectionAttribute(const char *SectionName,
+                                           CustomSectionAttributes attributes,
+                                           const char *ComdatName) {
+  MCSection *Section = GetSection(SectionName, attributes, ComdatName);
+
+  assert(!Section->hasInstructions());
+  Section->setHasInstructions(true);
+  if (ObjFileInfo->getObjectFileType() != ObjFileInfo->IsCOFF) {
+    OutContext->addGenDwarfSection(Section);
   }
 }
 
