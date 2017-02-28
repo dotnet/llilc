@@ -174,8 +174,10 @@ void ObjectWriter::SwitchSection(const char *SectionName,
   Streamer->SwitchSection(Section);
   if (Sections.count(Section) == 0) {
     Sections.insert(Section);
-    if (ObjFileInfo->getObjectFileType() != ObjFileInfo->IsCOFF) {
+    if (ObjFileInfo->getObjectFileType() == ObjFileInfo->IsMachO) {
       assert(!Section->getBeginSymbol());
+      // Output a DWARF linker-local symbol.
+      // This symbol is used as a base for other symbols in a section.
       MCSymbol *SectionStartSym = OutContext->createTempSymbol();
       Streamer->EmitLabel(SectionStartSym);
       Section->setBeginSymbol(SectionStartSym);
