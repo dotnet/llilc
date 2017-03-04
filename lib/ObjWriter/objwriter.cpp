@@ -29,10 +29,9 @@
 #include "llvm/MC/MCSectionCOFF.h"
 #include "llvm/MC/MCSectionELF.h"
 #include "llvm/MC/MCSectionMachO.h"
-#include "llvm/MC/MCStreamer.h"
+#include "llvm/MC/MCObjectStreamer.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/MCTargetOptionsCommandFlags.h"
-#include "llvm/MC/MCWinCOFFStreamer.h"
 #include "llvm/Support/COFF.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compression.h"
@@ -49,7 +48,6 @@
 #include "llvm/Support/ToolOutputFile.h"
 #include "llvm/Support/Win64EH.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 
 using namespace llvm;
 using namespace llvm::codeview;
@@ -161,6 +159,8 @@ bool ObjectWriter::Init(llvm::StringRef ObjectFilePath) {
   FuncId = 1;
 
   SetCodeSectionAttribute("text", CustomSectionAttributes_Executable, nullptr);
+
+  TypeBuilder.SetStreamer(Streamer);
 
   return true;
 }
@@ -352,6 +352,7 @@ int ObjectWriter::EmitSymbolRef(const char *SymbolName,
         TargetExpr, MCConstantExpr::create(Delta, *OutContext), *OutContext);
   }
   Streamer->EmitValueImpl(TargetExpr, Size, SMLoc(), IsPCRelative);
+
   return Size;
 }
 
@@ -699,6 +700,10 @@ void ObjectWriter::EmitDebugLoc(int NativeOffset, int FileId, int LineNumber,
 }
 
 void ObjectWriter::EmitDebugModuleInfo() {
+  if (ObjFileInfo->getObjectFileType() == ObjFileInfo->IsCOFF) {
+    TypeBuilder.EmitTypeInformation(ObjFileInfo->getCOFFDebugTypesSection());
+  }
+
   // Ensure ending all sections.
   for (auto Section : Sections) {
     Streamer->endSection(Section);

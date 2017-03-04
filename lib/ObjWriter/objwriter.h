@@ -13,11 +13,13 @@
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/Target/TargetOptions.h"
+#include "llvm/DebugInfo/CodeView/TypeTableBuilder.h"
 
 #include "cfi.h"
 #include "jitDebugInfo.h"
 #include <string>
 #include <set>
+#include "typeBuilder.h"
 
 using namespace llvm;
 using namespace llvm::codeview;
@@ -115,6 +117,8 @@ private:
 
   std::set<MCSection *> Sections;
   int FuncId;
+
+  TypeBuilder TypeBuilder;
 
   std::string TripleName;
 

@@ -24,6 +24,9 @@ endif()
 add_library(objwriter
    SHARED
    objwriter.cpp
+   objwriter.h
+   typeBuilder.cpp
+   typeBuilder.h
    ${OBJWRITER_EXPORTS_DEF}
 )
 
