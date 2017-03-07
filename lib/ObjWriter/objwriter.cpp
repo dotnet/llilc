@@ -718,3 +718,20 @@ void ObjectWriter::EmitDebugModuleInfo() {
     OutContext->setGenDwarfForAssembly(true);
   }
 }
+
+unsigned ObjectWriter::GetEnumTypeIndex(EnumTypeDescriptor TypeDescriptor,
+                                        EnumRecordTypeDescriptor *TypeRecords) {
+  return TypeBuilder.GetEnumTypeIndex(TypeDescriptor, TypeRecords);
+}
+
+unsigned ObjectWriter::GetClassTypeIndex(ClassTypeDescriptor ClassDescriptor) {
+  return TypeBuilder.GetClassTypeIndex(ClassDescriptor);
+}
+
+void ObjectWriter::CompleteClassDescription(
+    ClassTypeDescriptor ClassDescriptor,
+    ClassFieldsTypeDescriptior ClassFieldsDescriptor,
+    DataFieldDescriptor *FieldsDescriptors) {
+  TypeBuilder.CompleteClassDescription(ClassDescriptor, ClassFieldsDescriptor,
+                                       FieldsDescriptors);
+}

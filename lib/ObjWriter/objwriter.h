@@ -71,6 +71,14 @@ public:
   void EmitCFILsda(const char *LsdaBlobSymbolName);
   void EmitCFICode(int Offset, const char *Blob);
 
+  unsigned GetEnumTypeIndex(EnumTypeDescriptor TypeDescriptor,
+                            EnumRecordTypeDescriptor *TypeRecords);
+  unsigned GetClassTypeIndex(ClassTypeDescriptor ClassDescriptor);
+  void
+  CompleteClassDescription(ClassTypeDescriptor ClassDescriptor,
+                           ClassFieldsTypeDescriptior ClassFieldsDescriptor,
+                           DataFieldDescriptor *FieldsDescriptors);
+
 private:
   void EmitLabelDiff(const MCSymbol *From, const MCSymbol *To,
                      unsigned int Size = 4);
@@ -241,4 +249,26 @@ extern "C" void EmitDebugLoc(ObjectWriter *OW, int NativeOffset, int FileId,
 extern "C" void EmitDebugModuleInfo(ObjectWriter *OW) {
   assert(OW && "ObjWriter is null");
   OW->EmitDebugModuleInfo();
+}
+
+extern "C" unsigned GetEnumTypeIndex(ObjectWriter *OW,
+                                     EnumTypeDescriptor TypeDescriptor,
+                                     EnumRecordTypeDescriptor *TypeRecords) {
+  assert(OW && "ObjWriter is null");
+  return OW->GetEnumTypeIndex(TypeDescriptor, TypeRecords);
+}
+
+extern "C" unsigned GetClassTypeIndex(ObjectWriter *OW,
+                                      ClassTypeDescriptor ClassDescriptor) {
+  assert(OW && "ObjWriter is null");
+  return OW->GetClassTypeIndex(ClassDescriptor);
+}
+
+extern "C" void
+CompleteClassDescription(ObjectWriter *OW, ClassTypeDescriptor ClassDescriptor,
+                         ClassFieldsTypeDescriptior ClassFieldsDescriptor,
+                         DataFieldDescriptor *FieldsDescriptors) {
+  assert(OW && "ObjWriter is null");
+  OW->CompleteClassDescription(ClassDescriptor, ClassFieldsDescriptor,
+                               FieldsDescriptors);
 }
