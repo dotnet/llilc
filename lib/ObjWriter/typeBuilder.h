@@ -8,18 +8,18 @@
 using namespace llvm;
 using namespace llvm::codeview;
 
-typedef unsigned long long ulong;
+typedef unsigned long long uint64;
 
 #pragma pack(push, 1)
 
 extern "C" struct EnumRecordTypeDescriptor {
-  ulong Value;
+  uint64 Value;
   char *Name;
 };
 
 extern "C" struct EnumTypeDescriptor {
-  ulong ElementType;
-  ulong ElementCount;
+  uint64 ElementType;
+  uint64 ElementCount;
   char *Name;
   char *UniqueName;
 };
@@ -32,8 +32,8 @@ extern "C" struct ClassTypeDescriptor {
 };
 
 extern "C" struct DataFieldDescriptor {
-  unsigned typeIndex;
-  int offset;
+  unsigned FieldTypeIndex;
+  int Offset;
   char *Name;
 };
 
@@ -43,9 +43,9 @@ extern "C" struct ClassFieldsTypeDescriptior {
 };
 
 #pragma pack(pop)
-class TypeBuilder {
+class UserDefinedTypesBuilder {
 public:
-  TypeBuilder();
+  UserDefinedTypesBuilder();
   void SetStreamer(MCObjectStreamer *Streamer);
   void EmitTypeInformation(MCSection *COFFDebugTypesSection);
 
@@ -61,7 +61,7 @@ private:
   void EmitCodeViewMagicVersion();
   ClassOptions GetCommonClassOptions();
 
-  unsigned GetEnumFieldListType(ulong Count,
+  unsigned GetEnumFieldListType(uint64 Count,
                                 EnumRecordTypeDescriptor *TypeRecords);
 
   MCObjectStreamer *Streamer;

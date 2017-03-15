@@ -1,23 +1,27 @@
 #include "typeBuilder.h"
 #include "llvm/Support/COFF.h"
 
-TypeBuilder::TypeBuilder() : Allocator(), TypeTable(Allocator) {}
+UserDefinedTypesBuilder::UserDefinedTypesBuilder()
+    : Allocator(), TypeTable(Allocator) {}
 
-void TypeBuilder::SetStreamer(MCObjectStreamer *Streamer) {
+void UserDefinedTypesBuilder::SetStreamer(MCObjectStreamer *Streamer) {
   assert(this->Streamer == 0);
   assert(Streamer != 0);
   this->Streamer = Streamer;
 }
 
-void TypeBuilder::EmitCodeViewMagicVersion() {
+void UserDefinedTypesBuilder::EmitCodeViewMagicVersion() {
   Streamer->EmitValueToAlignment(4);
   Streamer->AddComment("Debug section magic");
   Streamer->EmitIntValue(COFF::DEBUG_SECTION_MAGIC, 4);
 }
 
-ClassOptions TypeBuilder::GetCommonClassOptions() { return ClassOptions(); }
+ClassOptions UserDefinedTypesBuilder::GetCommonClassOptions() {
+  return ClassOptions();
+}
 
-void TypeBuilder::EmitTypeInformation(MCSection *COFFDebugTypesSection) {
+void UserDefinedTypesBuilder::EmitTypeInformation(
+    MCSection *COFFDebugTypesSection) {
 
   if (TypeTable.empty())
     return;
@@ -25,18 +29,23 @@ void TypeBuilder::EmitTypeInformation(MCSection *COFFDebugTypesSection) {
   Streamer->SwitchSection(COFFDebugTypesSection);
   EmitCodeViewMagicVersion();
 
-  TypeTable.ForEachRecord([&](TypeIndex Index, ArrayRef<uint8_t> Record) {
+  TypeTable.ForEachRecord([&](TypeIndex FieldTypeIndex,
+                              ArrayRef<uint8_t> Record) {
     StringRef S(reinterpret_cast<const char *>(Record.data()), Record.size());
     Streamer->EmitBinaryData(S);
   });
 }
 
-unsigned
-TypeBuilder::GetEnumFieldListType(ulong Count,
-                                  EnumRecordTypeDescriptor *TypeRecords) {
+unsigned UserDefinedTypesBuilder::GetEnumFieldListType(
+    uint64 Count, EnumRecordTypeDescriptor *TypeRecords) {
   FieldListRecordBuilder FLRB(TypeTable);
   FLRB.begin();
-  for (int i = 0; i < Count; ++i) {
+  uint64 MaxInt = (unsigned int)-1;
+  if (Count > MaxInt) {
+    // Do not expect more than int fields.
+    return 0;
+  }
+  for (int i = 0; i < (int)Count; ++i) {
     EnumRecordTypeDescriptor record = TypeRecords[i];
     EnumeratorRecord ER(MemberAccess::Public, APSInt::getUnsigned(record.Value),
                         record.Name);
@@ -46,8 +55,8 @@ TypeBuilder::GetEnumFieldListType(ulong Count,
   return Type.getIndex();
 }
 
-unsigned TypeBuilder::GetEnumTypeIndex(EnumTypeDescriptor TypeDescriptor,
-                                       EnumRecordTypeDescriptor *TypeRecords) {
+unsigned UserDefinedTypesBuilder::GetEnumTypeIndex(
+    EnumTypeDescriptor TypeDescriptor, EnumRecordTypeDescriptor *TypeRecords) {
 
   ClassOptions CO = GetCommonClassOptions();
   unsigned FieldListIndex =
@@ -63,17 +72,24 @@ unsigned TypeBuilder::GetEnumTypeIndex(EnumTypeDescriptor TypeDescriptor,
   return Type.getIndex();
 }
 
-unsigned TypeBuilder::GetClassTypeIndex(ClassTypeDescriptor ClassDescriptor) {
+unsigned UserDefinedTypesBuilder::GetClassTypeIndex(
+    ClassTypeDescriptor ClassDescriptor) {
   TypeRecordKind Kind =
       ClassDescriptor.IsStruct ? TypeRecordKind::Struct : TypeRecordKind::Class;
   ClassOptions CO = ClassOptions::ForwardReference | GetCommonClassOptions();
   ClassRecord CR(Kind, 0, CO, TypeIndex(), TypeIndex(), TypeIndex(), 0,
                  ClassDescriptor.Name, ClassDescriptor.UniqueName);
   TypeIndex FwdDeclTI = TypeTable.writeKnownType(CR);
+
+  if (ClassDescriptor.IsStruct == false) {
+    PointerRecord PointerToClass(FwdDeclTI, 0);
+    TypeIndex PointerIndex = TypeTable.writeKnownType(PointerToClass);
+    return PointerIndex.getIndex();
+  }
   return FwdDeclTI.getIndex();
 }
 
-void TypeBuilder::CompleteClassDescription(
+void UserDefinedTypesBuilder::CompleteClassDescription(
     ClassTypeDescriptor ClassDescriptor,
     ClassFieldsTypeDescriptior ClassFieldsDescriptor,
     DataFieldDescriptor *FieldsDescriptors) {
@@ -91,8 +107,8 @@ void TypeBuilder::CompleteClassDescription(
   for (int i = 0; i < ClassFieldsDescriptor.FieldsCount; ++i) {
     DataFieldDescriptor desc = FieldsDescriptors[i];
     MemberAccess Access = MemberAccess::Public;
-    TypeIndex MemberBaseType(desc.typeIndex);
-    int MemberOffsetInBytes = desc.offset;
+    TypeIndex MemberBaseType(desc.FieldTypeIndex);
+    int MemberOffsetInBytes = desc.Offset;
     DataMemberRecord DMR(Access, MemberBaseType, MemberOffsetInBytes,
                          desc.Name);
     FLBR.writeMemberType(DMR);
@@ -104,10 +120,5 @@ void TypeBuilder::CompleteClassDescription(
   ClassRecord CR(Kind, ClassFieldsDescriptor.FieldsCount, CO, FieldListIndex,
                  TypeIndex(), TypeIndex(), ClassFieldsDescriptor.Size,
                  ClassDescriptor.Name, ClassDescriptor.UniqueName);
-  TypeIndex CompleteTI = TypeTable.writeKnownType(CR);
-
-  if (ClassDescriptor.IsStruct == false) {
-    PointerRecord pr(CompleteTI, 0);
-    TypeIndex prIndex = TypeTable.writeKnownType(pr);
-  }
+  TypeTable.writeKnownType(CR);
 }

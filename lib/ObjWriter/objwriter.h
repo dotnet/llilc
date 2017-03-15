@@ -126,7 +126,7 @@ private:
   std::set<MCSection *> Sections;
   int FuncId;
 
-  TypeBuilder TypeBuilder;
+  UserDefinedTypesBuilder TypeBuilder;
 
   std::string TripleName;
 

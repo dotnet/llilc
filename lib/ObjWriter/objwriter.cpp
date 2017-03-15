@@ -380,12 +380,12 @@ void ObjectWriter::EmitWinFrameInfo(const char *FunctionName, int StartOffset,
   const MCExpr *BaseRefRel =
       GetSymbolRefExpr(FunctionName, MCSymbolRefExpr::VK_COFF_IMGREL32);
 
-  // start offset
+  // start Offset
   const MCExpr *StartOfs = MCConstantExpr::create(StartOffset, *OutContext);
   Streamer->EmitValue(
       MCBinaryExpr::createAdd(BaseRefRel, StartOfs, *OutContext), 4);
 
-  // end offset
+  // end Offset
   const MCExpr *EndOfs = MCConstantExpr::create(EndOffset, *OutContext);
   Streamer->EmitValue(MCBinaryExpr::createAdd(BaseRefRel, EndOfs, *OutContext),
                       4);
