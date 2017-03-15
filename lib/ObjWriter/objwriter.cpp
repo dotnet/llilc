@@ -160,7 +160,8 @@ bool ObjectWriter::Init(llvm::StringRef ObjectFilePath) {
 
   SetCodeSectionAttribute("text", CustomSectionAttributes_Executable, nullptr);
 
-  TypeBuilder.SetStreamer(Streamer);
+  if (ObjFileInfo->getObjectFileType() == ObjFileInfo->IsCOFF)
+    TypeBuilder.SetStreamer(Streamer);
 
   return true;
 }
@@ -721,17 +722,24 @@ void ObjectWriter::EmitDebugModuleInfo() {
 
 unsigned ObjectWriter::GetEnumTypeIndex(EnumTypeDescriptor TypeDescriptor,
                                         EnumRecordTypeDescriptor *TypeRecords) {
-  return TypeBuilder.GetEnumTypeIndex(TypeDescriptor, TypeRecords);
+  if (ObjFileInfo->getObjectFileType() == ObjFileInfo->IsCOFF)
+    return TypeBuilder.GetEnumTypeIndex(TypeDescriptor, TypeRecords);
+  else
+    return 0;
 }
 
 unsigned ObjectWriter::GetClassTypeIndex(ClassTypeDescriptor ClassDescriptor) {
-  return TypeBuilder.GetClassTypeIndex(ClassDescriptor);
+  if (ObjFileInfo->getObjectFileType() == ObjFileInfo->IsCOFF)
+    return TypeBuilder.GetClassTypeIndex(ClassDescriptor);
+  else
+    return 0;
 }
 
 void ObjectWriter::CompleteClassDescription(
     ClassTypeDescriptor ClassDescriptor,
     ClassFieldsTypeDescriptior ClassFieldsDescriptor,
     DataFieldDescriptor *FieldsDescriptors) {
-  TypeBuilder.CompleteClassDescription(ClassDescriptor, ClassFieldsDescriptor,
-                                       FieldsDescriptors);
+  if (ObjFileInfo->getObjectFileType() == ObjFileInfo->IsCOFF)
+    TypeBuilder.CompleteClassDescription(ClassDescriptor, ClassFieldsDescriptor,
+                                         FieldsDescriptors);
 }
