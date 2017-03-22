@@ -722,24 +722,23 @@ void ObjectWriter::EmitDebugModuleInfo() {
 
 unsigned ObjectWriter::GetEnumTypeIndex(EnumTypeDescriptor TypeDescriptor,
                                         EnumRecordTypeDescriptor *TypeRecords) {
-  if (ObjFileInfo->getObjectFileType() == ObjFileInfo->IsCOFF)
-    return TypeBuilder.GetEnumTypeIndex(TypeDescriptor, TypeRecords);
-  else
-    return 0;
+  assert(ObjFileInfo->getObjectFileType() == ObjFileInfo->IsCOFF &&
+         "only COFF is supported now");
+  return TypeBuilder.GetEnumTypeIndex(TypeDescriptor, TypeRecords);
 }
 
 unsigned ObjectWriter::GetClassTypeIndex(ClassTypeDescriptor ClassDescriptor) {
-  if (ObjFileInfo->getObjectFileType() == ObjFileInfo->IsCOFF)
-    return TypeBuilder.GetClassTypeIndex(ClassDescriptor);
-  else
-    return 0;
+  assert(ObjFileInfo->getObjectFileType() == ObjFileInfo->IsCOFF &&
+         "only COFF is supported now");
+  return TypeBuilder.GetClassTypeIndex(ClassDescriptor);
 }
 
-void ObjectWriter::CompleteClassDescription(
+unsigned ObjectWriter::GetCompleteClassTypeIndex(
     ClassTypeDescriptor ClassDescriptor,
     ClassFieldsTypeDescriptior ClassFieldsDescriptor,
     DataFieldDescriptor *FieldsDescriptors) {
-  if (ObjFileInfo->getObjectFileType() == ObjFileInfo->IsCOFF)
-    TypeBuilder.CompleteClassDescription(ClassDescriptor, ClassFieldsDescriptor,
-                                         FieldsDescriptors);
+  assert(ObjFileInfo->getObjectFileType() == ObjFileInfo->IsCOFF &&
+         "only COFF is supported now");
+  return TypeBuilder.GetCompleteClassTypeIndex(
+      ClassDescriptor, ClassFieldsDescriptor, FieldsDescriptors);
 }

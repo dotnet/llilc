@@ -1,3 +1,13 @@
+//===---- typeBuilder.cpp --------------------------------*- C++ -*-===//
+//
+// type builder implementation using codeview::TypeTableBuilder
+//
+// Copyright (c) Microsoft. All rights reserved.
+// Licensed under the MIT license.
+// See LICENSE file in the project root for full license information.
+//
+//===----------------------------------------------------------------------===//
+
 #include "typeBuilder.h"
 #include "llvm/Support/COFF.h"
 
@@ -41,10 +51,7 @@ unsigned UserDefinedTypesBuilder::GetEnumFieldListType(
   FieldListRecordBuilder FLRB(TypeTable);
   FLRB.begin();
   uint64 MaxInt = (unsigned int)-1;
-  if (Count > MaxInt) {
-    // Do not expect more than int fields.
-    return 0;
-  }
+  assert(Count <= MaxInt && "There are too many fields inside enum");
   for (int i = 0; i < (int)Count; ++i) {
     EnumRecordTypeDescriptor record = TypeRecords[i];
     EnumeratorRecord ER(MemberAccess::Public, APSInt::getUnsigned(record.Value),
@@ -89,7 +96,7 @@ unsigned UserDefinedTypesBuilder::GetClassTypeIndex(
   return FwdDeclTI.getIndex();
 }
 
-void UserDefinedTypesBuilder::CompleteClassDescription(
+unsigned UserDefinedTypesBuilder::GetCompleteClassTypeIndex(
     ClassTypeDescriptor ClassDescriptor,
     ClassFieldsTypeDescriptior ClassFieldsDescriptor,
     DataFieldDescriptor *FieldsDescriptors) {
@@ -120,5 +127,11 @@ void UserDefinedTypesBuilder::CompleteClassDescription(
   ClassRecord CR(Kind, ClassFieldsDescriptor.FieldsCount, CO, FieldListIndex,
                  TypeIndex(), TypeIndex(), ClassFieldsDescriptor.Size,
                  ClassDescriptor.Name, ClassDescriptor.UniqueName);
-  TypeTable.writeKnownType(CR);
+  TypeIndex ClassIndex = TypeTable.writeKnownType(CR);
+  if (ClassDescriptor.IsStruct == false) {
+    PointerRecord PointerToClass(ClassIndex, 0);
+    TypeIndex PointerIndex = TypeTable.writeKnownType(PointerToClass);
+    return PointerIndex.getIndex();
+  }
+  return ClassIndex.getIndex();
 }

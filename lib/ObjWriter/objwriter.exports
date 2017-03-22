@@ -19,4 +19,4 @@ EmitDebugModuleInfo
 EmitDebugVar
 GetEnumTypeIndex
 GetClassTypeIndex
-CompleteClassDescription
+GetCompleteClassTypeIndex

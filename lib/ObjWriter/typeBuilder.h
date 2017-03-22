@@ -1,3 +1,13 @@
+//===---- typeBuilder.h --------------------------------*- C++ -*-===//
+//
+// type builder is used to convert .Net types into CodeView descriptors.
+//
+// Copyright (c) Microsoft. All rights reserved.
+// Licensed under the MIT license.
+// See LICENSE file in the project root for full license information.
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include "llvm/DebugInfo/CodeView/TypeTableBuilder.h"
@@ -52,10 +62,10 @@ public:
   unsigned GetEnumTypeIndex(EnumTypeDescriptor TypeDescriptor,
                             EnumRecordTypeDescriptor *TypeRecords);
   unsigned GetClassTypeIndex(ClassTypeDescriptor ClassDescriptor);
-  void
-  CompleteClassDescription(ClassTypeDescriptor ClassDescriptor,
-                           ClassFieldsTypeDescriptior ClassFieldsDescriptor,
-                           DataFieldDescriptor *FieldsDescriptors);
+  unsigned
+  GetCompleteClassTypeIndex(ClassTypeDescriptor ClassDescriptor,
+                            ClassFieldsTypeDescriptior ClassFieldsDescriptor,
+                            DataFieldDescriptor *FieldsDescriptors);
 
 private:
   void EmitCodeViewMagicVersion();

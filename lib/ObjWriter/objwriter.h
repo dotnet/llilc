@@ -74,10 +74,10 @@ public:
   unsigned GetEnumTypeIndex(EnumTypeDescriptor TypeDescriptor,
                             EnumRecordTypeDescriptor *TypeRecords);
   unsigned GetClassTypeIndex(ClassTypeDescriptor ClassDescriptor);
-  void
-  CompleteClassDescription(ClassTypeDescriptor ClassDescriptor,
-                           ClassFieldsTypeDescriptior ClassFieldsDescriptor,
-                           DataFieldDescriptor *FieldsDescriptors);
+  unsigned
+  GetCompleteClassTypeIndex(ClassTypeDescriptor ClassDescriptor,
+                            ClassFieldsTypeDescriptior ClassFieldsDescriptor,
+                            DataFieldDescriptor *FieldsDescriptors);
 
 private:
   void EmitLabelDiff(const MCSymbol *From, const MCSymbol *To,
@@ -264,11 +264,11 @@ extern "C" unsigned GetClassTypeIndex(ObjectWriter *OW,
   return OW->GetClassTypeIndex(ClassDescriptor);
 }
 
-extern "C" void
-CompleteClassDescription(ObjectWriter *OW, ClassTypeDescriptor ClassDescriptor,
-                         ClassFieldsTypeDescriptior ClassFieldsDescriptor,
-                         DataFieldDescriptor *FieldsDescriptors) {
+extern "C" unsigned
+GetCompleteClassTypeIndex(ObjectWriter *OW, ClassTypeDescriptor ClassDescriptor,
+                          ClassFieldsTypeDescriptior ClassFieldsDescriptor,
+                          DataFieldDescriptor *FieldsDescriptors) {
   assert(OW && "ObjWriter is null");
-  OW->CompleteClassDescription(ClassDescriptor, ClassFieldsDescriptor,
-                               FieldsDescriptors);
+  return OW->GetCompleteClassTypeIndex(ClassDescriptor, ClassFieldsDescriptor,
+                                       FieldsDescriptors);
 }
