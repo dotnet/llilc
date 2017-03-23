@@ -50,8 +50,10 @@ unsigned UserDefinedTypesBuilder::GetEnumFieldListType(
     uint64 Count, EnumRecordTypeDescriptor *TypeRecords) {
   FieldListRecordBuilder FLRB(TypeTable);
   FLRB.begin();
+#ifndef NDEBUG
   uint64 MaxInt = (unsigned int)-1;
   assert(Count <= MaxInt && "There are too many fields inside enum");
+#endif
   for (int i = 0; i < (int)Count; ++i) {
     EnumRecordTypeDescriptor record = TypeRecords[i];
     EnumeratorRecord ER(MemberAccess::Public, APSInt::getUnsigned(record.Value),

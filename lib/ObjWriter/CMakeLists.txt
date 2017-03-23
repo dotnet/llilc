@@ -24,8 +24,8 @@ endif()
 add_library(objwriter
    SHARED
    objwriter.cpp
-   objwriter.h
    typeBuilder.cpp
+   objwriter.h # Visual Studio generator doesn't include necessary header files into the project automatically
    typeBuilder.h
    ${OBJWRITER_EXPORTS_DEF}
 )
