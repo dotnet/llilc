@@ -13,11 +13,13 @@
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/Target/TargetOptions.h"
+#include "llvm/DebugInfo/CodeView/TypeTableBuilder.h"
 
 #include "cfi.h"
 #include "jitDebugInfo.h"
 #include <string>
 #include <set>
+#include "typeBuilder.h"
 
 using namespace llvm;
 using namespace llvm::codeview;
@@ -69,6 +71,14 @@ public:
   void EmitCFILsda(const char *LsdaBlobSymbolName);
   void EmitCFICode(int Offset, const char *Blob);
 
+  unsigned GetEnumTypeIndex(EnumTypeDescriptor TypeDescriptor,
+                            EnumRecordTypeDescriptor *TypeRecords);
+  unsigned GetClassTypeIndex(ClassTypeDescriptor ClassDescriptor);
+  unsigned
+  GetCompleteClassTypeIndex(ClassTypeDescriptor ClassDescriptor,
+                            ClassFieldsTypeDescriptior ClassFieldsDescriptor,
+                            DataFieldDescriptor *FieldsDescriptors);
+
 private:
   void EmitLabelDiff(const MCSymbol *From, const MCSymbol *To,
                      unsigned int Size = 4);
@@ -115,6 +125,8 @@ private:
 
   std::set<MCSection *> Sections;
   int FuncId;
+
+  UserDefinedTypesBuilder TypeBuilder;
 
   std::string TripleName;
 
@@ -237,4 +249,26 @@ extern "C" void EmitDebugLoc(ObjectWriter *OW, int NativeOffset, int FileId,
 extern "C" void EmitDebugModuleInfo(ObjectWriter *OW) {
   assert(OW && "ObjWriter is null");
   OW->EmitDebugModuleInfo();
+}
+
+extern "C" unsigned GetEnumTypeIndex(ObjectWriter *OW,
+                                     EnumTypeDescriptor TypeDescriptor,
+                                     EnumRecordTypeDescriptor *TypeRecords) {
+  assert(OW && "ObjWriter is null");
+  return OW->GetEnumTypeIndex(TypeDescriptor, TypeRecords);
+}
+
+extern "C" unsigned GetClassTypeIndex(ObjectWriter *OW,
+                                      ClassTypeDescriptor ClassDescriptor) {
+  assert(OW && "ObjWriter is null");
+  return OW->GetClassTypeIndex(ClassDescriptor);
+}
+
+extern "C" unsigned
+GetCompleteClassTypeIndex(ObjectWriter *OW, ClassTypeDescriptor ClassDescriptor,
+                          ClassFieldsTypeDescriptior ClassFieldsDescriptor,
+                          DataFieldDescriptor *FieldsDescriptors) {
+  assert(OW && "ObjWriter is null");
+  return OW->GetCompleteClassTypeIndex(ClassDescriptor, ClassFieldsDescriptor,
+                                       FieldsDescriptors);
 }

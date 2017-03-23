@@ -29,10 +29,9 @@
 #include "llvm/MC/MCSectionCOFF.h"
 #include "llvm/MC/MCSectionELF.h"
 #include "llvm/MC/MCSectionMachO.h"
-#include "llvm/MC/MCStreamer.h"
+#include "llvm/MC/MCObjectStreamer.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/MCTargetOptionsCommandFlags.h"
-#include "llvm/MC/MCWinCOFFStreamer.h"
 #include "llvm/Support/COFF.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compression.h"
@@ -49,7 +48,6 @@
 #include "llvm/Support/ToolOutputFile.h"
 #include "llvm/Support/Win64EH.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 
 using namespace llvm;
 using namespace llvm::codeview;
@@ -161,6 +159,9 @@ bool ObjectWriter::Init(llvm::StringRef ObjectFilePath) {
   FuncId = 1;
 
   SetCodeSectionAttribute("text", CustomSectionAttributes_Executable, nullptr);
+
+  if (ObjFileInfo->getObjectFileType() == ObjFileInfo->IsCOFF)
+    TypeBuilder.SetStreamer(Streamer);
 
   return true;
 }
@@ -352,6 +353,7 @@ int ObjectWriter::EmitSymbolRef(const char *SymbolName,
         TargetExpr, MCConstantExpr::create(Delta, *OutContext), *OutContext);
   }
   Streamer->EmitValueImpl(TargetExpr, Size, SMLoc(), IsPCRelative);
+
   return Size;
 }
 
@@ -379,12 +381,12 @@ void ObjectWriter::EmitWinFrameInfo(const char *FunctionName, int StartOffset,
   const MCExpr *BaseRefRel =
       GetSymbolRefExpr(FunctionName, MCSymbolRefExpr::VK_COFF_IMGREL32);
 
-  // start offset
+  // start Offset
   const MCExpr *StartOfs = MCConstantExpr::create(StartOffset, *OutContext);
   Streamer->EmitValue(
       MCBinaryExpr::createAdd(BaseRefRel, StartOfs, *OutContext), 4);
 
-  // end offset
+  // end Offset
   const MCExpr *EndOfs = MCConstantExpr::create(EndOffset, *OutContext);
   Streamer->EmitValue(MCBinaryExpr::createAdd(BaseRefRel, EndOfs, *OutContext),
                       4);
@@ -699,6 +701,10 @@ void ObjectWriter::EmitDebugLoc(int NativeOffset, int FileId, int LineNumber,
 }
 
 void ObjectWriter::EmitDebugModuleInfo() {
+  if (ObjFileInfo->getObjectFileType() == ObjFileInfo->IsCOFF) {
+    TypeBuilder.EmitTypeInformation(ObjFileInfo->getCOFFDebugTypesSection());
+  }
+
   // Ensure ending all sections.
   for (auto Section : Sections) {
     Streamer->endSection(Section);
@@ -712,4 +718,27 @@ void ObjectWriter::EmitDebugModuleInfo() {
   } else {
     OutContext->setGenDwarfForAssembly(true);
   }
+}
+
+unsigned ObjectWriter::GetEnumTypeIndex(EnumTypeDescriptor TypeDescriptor,
+                                        EnumRecordTypeDescriptor *TypeRecords) {
+  assert(ObjFileInfo->getObjectFileType() == ObjFileInfo->IsCOFF &&
+         "only COFF is supported now");
+  return TypeBuilder.GetEnumTypeIndex(TypeDescriptor, TypeRecords);
+}
+
+unsigned ObjectWriter::GetClassTypeIndex(ClassTypeDescriptor ClassDescriptor) {
+  assert(ObjFileInfo->getObjectFileType() == ObjFileInfo->IsCOFF &&
+         "only COFF is supported now");
+  return TypeBuilder.GetClassTypeIndex(ClassDescriptor);
+}
+
+unsigned ObjectWriter::GetCompleteClassTypeIndex(
+    ClassTypeDescriptor ClassDescriptor,
+    ClassFieldsTypeDescriptior ClassFieldsDescriptor,
+    DataFieldDescriptor *FieldsDescriptors) {
+  assert(ObjFileInfo->getObjectFileType() == ObjFileInfo->IsCOFF &&
+         "only COFF is supported now");
+  return TypeBuilder.GetCompleteClassTypeIndex(
+      ClassDescriptor, ClassFieldsDescriptor, FieldsDescriptors);
 }

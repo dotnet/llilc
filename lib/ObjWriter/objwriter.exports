@@ -17,3 +17,6 @@ EmitDebugLoc
 EmitDebugFunctionInfo
 EmitDebugModuleInfo
 EmitDebugVar
+GetEnumTypeIndex
+GetClassTypeIndex
+GetCompleteClassTypeIndex
