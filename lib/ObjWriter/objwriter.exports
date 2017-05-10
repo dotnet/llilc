@@ -20,3 +20,4 @@ EmitDebugVar
 GetEnumTypeIndex
 GetClassTypeIndex
 GetCompleteClassTypeIndex
+GetArrayTypeIndex

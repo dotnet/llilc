@@ -10,6 +10,7 @@
 
 #include "typeBuilder.h"
 #include "llvm/Support/COFF.h"
+#include <sstream>
 
 UserDefinedTypesBuilder::UserDefinedTypesBuilder()
     : Allocator(), TypeTable(Allocator) {}
@@ -18,6 +19,10 @@ void UserDefinedTypesBuilder::SetStreamer(MCObjectStreamer *Streamer) {
   assert(this->Streamer == 0);
   assert(Streamer != 0);
   this->Streamer = Streamer;
+}
+
+void UserDefinedTypesBuilder::SetTargetPointerSize(unsigned TargetPointerSize) {
+  this->TargetPointerSize = TargetPointerSize;
 }
 
 void UserDefinedTypesBuilder::EmitCodeViewMagicVersion() {
@@ -107,10 +112,7 @@ unsigned UserDefinedTypesBuilder::GetCompleteClassTypeIndex(
   FLBR.begin();
 
   if (ClassDescriptor.BaseClassId != 0) {
-    MemberAttributes def;
-    TypeIndex BaseTypeIndex(ClassDescriptor.BaseClassId);
-    BaseClassRecord BCR(def, BaseTypeIndex, 0);
-    FLBR.writeMemberType(BCR);
+    AddBaseClass(FLBR, ClassDescriptor.BaseClassId);
   }
 
   for (int i = 0; i < ClassFieldsDescriptor.FieldsCount; ++i) {
@@ -130,10 +132,91 @@ unsigned UserDefinedTypesBuilder::GetCompleteClassTypeIndex(
                  TypeIndex(), TypeIndex(), ClassFieldsDescriptor.Size,
                  ClassDescriptor.Name, ClassDescriptor.UniqueName);
   TypeIndex ClassIndex = TypeTable.writeKnownType(CR);
+
   if (ClassDescriptor.IsStruct == false) {
-    PointerRecord PointerToClass(ClassIndex, 0);
-    TypeIndex PointerIndex = TypeTable.writeKnownType(PointerToClass);
-    return PointerIndex.getIndex();
+    return GetPointerType(ClassIndex);
   }
   return ClassIndex.getIndex();
+}
+
+unsigned UserDefinedTypesBuilder::GetArrayTypeIndex(
+    ClassTypeDescriptor ClassDescriptor, ArrayTypeDescriptor ArrayDescriptor) {
+  TypeIndex ElementTypeIndex = TypeIndex(ArrayDescriptor.ElementType);
+  TypeIndex IndexType = TypeIndex(SimpleTypeKind::Int32);
+
+  FieldListRecordBuilder FLBR(TypeTable);
+  FLBR.begin();
+
+  unsigned Offset = 0;
+  unsigned FieldsCount = 0;
+
+  assert(ClassDescriptor.BaseClassId != 0);
+  AddBaseClass(FLBR, ClassDescriptor.BaseClassId);
+  FieldsCount++;
+  Offset += TargetPointerSize;
+
+  MemberAccess Access = MemberAccess::Public;
+
+  DataMemberRecord CountDMR(Access, IndexType, Offset, "count");
+  FLBR.writeMemberType(CountDMR);
+  FieldsCount++;
+  Offset += TargetPointerSize;
+
+  if (ArrayDescriptor.IsMultiDimensional == 1) {
+    for (unsigned i = 0; i < ArrayDescriptor.Rank; ++i) {
+      std::stringstream ss;
+      ss << "length" << i;
+      char *LengthName = new char[ss.gcount() + 1];
+      ss >> LengthName;
+      DataMemberRecord LengthDMR(Access, TypeIndex(SimpleTypeKind::Int32),
+                                 Offset, LengthName);
+      FLBR.writeMemberType(LengthDMR);
+      FieldsCount++;
+      Offset += 4;
+    }
+
+    for (unsigned i = 0; i < ArrayDescriptor.Rank; ++i) {
+      std::stringstream ss;
+      ss << "bounds" << i;
+      char *BoundsName = new char[ss.gcount() + 1];
+      ss >> BoundsName;
+      DataMemberRecord BoundsDMR(Access, TypeIndex(SimpleTypeKind::Int32),
+                                 Offset, BoundsName);
+      FLBR.writeMemberType(BoundsDMR);
+      FieldsCount++;
+      Offset += 4;
+    }
+  }
+
+  ArrayRecord AR(ElementTypeIndex, IndexType, ArrayDescriptor.Size, "");
+  TypeIndex ArrayIndex = TypeTable.writeKnownType(AR);
+  DataMemberRecord ArrayDMR(Access, ArrayIndex, Offset, "values");
+  FLBR.writeMemberType(ArrayDMR);
+  FieldsCount++;
+
+  TypeIndex FieldListIndex = FLBR.end();
+
+  assert(ClassDescriptor.IsStruct == false);
+  TypeRecordKind Kind = TypeRecordKind::Class;
+  ClassOptions CO = GetCommonClassOptions();
+  ClassRecord CR(Kind, FieldsCount, CO, FieldListIndex, TypeIndex(),
+                 TypeIndex(), ArrayDescriptor.Size, ClassDescriptor.Name,
+                 ClassDescriptor.UniqueName);
+  TypeIndex ClassIndex = TypeTable.writeKnownType(CR);
+
+  return GetPointerType(ClassIndex);
+}
+
+void UserDefinedTypesBuilder::AddBaseClass(FieldListRecordBuilder &FLBR,
+                                           unsigned BaseClassId) {
+  MemberAttributes def;
+  TypeIndex BaseTypeIndex(BaseClassId);
+  BaseClassRecord BCR(def, BaseTypeIndex, 0);
+  FLBR.writeMemberType(BCR);
+}
+
+unsigned UserDefinedTypesBuilder::GetPointerType(TypeIndex ClassIndex) {
+  PointerRecord PointerToClass(ClassIndex, 0);
+  TypeIndex PointerIndex = TypeTable.writeKnownType(PointerToClass);
+  return PointerIndex.getIndex();
 }
