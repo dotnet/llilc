@@ -141,9 +141,6 @@ unsigned UserDefinedTypesBuilder::GetCompleteClassTypeIndex(
 
 unsigned UserDefinedTypesBuilder::GetArrayTypeIndex(
     ClassTypeDescriptor ClassDescriptor, ArrayTypeDescriptor ArrayDescriptor) {
-  TypeIndex ElementTypeIndex = TypeIndex(ArrayDescriptor.ElementType);
-  TypeIndex IndexType = TypeIndex(SimpleTypeKind::Int32);
-
   FieldListRecordBuilder FLBR(TypeTable);
   FLBR.begin();
 
@@ -156,7 +153,7 @@ unsigned UserDefinedTypesBuilder::GetArrayTypeIndex(
   Offset += TargetPointerSize;
 
   MemberAccess Access = MemberAccess::Public;
-
+  TypeIndex IndexType = TypeIndex(SimpleTypeKind::Int32);
   DataMemberRecord CountDMR(Access, IndexType, Offset, "count");
   FLBR.writeMemberType(CountDMR);
   FieldsCount++;
@@ -188,6 +185,7 @@ unsigned UserDefinedTypesBuilder::GetArrayTypeIndex(
     }
   }
 
+  TypeIndex ElementTypeIndex = TypeIndex(ArrayDescriptor.ElementType);
   ArrayRecord AR(ElementTypeIndex, IndexType, ArrayDescriptor.Size, "");
   TypeIndex ArrayIndex = TypeTable.writeKnownType(AR);
   DataMemberRecord ArrayDMR(Access, ArrayIndex, Offset, "values");
