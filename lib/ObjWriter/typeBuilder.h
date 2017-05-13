@@ -80,16 +80,16 @@ public:
   void SetTargetPointerSize(unsigned TargetPointerSize);
   void EmitTypeInformation(MCSection *COFFDebugTypesSection);
 
-  unsigned GetEnumTypeIndex(EnumTypeDescriptor TypeDescriptor,
+  unsigned GetEnumTypeIndex(EnumTypeDescriptor &TypeDescriptor,
                             EnumRecordTypeDescriptor *TypeRecords);
-  unsigned GetClassTypeIndex(ClassTypeDescriptor ClassDescriptor);
+  unsigned GetClassTypeIndex(ClassTypeDescriptor &ClassDescriptor);
   unsigned
-  GetCompleteClassTypeIndex(ClassTypeDescriptor ClassDescriptor,
-                            ClassFieldsTypeDescriptior ClassFieldsDescriptor,
+  GetCompleteClassTypeIndex(ClassTypeDescriptor &ClassDescriptor,
+                            ClassFieldsTypeDescriptior &ClassFieldsDescriptor,
                             DataFieldDescriptor *FieldsDescriptors);
 
-  unsigned GetArrayTypeIndex(ClassTypeDescriptor ClassDescriptor,
-                             ArrayTypeDescriptor ArrayDescriptor);
+  unsigned GetArrayTypeIndex(ClassTypeDescriptor &ClassDescriptor,
+                             ArrayTypeDescriptor &ArrayDescriptor);
 
 private:
   void EmitCodeViewMagicVersion();
@@ -97,7 +97,7 @@ private:
 
   unsigned GetEnumFieldListType(uint64 Count,
                                 EnumRecordTypeDescriptor *TypeRecords);
-  unsigned GetPointerType(TypeIndex ClassIndex);
+  unsigned GetPointerType(TypeIndex &ClassIndex);
 
   void AddBaseClass(FieldListRecordBuilder &FLBR, unsigned BaseClassId);
 

@@ -71,16 +71,16 @@ public:
   void EmitCFILsda(const char *LsdaBlobSymbolName);
   void EmitCFICode(int Offset, const char *Blob);
 
-  unsigned GetEnumTypeIndex(EnumTypeDescriptor TypeDescriptor,
+  unsigned GetEnumTypeIndex(EnumTypeDescriptor& TypeDescriptor,
                             EnumRecordTypeDescriptor *TypeRecords);
-  unsigned GetClassTypeIndex(ClassTypeDescriptor ClassDescriptor);
+  unsigned GetClassTypeIndex(ClassTypeDescriptor& ClassDescriptor);
   unsigned
-  GetCompleteClassTypeIndex(ClassTypeDescriptor ClassDescriptor,
-                            ClassFieldsTypeDescriptior ClassFieldsDescriptor,
+  GetCompleteClassTypeIndex(ClassTypeDescriptor& ClassDescriptor,
+                            ClassFieldsTypeDescriptior& ClassFieldsDescriptor,
                             DataFieldDescriptor *FieldsDescriptors);
 
-  unsigned GetArrayTypeIndex(ClassTypeDescriptor ClassDescriptor,
-                             ArrayTypeDescriptor ArrayDescriptor);
+  unsigned GetArrayTypeIndex(ClassTypeDescriptor& ClassDescriptor,
+                             ArrayTypeDescriptor& ArrayDescriptor);
 
 private:
   void EmitLabelDiff(const MCSymbol *From, const MCSymbol *To,

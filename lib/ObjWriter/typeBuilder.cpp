@@ -73,7 +73,7 @@ unsigned UserDefinedTypesBuilder::GetEnumFieldListType(
 }
 
 unsigned UserDefinedTypesBuilder::GetEnumTypeIndex(
-    EnumTypeDescriptor TypeDescriptor, EnumRecordTypeDescriptor *TypeRecords) {
+    EnumTypeDescriptor& TypeDescriptor, EnumRecordTypeDescriptor *TypeRecords) {
 
   ClassOptions CO = GetCommonClassOptions();
   unsigned FieldListIndex =
@@ -90,7 +90,7 @@ unsigned UserDefinedTypesBuilder::GetEnumTypeIndex(
 }
 
 unsigned UserDefinedTypesBuilder::GetClassTypeIndex(
-    ClassTypeDescriptor ClassDescriptor) {
+    ClassTypeDescriptor& ClassDescriptor) {
   TypeRecordKind Kind =
       ClassDescriptor.IsStruct ? TypeRecordKind::Struct : TypeRecordKind::Class;
   ClassOptions CO = ClassOptions::ForwardReference | GetCommonClassOptions();
@@ -107,8 +107,8 @@ unsigned UserDefinedTypesBuilder::GetClassTypeIndex(
 }
 
 unsigned UserDefinedTypesBuilder::GetCompleteClassTypeIndex(
-    ClassTypeDescriptor ClassDescriptor,
-    ClassFieldsTypeDescriptior ClassFieldsDescriptor,
+    ClassTypeDescriptor& ClassDescriptor,
+    ClassFieldsTypeDescriptior& ClassFieldsDescriptor,
     DataFieldDescriptor *FieldsDescriptors) {
 
   FieldListRecordBuilder FLBR(TypeTable);
@@ -143,7 +143,7 @@ unsigned UserDefinedTypesBuilder::GetCompleteClassTypeIndex(
 }
 
 unsigned UserDefinedTypesBuilder::GetArrayTypeIndex(
-    ClassTypeDescriptor ClassDescriptor, ArrayTypeDescriptor ArrayDescriptor) {
+    ClassTypeDescriptor& ClassDescriptor, ArrayTypeDescriptor& ArrayDescriptor) {
   FieldListRecordBuilder FLBR(TypeTable);
   FLBR.begin();
 
@@ -164,7 +164,6 @@ unsigned UserDefinedTypesBuilder::GetArrayTypeIndex(
 
   if (ArrayDescriptor.IsMultiDimensional == 1) {
     for (unsigned i = 0; i < ArrayDescriptor.Rank; ++i) {
-
       DataMemberRecord LengthDMR(Access, TypeIndex(SimpleTypeKind::Int32),
                                  Offset, ArrayDimentions.GetLengthName(i));
       FLBR.writeMemberType(LengthDMR);
@@ -209,7 +208,7 @@ void UserDefinedTypesBuilder::AddBaseClass(FieldListRecordBuilder &FLBR,
   FLBR.writeMemberType(BCR);
 }
 
-unsigned UserDefinedTypesBuilder::GetPointerType(TypeIndex ClassIndex) {
+unsigned UserDefinedTypesBuilder::GetPointerType(TypeIndex& ClassIndex) {
   PointerRecord PointerToClass(ClassIndex, 0);
   TypeIndex PointerIndex = TypeTable.writeKnownType(PointerToClass);
   return PointerIndex.getIndex();
