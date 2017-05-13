@@ -13,7 +13,8 @@
 #include <sstream>
 
 UserDefinedTypesBuilder::UserDefinedTypesBuilder()
-    : Allocator(), TypeTable(Allocator), Streamer(nullptr), TargetPointerSize(0) {}
+    : Allocator(), TypeTable(Allocator), Streamer(nullptr),
+      TargetPointerSize(0) {}
 
 void UserDefinedTypesBuilder::SetStreamer(MCObjectStreamer *Streamer) {
   assert(this->Streamer == nullptr);
@@ -163,24 +164,17 @@ unsigned UserDefinedTypesBuilder::GetArrayTypeIndex(
 
   if (ArrayDescriptor.IsMultiDimensional == 1) {
     for (unsigned i = 0; i < ArrayDescriptor.Rank; ++i) {
-      std::stringstream ss;
-      ss << "length" << i;
-      char *LengthName = new char[ss.gcount() + 1];
-      ss >> LengthName;
+
       DataMemberRecord LengthDMR(Access, TypeIndex(SimpleTypeKind::Int32),
-                                 Offset, LengthName);
+                                 Offset, ArrayDimentions.GetLengthName(i));
       FLBR.writeMemberType(LengthDMR);
       FieldsCount++;
       Offset += 4;
     }
 
     for (unsigned i = 0; i < ArrayDescriptor.Rank; ++i) {
-      std::stringstream ss;
-      ss << "bounds" << i;
-      char *BoundsName = new char[ss.gcount() + 1];
-      ss >> BoundsName;
       DataMemberRecord BoundsDMR(Access, TypeIndex(SimpleTypeKind::Int32),
-                                 Offset, BoundsName);
+                                 Offset, ArrayDimentions.GetBoundsName(i));
       FLBR.writeMemberType(BoundsDMR);
       FieldsCount++;
       Offset += 4;
@@ -219,4 +213,33 @@ unsigned UserDefinedTypesBuilder::GetPointerType(TypeIndex ClassIndex) {
   PointerRecord PointerToClass(ClassIndex, 0);
   TypeIndex PointerIndex = TypeTable.writeKnownType(PointerToClass);
   return PointerIndex.getIndex();
+}
+
+const char *ArrayDimensionsDescriptor::GetLengthName(unsigned index) {
+  if (Lengths.size() <= index) {
+    Resize(index + 1);
+  }
+  return Lengths[index].c_str();
+}
+
+const char *ArrayDimensionsDescriptor::GetBoundsName(unsigned index) {
+  if (Bounds.size() <= index) {
+    Resize(index);
+  }
+  return Bounds[index].c_str();
+}
+
+void ArrayDimensionsDescriptor::Resize(unsigned NewSize) {
+  unsigned OldSize = Lengths.size();
+  assert(OldSize == Bounds.size());
+  Lengths.resize(NewSize);
+  Bounds.resize(NewSize);
+  for (unsigned i = OldSize; i < NewSize; ++i) {
+    std::stringstream ss;
+    ss << "length" << i;
+    ss >> Lengths[i];
+    ss.clear();
+    ss << "bounds" << i;
+    ss >> Bounds[i];
+  }
 }

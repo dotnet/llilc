@@ -14,6 +14,7 @@
 #include "llvm/MC/MCObjectStreamer.h"
 
 #include <string>
+#include <vector>
 
 using namespace llvm;
 using namespace llvm::codeview;
@@ -59,6 +60,18 @@ extern "C" struct ArrayTypeDescriptor {
   int IsMultiDimensional;
 };
 
+class ArrayDimensionsDescriptor {
+public:
+  const char *GetLengthName(unsigned index);
+  const char *GetBoundsName(unsigned index);
+
+private:
+  void Resize(unsigned NewSize);
+
+  std::vector<std::string> Lengths;
+  std::vector<std::string> Bounds;
+};
+
 #pragma pack(pop)
 class UserDefinedTypesBuilder {
 public:
@@ -93,4 +106,6 @@ private:
   TypeTableBuilder TypeTable;
 
   unsigned TargetPointerSize;
+
+  ArrayDimensionsDescriptor ArrayDimentions;
 };
