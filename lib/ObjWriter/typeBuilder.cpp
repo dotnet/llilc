@@ -13,15 +13,17 @@
 #include <sstream>
 
 UserDefinedTypesBuilder::UserDefinedTypesBuilder()
-    : Allocator(), TypeTable(Allocator) {}
+    : Allocator(), TypeTable(Allocator), Streamer(nullptr), TargetPointerSize(0) {}
 
 void UserDefinedTypesBuilder::SetStreamer(MCObjectStreamer *Streamer) {
-  assert(this->Streamer == 0);
-  assert(Streamer != 0);
+  assert(this->Streamer == nullptr);
+  assert(Streamer != nullptr);
   this->Streamer = Streamer;
 }
 
 void UserDefinedTypesBuilder::SetTargetPointerSize(unsigned TargetPointerSize) {
+  assert(this->TargetPointerSize == 0);
+  assert(TargetPointerSize != 0);
   this->TargetPointerSize = TargetPointerSize;
 }
 
