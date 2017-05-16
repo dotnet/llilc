@@ -469,7 +469,7 @@ void ObjectWriter::EmitCOFFSecRel32Value(MCExpr const *Value) {
 }
 
 void ObjectWriter::EmitVarDefRange(const MCSymbol *Fn,
-                                   LocalVariableAddrRange &Range) {
+                                   const LocalVariableAddrRange &Range) {
   const MCSymbolRefExpr *BaseSym = MCSymbolRefExpr::create(Fn, *OutContext);
   const MCExpr *Offset = MCConstantExpr::create(Range.OffsetStart, *OutContext);
   const MCExpr *Expr = MCBinaryExpr::createAdd(BaseSym, Offset, *OutContext);
@@ -479,7 +479,7 @@ void ObjectWriter::EmitVarDefRange(const MCSymbol *Fn,
 }
 
 void ObjectWriter::EmitCVDebugVarInfo(const MCSymbol *Fn,
-                                      DebugVarInfo LocInfos[],
+                                      const DebugVarInfo LocInfos[],
                                       int NumVarInfos) {
   for (int I = 0; I < NumVarInfos; I++) {
     // Emit an S_LOCAL record
@@ -678,7 +678,7 @@ void ObjectWriter::EmitDebugFunctionInfo(const char *FunctionName,
 
 void ObjectWriter::EmitDebugVar(char *Name, int TypeIndex, bool IsParm,
                                 int RangeCount,
-                                ICorDebugInfo::NativeVarInfo *Ranges) {
+                                const ICorDebugInfo::NativeVarInfo *Ranges) {
   assert(RangeCount != 0);
   DebugVarInfo NewVar(Name, TypeIndex, IsParm);
 
@@ -722,31 +722,34 @@ void ObjectWriter::EmitDebugModuleInfo() {
   }
 }
 
-unsigned ObjectWriter::GetEnumTypeIndex(EnumTypeDescriptor& TypeDescriptor,
-                                        EnumRecordTypeDescriptor *TypeRecords) {
+unsigned
+ObjectWriter::GetEnumTypeIndex(const EnumTypeDescriptor &TypeDescriptor,
+                               const EnumRecordTypeDescriptor *TypeRecords) {
   assert(ObjFileInfo->getObjectFileType() == ObjFileInfo->IsCOFF &&
          "only COFF is supported now");
   return TypeBuilder.GetEnumTypeIndex(TypeDescriptor, TypeRecords);
 }
 
-unsigned ObjectWriter::GetClassTypeIndex(ClassTypeDescriptor& ClassDescriptor) {
+unsigned
+ObjectWriter::GetClassTypeIndex(const ClassTypeDescriptor &ClassDescriptor) {
   assert(ObjFileInfo->getObjectFileType() == ObjFileInfo->IsCOFF &&
          "only COFF is supported now");
   return TypeBuilder.GetClassTypeIndex(ClassDescriptor);
 }
 
 unsigned ObjectWriter::GetCompleteClassTypeIndex(
-    ClassTypeDescriptor& ClassDescriptor,
-    ClassFieldsTypeDescriptior& ClassFieldsDescriptor,
-    DataFieldDescriptor *FieldsDescriptors) {
+    const ClassTypeDescriptor &ClassDescriptor,
+    const ClassFieldsTypeDescriptior &ClassFieldsDescriptor,
+    const DataFieldDescriptor *FieldsDescriptors) {
   assert(ObjFileInfo->getObjectFileType() == ObjFileInfo->IsCOFF &&
          "only COFF is supported now");
   return TypeBuilder.GetCompleteClassTypeIndex(
       ClassDescriptor, ClassFieldsDescriptor, FieldsDescriptors);
 }
 
-unsigned ObjectWriter::GetArrayTypeIndex(ClassTypeDescriptor& ClassDescriptor,
-                                         ArrayTypeDescriptor& ArrayDescriptor) {
+unsigned
+ObjectWriter::GetArrayTypeIndex(const ClassTypeDescriptor &ClassDescriptor,
+                                const ArrayTypeDescriptor &ArrayDescriptor) {
   assert(ObjFileInfo->getObjectFileType() == ObjFileInfo->IsCOFF &&
          "only COFF is supported now");
   return TypeBuilder.GetArrayTypeIndex(ClassDescriptor, ArrayDescriptor);

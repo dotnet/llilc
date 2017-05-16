@@ -55,7 +55,7 @@ void UserDefinedTypesBuilder::EmitTypeInformation(
 }
 
 unsigned UserDefinedTypesBuilder::GetEnumFieldListType(
-    uint64 Count, EnumRecordTypeDescriptor *TypeRecords) {
+    uint64 Count, const EnumRecordTypeDescriptor *TypeRecords) {
   FieldListRecordBuilder FLRB(TypeTable);
   FLRB.begin();
 #ifndef NDEBUG
@@ -73,7 +73,8 @@ unsigned UserDefinedTypesBuilder::GetEnumFieldListType(
 }
 
 unsigned UserDefinedTypesBuilder::GetEnumTypeIndex(
-    EnumTypeDescriptor& TypeDescriptor, EnumRecordTypeDescriptor *TypeRecords) {
+    const EnumTypeDescriptor &TypeDescriptor,
+    const EnumRecordTypeDescriptor *TypeRecords) {
 
   ClassOptions CO = GetCommonClassOptions();
   unsigned FieldListIndex =
@@ -90,7 +91,7 @@ unsigned UserDefinedTypesBuilder::GetEnumTypeIndex(
 }
 
 unsigned UserDefinedTypesBuilder::GetClassTypeIndex(
-    ClassTypeDescriptor& ClassDescriptor) {
+    const ClassTypeDescriptor &ClassDescriptor) {
   TypeRecordKind Kind =
       ClassDescriptor.IsStruct ? TypeRecordKind::Struct : TypeRecordKind::Class;
   ClassOptions CO = ClassOptions::ForwardReference | GetCommonClassOptions();
@@ -107,9 +108,9 @@ unsigned UserDefinedTypesBuilder::GetClassTypeIndex(
 }
 
 unsigned UserDefinedTypesBuilder::GetCompleteClassTypeIndex(
-    ClassTypeDescriptor& ClassDescriptor,
-    ClassFieldsTypeDescriptior& ClassFieldsDescriptor,
-    DataFieldDescriptor *FieldsDescriptors) {
+    const ClassTypeDescriptor &ClassDescriptor,
+    const ClassFieldsTypeDescriptior &ClassFieldsDescriptor,
+    const DataFieldDescriptor *FieldsDescriptors) {
 
   FieldListRecordBuilder FLBR(TypeTable);
   FLBR.begin();
@@ -143,7 +144,8 @@ unsigned UserDefinedTypesBuilder::GetCompleteClassTypeIndex(
 }
 
 unsigned UserDefinedTypesBuilder::GetArrayTypeIndex(
-    ClassTypeDescriptor& ClassDescriptor, ArrayTypeDescriptor& ArrayDescriptor) {
+    const ClassTypeDescriptor &ClassDescriptor,
+    const ArrayTypeDescriptor &ArrayDescriptor) {
   FieldListRecordBuilder FLBR(TypeTable);
   FLBR.begin();
 
@@ -208,7 +210,7 @@ void UserDefinedTypesBuilder::AddBaseClass(FieldListRecordBuilder &FLBR,
   FLBR.writeMemberType(BCR);
 }
 
-unsigned UserDefinedTypesBuilder::GetPointerType(TypeIndex& ClassIndex) {
+unsigned UserDefinedTypesBuilder::GetPointerType(const TypeIndex &ClassIndex) {
   PointerRecord PointerToClass(ClassIndex, 0);
   TypeIndex PointerIndex = TypeTable.writeKnownType(PointerToClass);
   return PointerIndex.getIndex();
