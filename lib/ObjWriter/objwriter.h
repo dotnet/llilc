@@ -79,6 +79,9 @@ public:
                             ClassFieldsTypeDescriptior ClassFieldsDescriptor,
                             DataFieldDescriptor *FieldsDescriptors);
 
+  unsigned GetArrayTypeIndex(ClassTypeDescriptor ClassDescriptor,
+                             ArrayTypeDescriptor ArrayDescriptor);
+
 private:
   void EmitLabelDiff(const MCSymbol *From, const MCSymbol *To,
                      unsigned int Size = 4);
@@ -271,4 +274,11 @@ GetCompleteClassTypeIndex(ObjectWriter *OW, ClassTypeDescriptor ClassDescriptor,
   assert(OW && "ObjWriter is null");
   return OW->GetCompleteClassTypeIndex(ClassDescriptor, ClassFieldsDescriptor,
                                        FieldsDescriptors);
+}
+
+extern "C" unsigned GetArrayTypeIndex(ObjectWriter *OW,
+                                      ClassTypeDescriptor ClassDescriptor,
+                                      ArrayTypeDescriptor ArrayDescriptor) {
+  assert(OW && "ObjWriter is null");
+  return OW->GetArrayTypeIndex(ClassDescriptor, ArrayDescriptor);
 }

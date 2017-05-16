@@ -14,6 +14,7 @@
 #include "llvm/MC/MCObjectStreamer.h"
 
 #include <string>
+#include <vector>
 
 using namespace llvm;
 using namespace llvm::codeview;
@@ -52,11 +53,31 @@ extern "C" struct ClassFieldsTypeDescriptior {
   int FieldsCount;
 };
 
+extern "C" struct ArrayTypeDescriptor {
+  unsigned Rank;
+  unsigned ElementType;
+  unsigned Size;
+  int IsMultiDimensional;
+};
+
+class ArrayDimensionsDescriptor {
+public:
+  const char *GetLengthName(unsigned index);
+  const char *GetBoundsName(unsigned index);
+
+private:
+  void Resize(unsigned NewSize);
+
+  std::vector<std::string> Lengths;
+  std::vector<std::string> Bounds;
+};
+
 #pragma pack(pop)
 class UserDefinedTypesBuilder {
 public:
   UserDefinedTypesBuilder();
   void SetStreamer(MCObjectStreamer *Streamer);
+  void SetTargetPointerSize(unsigned TargetPointerSize);
   void EmitTypeInformation(MCSection *COFFDebugTypesSection);
 
   unsigned GetEnumTypeIndex(EnumTypeDescriptor TypeDescriptor,
@@ -67,14 +88,24 @@ public:
                             ClassFieldsTypeDescriptior ClassFieldsDescriptor,
                             DataFieldDescriptor *FieldsDescriptors);
 
+  unsigned GetArrayTypeIndex(ClassTypeDescriptor ClassDescriptor,
+                             ArrayTypeDescriptor ArrayDescriptor);
+
 private:
   void EmitCodeViewMagicVersion();
   ClassOptions GetCommonClassOptions();
 
   unsigned GetEnumFieldListType(uint64 Count,
                                 EnumRecordTypeDescriptor *TypeRecords);
+  unsigned GetPointerType(TypeIndex ClassIndex);
+
+  void AddBaseClass(FieldListRecordBuilder &FLBR, unsigned BaseClassId);
 
   MCObjectStreamer *Streamer;
   BumpPtrAllocator Allocator;
   TypeTableBuilder TypeTable;
+
+  unsigned TargetPointerSize;
+
+  ArrayDimensionsDescriptor ArrayDimentions;
 };

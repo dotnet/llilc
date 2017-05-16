@@ -160,8 +160,11 @@ bool ObjectWriter::Init(llvm::StringRef ObjectFilePath) {
 
   SetCodeSectionAttribute("text", CustomSectionAttributes_Executable, nullptr);
 
-  if (ObjFileInfo->getObjectFileType() == ObjFileInfo->IsCOFF)
+  if (ObjFileInfo->getObjectFileType() == ObjFileInfo->IsCOFF) {
     TypeBuilder.SetStreamer(Streamer);
+    unsigned TargetPointerSize = AsmInfo->getPointerSize();
+    TypeBuilder.SetTargetPointerSize(TargetPointerSize);
+  }
 
   return true;
 }
@@ -353,7 +356,6 @@ int ObjectWriter::EmitSymbolRef(const char *SymbolName,
         TargetExpr, MCConstantExpr::create(Delta, *OutContext), *OutContext);
   }
   Streamer->EmitValueImpl(TargetExpr, Size, SMLoc(), IsPCRelative);
-
   return Size;
 }
 
@@ -741,4 +743,11 @@ unsigned ObjectWriter::GetCompleteClassTypeIndex(
          "only COFF is supported now");
   return TypeBuilder.GetCompleteClassTypeIndex(
       ClassDescriptor, ClassFieldsDescriptor, FieldsDescriptors);
+}
+
+unsigned ObjectWriter::GetArrayTypeIndex(ClassTypeDescriptor ClassDescriptor,
+                                         ArrayTypeDescriptor ArrayDescriptor) {
+  assert(ObjFileInfo->getObjectFileType() == ObjFileInfo->IsCOFF &&
+         "only COFF is supported now");
+  return TypeBuilder.GetArrayTypeIndex(ClassDescriptor, ArrayDescriptor);
 }
