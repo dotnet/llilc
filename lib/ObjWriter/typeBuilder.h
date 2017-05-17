@@ -101,10 +101,10 @@ private:
 
   void AddBaseClass(FieldListRecordBuilder &FLBR, unsigned BaseClassId);
 
-  MCObjectStreamer *Streamer;
   BumpPtrAllocator Allocator;
   TypeTableBuilder TypeTable;
 
+  MCObjectStreamer *Streamer;
   unsigned TargetPointerSize;
 
   ArrayDimensionsDescriptor ArrayDimentions;
