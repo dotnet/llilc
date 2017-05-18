@@ -61,7 +61,7 @@ public:
   void EmitDebugFileInfo(int FileId, const char *FileName);
   void EmitDebugFunctionInfo(const char *FunctionName, int FunctionSize);
   void EmitDebugVar(char *Name, int TypeIndex, bool IsParm, int RangeCount,
-                    ICorDebugInfo::NativeVarInfo *Ranges);
+                    const ICorDebugInfo::NativeVarInfo *Ranges);
   void EmitDebugLoc(int NativeOffset, int FileId, int LineNumber,
                     int ColNumber);
   void EmitDebugModuleInfo();
@@ -71,16 +71,16 @@ public:
   void EmitCFILsda(const char *LsdaBlobSymbolName);
   void EmitCFICode(int Offset, const char *Blob);
 
-  unsigned GetEnumTypeIndex(EnumTypeDescriptor TypeDescriptor,
-                            EnumRecordTypeDescriptor *TypeRecords);
-  unsigned GetClassTypeIndex(ClassTypeDescriptor ClassDescriptor);
-  unsigned
-  GetCompleteClassTypeIndex(ClassTypeDescriptor ClassDescriptor,
-                            ClassFieldsTypeDescriptior ClassFieldsDescriptor,
-                            DataFieldDescriptor *FieldsDescriptors);
+  unsigned GetEnumTypeIndex(const EnumTypeDescriptor &TypeDescriptor,
+                            const EnumRecordTypeDescriptor *TypeRecords);
+  unsigned GetClassTypeIndex(const ClassTypeDescriptor &ClassDescriptor);
+  unsigned GetCompleteClassTypeIndex(
+      const ClassTypeDescriptor &ClassDescriptor,
+      const ClassFieldsTypeDescriptior &ClassFieldsDescriptor,
+      const DataFieldDescriptor *FieldsDescriptors);
 
-  unsigned GetArrayTypeIndex(ClassTypeDescriptor ClassDescriptor,
-                             ArrayTypeDescriptor ArrayDescriptor);
+  unsigned GetArrayTypeIndex(const ClassTypeDescriptor &ClassDescriptor,
+                             const ArrayTypeDescriptor &ArrayDescriptor);
 
 private:
   void EmitLabelDiff(const MCSymbol *From, const MCSymbol *To,
@@ -88,8 +88,8 @@ private:
   void EmitSymRecord(int Size, SymbolRecordKind SymbolKind);
   void EmitCOFFSecRel32Value(MCExpr const *Value);
 
-  void EmitVarDefRange(const MCSymbol *Fn, LocalVariableAddrRange &Range);
-  void EmitCVDebugVarInfo(const MCSymbol *Fn, DebugVarInfo LocInfos[],
+  void EmitVarDefRange(const MCSymbol *Fn, const LocalVariableAddrRange &Range);
+  void EmitCVDebugVarInfo(const MCSymbol *Fn, const DebugVarInfo LocInfos[],
                           int NumVarInfos);
   void EmitCVDebugFunctionInfo(const char *FunctionName, int FunctionSize);
 

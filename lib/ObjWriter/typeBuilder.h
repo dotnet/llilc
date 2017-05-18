@@ -80,31 +80,31 @@ public:
   void SetTargetPointerSize(unsigned TargetPointerSize);
   void EmitTypeInformation(MCSection *COFFDebugTypesSection);
 
-  unsigned GetEnumTypeIndex(EnumTypeDescriptor TypeDescriptor,
-                            EnumRecordTypeDescriptor *TypeRecords);
-  unsigned GetClassTypeIndex(ClassTypeDescriptor ClassDescriptor);
-  unsigned
-  GetCompleteClassTypeIndex(ClassTypeDescriptor ClassDescriptor,
-                            ClassFieldsTypeDescriptior ClassFieldsDescriptor,
-                            DataFieldDescriptor *FieldsDescriptors);
+  unsigned GetEnumTypeIndex(const EnumTypeDescriptor &TypeDescriptor,
+                            const EnumRecordTypeDescriptor *TypeRecords);
+  unsigned GetClassTypeIndex(const ClassTypeDescriptor &ClassDescriptor);
+  unsigned GetCompleteClassTypeIndex(
+      const ClassTypeDescriptor &ClassDescriptor,
+      const ClassFieldsTypeDescriptior &ClassFieldsDescriptor,
+      const DataFieldDescriptor *FieldsDescriptors);
 
-  unsigned GetArrayTypeIndex(ClassTypeDescriptor ClassDescriptor,
-                             ArrayTypeDescriptor ArrayDescriptor);
+  unsigned GetArrayTypeIndex(const ClassTypeDescriptor &ClassDescriptor,
+                             const ArrayTypeDescriptor &ArrayDescriptor);
 
 private:
   void EmitCodeViewMagicVersion();
   ClassOptions GetCommonClassOptions();
 
   unsigned GetEnumFieldListType(uint64 Count,
-                                EnumRecordTypeDescriptor *TypeRecords);
-  unsigned GetPointerType(TypeIndex ClassIndex);
+                                const EnumRecordTypeDescriptor *TypeRecords);
+  unsigned GetPointerType(const TypeIndex &ClassIndex);
 
   void AddBaseClass(FieldListRecordBuilder &FLBR, unsigned BaseClassId);
 
-  MCObjectStreamer *Streamer;
   BumpPtrAllocator Allocator;
   TypeTableBuilder TypeTable;
 
+  MCObjectStreamer *Streamer;
   unsigned TargetPointerSize;
 
   ArrayDimensionsDescriptor ArrayDimentions;
