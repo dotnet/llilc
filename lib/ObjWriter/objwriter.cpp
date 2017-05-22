@@ -702,9 +702,36 @@ void ObjectWriter::EmitDebugLoc(int NativeOffset, int FileId, int LineNumber,
   }
 }
 
+void ObjectWriter::EmitCVUserDefinedTypesSymbols() {
+  const auto &UDTs = TypeBuilder.GetUDTs();
+  if (UDTs.empty()) {
+    return;
+  }
+  MCSection *Section = ObjFileInfo->getCOFFDebugSymbolsSection();
+  Streamer->SwitchSection(Section);
+
+  MCSymbol *SymbolsBegin = OutContext->createTempSymbol(),
+           *SymbolsEnd = OutContext->createTempSymbol();
+  Streamer->EmitIntValue(unsigned(ModuleSubstreamKind::Symbols), 4);
+  EmitLabelDiff(SymbolsBegin, SymbolsEnd);
+  Streamer->EmitLabel(SymbolsBegin);
+
+  for (const std::pair<std::string, codeview::TypeIndex> &UDT : UDTs) {
+    unsigned NameLength = UDT.first.length() + 1;
+    unsigned RecordLength = 2 + 4 + NameLength;
+    Streamer->EmitIntValue(RecordLength, 2);
+    Streamer->EmitIntValue(unsigned(SymbolKind::S_UDT), 2);
+    Streamer->EmitIntValue(UDT.second.getIndex(), 4);
+    Streamer->EmitBytes(StringRef(UDT.first.c_str(), NameLength));
+  }
+  Streamer->EmitLabel(SymbolsEnd);
+  Streamer->EmitValueToAlignment(4);
+}
+
 void ObjectWriter::EmitDebugModuleInfo() {
   if (ObjFileInfo->getObjectFileType() == ObjFileInfo->IsCOFF) {
     TypeBuilder.EmitTypeInformation(ObjFileInfo->getCOFFDebugTypesSection());
+    EmitCVUserDefinedTypesSymbols();
   }
 
   // Ensure ending all sections.

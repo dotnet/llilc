@@ -91,6 +91,10 @@ public:
   unsigned GetArrayTypeIndex(const ClassTypeDescriptor &ClassDescriptor,
                              const ArrayTypeDescriptor &ArrayDescriptor);
 
+  const std::vector<std::pair<std::string, codeview::TypeIndex>> &GetUDTs() {
+    return UserDefinedTypes;
+  }
+
 private:
   void EmitCodeViewMagicVersion();
   ClassOptions GetCommonClassOptions();
@@ -108,4 +112,6 @@ private:
   unsigned TargetPointerSize;
 
   ArrayDimensionsDescriptor ArrayDimentions;
+
+  std::vector<std::pair<std::string, codeview::TypeIndex>> UserDefinedTypes;
 };
