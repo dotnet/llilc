@@ -87,6 +87,7 @@ unsigned UserDefinedTypesBuilder::GetEnumTypeIndex(
                         ElementTypeIndex);
 
   TypeIndex Type = TypeTable.writeKnownType(EnumRecord);
+  UserDefinedTypes.push_back(std::make_pair(TypeDescriptor.Name, Type));
   return Type.getIndex();
 }
 
@@ -136,6 +137,8 @@ unsigned UserDefinedTypesBuilder::GetCompleteClassTypeIndex(
                  TypeIndex(), TypeIndex(), ClassFieldsDescriptor.Size,
                  ClassDescriptor.Name, ClassDescriptor.UniqueName);
   TypeIndex ClassIndex = TypeTable.writeKnownType(CR);
+
+  UserDefinedTypes.push_back(std::make_pair(ClassDescriptor.Name, ClassIndex));
 
   if (ClassDescriptor.IsStruct == false) {
     return GetPointerType(ClassIndex);
@@ -198,6 +201,8 @@ unsigned UserDefinedTypesBuilder::GetArrayTypeIndex(
                  TypeIndex(), ArrayDescriptor.Size, ClassDescriptor.Name,
                  ClassDescriptor.UniqueName);
   TypeIndex ClassIndex = TypeTable.writeKnownType(CR);
+
+  UserDefinedTypes.push_back(std::make_pair(ClassDescriptor.Name, ClassIndex));
 
   return GetPointerType(ClassIndex);
 }

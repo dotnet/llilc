@@ -105,6 +105,8 @@ private:
                                 CustomSectionAttributes attributes,
                                 const char *ComdatName);
 
+  void EmitCVUserDefinedTypesSymbols();
+
   void InitTripleName();
   Triple GetTriple();
 
