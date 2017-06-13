@@ -82,6 +82,13 @@ public:
   unsigned GetArrayTypeIndex(const ClassTypeDescriptor &ClassDescriptor,
                              const ArrayTypeDescriptor &ArrayDescriptor);
 
+  unsigned GetPointerTypeIndex(const PointerTypeDescriptor& PointerDescriptor);
+
+  unsigned GetMemberFunctionTypeIndex(const MemberFunctionTypeDescriptor& MemberDescriptor,
+                                      uint32_t const *const ArgumentTypes);
+
+  unsigned GetMemberFunctionId(const MemberFunctionIdTypeDescriptor& MemberIdDescriptor);
+
 private:
   void EmitLabelDiff(const MCSymbol *From, const MCSymbol *To,
                      unsigned int Size = 4);
@@ -283,4 +290,23 @@ extern "C" unsigned GetArrayTypeIndex(ObjectWriter *OW,
                                       ArrayTypeDescriptor ArrayDescriptor) {
   assert(OW && "ObjWriter is null");
   return OW->GetArrayTypeIndex(ClassDescriptor, ArrayDescriptor);
+}
+
+extern "C" unsigned GetPointerTypeIndex(ObjectWriter *OW,
+    PointerTypeDescriptor PointerDescriptor) {
+    assert(OW && "ObjWriter is null");
+    return OW->GetPointerTypeIndex(PointerDescriptor);
+}
+
+extern "C" unsigned GetMemberFunctionTypeIndex(ObjectWriter *OW,
+    MemberFunctionTypeDescriptor MemberDescriptor,
+    uint32_t *ArgumentTypes) {
+    assert(OW && "ObjWriter is null");
+    return OW->GetMemberFunctionTypeIndex(MemberDescriptor, ArgumentTypes);
+}
+
+extern "C" unsigned GetMemberFunctionIdTypeIndex(ObjectWriter *OW,
+    MemberFunctionIdTypeDescriptor MemberIdDescriptor) {
+    assert(OW && "ObjWriter is null");
+    return OW->GetMemberFunctionId(MemberIdDescriptor);
 }

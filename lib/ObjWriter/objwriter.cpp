@@ -781,3 +781,26 @@ ObjectWriter::GetArrayTypeIndex(const ClassTypeDescriptor &ClassDescriptor,
          "only COFF is supported now");
   return TypeBuilder.GetArrayTypeIndex(ClassDescriptor, ArrayDescriptor);
 }
+
+unsigned 
+ObjectWriter::GetPointerTypeIndex(const PointerTypeDescriptor& PointerDescriptor) {
+    assert(ObjFileInfo->getObjectFileType() == ObjFileInfo->IsCOFF &&
+        "only COFF is supported now");
+    return TypeBuilder.GetPointerTypeIndex(PointerDescriptor);
+}
+
+unsigned 
+ObjectWriter::GetMemberFunctionTypeIndex(const MemberFunctionTypeDescriptor& MemberDescriptor,
+                                         uint32_t const *const ArgumentTypes) {
+    assert(ObjFileInfo->getObjectFileType() == ObjFileInfo->IsCOFF &&
+        "only COFF is supported now");
+    return TypeBuilder.GetMemberFunctionTypeIndex(MemberDescriptor, ArgumentTypes);
+}
+
+unsigned 
+ObjectWriter::GetMemberFunctionId(const MemberFunctionIdTypeDescriptor& MemberIdDescriptor) {
+    assert(ObjFileInfo->getObjectFileType() == ObjFileInfo->IsCOFF &&
+        "only COFF is supported now");
+    return TypeBuilder.GetMemberFunctionId(MemberIdDescriptor);
+}
+

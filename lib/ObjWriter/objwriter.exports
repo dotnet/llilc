@@ -21,3 +21,6 @@ GetEnumTypeIndex
 GetClassTypeIndex
 GetCompleteClassTypeIndex
 GetArrayTypeIndex
+GetPointerTypeIndex
+GetMemberFunctionTypeIndex
+GetMemberFunctionIdTypeIndex
