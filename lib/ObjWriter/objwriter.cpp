@@ -32,10 +32,10 @@
 #include "llvm/MC/MCObjectStreamer.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/MCTargetOptionsCommandFlags.h"
-#include "llvm/Support/COFF.h"
+#include "llvm/BinaryFormat/COFF.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compression.h"
-#include "llvm/Support/ELF.h"
+#include "llvm/BinaryFormat/ELF.h"
 #include "llvm/Support/FileUtilities.h"
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/Host.h"
@@ -162,7 +162,7 @@ bool ObjectWriter::Init(llvm::StringRef ObjectFilePath) {
 
   if (ObjFileInfo->getObjectFileType() == ObjFileInfo->IsCOFF) {
     TypeBuilder.SetStreamer(Streamer);
-    unsigned TargetPointerSize = AsmInfo->getPointerSize();
+    unsigned TargetPointerSize = AssemblerPrinter->getPointerSize();
     TypeBuilder.SetTargetPointerSize(TargetPointerSize);
   }
 
@@ -601,7 +601,7 @@ void ObjectWriter::EmitCVDebugFunctionInfo(const char *FunctionName,
   // Emit a symbol subsection, required by VS2012+ to find function boundaries.
   MCSymbol *SymbolsBegin = OutContext->createTempSymbol(),
            *SymbolsEnd = OutContext->createTempSymbol();
-  Streamer->EmitIntValue(unsigned(ModuleSubstreamKind::Symbols), 4);
+  Streamer->EmitIntValue(unsigned(DebugSubsectionKind::Symbols), 4);
   EmitLabelDiff(SymbolsBegin, SymbolsEnd);
   Streamer->EmitLabel(SymbolsBegin);
   {
@@ -712,7 +712,7 @@ void ObjectWriter::EmitCVUserDefinedTypesSymbols() {
 
   MCSymbol *SymbolsBegin = OutContext->createTempSymbol(),
            *SymbolsEnd = OutContext->createTempSymbol();
-  Streamer->EmitIntValue(unsigned(ModuleSubstreamKind::Symbols), 4);
+  Streamer->EmitIntValue(unsigned(DebugSubsectionKind::Symbols), 4);
   EmitLabelDiff(SymbolsBegin, SymbolsEnd);
   Streamer->EmitLabel(SymbolsBegin);
 

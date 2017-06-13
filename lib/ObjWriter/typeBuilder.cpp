@@ -9,7 +9,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "typeBuilder.h"
-#include "llvm/Support/COFF.h"
+#include "llvm/BinaryFormat/COFF.h"
 #include <sstream>
 
 UserDefinedTypesBuilder::UserDefinedTypesBuilder()
@@ -68,7 +68,7 @@ unsigned UserDefinedTypesBuilder::GetEnumFieldListType(
                         record.Name);
     FLRB.writeMemberType(ER);
   }
-  TypeIndex Type = FLRB.end();
+  TypeIndex Type = FLRB.end(true);
   return Type.getIndex();
 }
 
@@ -129,7 +129,7 @@ unsigned UserDefinedTypesBuilder::GetCompleteClassTypeIndex(
                          desc.Name);
     FLBR.writeMemberType(DMR);
   }
-  TypeIndex FieldListIndex = FLBR.end();
+  TypeIndex FieldListIndex = FLBR.end(true);
   TypeRecordKind Kind =
       ClassDescriptor.IsStruct ? TypeRecordKind::Struct : TypeRecordKind::Class;
   ClassOptions CO = GetCommonClassOptions();
@@ -192,7 +192,7 @@ unsigned UserDefinedTypesBuilder::GetArrayTypeIndex(
   FLBR.writeMemberType(ArrayDMR);
   FieldsCount++;
 
-  TypeIndex FieldListIndex = FLBR.end();
+  TypeIndex FieldListIndex = FLBR.end(true);
 
   assert(ClassDescriptor.IsStruct == false);
   TypeRecordKind Kind = TypeRecordKind::Class;
