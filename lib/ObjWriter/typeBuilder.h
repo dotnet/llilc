@@ -21,7 +21,7 @@ using namespace llvm::codeview;
 
 typedef unsigned long long uint64;
 
-#pragma pack(push, 1)
+#pragma pack(push, 8)
 
 extern "C" struct EnumRecordTypeDescriptor {
   uint64 Value;
@@ -29,35 +29,55 @@ extern "C" struct EnumRecordTypeDescriptor {
 };
 
 extern "C" struct EnumTypeDescriptor {
-  unsigned ElementType;
+  uint32_t ElementType;
   uint64 ElementCount;
   char *Name;
-  char *UniqueName;
 };
 
 extern "C" struct ClassTypeDescriptor {
-  int IsStruct;
+  int32_t IsStruct;
   char *Name;
-  char *UniqueName;
-  unsigned BaseClassId;
+  uint32_t BaseClassId;
 };
 
 extern "C" struct DataFieldDescriptor {
-  unsigned FieldTypeIndex;
+  uint32_t FieldTypeIndex;
   uint64 Offset;
   char *Name;
 };
 
 extern "C" struct ClassFieldsTypeDescriptior {
   uint64 Size;
-  int FieldsCount;
+  int32_t FieldsCount;
 };
 
 extern "C" struct ArrayTypeDescriptor {
-  unsigned Rank;
-  unsigned ElementType;
-  unsigned Size;
-  int IsMultiDimensional;
+  uint32_t Rank;
+  uint32_t ElementType;
+  uint32_t Size;
+  int32_t IsMultiDimensional;
+};
+
+extern "C" struct PointerTypeDescriptor {
+    uint32_t ElementType;
+    int32_t IsReference;
+    int32_t IsConst;
+    int32_t Is64Bit;
+};
+
+extern "C" struct MemberFunctionTypeDescriptor {
+    uint32_t ReturnType;
+    uint32_t ContainingClass;
+    uint32_t TypeIndexOfThisPointer;
+    int32_t ThisAdjust;
+    uint32_t CallingConvention;
+    uint16_t NumberOfArguments;
+};
+
+extern "C" struct MemberFunctionIdTypeDescriptor {
+    uint32_t MemberFunction;
+    uint32_t ParentClass;
+    char *Name;
 };
 
 class ArrayDimensionsDescriptor {
@@ -91,6 +111,13 @@ public:
   unsigned GetArrayTypeIndex(const ClassTypeDescriptor &ClassDescriptor,
                              const ArrayTypeDescriptor &ArrayDescriptor);
 
+  unsigned GetPointerTypeIndex(const PointerTypeDescriptor& PointerDescriptor);
+
+  unsigned GetMemberFunctionTypeIndex(const MemberFunctionTypeDescriptor& MemberDescriptor,
+      uint32_t const *const ArgumentTypes);
+
+  unsigned GetMemberFunctionId(const MemberFunctionIdTypeDescriptor& MemberIdDescriptor);
+
   const std::vector<std::pair<std::string, codeview::TypeIndex>> &GetUDTs() {
     return UserDefinedTypes;
   }
@@ -101,9 +128,9 @@ private:
 
   unsigned GetEnumFieldListType(uint64 Count,
                                 const EnumRecordTypeDescriptor *TypeRecords);
-  unsigned GetPointerType(const TypeIndex &ClassIndex);
 
   void AddBaseClass(FieldListRecordBuilder &FLBR, unsigned BaseClassId);
+  void AddClassVTShape(FieldListRecordBuilder &FLBR);
 
   BumpPtrAllocator Allocator;
   TypeTableBuilder TypeTable;
@@ -112,6 +139,7 @@ private:
   unsigned TargetPointerSize;
 
   ArrayDimensionsDescriptor ArrayDimentions;
+  TypeIndex ClassVTableTypeIndex;
 
   std::vector<std::pair<std::string, codeview::TypeIndex>> UserDefinedTypes;
 };
