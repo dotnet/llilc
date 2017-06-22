@@ -2,7 +2,7 @@
 <package >
   <metadata>
     <id>toolchain.ubuntu.14.04-x64.Microsoft.DotNet.ObjectWriter</id>
-    <version>1.0.18-prerelease-00002</version>
+    <version>1.0.19-prerelease-00001</version>
     <title>Microsoft .NET Object File Generator</title>
     <authors>Microsoft</authors>
     <owners>Microsoft</owners>
