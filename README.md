@@ -18,7 +18,7 @@ Introduction
 LLILC is an **LL**VM based MS**IL** **C**ompiler - we pronounce it 'lilac' -
 with a goal of producing a set of cross-platform .NET code generation tools.
 Today LLILC is being developed against [dotnet/CoreCLR](https://github.com/dotnet/coreclr)
-for use as a JIT, as well as an cross platform platform object emitter and disassembler
+for use as a JIT, as well as a cross platform object emitter and disassembler
 that is used by CoreRT as well as other dotnet utilites.  
 
 See the [documentation](Documentation/Welcome.md) for more information.
