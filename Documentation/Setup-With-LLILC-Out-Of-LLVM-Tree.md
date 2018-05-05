@@ -43,10 +43,10 @@ Steps that are different:
   * Unlike the [Getting Started for Windows](Getting-Started-For-Windows.md)
     directions, create a separate LLILC directory.:
 
-        ```
-        > cd $llilc-repo-dir/..
-        > git clone https://github.com/dotnet/llilc
-        ```
+    ```
+    > cd $llilc-repo-dir/..
+    > git clone https://github.com/dotnet/llilc
+    ```
 
   * This will create a directory tree under $llilc-repo-dir that contains
     the cloned sources.
@@ -54,17 +54,17 @@ Steps that are different:
 * Create a Visual Studio Solution for LLVM
   * Create a directory to hold the LLVM build output:
 
-        ```
-        > mkdir $llvm-build-dir
-        ```
+    ```
+    > mkdir $llvm-build-dir
+    ```
 
   * Run cmake from within the newly-created `llvm-build` directory with the
     Visual Studio backend to generate the LLVM solution:
 
-        ```
-        > cd $llvm-build-dir
-        > cmake -G "Visual Studio 12 2013 Win64" $llvm-repo-dir -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_TARGETS_TO_BUILD:STRING=X86 -DLLVM_ENABLE_DOXYGEN=ON
-        ```
+    ```
+    > cd $llvm-build-dir
+    > cmake -G "Visual Studio 12 2013 Win64" $llvm-repo-dir -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_TARGETS_TO_BUILD:STRING=X86 -DLLVM_ENABLE_DOXYGEN=ON
+    ```
 
   * This will generate `LLVM.sln` inside the $llvm-build-dir directory.
 
@@ -72,47 +72,49 @@ Steps that are different:
   * Change directories to the LLVM build directory and set up environment
     variables for the Visual Studio toolchain:
 
-        ```
-        > cd $llvm-build-dir
-        > "%VS120COMNTOOLS%\..\..\VC\vcvarsall.bat" x64
-        ```
+    ```
+    > cd $llvm-build-dir
+    > "%VS120COMNTOOLS%\..\..\VC\vcvarsall.bat" x64
+    ```
 
   * Start the build. Note that If you have a multi-core machine, you may
     request a faster, parallel build by adding the `/m` flag to the command
     line, optionally specifying the degree of parallelism (e.g. `/m:4`).
 
-        ```
-        > msbuild LLVM.sln /p:Configuration=Debug /p:Platform=x64 /t:ALL_BUILD
-        ```
+    ```
+    > msbuild LLVM.sln /p:Configuration=Debug /p:Platform=x64 /t:ALL_BUILD
+    ```
+
 * Create a Visual Studio Solution for LLILC
   * Create a directory to hold the LLILC build output:
 
-        ```
-        > mkdir $llilc-build-dir
-        ```
+    ```
+    > mkdir $llilc-build-dir
+    ```
 
   * Run cmake from within the newly-created `llilc-build` directory with the
     Visual Studio backend to generate the LLVM solution:
 
-        ```
-        > cd $llilc-build-dir
-        > cmake -G "Visual Studio 12 2013 Win64" $llilc-repo-dir -DWITH_CORECLR=$coreclr-build-dir -DWITH_LLVM=$llvm-build-dir -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_TARGETS_TO_BUILD:STRING=X86 -DLLVM_ENABLE_DOXYGEN=ON
-        ```
+    ```
+    > cd $llilc-build-dir
+    > cmake -G "Visual Studio 12 2013 Win64" $llilc-repo-dir -DWITH_CORECLR=$coreclr-build-dir -DWITH_LLVM=$llvm-build-dir -DLLVM_OPTIMIZED_TABLEGEN=ON -DLLVM_TARGETS_TO_BUILD:STRING=X86 -DLLVM_ENABLE_DOXYGEN=ON
+    ```
+
   * This will generate `LLILC.sln` inside the $llilc-build-dir directory.
   * Currently there is a bug in the LLVM configuration that leaves some file
     paths in Windows format with back slashes. If you get an error message
     when configuring, like
-       ```
-       Syntax error in cmake code at
+    ```
+    Syntax error in cmake code at
 
-         share/llvm/cmake/LLVMExports.cmake:233
+        share/llvm/cmake/LLVMExports.cmake:233
 
-       when parsing string
+    when parsing string
 
-          ...C:\Program Files (x86)\...
+        ...C:\Program Files (x86)\...
 
-      Invalid escape sequence \P
-      ```
+    Invalid escape sequence \P
+    ```
     you can work around it by editing the offending line by
     changing the back slashes to forward slashes.
 
@@ -120,20 +122,21 @@ Steps that are different:
   * Change directories to the LLVM build directory and set up environment
     variables for the Visual Studio toolchain:
 
-        ```
-        > cd $llilc-build-dir
-        > "%VS120COMNTOOLS%\..\..\VC\vcvarsall.bat" x64
-        ```
+    ```
+    > cd $llilc-build-dir
+    > "%VS120COMNTOOLS%\..\..\VC\vcvarsall.bat" x64
+    ```
 
   * Start the build. Note that If you have a multi-core machine, you may
     request a faster, parallel build by adding the `/m` flag to the command
     line, optionally specifying the degree of parallelism (e.g. `/m:4`).
 
-        ```
-        > msbuild LLILC.sln /p:Configuration=Debug /p:Platform=x64 /t:ALL_BUILD
-        ```
+    ```
+    > msbuild LLILC.sln /p:Configuration=Debug /p:Platform=x64 /t:ALL_BUILD
+    ```
+
   * To run doxgen over the LLILC sources use the following command line:
 
-        ```
-        > msbuild LLVM.sln /p:Configuration=Debug /p:Platform=x64 /t:doxygen-llilc
-        ```
+    ```
+    > msbuild LLVM.sln /p:Configuration=Debug /p:Platform=x64 /t:doxygen-llilc
+    ```
