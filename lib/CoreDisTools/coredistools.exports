@@ -3,6 +3,7 @@ InitBufferedDisasm
 NewDisasm
 FinishDisasm
 DisasmInstruction
+DumpInstruction
 InitBufferedDiffer
 NewDiffer
 FinishDiff
