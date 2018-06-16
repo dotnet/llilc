@@ -140,6 +140,7 @@ void StdErr(const char *msg, ...) {
 const PrintControl DefaultPrintControl = {StdErr, StdErr, StdOut, StdOut};
 
 string outputBuffer;
+raw_string_ostream outputStream (outputBuffer);
 void BufferedOut(const char *msg, ...) {
   va_list argList;
   va_start(argList, msg);
@@ -148,7 +149,8 @@ void BufferedOut(const char *msg, ...) {
   size_t size = vsnprintf( nullptr, 0, message.c_str(), argList ) + 1; // Extra space for '\0'
   unique_ptr<char[]> buf( new char[ size ] );
   vsnprintf( buf.get(), size, message.c_str(), argList );
-  outputBuffer = outputBuffer.append(buf.get());
+  outputStream << buf.get();
+  outputStream.flush();
   va_end(argList);
 }
 const PrintControl BufferedPrintControl = {StdErr, StdErr, StdOut, BufferedOut};
@@ -684,6 +686,15 @@ DllIface size_t DisasmInstruction(const CorDisasm *Disasm,
   return DecodeLength;
 }
 
+DllIface size_t DumpInstruction(const CorDisasm *Disasm,
+	const uint8_t *Address, const uint8_t *Bytes,
+	size_t Maxlength) {
+	assert((Disasm != nullptr) && "Disassembler object Expected ");
+	BlockIterator BIter(Bytes, Maxlength, (uintptr_t)Address);
+	size_t DecodeLength = (size_t)Disasm->disasmInstruction(BIter, true);
+	return DecodeLength;
+}
+
 DllIface bool NearDiffCodeBlocks(const CorAsmDiff *AsmDiff,
                                  const void *UserData, const uint8_t *Address1,
                                  const uint8_t *Bytes1, size_t Size1,
@@ -717,7 +728,7 @@ DllIface void DumpDiffBlocks(const CorAsmDiff *AsmDiff, const uint8_t *Address1,
 }
 
 DllIface const char* GetOutputBuffer() {
-  return outputBuffer.c_str();
+  return outputStream.str().c_str();
 }
 
 DllIface const void ClearOutputBuffer() {
