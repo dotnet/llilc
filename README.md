@@ -25,6 +25,13 @@ See the [documentation](Documentation/Welcome.md) for more information.
 It has a more complete discussion of our background and goals as well as
 "getting started" details and developer information.
 
+ObjectWriter for [CoreRT](https://github.com/dotnet/corert):
+CoreRT project uses ObjectWriter that lives in its own branch in this repo,
+if you want to build it then follow instructions from getting started, but use the following branches:
+1. last LLVM version and apply this [patch](https://reviews.llvm.org/D29483) or take the known working version from [Microsoft/llvm/CoreRT_ObjectWriter branch](https://github.com/dotnet/llilc/tree/ObjectWriter);
+2. [llilc/ObjectWriter branch](https://github.com/dotnet/llilc/tree/ObjectWriter);
+
+
 Supported Platforms
 -------------------
 
