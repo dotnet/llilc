@@ -38,10 +38,10 @@ may be replaced in all commands below with the directory of your choice.
   * Because LLILC is structured as an LLVM tool, it is canonically cloned
     into the `tools` subdirectory of the LLVM tree created above:
 
-        ```
-        > cd c:\dotnet\llvm\tools
-        > git clone https://github.com/dotnet/llilc
-        ```
+    ```
+    > cd c:\dotnet\llvm\tools
+    > git clone https://github.com/dotnet/llilc
+    ```
 
   * This will create a directory tree under `llilc` that contains the cloned
     sources.
@@ -67,26 +67,26 @@ may be replaced in all commands below with the directory of your choice.
 * Create a Visual Studio Solution for LLVM + LLILC
   * Create a directory to hold the LLVM build output:
 
-        ```
-        > cd c:\dotnet
-        > mkdir llvm-build
-        ```
+    ```
+    > cd c:\dotnet
+    > mkdir llvm-build
+    ```
 
   * Run cmake from within the newly-created `llvm-build` directory with the
     Visual Studio backend to generate the LLVM solution:
 
-        ```
-        > cd llvm-build
-        > cmake -G "Visual Studio 12 2013 Win64" ..\llvm -DWITH_CORECLR=<coreclr path>\bin\Product\$platform.$arch.$build> -DLLVM_OPTIMIZED_TABLEGEN=ON
-        ```
-        note: for Windows $platform should resolve to 'Windows_NT'
+    ```
+    > cd llvm-build
+    > cmake -G "Visual Studio 12 2013 Win64" ..\llvm -DWITH_CORECLR=<coreclr path>\bin\Product\$platform.$arch.$build> -DLLVM_OPTIMIZED_TABLEGEN=ON
+    ```
+    note: for Windows $platform should resolve to 'Windows_NT'
 
   * However if you also want to run Doxygen, use the following instead:
 
-        ```
-        > cd llvm-build
-        > cmake -G "Visual Studio 12 2013 Win64" ..\llvm -DLLVM_ENABLE_DOXYGEN=ON -DWITH_CORECLR=<coreclr path>\bin\Product\$platform.$arch.$build> -DLLVM_OPTIMIZED_TABLEGEN=ON
-        ```
+    ```
+    > cd llvm-build
+    > cmake -G "Visual Studio 12 2013 Win64" ..\llvm -DLLVM_ENABLE_DOXYGEN=ON -DWITH_CORECLR=<coreclr path>\bin\Product\$platform.$arch.$build> -DLLVM_OPTIMIZED_TABLEGEN=ON
+    ```
 
   * This will generate `LLVM.sln` inside the `llvm-build` directory.
 
@@ -94,23 +94,24 @@ may be replaced in all commands below with the directory of your choice.
   * Change directories to the LLVM build directory and set up environment
     variables for the Visual Studio toolchain:
 
-        ```
-        > cd c:\dotnet\llvm-build
-        > "%VS120COMNTOOLS%\..\..\VC\vcvarsall.bat" x64
-        ```
+    ```
+    > cd c:\dotnet\llvm-build
+    > "%VS120COMNTOOLS%\..\..\VC\vcvarsall.bat" x64
+    ```
 
   * Start the build. Note that If you have a multi-core machine, you may
     request a faster, parallel build by adding the `/m` flag to the command
     line, optionally specifying the degree of parallelism (e.g. `/m:4`).
 
-        ```
-        > msbuild LLVM.sln /p:Configuration=Debug /p:Platform=x64 /t:ALL_BUILD
-        ```
+    ```
+    > msbuild LLVM.sln /p:Configuration=Debug /p:Platform=x64 /t:ALL_BUILD
+    ```
+
   * To run doxygen over the LLILC sources use the following command line:
 
-        ```
-        > msbuild LLVM.sln /p:Configuration=Debug /p:Platform=x64 /t:doxygen-llilc
-        ```
+    ```
+    > msbuild LLVM.sln /p:Configuration=Debug /p:Platform=x64 /t:doxygen-llilc
+    ```
 
 The build steps above can also be done from Visual Studio by going to the
 solution explorer, right clicking the desired project (e.g. ALL_BUILD or

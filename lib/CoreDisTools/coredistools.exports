@@ -1,9 +1,14 @@
 InitDisasm
+InitBufferedDisasm
 NewDisasm
 FinishDisasm
 DisasmInstruction
+DumpInstruction
+InitBufferedDiffer
 NewDiffer
 FinishDiff
 NearDiffCodeBlocks
 DumpCodeBlock
 DumpDiffBlocks
+GetOutputBuffer
+ClearOutputBuffer
