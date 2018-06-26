@@ -731,6 +731,6 @@ DllIface const char* GetOutputBuffer() {
   return outputStream.str().c_str();
 }
 
-DllIface const void ClearOutputBuffer() {
+DllIface void ClearOutputBuffer() {
   outputBuffer.clear();
 }
