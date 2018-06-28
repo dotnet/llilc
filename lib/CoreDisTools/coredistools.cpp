@@ -285,10 +285,17 @@ bool CorDisasm::setTarget() {
     break;
   case Target_Arm64:
     TheTriple.setArch(Triple::aarch64);
+    break;
   case Target_X86:
     TheTriple.setArch(Triple::x86);
+    break;
   case Target_X64:
     TheTriple.setArch(Triple::x86_64);
+    break;
+  default:
+    Print->Error("Unsupported Architecture: %s\n",
+                 Triple::getArchTypeName(TheTriple.getArch()));
+    return false;
   }
 
   assert(TheTargetArch != Target_Host && "Target Expected to be specific");
