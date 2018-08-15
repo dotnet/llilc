@@ -1,0 +1,54 @@
+{
+  "runtimes": {
+    "win-x64": {
+      "Microsoft.NETCore.CoreDisTools": {
+        "runtime.win-x64.Microsoft.NETCore.CoreDisTools": "1.0.1-prerelease-00005"
+      }
+    },
+    "ubuntu.14.04-x64": {
+      "Microsoft.NETCore.CoreDisTools": {
+        "runtime.ubuntu.14.04-x64.Microsoft.NETCore.CoreDisTools": "1.0.1-prerelease-00002"
+      }
+    },
+    "ubuntu.16.04-x64": {
+      "Microsoft.NETCore.CoreDisTools": {
+        "runtime.ubuntu.16.04-x64.Microsoft.NETCore.CoreDisTools": "1.0.1-prerelease-00002"
+      }
+    },
+    "centos.7.1-x64": {
+      "Microsoft.NETCore.CoreDisTools": {
+        "runtime.centos.7.1-x64.Microsoft.NETCore.CoreDisTools": "1.0.1-prerelease-00002"
+      }
+    },
+    "osx.10.11-x64": {
+      "Microsoft.NETCore.CoreDisTools": {
+        "runtime.osx.10.11-x64.Microsoft.NETCore.CoreDisTools": "1.0.1-prerelease-00002"
+      }
+    },
+    "win-x86": {
+      "Microsoft.NETCore.CoreDisTools": {
+        "runtime.win-x86.Microsoft.NETCore.CoreDisTools": "1.0.1-prerelease-00005"
+      }
+    },
+    "ubuntu.14.04-x86": {
+      "Microsoft.NETCore.CoreDisTools": {
+        "runtime.ubuntu.14.04-x86.Microsoft.NETCore.CoreDisTools": "1.0.1-prerelease-00002"
+      }
+    },
+    "ubuntu.16.04-x86": {
+      "Microsoft.NETCore.CoreDisTools": {
+        "runtime.ubuntu.16.04-x86.Microsoft.NETCore.CoreDisTools": "1.0.1-prerelease-00002"
+      }
+    },
+    "centos.7.1-x86": {
+      "Microsoft.NETCore.CoreDisTools": {
+        "runtime.centos.7.1-x86.Microsoft.NETCore.CoreDisTools": "1.0.1-prerelease-00002"
+      }
+    },
+    "osx.10.11-x86": {
+      "Microsoft.NETCore.CoreDisTools": {
+        "runtime.osx.10.11-x86.Microsoft.NETCore.CoreDisTools": "1.0.1-prerelease-00002"
+      }
+    }
+  }
+}
