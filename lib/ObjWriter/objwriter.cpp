@@ -560,7 +560,7 @@ extern "C" void EmitCFICode(ObjectWriter *OW, int Offset, const char *Blob) {
   auto *AsmPrinter = &OW->getAsmPrinter();
   auto &OST = *AsmPrinter->OutStreamer;
 
-  CFI_CODE *CfiCode = (CFI_CODE *)Blob;
+  const CFI_CODE *CfiCode = (const CFI_CODE *)Blob;
   switch (CfiCode->CfiOpCode) {
   case CFI_ADJUST_CFA_OFFSET:
     assert(CfiCode->DwarfReg == DWARF_REG_ILLEGAL &&
