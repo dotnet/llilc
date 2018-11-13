@@ -31,6 +31,8 @@ if you want to build it then follow instructions from getting started, but use t
 1. latest LLVM [version](https://github.com/llvm-mirror/llvm) and apply this [patch](https://reviews.llvm.org/D29483) or take the known working version from [Microsoft/llvm/CoreRT_ObjectWriter branch](https://github.com/dotnet/llilc/tree/ObjectWriter);
 2. [llilc/ObjectWriter branch](https://github.com/dotnet/llilc/tree/ObjectWriter);
 
+libcoredistools: CoreCLR has a ongoing dependency on libcoredistools which is built out of this repo and placed into build/lib/libcoredistools.dylib|so|dll. To build coredistools follow the default workflow for building llilc/llvm on the master branch.
+
 
 Supported Platforms
 -------------------
