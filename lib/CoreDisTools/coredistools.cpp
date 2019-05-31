@@ -412,6 +412,37 @@ bool CorDisasm::decodeInstruction(BlockIterator &BIter, bool MayFail) const {
   return IsDecoded;
 }
 
+static bool tryDecodePCRelLabel(MCInst const& Inst, int64_t& Disp) {
+  constexpr unsigned int AArch64_LDRDl = 2359;
+  constexpr unsigned int AArch64_LDRSl = 2407;
+
+  bool HasPCRelLabel      = false;
+  unsigned int OperandNum = -1;
+
+  switch (Inst.getOpcode()) {
+    case AArch64_LDRDl:
+    case AArch64_LDRSl:
+      HasPCRelLabel = true;
+	  OperandNum    = 1;
+	  break;
+  }
+
+  if (HasPCRelLabel) {
+    assert(Inst.getOperand(OperandNum).isImm() && "Operand must be immediate value");
+    int64_t ImmVal = Inst.getOperand(OperandNum).getImm();
+
+    // Adapted from AArch64Disassembler.cpp DecodePCRelLabel19
+    // Sign-extend 19-bit immediate.
+    if (ImmVal & (1 << (19 - 1)))
+      ImmVal |= ~((1LL << 19) - 1);
+
+    Disp = ImmVal * 4;
+    return true;
+  }
+
+  return false;
+}
+
 uint64_t CorDisasm::disasmInstruction(BlockIterator &BIter,
                                       bool DumpAsm) const {
   uint64_t TotalSize = 0;
@@ -541,7 +572,25 @@ bool CorAsmDiff::nearDiff(const BlockInfo &LeftBlock,
     return false;
   }
 
+  const uint8_t* ConsBlockL = nullptr;
+  const uint8_t* ConsBlockR = nullptr;
+
   while (!Left.isEmpty() && !Right.isEmpty()) {
+    const bool isAtLiteralPoolL = Left.Ptr >= ConsBlockL;
+    const bool isAtLiteralPoolR = Right.Ptr >= ConsBlockR;
+
+    if (isAtLiteralPoolL || isAtLiteralPoolR) {
+      if (!isAtLiteralPoolL || !isAtLiteralPoolL) {
+        return fail("Literal Pool Size Mismatch", Left, Right);
+      }
+
+      assert(Left.BlockSize == Right.BlockSize);
+      if (memcmp(Left.Ptr, Right.Ptr, Right.BlockSize) != 0) {
+        return fail("Literal Pool Content Mismatch", Left, Right);
+      }
+
+      return true;
+    }
 
     decodeInstruction(Left);
     decodeInstruction(Right);
@@ -622,6 +671,26 @@ bool CorAsmDiff::nearDiff(const BlockInfo &LeftBlock,
           return fail("Immediate Operand Value Mismatch", Left, Right);
         }
       }
+    }
+
+    if (TheTargetArch == Target_Arm64) {
+      int64_t DispL = 0;
+
+      if (tryDecodePCRelLabel(Left.Inst, DispL)) {
+        if (ConsBlockL == nullptr || ConsBlockL > Left.Ptr + DispL) {
+          ConsBlockL = Left.Ptr + DispL;
+        }
+      }
+
+      int64_t DispR = 0;
+
+      if (tryDecodePCRelLabel(Right.Inst, DispR)) {
+        if (ConsBlockR == nullptr || ConsBlockR > Right.Ptr + DispR) {
+          ConsBlockR = Right.Ptr + DispR;
+        }
+      }
+
+      assert(DispL == DispR);
     }
 
     Left.advance();
