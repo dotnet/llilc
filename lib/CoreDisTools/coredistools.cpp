@@ -576,8 +576,8 @@ bool CorAsmDiff::nearDiff(const BlockInfo &LeftBlock,
   const uint8_t* ConsBlockR = nullptr;
 
   while (!Left.isEmpty() && !Right.isEmpty()) {
-    const bool isAtLiteralPoolL = Left.Ptr >= ConsBlockL;
-    const bool isAtLiteralPoolR = Right.Ptr >= ConsBlockR;
+    const bool isAtLiteralPoolL = (ConsBlockL != nullptr) && (Left.Ptr == ConsBlockL);
+    const bool isAtLiteralPoolR = (ConsBlockR != nullptr) && (Right.Ptr == ConsBlockR);
 
     if (isAtLiteralPoolL || isAtLiteralPoolR) {
       if (!isAtLiteralPoolL || !isAtLiteralPoolL) {
