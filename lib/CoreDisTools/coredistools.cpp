@@ -281,7 +281,7 @@ bool CorDisasm::setTarget() {
     break;
 
   case Target_Thumb:
-    TheTriple.setArch(Triple::thumb);
+    TheTriple.setArchName("thumbv7");
     break;
   case Target_Arm64:
     TheTriple.setArch(Triple::aarch64);
