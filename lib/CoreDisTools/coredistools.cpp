@@ -575,6 +575,15 @@ bool CorAsmDiff::nearDiff(const BlockInfo &LeftBlock,
   const uint8_t* ConsBlockL = nullptr;
   const uint8_t* ConsBlockR = nullptr;
 
+  constexpr int ARM_t2MOVTi16 = 2918;
+  constexpr int ARM_t2MOVi16  = 2920;
+
+  bool IsPrecededByMov  = false;
+  unsigned int Mov32Reg = 0;
+
+  int32_t Mov32ImmL = 0;
+  int32_t Mov32ImmR = 0;
+
   while (!Left.isEmpty() && !Right.isEmpty()) {
     const bool isAtLiteralPoolL = (ConsBlockL != nullptr) && (Left.Ptr == ConsBlockL);
     const bool isAtLiteralPoolR = (ConsBlockR != nullptr) && (Right.Ptr == ConsBlockR);
@@ -662,10 +671,22 @@ bool CorAsmDiff::nearDiff(const BlockInfo &LeftBlock,
             continue;
           }
 
-          if (Comparator(UserData, Left.BlockOffset(), Left.InstrSize, ImmL,
-                         ImmR)) {
+          if (Comparator(UserData, Left.BlockOffset(), Left.InstrSize, ImmL, ImmR)) {
             // The client somehow thinks that these offsets are equivalent
             continue;
+          }
+
+          // MOVW, MOVT instruction pair can be used to load a 32-bit value to a register. See if this is a case.
+          if (TheTargetArch == Target_Thumb) {
+            if ((InstL.getOpcode() == ARM_t2MOVTi16) && IsPrecededByMov && (InstL.getOperand(0).getReg() == Mov32Reg)) {
+              // Reconstruct 32-bit values that are being loaded to a register using MOV32.
+              Mov32ImmL = (ImmL << 16) | Mov32ImmL;
+              Mov32ImmR = (ImmR << 16) | Mov32ImmR;
+
+              if (Comparator(UserData, Left.BlockOffset(), Left.InstrSize, Mov32ImmL, Mov32ImmR)) {
+                continue;
+              }
+            }
           }
 
           return fail("Immediate Operand Value Mismatch", Left, Right);
@@ -673,7 +694,28 @@ bool CorAsmDiff::nearDiff(const BlockInfo &LeftBlock,
       }
     }
 
-    if (TheTargetArch == Target_Arm64) {
+    if (TheTargetArch == Target_Thumb) {
+      const MCInst &InstL = Left.Inst;
+
+      if (InstL.getOpcode() == ARM_t2MOVi16) {
+        const MCInst &InstR = Right.Inst;
+
+        assert(InstR.getOpcode() == ARM_t2MOVi16);
+        IsPrecededByMov = true;
+        // Stash operands of the MOV instructions in case if the next decoded instructions are MOVT.
+
+        Mov32Reg = InstL.getOperand(0).getReg();
+        assert(InstR.getOperand(0).getReg() == Mov32Reg);
+
+        Mov32ImmL = InstL.getOperand(1).getImm();
+        Mov32ImmR = InstR.getOperand(1).getImm();
+      } else {
+        IsPrecededByMov = false;
+        Mov32Reg = 0;
+        Mov32ImmL = 0;
+        Mov32ImmR = 0;
+      }
+    } else if (TheTargetArch == Target_Arm64) {
       int64_t DispL = 0;
 
       if (tryDecodePCRelLabel(Left.Inst, DispL)) {
