@@ -1,5 +1,11 @@
+# LLILC Is Now Archived
+
+LLILC was an experimental project to build a .NET compatible JIT from LLVM. It is no longer under active development.
+
+For questions or concerns please open an issue on https://github.com/dotnet/core.
+
 Welcome to LLILC
-================
+------------
 
 [![Join the chat at https://gitter.im/dotnet/llilc](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/dotnet/llilc?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
